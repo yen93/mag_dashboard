@@ -1,0 +1,60 @@
+================================================================================
+AS-BUILT — MAG Metrics Dashboard
+Last updated: 2026-09-11
+================================================================================
+
+OVERVIEW
+- Internal metrics dashboard for Sales / Marketing / Operations. Single-page app
+  (tabs, date-range + theme + per-chart toggles) behind a JWT login. Currently
+  served with seeded MOCK data; API response shapes match what live sources would
+  return, so integrations can be swapped in without frontend changes.
+
+SCRIPTS / APP CODE
+- server/index.js — Express app: mounts /api routes, serves the built React
+  client from client/dist, SPA fallback for non-/api routes. Listens on $PORT
+  (default 8080).
+- server/auth.js — POST /api/login (verifies bcrypt password, issues JWT),
+  requireAuth Bearer-token middleware, GET /api/me. Signs with JWT_SECRET.
+- server/users.js — 3 seeded users; plaintext seed passwords are bcrypt-hashed
+  at module load (no plaintext compare). Demo: admin@myadventuregroup.com.au,
+  sales@..., marketing@... (passwords documented in README).
+- server/data/util.js — deterministic PRNG (mulberry32) + date-range helpers
+  (7d / 30d / 90d / ytd) so mock numbers are stable per date.
+- server/data/{sales,marketing,operations}.js — mock metric generators returning
+  { range, kpis, timeseries, ...area-specific breakdowns }.
+- client/ — React + Vite + Recharts + React Router frontend. AuthContext (JWT in
+  localStorage) + ProtectedRoute; Dashboard shell with tab bar, shared date-range
+  segmented control, persisted light/dark theme; per-tab KPI tiles, TrendChart
+  (series show/hide chips + chart/table view toggle), bar/pie charts, tables.
+
+BUILD / RUN
+- Dev: `npm install` && `npm --prefix client install` && `npm run dev`
+  (Express :8080, Vite :5173 proxying /api).
+- Production path: `npm run build` (outputs client/dist) then `npm start` (:8080).
+- Container: multi-stage Dockerfile (build client → run server on Node 20 alpine).
+
+ENVIRONMENT VARIABLES
+- JWT_SECRET — JWT signing secret. MUST be set in any deployment (server warns
+  and uses an insecure dev default if unset). On Cloud Run it is set as a service
+  env var. The generated production value is stored locally at
+  %TEMP%\mag_jwt_secret.txt (NOT in the repo).
+- JWT_TTL — token lifetime (default 8h). PORT — listen port (Cloud Run sets it).
+
+EXTERNAL INTEGRATIONS
+- Google Cloud Run — hosts the deployed container.
+  Project: claudegwscli-502400, region australia-southeast1.
+  Live URL: https://dashboard-659687081407.australia-southeast1.run.app
+  Deployed via `gcloud run deploy dashboard --source .` (Cloud Build builds the
+  Dockerfile). --allow-unauthenticated at the network layer; the app's JWT login
+  is the actual gate. Service scales to zero (free-tier friendly for mockup use).
+
+DATA STORES
+- None. All metrics are generated in-memory by server/data/*; users are the seeded
+  array in server/users.js. No database.
+
+AUTOMATIONS / ROUTINES
+- None.
+
+OTHER
+- gpc_proj_id.txt holds the GCP project ID (claudegwscli-502400) — not a secret.
+================================================================================

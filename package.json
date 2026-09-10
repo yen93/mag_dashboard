@@ -1,0 +1,26 @@
+{
+  "name": "mag-metrics-dashboard",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Sales / Marketing / Operations metrics dashboard (mockup) with JWT auth, deployable to Cloud Run.",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm:dev:server\" \"npm:dev:client\"",
+    "dev:server": "nodemon server/index.js",
+    "dev:client": "npm --prefix client run dev",
+    "build": "npm --prefix client install && npm --prefix client run build",
+    "start": "node server/index.js"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "express": "^4.19.2",
+    "jsonwebtoken": "^9.0.2"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1",
+    "nodemon": "^3.1.4"
+  }
+}

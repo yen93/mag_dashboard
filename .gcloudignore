@@ -1,0 +1,9 @@
+# Files not uploaded to Cloud Build. The container is built from the Dockerfile,
+# so local node_modules and build output are excluded and rebuilt in the image.
+.git
+.gitignore
+node_modules
+client/node_modules
+client/dist
+*.log
+.env
