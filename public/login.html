@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <!-- apply saved theme early to avoid a flash -->
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <div class="login-wrap">
+    <form class="login-card" id="loginForm">
+      <h1>MAG Metrics</h1>
+      <p class="sub">Sign in to view the dashboard</p>
+
+      <div class="error" id="error" hidden></div>
+
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" autocomplete="username" value="admin@myadventuregroup.com.au" required />
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" required />
+      </div>
+
+      <button class="btn" type="submit" id="submitBtn">Sign in</button>
+
+      <p class="hint">Demo account: <code>admin@myadventuregroup.com.au</code> / <code>admin123</code></p>
+    </form>
+  </div>
+
+  <script src="app.js"></script>
+  <script>
+    // Already signed in? Go straight to the dashboard.
+    if (currentUser()) window.location.href = 'sales.html';
+
+    var form = document.getElementById('loginForm');
+    var errBox = document.getElementById('error');
+    var btn = document.getElementById('submitBtn');
+
+    form.addEventListener('submit', function (e) {
+      e.preventDefault();
+      errBox.hidden = true;
+      btn.disabled = true; btn.textContent = 'Signing in…';
+      apiLogin(document.getElementById('email').value, document.getElementById('password').value)
+        .then(function (data) { setToken(data.token); window.location.href = 'sales.html'; })
+        .catch(function (err) {
+          errBox.textContent = err.message || 'Login failed.';
+          errBox.hidden = false;
+          btn.disabled = false; btn.textContent = 'Sign in';
+        });
+    });
+  </script>
+</body>
+</html>

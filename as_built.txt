@@ -1,11 +1,12 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-09-11
+Last updated: 2026-09-11 (converted React frontend → plain HTML pages)
 ================================================================================
 
 OVERVIEW
-- Internal metrics dashboard for Sales / Marketing / Operations. Single-page app
-  (tabs, date-range + theme + per-chart toggles) behind a JWT login. Currently
+- Internal metrics dashboard for Sales / Marketing / Operations. Plain multi-page
+  HTML app (one page per screen; tabs are links) with date-range + theme +
+  chart/table toggles, behind a JWT login. No frontend build step. Currently
   served with seeded MOCK data; API response shapes match what live sources would
   return, so integrations can be swapped in without frontend changes.
 
@@ -22,16 +23,22 @@ SCRIPTS / APP CODE
   (7d / 30d / 90d / ytd) so mock numbers are stable per date.
 - server/data/{sales,marketing,operations}.js — mock metric generators returning
   { range, kpis, timeseries, ...area-specific breakdowns }.
-- client/ — React + Vite + Recharts + React Router frontend. AuthContext (JWT in
-  localStorage) + ProtectedRoute; Dashboard shell with tab bar, shared date-range
-  segmented control, persisted light/dark theme; per-tab KPI tiles, TrendChart
-  (series show/hide chips + chart/table view toggle), bar/pie charts, tables.
+- public/ — plain static frontend, served directly (NO build step):
+  - login.html, sales.html, marketing.html, operations.html (one per screen;
+    tab bar = links between pages)
+  - app.css — shared styling; light/dark theming via CSS variables
+  - app.js — shared logic: auth/token, fetchMetrics, formatting, theme, and
+    Chart.js helpers (lineChart/barChart/pieChart/renderKpis/renderTable);
+    initPage(area, renderFn) bootstraps each page. JWT in localStorage; shared
+    date range persisted in localStorage across pages.
+  - vendor/chart.umd.min.js — Chart.js vendored locally (no CDN).
 
 BUILD / RUN
-- Dev: `npm install` && `npm --prefix client install` && `npm run dev`
-  (Express :8080, Vite :5173 proxying /api).
-- Production path: `npm run build` (outputs client/dist) then `npm start` (:8080).
-- Container: multi-stage Dockerfile (build client → run server on Node 20 alpine).
+- Dev: `npm install` (server deps only) then `npm run dev` (nodemon, :8080) or
+  `npm start`. Editing public/ files needs only a browser refresh.
+- No `npm run build` and no client install step.
+- Container: single-stage Dockerfile (npm install --omit=dev; copy server/ +
+  public/; run on Node 20 alpine).
 
 ENVIRONMENT VARIABLES
 - JWT_SECRET — JWT signing secret. MUST be set in any deployment (server warns

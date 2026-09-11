@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Marketing — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales.html">Sales</a>
+    <a class="tab active" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+  </nav>
+
+  <main class="content">
+    <div class="toolbar">
+      <strong>Marketing overview</strong>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:13px">Date range</span>
+      <div class="segmented" id="rangeToggle">
+        <button data-range="7d">7D</button>
+        <button data-range="30d">30D</button>
+        <button data-range="90d">90D</button>
+        <button data-range="ytd">YTD</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="kpis"></div>
+
+    <div class="grid" style="margin-bottom:16px">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>Acquisition over time</h3>
+          <div class="spacer"></div>
+          <div class="segmented" data-view-for="acq">
+            <button data-view="chart" class="active">Chart</button>
+            <button data-view="table">Table</button>
+          </div>
+        </div>
+        <div class="chart-box" id="acq-chart"><canvas id="acqCanvas"></canvas></div>
+        <div id="acq-table" hidden></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card col-6">
+        <div class="card-head"><h3>Traffic sources</h3></div>
+        <div class="chart-box short"><canvas id="channelsCanvas"></canvas></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-head"><h3>Conversion funnel</h3></div>
+        <div class="chart-box short"><canvas id="funnelCanvas"></canvas></div>
+      </div>
+      <div class="card col-12">
+        <div class="card-head"><h3>Campaign performance</h3></div>
+        <div id="campaignsTable"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+  <script>
+    function renderMarketing(data) {
+      renderKpis('kpis', [
+        { label: 'Leads', value: data.kpis.leads.value, unit: 'count', delta: data.kpis.leads.delta },
+        { label: 'Signups', value: data.kpis.signups.value, unit: 'count', delta: data.kpis.signups.delta },
+        { label: 'Conversion rate', value: data.kpis.convRate.value, unit: 'percent', delta: data.kpis.convRate.delta },
+        { label: 'Email open rate', value: data.kpis.openRate.value, unit: 'percent', delta: data.kpis.openRate.delta },
+      ]);
+
+      var series = [
+        { key: 'leads', label: 'Leads', color: '#3b6ef0', unit: 'count' },
+        { key: 'signups', label: 'Signups', color: '#17a673', unit: 'count' },
+        { key: 'sessions', label: 'Sessions', color: '#f0a63b', unit: 'count' },
+      ];
+      lineChart('acqCanvas', data.timeseries, series);
+      wireViewToggle('acq', function () {
+        renderTable('acq-table', data.timeseries, [{ key: 'date', label: 'Date', render: shortDate }]
+          .concat(series.map(function (s) { return { key: s.key, label: s.label, unit: s.unit }; })));
+      });
+
+      pieChart('channelsCanvas', data.channels.map(function (c) { return { label: c.source, value: c.value }; }));
+
+      barChart('funnelCanvas', data.funnel.map(function (f) { return f.stage; }),
+        data.funnel.map(function (f) { return f.value; }), { horizontal: true });
+
+      renderTable('campaignsTable', data.campaigns, [
+        { key: 'name', label: 'Campaign' },
+        { key: 'sent', label: 'Sent', unit: 'count' },
+        { key: 'openRate', label: 'Open rate', unit: 'percent' },
+        { key: 'clickRate', label: 'Click rate', unit: 'percent' },
+        { key: 'conversions', label: 'Conversions', unit: 'count' },
+      ]);
+    }
+
+    initPage('marketing', renderMarketing);
+  </script>
+</body>
+</html>

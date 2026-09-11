@@ -26,16 +26,12 @@ metrics.get('/marketing', (req, res) => res.json(getMarketing(req.query.range)))
 metrics.get('/operations', (req, res) => res.json(getOperations(req.query.range)));
 app.use('/api/metrics', metrics);
 
-// Serve the built React frontend (produced by `npm run build`).
-const clientDist = path.join(__dirname, '..', 'client', 'dist');
-app.use(express.static(clientDist));
+// Serve the plain HTML/CSS/JS pages from public/.
+const publicDir = path.join(__dirname, '..', 'public');
+app.use(express.static(publicDir));
 
-// SPA fallback: any non-API route returns index.html so client-side routing works.
-app.get(/^(?!\/api).*/, (_req, res) => {
-  res.sendFile(path.join(clientDist, 'index.html'), (err) => {
-    if (err) res.status(404).send('Frontend not built. Run `npm run build`.');
-  });
-});
+// Root -> the first dashboard page (which bounces to login if not signed in).
+app.get('/', (_req, res) => res.redirect('/sales.html'));
 
 app.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);

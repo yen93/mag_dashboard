@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Operations — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab active" href="operations.html">Operations</a>
+  </nav>
+
+  <main class="content">
+    <div class="toolbar">
+      <strong>Operations overview</strong>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:13px">Date range</span>
+      <div class="segmented" id="rangeToggle">
+        <button data-range="7d">7D</button>
+        <button data-range="30d">30D</button>
+        <button data-range="90d">90D</button>
+        <button data-range="ytd">YTD</button>
+      </div>
+    </div>
+
+    <div class="kpi-grid" id="kpis"></div>
+
+    <div class="grid" style="margin-bottom:16px">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>Operations over time</h3>
+          <div class="spacer"></div>
+          <div class="segmented" data-view-for="ops">
+            <button data-view="chart" class="active">Chart</button>
+            <button data-view="table">Table</button>
+          </div>
+        </div>
+        <div class="chart-box" id="ops-chart"><canvas id="opsCanvas"></canvas></div>
+        <div id="ops-table" hidden></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card col-6">
+        <div class="card-head"><h3>Utilization by location</h3></div>
+        <div class="chart-box short"><canvas id="utilCanvas"></canvas></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-head"><h3>Open issues by category</h3></div>
+        <div id="issuesTable"></div>
+      </div>
+      <div class="card col-12">
+        <div class="card-head"><h3>Bookings by location</h3></div>
+        <div class="chart-box short"><canvas id="bookingsCanvas"></canvas></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+  <script>
+    var PRIORITY_COLOR = { High: '#e2483d', Medium: '#f0a63b', Low: '#17a673' };
+
+    function renderOperations(data) {
+      renderKpis('kpis', [
+        { label: 'Bookings', value: data.kpis.bookings.value, unit: 'count', delta: data.kpis.bookings.delta },
+        { label: 'Capacity utilization', value: data.kpis.utilization.value, unit: 'percent', delta: data.kpis.utilization.delta },
+        { label: 'Avg turnaround', value: data.kpis.turnaround.value, unit: 'hours', delta: data.kpis.turnaround.delta, invert: true },
+        { label: 'On-time rate', value: data.kpis.onTime.value, unit: 'percent', delta: data.kpis.onTime.delta },
+      ]);
+
+      var series = [
+        { key: 'bookings', label: 'Bookings', color: '#3b6ef0', unit: 'count' },
+        { key: 'utilization', label: 'Utilization %', color: '#7c5cff', unit: 'percent' },
+        { key: 'onTime', label: 'On-time %', color: '#17a673', unit: 'percent' },
+      ];
+      lineChart('opsCanvas', data.timeseries, series);
+      wireViewToggle('ops', function () {
+        renderTable('ops-table', data.timeseries, [{ key: 'date', label: 'Date', render: shortDate }]
+          .concat(series.map(function (s) { return { key: s.key, label: s.label, unit: s.unit }; })));
+      });
+
+      barChart('utilCanvas', data.locations.map(function (l) { return l.name; }),
+        data.locations.map(function (l) { return l.utilization; }));
+
+      renderTable('issuesTable', data.issues, [
+        { key: 'category', label: 'Category' },
+        { key: 'priority', label: 'Priority', render: function (p) {
+            return '<span class="pill"><span class="swatch" style="background:' + PRIORITY_COLOR[p] + '"></span>' + p + '</span>';
+        } },
+        { key: 'open', label: 'Open', unit: 'count' },
+      ]);
+
+      barChart('bookingsCanvas', data.locations.map(function (l) { return l.name; }),
+        data.locations.map(function (l) { return l.bookings; }), { colors: '#7c5cff' });
+    }
+
+    initPage('operations', renderOperations);
+  </script>
+</body>
+</html>

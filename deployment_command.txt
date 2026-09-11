@@ -1,0 +1,1 @@
+gcloud run deploy dashboard --source . --region australia-southeast1

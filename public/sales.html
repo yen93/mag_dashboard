@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sales — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <!-- ===== Top bar (same on every dashboard page) ===== -->
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <!-- ===== Tabs (plain links to the other pages) ===== -->
+  <nav class="tabbar">
+    <a class="tab active" href="sales.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+  </nav>
+
+  <main class="content">
+    <div class="toolbar">
+      <strong>Sales overview</strong>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:13px">Date range</span>
+      <div class="segmented" id="rangeToggle">
+        <button data-range="7d">7D</button>
+        <button data-range="30d">30D</button>
+        <button data-range="90d">90D</button>
+        <button data-range="ytd">YTD</button>
+      </div>
+    </div>
+
+    <!-- KPI tiles (filled by JS) -->
+    <div class="kpi-grid" id="kpis"></div>
+
+    <!-- Deals over time: chart / table toggle -->
+    <div class="grid" style="margin-bottom:16px">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>Deals over time</h3>
+          <div class="spacer"></div>
+          <div class="segmented" data-view-for="deals">
+            <button data-view="chart" class="active">Chart</button>
+            <button data-view="table">Table</button>
+          </div>
+        </div>
+        <div class="chart-box" id="deals-chart"><canvas id="dealsCanvas"></canvas></div>
+        <div id="deals-table" hidden></div>
+      </div>
+    </div>
+
+    <div class="grid">
+      <div class="card col-8">
+        <div class="card-head"><h3>Revenue by day</h3></div>
+        <div class="chart-box short"><canvas id="revenueCanvas"></canvas></div>
+      </div>
+      <div class="card col-4">
+        <div class="card-head"><h3>Pipeline by stage</h3></div>
+        <div class="chart-box short"><canvas id="pipelineCanvas"></canvas></div>
+      </div>
+      <div class="card col-12">
+        <div class="card-head"><h3>Top sales reps</h3></div>
+        <div id="repsTable"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js"></script>
+  <script>
+    // ===== Sales page rendering =====
+    function renderSales(data) {
+      renderKpis('kpis', [
+        { label: 'Revenue', value: data.kpis.revenue.value, unit: 'currency', delta: data.kpis.revenue.delta },
+        { label: 'Deals won', value: data.kpis.dealsWon.value, unit: 'count', delta: data.kpis.dealsWon.delta },
+        { label: 'Win rate', value: data.kpis.winRate.value, unit: 'percent', delta: data.kpis.winRate.delta },
+        { label: 'Avg deal size', value: data.kpis.avgDealSize.value, unit: 'currency', delta: data.kpis.avgDealSize.delta },
+      ]);
+
+      var series = [
+        { key: 'won', label: 'Won', color: '#17a673', unit: 'count' },
+        { key: 'lost', label: 'Lost', color: '#e2483d', unit: 'count' },
+        { key: 'deals', label: 'Total', color: '#3b6ef0', unit: 'count' },
+      ];
+      lineChart('dealsCanvas', data.timeseries, series);
+      wireViewToggle('deals', function () {
+        renderTable('deals-table', data.timeseries, [{ key: 'date', label: 'Date', render: shortDate }]
+          .concat(series.map(function (s) { return { key: s.key, label: s.label, unit: s.unit }; })));
+      });
+
+      barChart('revenueCanvas', data.timeseries.map(function (d) { return shortDate(d.date); }),
+        data.timeseries.map(function (d) { return d.revenue; }));
+
+      barChart('pipelineCanvas', data.pipeline.map(function (p) { return p.stage; }),
+        data.pipeline.map(function (p) { return p.value; }), { horizontal: true, colors: '#7c5cff' });
+
+      renderTable('repsTable', data.topReps, [
+        { key: 'name', label: 'Rep' },
+        { key: 'deals', label: 'Deals', unit: 'count' },
+        { key: 'revenue', label: 'Revenue', unit: 'currency' },
+      ]);
+    }
+
+    initPage('sales', renderSales);
+  </script>
+</body>
+</html>

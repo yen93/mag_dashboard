@@ -1,0 +1,73 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-09-11
+Session: Converted the dashboard frontend from React/Vite to plain editable HTML
+pages, updated docs, and pushed to GitHub. (Continues 1109260753_chat_history.txt.)
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Asked how to manually update the dashboard pages — where the HTML pages and
+resource files live.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained that the app was a React (Vite) build, so there was only one real HTML
+file and the "pages" were .jsx components — you edit source under client/src/,
+never client/dist/ (generated). Gave the file map (pages, tabs, styles, data),
+the edit→preview (npm run dev, :5173)→deploy loop, and noted that a plain-HTML
+architecture was possible if preferred. Offered to convert.
+
+--------------------------------------------------------------------------------
+USER:
+Said to convert it to plain editable HTML pages, and to just report back when
+done — they'll deploy the updates themselves using the previously given command.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Converted the frontend to plain static files while keeping the Express backend
+(JWT auth + mock-data API) unchanged. Work done:
+
+  - Vendored Chart.js locally to public/vendor/chart.umd.min.js (first tried
+    cdnjs — 404; succeeded from jsdelivr, ~200KB) so there's no CDN dependency.
+  - Wrote public/app.css (shared styling, CSS-variable theming) and public/app.js
+    (shared logic: token/auth, apiLogin/fetchMetrics, formatting, theme toggle,
+    persisted date range, Chart.js helpers lineChart/barChart/pieChart, renderKpis/
+    renderTable, wireViewToggle, and initPage() bootstrap).
+  - Wrote four pages: login.html, sales.html, marketing.html, operations.html.
+    Tabs are now plain links between pages; each page holds its structure and an
+    inline script mapping API data to charts/tables. Kept all features: JWT login,
+    date-range toggle (persists across pages via localStorage), light/dark theme,
+    series show/hide (Chart.js legend), and chart/table view toggle.
+  - Rewrote server/index.js to serve public/ (dropped the SPA fallback; / now
+    redirects to /sales.html).
+  - Simplified the Dockerfile to a single stage (no client build; copy server/ +
+    public/) and trimmed package.json (removed Vite/Recharts/React/concurrently;
+    scripts are just dev=nodemon and start=node).
+  - Removed the old client/ folder. It was locked on Windows by a leftover
+    `npm run dev` process tree (concurrently → nodemon + Vite/esbuild) from an
+    earlier session; identified the processes via Win32_Process command lines,
+    stopped that dev tree, then deleted client/.
+
+Verified locally (server on :8090): / redirects to sales.html, all pages +
+app.js + Chart.js serve (200), /api/metrics returns 401 without a token, and
+login → JWT → /api/metrics/operations?range=7d returned correct data. Updated
+README.md, CLAUDE.md, and as_built.txt to reflect the plain-HTML architecture
+(no build step; deploy command unchanged). Reported done and left committing to
+the user.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /dcp and asked to push to GitHub.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Generated timestamp 1109260841; confirmed the origin remote (yen93/mag_dashboard)
+and branch main are already set. Ran the security scan (no secrets to redact) and
+checked the user-created deployment_command.txt — it holds only the deploy command,
+safe to commit. Wrote this chat-history file (as_built.txt and CLAUDE.md were
+already updated during the conversion), staged all changes including the client/
+deletions and the new public/ tree, committed, and pushed to origin/main.
+
+================================================================================
+END OF EXPORT
+================================================================================
