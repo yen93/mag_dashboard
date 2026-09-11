@@ -8,7 +8,6 @@
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
 <body>
-  <!-- ===== Top bar (same on every dashboard page) ===== -->
   <header class="topbar">
     <div class="brand"><span class="dot"></span> MAG Metrics</div>
     <div class="spacer"></div>
@@ -17,7 +16,6 @@
     <button class="icon-btn" id="logoutBtn">Sign out</button>
   </header>
 
-  <!-- ===== Tabs (plain links to the other pages) ===== -->
   <nav class="tabbar">
     <a class="tab active" href="sales.html">Sales</a>
     <a class="tab" href="marketing.html">Marketing</a>
@@ -28,23 +26,22 @@
     <div class="toolbar">
       <strong>Sales overview</strong>
       <div class="spacer"></div>
-      <span class="muted" style="font-size:13px">Date range</span>
+      <span class="muted" style="font-size:13px">Period</span>
       <div class="segmented" id="rangeToggle">
-        <button data-range="7d">7D</button>
-        <button data-range="30d">30D</button>
-        <button data-range="90d">90D</button>
+        <button data-range="3m">3M</button>
+        <button data-range="6m">6M</button>
+        <button data-range="12m">12M</button>
         <button data-range="ytd">YTD</button>
       </div>
     </div>
 
-    <!-- KPI tiles (filled by JS) -->
     <div class="kpi-grid" id="kpis"></div>
 
-    <!-- Deals over time: chart / table toggle -->
     <div class="grid" style="margin-bottom:16px">
       <div class="card col-12">
         <div class="card-head">
           <h3>Deals over time</h3>
+          <span class="chips" id="trendChips"></span>
           <div class="spacer"></div>
           <div class="segmented" data-view-for="deals">
             <button data-view="chart" class="active">Chart</button>
@@ -58,16 +55,39 @@
 
     <div class="grid">
       <div class="card col-8">
-        <div class="card-head"><h3>Revenue by day</h3></div>
+        <div class="card-head"><h3>Won revenue by month</h3><span class="chips" id="revChips"></span></div>
         <div class="chart-box short"><canvas id="revenueCanvas"></canvas></div>
       </div>
       <div class="card col-4">
-        <div class="card-head"><h3>Pipeline by stage</h3></div>
-        <div class="chart-box short"><canvas id="pipelineCanvas"></canvas></div>
+        <div class="card-head"><h3>Direct vs indirect</h3><span class="chips" id="diChips"></span></div>
+        <div class="chart-box short"><canvas id="diCanvas"></canvas></div>
       </div>
-      <div class="card col-12">
-        <div class="card-head"><h3>Top sales reps</h3></div>
-        <div id="repsTable"></div>
+
+      <div class="card col-7">
+        <div class="card-head"><h3>Lead source &amp; conversion</h3><span class="chips" id="srcChips"></span></div>
+        <div id="sourceTable"></div>
+      </div>
+      <div class="card col-5">
+        <div class="card-head"><h3>New inquiries per month</h3><span class="chips" id="inqChips"></span></div>
+        <div class="chart-box short"><canvas id="inquiriesCanvas"></canvas></div>
+      </div>
+
+      <div class="card col-7">
+        <div class="card-head"><h3>Outbound outreach per week</h3><span class="chips" id="outChips"></span></div>
+        <div class="chart-box short"><canvas id="outboundCanvas"></canvas></div>
+      </div>
+      <div class="card col-5">
+        <div class="card-head"><h3>Demos delivered per month</h3><span class="chips" id="demoChips"></span></div>
+        <div class="chart-box short"><canvas id="demosCanvas"></canvas></div>
+      </div>
+
+      <div class="card col-6">
+        <div class="card-head"><h3>Google Ads inquiries</h3><span class="chips" id="gadsChips"></span></div>
+        <div id="gads-body"></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-head"><h3>Replies per week</h3><span class="chips" id="repliesChips"></span></div>
+        <div id="replies-body"></div>
       </div>
     </div>
   </main>
@@ -75,37 +95,70 @@
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js"></script>
   <script>
-    // ===== Sales page rendering =====
+    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+    var MONTH = { xKey: 'month', xLabel: monthLabel };
+
     function renderSales(data) {
       renderKpis('kpis', [
-        { label: 'Revenue', value: data.kpis.revenue.value, unit: 'currency', delta: data.kpis.revenue.delta },
-        { label: 'Deals won', value: data.kpis.dealsWon.value, unit: 'count', delta: data.kpis.dealsWon.delta },
-        { label: 'Win rate', value: data.kpis.winRate.value, unit: 'percent', delta: data.kpis.winRate.delta },
-        { label: 'Avg deal size', value: data.kpis.avgDealSize.value, unit: 'currency', delta: data.kpis.avgDealSize.delta },
+        { label: 'Deals created', metric: data.kpis.created },
+        { label: 'Deals won', metric: data.kpis.won },
+        { label: 'Win rate', metric: data.kpis.winRate },
+        { label: 'Won value', metric: data.kpis.wonValue },
+        { label: 'Avg deal size', metric: data.kpis.avgDeal },
+        { label: 'Open pipeline', metric: data.kpis.openPipeline },
       ]);
 
+      // Deals over time (chart + table)
+      setChips('trendChips', data.trend.meta);
+      var trend = data.trend.data;
       var series = [
-        { key: 'won', label: 'Won', color: '#17a673', unit: 'count' },
-        { key: 'lost', label: 'Lost', color: '#e2483d', unit: 'count' },
-        { key: 'deals', label: 'Total', color: '#3b6ef0', unit: 'count' },
+        { key: 'created', label: 'Created', color: '#3b6ef0' },
+        { key: 'won', label: 'Won', color: '#17a673' },
+        { key: 'lost', label: 'Lost', color: '#e2483d' },
       ];
-      lineChart('dealsCanvas', data.timeseries, series);
+      lineChart('dealsCanvas', trend, series, MONTH);
       wireViewToggle('deals', function () {
-        renderTable('deals-table', data.timeseries, [{ key: 'date', label: 'Date', render: shortDate }]
-          .concat(series.map(function (s) { return { key: s.key, label: s.label, unit: s.unit }; })));
+        renderTable('deals-table', trend, [{ key: 'month', label: 'Month', render: monthLabel }]
+          .concat(series.map(function (s) { return { key: s.key, label: s.label, unit: 'count' }; }))
+          .concat([{ key: 'revenue', label: 'Revenue', unit: 'currency' }]));
       });
 
-      barChart('revenueCanvas', data.timeseries.map(function (d) { return shortDate(d.date); }),
-        data.timeseries.map(function (d) { return d.revenue; }));
+      // Revenue by month
+      setChips('revChips', data.trend.meta);
+      barChart('revenueCanvas', trend.map(function (d) { return monthLabel(d.month); }),
+        trend.map(function (d) { return d.revenue; }));
 
-      barChart('pipelineCanvas', data.pipeline.map(function (p) { return p.stage; }),
-        data.pipeline.map(function (p) { return p.value; }), { horizontal: true, colors: '#7c5cff' });
+      // Direct vs indirect
+      setChips('diChips', data.directIndirect.meta);
+      pieChart('diCanvas', data.directIndirect.data);
 
-      renderTable('repsTable', data.topReps, [
-        { key: 'name', label: 'Rep' },
+      // Lead source table
+      setChips('srcChips', data.sources.meta);
+      renderTable('sourceTable', data.sources.data, [
+        { key: 'source', label: 'Source' },
         { key: 'deals', label: 'Deals', unit: 'count' },
-        { key: 'revenue', label: 'Revenue', unit: 'currency' },
+        { key: 'won', label: 'Won', unit: 'count' },
+        { key: 'winRate', label: 'Win %', unit: 'percent' },
       ]);
+
+      // Inquiries per month
+      setChips('inqChips', data.leadsTrend.meta);
+      barChart('inquiriesCanvas', data.leadsTrend.data.map(function (d) { return monthLabel(d.month); }),
+        data.leadsTrend.data.map(function (d) { return d.leads; }));
+
+      // Outbound per week
+      setChips('outChips', data.outbound.meta);
+      barChart('outboundCanvas', data.outbound.data.map(function (d) { return weekLabel(d.week); }),
+        data.outbound.data.map(function (d) { return d.sends; }), { colors: '#7c5cff' });
+
+      // Demos per month
+      setChips('demoChips', data.demos.meta);
+      barChart('demosCanvas', data.demos.data.map(function (d) { return monthLabel(d.month); }),
+        data.demos.data.map(function (d) { return d.demos; }), { colors: '#17a673' });
+
+      // Pending tiles
+      setChips('gadsChips', data.googleAds.meta); renderPendingBody('gads-body', data.googleAds.meta);
+      setChips('repliesChips', data.replies.meta); renderPendingBody('replies-body', data.replies.meta);
     }
 
     initPage('sales', renderSales);

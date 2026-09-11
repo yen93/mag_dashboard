@@ -2,5 +2,14 @@ node_modules/
 client/node_modules/
 client/dist/
 .env
+.env.*
 *.log
 .DS_Store
+
+# Credentials / secrets — never commit these
+*connection_string*
+*_secret*
+*credentials*
+service-account*.json
+scratch_*.json
+scratch_*.js

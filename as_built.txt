@@ -1,67 +1,147 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-09-11 (converted React frontend → plain HTML pages)
+Last updated: 2026-09-11 (wired Sales/Operations to real MAG data via Supabase)
 ================================================================================
 
 OVERVIEW
-- Internal metrics dashboard for Sales / Marketing / Operations. Plain multi-page
-  HTML app (one page per screen; tabs are links) with date-range + theme +
-  chart/table toggles, behind a JWT login. No frontend build step. Currently
-  served with seeded MOCK data; API response shapes match what live sources would
-  return, so integrations can be swapped in without frontend changes.
+- Internal metrics dashboard for Sales / Marketing / Operations at My Adventure
+  Group. Plain multi-page HTML app (one page per screen; tabs are links) with
+  date-range + theme + chart/table toggles, behind a JWT login. No frontend
+  build step.
+- Sales and Operations are now LIVE, backed by real data queried at runtime
+  from MAG's Supabase database. Marketing is partially live (leads, Google
+  reviews, keynote/offsite booking counts+value) with several tiles still
+  showing "needs setup" until their source is connected (see PENDING METRICS).
+  Every metric/section in the API response carries a `meta.status` of "live",
+  "partial", or "pending" plus a `source` label and, when pending, a `note`
+  explaining what's needed — the frontend renders this as a source chip and a
+  "needs setup" badge rather than faking a number.
 
 SCRIPTS / APP CODE
-- server/index.js — Express app: mounts /api routes, serves the built React
-  client from client/dist, SPA fallback for non-/api routes. Listens on $PORT
-  (default 8080).
-- server/auth.js — POST /api/login (verifies bcrypt password, issues JWT),
-  requireAuth Bearer-token middleware, GET /api/me. Signs with JWT_SECRET.
-- server/users.js — 3 seeded users; plaintext seed passwords are bcrypt-hashed
-  at module load (no plaintext compare). Demo: admin@myadventuregroup.com.au,
-  sales@..., marketing@... (passwords documented in README).
-- server/data/util.js — deterministic PRNG (mulberry32) + date-range helpers
-  (7d / 30d / 90d / ytd) so mock numbers are stable per date.
-- server/data/{sales,marketing,operations}.js — mock metric generators returning
-  { range, kpis, timeseries, ...area-specific breakdowns }.
+- server/index.js — Express app: mounts /api routes, serves public/ as static
+  files, / redirects to /sales.html. Metrics routes are generic
+  (/api/metrics/:area) and cached briefly per (area, range) via
+  server/lib/cache.js so repeat loads don't re-hit external APIs. Listens on
+  $PORT (default 8080).
+- server/auth.js / server/users.js — unchanged: JWT login, 3 bcrypt-hashed
+  seed users (see README for demo credentials).
+- server/config.js — reads every data-source credential from env vars
+  (SUPABASE_DB_URL, AC_API_URL/AC_API_KEY, XERO_*, CALENDLY_TOKEN,
+  MONDAY_TOKEN, GOOGLE_SERVICE_ACCOUNT_JSON/BUYER_ANALYSIS_SHEET_ID) and
+  exposes `hasSource(name)` so metric composers can degrade gracefully when a
+  credential is absent.
+- server/providers/supabase.js — pooled `pg` connection to the MAG Supabase
+  Postgres database (SSL, rejectUnauthorized:false as required by Supabase's
+  managed cert). This is the primary data source.
+- server/lib/range.js — month-window date-range helper (3m/6m/12m/ytd →
+  start date + a complete month-bucket axis) and `fillMonths` to left-join
+  query results onto that axis so trends never have gaps.
+- server/lib/sql.js — shared SQL fragments: SOURCE_BUCKET (buckets the
+  free-text lead-source/program taxonomy MAG encodes in
+  activecampaign_deals.title after "//", e.g. "Acme // Keynote") and
+  LEAD_SOURCE_LABEL (friendly labels for leads.source_table).
+- server/lib/metric.js — `live()/pending()/section()` wrappers giving every
+  metric its consistent {value, unit, delta, meta} (or {data, meta} for
+  sections) shape.
+- server/metrics/{sales,marketing,operations}.js — compose the real Supabase
+  queries (deals, leads, follow_up_sequence_logs, ac_custom_fields,
+  google_reviews, activecampaign_contacts/accounts) into the API payloads;
+  each returns a `notConfigured()` fallback (all metrics "pending") if
+  SUPABASE_DB_URL isn't set, so the app never hard-fails on a missing
+  credential.
 - public/ — plain static frontend, served directly (NO build step):
-  - login.html, sales.html, marketing.html, operations.html (one per screen;
-    tab bar = links between pages)
-  - app.css — shared styling; light/dark theming via CSS variables
-  - app.js — shared logic: auth/token, fetchMetrics, formatting, theme, and
-    Chart.js helpers (lineChart/barChart/pieChart/renderKpis/renderTable);
-    initPage(area, renderFn) bootstraps each page. JWT in localStorage; shared
-    date range persisted in localStorage across pages.
+  - login.html, sales.html, marketing.html, operations.html (tab bar = links)
+  - app.css — shared styling incl. chip/"needs setup" placeholder styles
+  - app.js — shared logic: auth/token, fetchMetrics, formatting, theme,
+    Chart.js helpers (lineChart/barChart/pieChart/renderKpis/renderTable),
+    metaChips()/renderPendingBody() for source & needs-setup badges,
+    monthLabel()/weekLabel() for the new month/week-bucketed charts.
+    initPage(area, renderFn) bootstraps each page; date range now defaults to
+    "12m" (was "30d") to match the month-window API.
   - vendor/chart.umd.min.js — Chart.js vendored locally (no CDN).
 
+DATA MODEL / CAVEATS (important for anyone touching the queries)
+- `activecampaign_deals.value` is stored in CENTS — always divide by 100.
+  `currency` is mixed-case ("aud"/"AUD"/"usd"/...) — always lower() it.
+- Deal value is CRM-contracted value, not billed revenue — Xero (not yet
+  connected) is the source of truth for invoiced/billed amounts.
+- Real demo/proposal signal is `ac_custom_fields.demo_date` /
+  `.proposal_sent` — NOT `activecampaign_deals.demo_date_is_added` /
+  `.proposal_sent_bool_is_added`, which are backfill-processed flags (true for
+  every row) and meaningless as activity signals.
+- `follow_up_sequence_logs` has only (id, created_at, lead_type, message_no) —
+  no person identifier — so "people reached" cannot be derived from it; only
+  send counts are computed.
+- `leads.is_referred` is used as a rough direct/indirect proxy, but "bureau"
+  is not an explicit tag anywhere in Supabase; treat that split as
+  approximate (also true for the historical Direct/Indirect ratio in the
+  Google "MAG BUYER ANALYSIS" sheet, ≈437:169, not yet wired in).
+- Ignore `ac_deals_160726` / `ac_contacts_170726` (empty one-off backup
+  snapshots) if exploring the schema further.
+
 BUILD / RUN
-- Dev: `npm install` (server deps only) then `npm run dev` (nodemon, :8080) or
-  `npm start`. Editing public/ files needs only a browser refresh.
+- Dev: `npm install` (installs bcryptjs, express, jsonwebtoken, pg) then
+  `npm run dev` (nodemon, :8080) or `npm start`. Without SUPABASE_DB_URL set,
+  all metrics endpoints still respond 200 with every tile marked "pending" —
+  useful for frontend-only work.
 - No `npm run build` and no client install step.
 - Container: single-stage Dockerfile (npm install --omit=dev; copy server/ +
   public/; run on Node 20 alpine).
 
-ENVIRONMENT VARIABLES
-- JWT_SECRET — JWT signing secret. MUST be set in any deployment (server warns
-  and uses an insecure dev default if unset). On Cloud Run it is set as a service
-  env var. The generated production value is stored locally at
-  %TEMP%\mag_jwt_secret.txt (NOT in the repo).
-- JWT_TTL — token lifetime (default 8h). PORT — listen port (Cloud Run sets it).
+ENVIRONMENT VARIABLES / CREDENTIALS
+- JWT_SECRET — JWT signing secret (unrelated to data sources). Set on Cloud
+  Run as a plain env var; generated value kept locally, NOT in the repo.
+- SUPABASE_DB_URL — full Postgres connection string for the MAG Supabase
+  project (session pooler). **Stored in Google Secret Manager** as the secret
+  `SUPABASE_DB_URL` in project claudegwscli-502400, mounted into Cloud Run via
+  `--set-secrets SUPABASE_DB_URL=SUPABASE_DB_URL:latest`. Not present in the
+  repo or in any local file — only Cloud Run's runtime service account
+  (`<project-number>-compute@developer.gserviceaccount.com`) has
+  secretmanager.secretAccessor on it.
+- AC_API_URL / AC_API_KEY, XERO_CLIENT_ID/XERO_CLIENT_SECRET/
+  XERO_REFRESH_TOKEN/XERO_TENANT_ID, CALENDLY_TOKEN, MONDAY_TOKEN,
+  GOOGLE_SERVICE_ACCOUNT_JSON / BUYER_ANALYSIS_SHEET_ID — read by
+  server/config.js but NOT YET SET; the metrics they'd unlock are the ones
+  currently flagged "needs setup" (see PENDING METRICS).
 
 EXTERNAL INTEGRATIONS
-- Google Cloud Run — hosts the deployed container.
-  Project: claudegwscli-502400, region australia-southeast1.
-  Live URL: https://dashboard-659687081407.australia-southeast1.run.app
-  Deployed via `gcloud run deploy dashboard --source .` (Cloud Build builds the
-  Dockerfile). --allow-unauthenticated at the network layer; the app's JWT login
-  is the actual gate. Service scales to zero (free-tier friendly for mockup use).
+- **Supabase** (MAG's "MAGTestProject", ref aivitcomiywiysrfwqxt,
+  ap-northeast-1) — direct Postgres access via `pg`, credential in Secret
+  Manager (see above). This mirrors most of MAG's other systems: the AC deal
+  pipeline, demo/proposal flags, outbound-sequence logs, leads, contacts,
+  accounts, and Google reviews. LIVE.
+- **Google Cloud Run** — hosts the deployed container. Project
+  claudegwscli-502400, region australia-southeast1. Live URL:
+  https://dashboard-659687081407.australia-southeast1.run.app. Deployed via
+  `gcloud run deploy dashboard --source . --set-secrets
+  SUPABASE_DB_URL=SUPABASE_DB_URL:latest`. --allow-unauthenticated at the
+  network layer; the app's JWT login is the actual gate. Scales to zero.
+- **ActiveCampaign, Xero, Calendly, monday.com, Google Sheets** — identified
+  as sources during exploration and mapped in the plan, but NOT YET
+  CONNECTED from the deployed app (no credentials configured). See PENDING
+  METRICS.
 
 DATA STORES
-- None. All metrics are generated in-memory by server/data/*; users are the seeded
-  array in server/users.js. No database.
+- No app-owned database. All metrics are read live (with a short in-memory
+  cache) from MAG's existing Supabase Postgres project; users for login are
+  the seeded array in server/users.js (unrelated to the data layer).
+
+PENDING METRICS (flagged "needs setup" in the UI, not silently faked)
+- Sales: Google Ads inquiry attribution (no tagging in any source yet);
+  replies-per-week (not tracked anywhere — Supabase's only `replied` column
+  is always 0).
+- Marketing: full 10-way lead-source split (needs AC's existing "Lead
+  Source" custom field populated — currently only outbound sources are
+  derivable); email open/click/unsubscribe rates (needs ActiveCampaign API);
+  demo calls booked (needs Calendly); keynote→offsite conversion rate (needs
+  keynote clients consistently flagged via AC's "Sent Post Keynote Invite").
+- Operations: buyer segmentation by industry/size/seniority (needs the
+  Google "MAG BUYER ANALYSIS" sheet connected via a service account);
+  keynote delivery pipeline phase (needs monday.com's Direct/Indirect
+  Keynote Management boards — real data exists there, just not wired in).
 
 AUTOMATIONS / ROUTINES
-- None.
-
-OTHER
-- gpc_proj_id.txt holds the GCP project ID (claudegwscli-502400) — not a secret.
+- None owned by this app. (MAG's own lead-generation/outreach automations —
+  LinkedIn scraping, cold-lead sequencing, proposal routing — write into the
+  Supabase tables this dashboard reads; they are external to this repo.)
 ================================================================================

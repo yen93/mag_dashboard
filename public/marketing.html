@@ -26,44 +26,47 @@
     <div class="toolbar">
       <strong>Marketing overview</strong>
       <div class="spacer"></div>
-      <span class="muted" style="font-size:13px">Date range</span>
+      <span class="muted" style="font-size:13px">Period</span>
       <div class="segmented" id="rangeToggle">
-        <button data-range="7d">7D</button>
-        <button data-range="30d">30D</button>
-        <button data-range="90d">90D</button>
+        <button data-range="3m">3M</button>
+        <button data-range="6m">6M</button>
+        <button data-range="12m">12M</button>
         <button data-range="ytd">YTD</button>
       </div>
     </div>
 
     <div class="kpi-grid" id="kpis"></div>
 
-    <div class="grid" style="margin-bottom:16px">
-      <div class="card col-12">
-        <div class="card-head">
-          <h3>Acquisition over time</h3>
-          <div class="spacer"></div>
-          <div class="segmented" data-view-for="acq">
-            <button data-view="chart" class="active">Chart</button>
-            <button data-view="table">Table</button>
-          </div>
-        </div>
-        <div class="chart-box" id="acq-chart"><canvas id="acqCanvas"></canvas></div>
-        <div id="acq-table" hidden></div>
-      </div>
-    </div>
-
     <div class="grid">
-      <div class="card col-6">
-        <div class="card-head"><h3>Traffic sources</h3></div>
-        <div class="chart-box short"><canvas id="channelsCanvas"></canvas></div>
+      <div class="card col-8">
+        <div class="card-head"><h3>New Google reviews per month</h3><span class="chips" id="revChips"></span></div>
+        <div class="chart-box" id="rev-chart"><canvas id="reviewsCanvas"></canvas></div>
       </div>
-      <div class="card col-6">
-        <div class="card-head"><h3>Conversion funnel</h3></div>
-        <div class="chart-box short"><canvas id="funnelCanvas"></canvas></div>
+      <div class="card col-4">
+        <div class="card-head"><h3>New leads by source</h3><span class="chips" id="srcChips"></span></div>
+        <div class="chart-box" id="src-chart"><canvas id="sourceCanvas"></canvas></div>
       </div>
-      <div class="card col-12">
-        <div class="card-head"><h3>Campaign performance</h3></div>
-        <div id="campaignsTable"></div>
+
+      <div class="card col-7">
+        <div class="card-head"><h3>Keynotes &amp; offsites booked</h3><span class="chips" id="bookChips"></span></div>
+        <div id="bookingsTable"></div>
+      </div>
+      <div class="card col-5">
+        <div class="card-head"><h3>New leads per month</h3><span class="chips" id="leadChips"></span></div>
+        <div class="chart-box short"><canvas id="leadsCanvas"></canvas></div>
+      </div>
+
+      <div class="card col-4">
+        <div class="card-head"><h3>Email open / click / unsub</h3><span class="chips" id="emailChips"></span></div>
+        <div id="email-body"></div>
+      </div>
+      <div class="card col-4">
+        <div class="card-head"><h3>Demo calls booked</h3><span class="chips" id="demoChips"></span></div>
+        <div id="demo-body"></div>
+      </div>
+      <div class="card col-4">
+        <div class="card-head"><h3>Keynote → offsite conversion</h3><span class="chips" id="k2oChips"></span></div>
+        <div id="k2o-body"></div>
       </div>
     </div>
   </main>
@@ -71,37 +74,42 @@
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js"></script>
   <script>
+    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+
     function renderMarketing(data) {
       renderKpis('kpis', [
-        { label: 'Leads', value: data.kpis.leads.value, unit: 'count', delta: data.kpis.leads.delta },
-        { label: 'Signups', value: data.kpis.signups.value, unit: 'count', delta: data.kpis.signups.delta },
-        { label: 'Conversion rate', value: data.kpis.convRate.value, unit: 'percent', delta: data.kpis.convRate.delta },
-        { label: 'Email open rate', value: data.kpis.openRate.value, unit: 'percent', delta: data.kpis.openRate.delta },
+        { label: 'New leads (this month)', metric: data.kpis.newLeads },
+        { label: 'Google reviews (this month)', metric: data.kpis.reviews },
+        { label: 'Demos (this month)', metric: data.kpis.demosBooked },
+        { label: 'Keynotes booked (period)', metric: data.kpis.keynotes },
       ]);
 
-      var series = [
-        { key: 'leads', label: 'Leads', color: '#3b6ef0', unit: 'count' },
-        { key: 'signups', label: 'Signups', color: '#17a673', unit: 'count' },
-        { key: 'sessions', label: 'Sessions', color: '#f0a63b', unit: 'count' },
-      ];
-      lineChart('acqCanvas', data.timeseries, series);
-      wireViewToggle('acq', function () {
-        renderTable('acq-table', data.timeseries, [{ key: 'date', label: 'Date', render: shortDate }]
-          .concat(series.map(function (s) { return { key: s.key, label: s.label, unit: s.unit }; })));
-      });
+      // Reviews per month
+      setChips('revChips', data.reviewsTrend.meta);
+      barChart('reviewsCanvas', data.reviewsTrend.data.map(function (d) { return monthLabel(d.month); }),
+        data.reviewsTrend.data.map(function (d) { return d.reviews; }), { colors: '#17a673' });
 
-      pieChart('channelsCanvas', data.channels.map(function (c) { return { label: c.source, value: c.value }; }));
+      // New leads by source (partial)
+      setChips('srcChips', data.leadsBySource.meta);
+      pieChart('sourceCanvas', data.leadsBySource.data);
 
-      barChart('funnelCanvas', data.funnel.map(function (f) { return f.stage; }),
-        data.funnel.map(function (f) { return f.value; }), { horizontal: true });
-
-      renderTable('campaignsTable', data.campaigns, [
-        { key: 'name', label: 'Campaign' },
-        { key: 'sent', label: 'Sent', unit: 'count' },
-        { key: 'openRate', label: 'Open rate', unit: 'percent' },
-        { key: 'clickRate', label: 'Click rate', unit: 'percent' },
-        { key: 'conversions', label: 'Conversions', unit: 'count' },
+      // Keynotes & offsites table
+      setChips('bookChips', data.bookings.meta);
+      renderTable('bookingsTable', data.bookings.data, [
+        { key: 'type', label: 'Program' },
+        { key: 'count', label: 'Booked (won)', unit: 'count' },
+        { key: 'value', label: 'Contracted value', unit: 'currency' },
       ]);
+
+      // Leads per month
+      setChips('leadChips', data.leadsTrend.meta);
+      barChart('leadsCanvas', data.leadsTrend.data.map(function (d) { return monthLabel(d.month); }),
+        data.leadsTrend.data.map(function (d) { return d.leads; }));
+
+      // Pending tiles
+      setChips('emailChips', data.emailRates.meta); renderPendingBody('email-body', data.emailRates.meta);
+      setChips('demoChips', data.demoCallsBooked.meta); renderPendingBody('demo-body', data.demoCallsBooked.meta);
+      setChips('k2oChips', data.keynoteToOffsite.meta); renderPendingBody('k2o-body', data.keynoteToOffsite.meta);
     }
 
     initPage('marketing', renderMarketing);

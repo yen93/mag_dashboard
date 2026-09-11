@@ -1,12 +1,14 @@
 # CLAUDE.md — MAG Metrics Dashboard
 
 Internal Sales/Marketing/Operations metrics dashboard. **Plain HTML/CSS/JS**
-frontend (no build step) + Express API in one deployable service, JWT login,
-**mock data** (no DB). Deployed on Google Cloud Run.
+frontend (no build step) + Express API in one deployable service, JWT login.
+**Sales and Operations are LIVE**, backed by real data queried at runtime from
+MAG's Supabase database; **Marketing is partially live**. Deployed on Google
+Cloud Run.
 
-> History: this started as a React + Vite app, then was converted to plain
-> editable HTML pages (so pages can be hand-edited without a build). There is no
-> more `client/`, Vite, or Recharts.
+> History: started as a React + Vite app → converted to plain editable HTML
+> pages → wired to real MAG data (Supabase primary, more sources planned). No
+> more `client/`, Vite, Recharts, or `server/data/` mock generators.
 
 ## Architecture (the non-obvious bits)
 - **Single origin.** `server/index.js` serves both `/api/*` and the static pages
@@ -18,53 +20,97 @@ frontend (no build step) + Express API in one deployable service, JWT login,
   variables drive theming). Shared logic in `public/app.js`. Each page has an
   inline `<script>` that calls `initPage(area, renderFn)` and maps API data onto
   charts/tables. **Do not add a bundler** — the point is hand-editability.
-- **Charts:** Chart.js, vendored locally at `public/vendor/chart.umd.min.js`
-  (loaded via `<script>` before `app.js`). No CDN dependency. `app.js` exposes
-  `lineChart` / `barChart` / `pieChart` / `renderKpis` / `renderTable` helpers;
-  charts read colors from CSS variables and are recreated on theme toggle.
-  Series show/hide uses Chart.js's built-in legend click; chart/table view uses
-  `wireViewToggle`.
+- **Charts:** Chart.js, vendored locally at `public/vendor/chart.umd.min.js`.
+  `app.js` exposes `lineChart`/`barChart`/`pieChart`/`renderKpis`/`renderTable`
+  plus `metaChips()`/`renderPendingBody()` for the source-chip / "needs setup"
+  badges every metric can carry. `monthLabel()`/`weekLabel()` format the
+  month/week-bucketed x-axes the live data uses (date range is now month-window
+  based: `3m`/`6m`/`12m`/`ytd`, default `12m` — not the old daily `7d`/`30d`).
 - **ESM on the server** (`"type":"module"` in package.json) — use `import`.
-- **Mock data is deterministic.** `server/data/util.js` seeded PRNG; generators
-  in `server/data/{sales,marketing,operations}.js` return a fixed shape
-  (`{ range, kpis, timeseries, ... }`). To go live, replace those bodies but KEEP
-  the shape — the pages and auth need no changes.
-- **Auth.** `server/users.js` seeds users, bcrypt-hashes passwords at load.
-  `server/auth.js` issues/verifies JWTs with `JWT_SECRET`. Frontend keeps the
-  token in `localStorage` (`app.js`), decodes it client-side for the user chip,
-  and a 401 from the API triggers logout → `login.html`. Shared date range also
-  persists in `localStorage` so it carries across pages.
+- **Data layer (live, not mock):**
+  - `server/config.js` — reads every source credential from env vars and
+    exposes `hasSource(name)`.
+  - `server/providers/supabase.js` — pooled `pg` connection; **the primary
+    data source**.
+  - `server/lib/range.js` — month-window date-range → a complete month-bucket
+    axis (`fillMonths` left-joins query rows onto it so trends have no gaps).
+  - `server/lib/sql.js` — shared SQL fragments, esp. `SOURCE_BUCKET` (buckets
+    the free-text taxonomy MAG encodes in `activecampaign_deals.title` after
+    `//`, e.g. `"Acme // Keynote"`).
+  - `server/lib/metric.js` — `live()`/`pending()`/`section()` wrap every value
+    in `{value, unit, delta, meta:{status, source, note}}` (or `{data, meta}`).
+  - `server/metrics/{sales,marketing,operations}.js` — compose real Supabase
+    queries into the API payload. Each has a `notConfigured()` fallback (all
+    metrics `pending`) if `SUPABASE_DB_URL` isn't set — **the app never
+    hard-fails on a missing credential**, tiles just show "needs setup".
+  - `server/index.js` metrics route is generic (`/api/metrics/:area`) and
+    caches each `(area, range)` response briefly via `server/lib/cache.js`.
+- **Auth (unchanged).** `server/users.js` seeds users, bcrypt-hashes passwords
+  at load. `server/auth.js` issues/verifies JWTs with `JWT_SECRET`. Frontend
+  keeps the token in `localStorage`, and a 401 triggers logout → `login.html`.
+
+## Data caveats — read before touching any query
+- `activecampaign_deals.value` is in **CENTS** — divide by 100. `currency` is
+  mixed-case (`aud`/`AUD`/`usd`) — always `lower()` it.
+- Deal value is **CRM-contracted**, not billed revenue (Xero would be billed).
+- Real demo/proposal signal is `ac_custom_fields.demo_date` /
+  `.proposal_sent` — **not** `activecampaign_deals.demo_date_is_added` /
+  `.proposal_sent_bool_is_added`, which are backfill flags, true for every row.
+- `follow_up_sequence_logs` has no person identifier (only id/created_at/
+  lead_type/message_no) — don't try to derive "people reached" from it.
+- `leads.is_referred` is only an approximate direct/indirect proxy; "bureau"
+  isn't explicitly tagged anywhere in Supabase yet.
+- Ignore `ac_deals_160726` / `ac_contacts_170726` — empty one-off backups.
 
 ## Build / run
-- Local: `npm install` (server deps only), then `npm run dev` (nodemon on :8080)
-  or `npm start`. Open http://localhost:8080. Editing `public/` files needs only
-  a browser refresh, no restart.
-- There is **no** `npm run build` and no client install step anymore.
+- Local: `npm install` then `npm run dev` (nodemon on :8080) or `npm start`.
+  Without `SUPABASE_DB_URL` set, metrics endpoints still return 200 with every
+  tile marked `pending` — fine for frontend-only work.
+- No `npm run build` and no client install step.
 
 ## Deploy (Cloud Run)
-- `gcloud run deploy dashboard --source . --region australia-southeast1
-  --allow-unauthenticated --set-env-vars JWT_SECRET=<secret>`
-  (single-stage Dockerfile: `npm install --omit=dev`, copy `server/` + `public/`,
-  run the server on Node 20 alpine.)
+```
+gcloud run deploy dashboard --source . --region australia-southeast1 \
+  --set-secrets SUPABASE_DB_URL=SUPABASE_DB_URL:latest
+```
+(single-stage Dockerfile: `npm install --omit=dev`, copy `server/` + `public/`,
+run on Node 20 alpine.) `JWT_SECRET` is already set on the service from a prior
+deploy — omit it on redeploys or it'll be dropped (use `gcloud run services
+describe dashboard --region australia-southeast1` to check current env/secrets
+before changing them).
 - Project `claudegwscli-502400`. Live URL:
   https://dashboard-659687081407.australia-southeast1.run.app
 - **gcloud is NOT on PATH by default** on this machine (installed via winget).
   Full path: `C:\Users\Cloverly\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd`.
-  A fresh terminal picks it up on PATH; an already-open one may not.
-- `--allow-unauthenticated` is intentional — the JWT login is the gate.
+- `--allow-unauthenticated` (network layer) is intentional — the JWT login is
+  the actual gate.
+
+## Credentials (see as_built.txt "PENDING METRICS" for what each unlocks)
+- **`SUPABASE_DB_URL`** — LIVE. Stored only in **Google Secret Manager**
+  (secret name `SUPABASE_DB_URL`, project `claudegwscli-502400`), mounted via
+  `--set-secrets`. Only Cloud Run's runtime service account has
+  `secretAccessor`. **Never put this in the repo or a local file that isn't
+  gitignored** — `.gitignore` blocks `*connection_string*`, `*_secret*`,
+  `*credentials*`, `service-account*.json`, `scratch_*`.
+- Not yet configured: `AC_API_URL`/`AC_API_KEY` (ActiveCampaign), `XERO_*`
+  (Xero OAuth), `CALENDLY_TOKEN`, `MONDAY_TOKEN`,
+  `GOOGLE_SERVICE_ACCOUNT_JSON`/`BUYER_ANALYSIS_SHEET_ID` (the MAG Buyer
+  Analysis sheet). Read from env by `server/config.js`; add each the same way
+  as Supabase (Secret Manager + `--set-secrets`) when connected.
 
 ## Gotchas
-- **Env vars:** `JWT_SECRET` MUST be set in any deployment (server warns + uses an
-  insecure dev default otherwise). The production value lives at
-  `%TEMP%\mag_jwt_secret.txt`, not in the repo. `JWT_TTL` default 8h; `PORT`
-  default 8080 (Cloud Run sets it).
+- **Testing a new DB credential:** never inline a password in a Bash command
+  or print a connection string — read it from an env var in a throwaway script,
+  print only success/failure and non-secret diagnostics, then delete the
+  script. `pg` needs `ssl:{rejectUnauthorized:false}` for Supabase's pooler.
 - **Windows/shells:** the `!` in-session prompt runs **Bash**, not PowerShell —
   don't use PowerShell `&`/`$` call syntax there.
-- **Leftover dev processes lock files.** A stray `vite`/`esbuild` from an old
-  `npm run dev` can lock folders on Windows; kill the node/esbuild tree if a
+- **Leftover dev processes lock files.** A stray `vite`/`esbuild`/`node` from an
+  old `npm run dev` can lock folders on Windows; kill the process tree if a
   delete/rename fails with "resource busy".
 - Dockerfile uses `npm install` (not `npm ci`); no lockfile-strict install.
 
 ## Demo logins
 admin@myadventuregroup.com.au / admin123 (also sales@ / sales123,
-marketing@ / marketing123). Defined in `server/users.js`.
+marketing@ / marketing123). Defined in `server/users.js` — unrelated to the
+data-source credentials above.
