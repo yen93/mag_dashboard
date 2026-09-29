@@ -1,0 +1,177 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-09-29
+Session: Build a sortable/searchable "LIV pipeline" 2026 deals table for the
+Sales page of the MAG metrics dashboard — planned, implemented (Supabase +
+ActiveCampaign live enrichment), validated locally; deploy pending.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Pointed to sales/initial_prompt.txt. Task: create an HTML page that auto-syncs
+all deals under the "Keynotes // Workshops // Immersive (LIV)" pipeline as a
+sortable/searchable table, and put it in the Sales page of the live dashboard
+(https://dashboard-659687081407.australia-southeast1.run.app). Columns: date
+created, account, lead type (Inbound/Outbound? from a "General Details" group),
+primary contact name, primary contact job title, last deal note, date of latest
+deal note, deal owner, "Replied back to us" (yes/no from deal stage), deal
+status, demo date, Magalog sent?, proposal sent?
+(Session started in plan mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Launched two Explore agents in parallel:
+1) Codebase structure — confirmed the app is plain HTML/CSS/JS + Express (ESM),
+   single origin. Routes are registered in server/index.js; the generic
+   /api/metrics/:area router is guarded by requireAuth and wrapped by
+   cached(key, producer, ttlMs). server/providers/supabase.js exports
+   q(sql, params) and supabaseConfigured(). server/lib/metric.js exports
+   live()/pending()/section(). public/app.js exposes renderKpis/renderTable/
+   chart helpers/metaChips/initPage — crucially renderTable is STATIC (no sort
+   or search), so a sortable/searchable helper would need to be added.
+   public/app.css has reusable table.data / .card.col-12 / .pill / chip styles.
+2) Data/schema (via Supabase MCP) — the MAG data lives in Supabase project
+   "MAGTestProject" (ref aivitcomiywiysrfwqxt). The pipeline is
+   activecampaign_deals."group" = '3'. Mapped each column: 7 are available in
+   Supabase (date created=cdate, account via activecampaign_accounts, contact
+   via activecampaign_contacts, replied from stage, status 0/1/2, demo_date and
+   proposal_sent from ac_custom_fields taking the latest row per deal); 6 are
+   ONLY in ActiveCampaign (lead type, job title, last note + note date, owner
+   NAME [Supabase has only the numeric owner id], Magalog). Stage set for the
+   pipeline and their meanings were enumerated (71=CONTACT MADE NO REPLY,
+   70=REPLY YES, 69=REPLY NO, 58=demo booked, 59=proposal, 15=won, plus 121/
+   113/12). value is in cents; currency is mixed-case.
+
+--------------------------------------------------------------------------------
+USER:
+Clarified: don't need all deals — only deals created in 2026.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Acknowledged; scoped to cdate within 2026. (The data agent later reported 259
+such deals: 107 open / 28 won / 124 lost.)
+
+--------------------------------------------------------------------------------
+ASSISTANT (after data agent returned):
+Surfaced the key decision — 6 of 13 columns aren't in Supabase — and asked two
+questions via AskUserQuestion: (1) how to source the AC-only columns, and (2)
+how "Replied back to us" should map from stage.
+
+--------------------------------------------------------------------------------
+USER:
+(1) Wire ActiveCampaign into the app now so all 13 columns are live.
+(2) "Replied = Yes" for any reply — stages 70, 69, and all downstream; No only
+for 71 (contact made, no reply) and earlier.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the critical files (config.js — already has activecampaign.apiUrl/apiKey +
+hasSource('activecampaign'); metric.js; sales.js; app.js; sales.html;
+index.js; cache.js; app.css). Validated the core Supabase SELECT live via the
+MCP (join accounts/contacts + LATERAL latest ac_custom_fields; CASE for replied
+and status; COALESCE account to the deal title's first segment) — it returned
+the expected rows. Wrote the plan to the plan file and called ExitPlanMode.
+
+--------------------------------------------------------------------------------
+USER:
+Approved the plan.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented:
+- NEW server/providers/activecampaign.js — acConfigured(), acGet() (Api-Token
+  header; retry with backoff on 429/5xx honouring Retry-After), acGetSafe(),
+  acPaginate(), pMapLimit() (concurrency limiter).
+- NEW server/metrics/liv-deals.js — getLivDeals(): runs the validated Supabase
+  query (group '3', cdate in 2026), then enrichFromAC() fills owner name (from
+  /users), lead type + job title + Magalog (from dealCustomFieldMeta label
+  matching + per-deal dealCustomFieldData), and last note + date (per-deal
+  /notes). Fail-soft: missing AC config or per-call errors mark the section
+  "partial" and leave cells null rather than failing.
+- server/index.js — new requireAuth router GET /api/sales/deals wrapped in
+  cached('sales:deals', getLivDeals, 30*60*1000).
+- public/app.js — added fetchJSON(path) (auth + 401 logout, reused by
+  fetchMetrics) and renderSortableTable(containerId, rows, columns, opts) with
+  clickable header sorting + a search box; added fmtDate().
+- public/sales.html — added a full-width "LIV pipeline deals — 2026" card
+  (chips + row count + search) rendered from /api/sales/deals via loadLivDeals()
+  with all 13 columns; called once after initPage.
+- public/app.css — .table-search, .table-scroll, sortable-th affordances,
+  .pill.pos/.neg.
+Ran node --check on all changed files (clean). Booted the server locally and hit
+/api/health, /api/login (got a token), and /api/sales/deals — with no local
+Supabase creds it correctly returned the graceful "pending" shape, proving the
+wiring and fallback. Stopped the local server.
+
+--------------------------------------------------------------------------------
+USER:
+Said the AC credentials are already in Google Secret Manager.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Tried to list Secret Manager secrets via gcloud (full winget path) but every
+API-hitting gcloud call failed with "Reauthentication failed. cannot prompt
+during non-interactive execution" — the org's reauth policy can't be satisfied
+in a non-interactive shell (confirmed it wasn't the sandbox; even the in-session
+"!" prefix and a fresh auth login didn't help). Concluded the actual deploy must
+run in the user's external terminal, but the rest could be done here.
+
+--------------------------------------------------------------------------------
+USER:
+Provided sales/ac_creds.txt (the AC API URL + key).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Used the file ONLY inside throwaway scratchpad scripts (never read into the
+chat), printing non-secret diagnostics. Probe findings:
+- Base URL host myadventuregroup.api-us1.com; 8 users (owner id->name works).
+- The columns are DEAL custom fields (the "General Details" group): "Inbound/
+  Outbound?" = field 14 (lead type), "Magalog sent?" = field 11. Demo date (17)
+  and Proposal sent (15) exist too but we already get those from Supabase.
+- "Job Title" does NOT exist as a deal or contact field anywhere in AC — that
+  column will legitimately show "—".
+- Single-deal ?include= does NOT sideload; the sub-resource endpoints
+  deals/{id}/dealCustomFieldData and deals/{id}/notes both work (notes carry
+  cdate + HTML note body). dealCustomFieldData records carry customFieldId ==
+  meta id.
+- Bulk-filtering dealCustomFieldData by field id is unsupported (filters[...]
+  return 422; the bare param is ignored — 25,471 unfiltered records), so lead
+  type + Magalog must be fetched per deal.
+Updated the code accordingly: per-deal fetch calls the two sub-resource
+endpoints directly (dropped the useless include), concurrency 6, provider
+retries on 429. Then validated the REAL provider + enrichment against live AC
+for 6 known 2026 deals — resolved field ids leadType=14 / magalog=11 /
+jobTitle=null; owner names, lead type, Magalog, and latest note + date all
+populated correctly (nulls were genuinely-unset fields); ~2.2s for 6 deals
+(=> ~90s cold for 259, then 30-min cache).
+
+--------------------------------------------------------------------------------
+USER:
+Provided sales/gsm_secrets.txt (the list of Secret Manager secret NAMES only).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Names: AC_API_URL, AC_API_TOKEN (the AC key — app env var AC_API_KEY maps to
+this secret), SUPABASE_DB_URL (plus unrelated OpenAI/n8n/supabase/etc). Deleted
+ac_creds.txt and gsm_secrets.txt from the repo tree (they were not git-ignored
+and would otherwise be uploaded by `gcloud run deploy --source .`). Prepared the
+external-terminal deploy: discover the runtime service account, grant it
+secretAccessor on AC_API_URL and AC_API_TOKEN (idempotent), then
+`gcloud run deploy dashboard --source . --region australia-southeast1
+--set-secrets SUPABASE_DB_URL=SUPABASE_DB_URL:latest,AC_API_URL=AC_API_URL:latest,
+AC_API_KEY=AC_API_TOKEN:latest` (JWT_SECRET is a plain env var, left untouched).
+Plan is to validate the live endpoint from here after deploy.
+
+--------------------------------------------------------------------------------
+USER:
+Asked whether to use cmd.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Advised PowerShell (the deploy block uses PowerShell syntax), with how to open
+it, and offered a cmd-friendly / one-line-at-a-time alternative. Then the user
+invoked /save-chat-history (this export). Deploy and live validation are still
+pending at time of export.
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -1,0 +1,21 @@
+## Your task:
+create an html page to auto sync all deals under the "Keynotes // Workshops // Immersive (LIV)" pipeline. 
+it can just be like a table that can be sorted and searched.
+
+## columns should be: 
+date created, 
+account, 
+lead type (from Inbound/ Outbound? field under General Details group),
+Primary Contact name,
+Primary contact Job Title,
+last deal note,
+date of latest deal note,
+deal owner,
+Replied back to us (yes/no; based on the deal stage)
+deal status,
+Demo Date,
+Magalog sent?,
+Proposal sent?
+
+## where to deploy:
+put it in the sales page of our live dashboard: https://dashboard-659687081407.australia-southeast1.run.app

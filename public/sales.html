@@ -40,6 +40,18 @@
     <div class="grid" style="margin-bottom:16px">
       <div class="card col-12">
         <div class="card-head">
+          <h3>LIV pipeline deals — 2026</h3>
+          <span class="chips" id="livChips"></span>
+          <div class="spacer"></div>
+          <span class="muted" id="livCount" style="font-size:13px"></span>
+        </div>
+        <div id="livDeals"></div>
+      </div>
+    </div>
+
+    <div class="grid" style="margin-bottom:16px">
+      <div class="card col-12">
+        <div class="card-head">
           <h3>Deals over time</h3>
           <span class="chips" id="trendChips"></span>
           <div class="spacer"></div>
@@ -161,7 +173,54 @@
       setChips('repliesChips', data.replies.meta); renderPendingBody('replies-body', data.replies.meta);
     }
 
+    // ---- LIV pipeline deals table (own endpoint; independent of the period toggle) ----
+    function livStatusPill(s) {
+      var cls = s === 'won' ? 'pos' : s === 'lost' ? 'neg' : '';
+      return '<span class="pill ' + cls + '">' + esc(s || '—') + '</span>';
+    }
+    function livText(v) { return v ? esc(v) : '—'; }
+    function livNote(v) {
+      if (!v) return '—';
+      var t = String(v), short = t.length > 90 ? t.slice(0, 90) + '…' : t;
+      return '<span title="' + esc(t) + '">' + esc(short) + '</span>';
+    }
+
+    function loadLivDeals() {
+      var host = document.getElementById('livDeals');
+      host.innerHTML = '<div class="muted" style="padding:14px">Loading deals…</div>';
+      fetchJSON('/api/sales/deals').then(function (data) {
+        setChips('livChips', data.deals.meta);
+        renderSortableTable('livDeals', data.deals.data || [], [
+          { key: 'dateCreated', label: 'Created', unit: 'date' },
+          { key: 'account', label: 'Account', render: livText },
+          { key: 'leadType', label: 'Lead type', render: livText },
+          { key: 'contact', label: 'Primary contact', render: livText },
+          { key: 'jobTitle', label: 'Job title', render: livText },
+          { key: 'lastNote', label: 'Last note', render: livNote },
+          { key: 'lastNoteDate', label: 'Note date', unit: 'date' },
+          { key: 'owner', label: 'Owner', render: livText },
+          { key: 'replied', label: 'Replied', render: livText },
+          { key: 'status', label: 'Status', render: livStatusPill },
+          { key: 'demoDate', label: 'Demo date', unit: 'date' },
+          { key: 'magalogSent', label: 'Magalog', render: livText },
+          { key: 'proposalSent', label: 'Proposal', render: livText },
+        ], {
+          searchPlaceholder: 'Search deals…',
+          sortKey: 'dateCreated', sortDir: 'desc',
+          emptyText: 'No 2026 deals in this pipeline.',
+          onCount: function (shown, total) {
+            var el = document.getElementById('livCount');
+            if (el) el.textContent = shown === total ? (total + ' deals') : (shown + ' of ' + total + ' deals');
+          },
+        });
+      }).catch(function (err) {
+        console.error(err);
+        host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load deals</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
     initPage('sales', renderSales);
+    if (currentUser()) loadLivDeals();
   </script>
 </body>
 </html>

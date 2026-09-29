@@ -42,16 +42,21 @@ function apiLogin(email, password) {
   });
 }
 
-function fetchMetrics(area, range) {
-  return fetch('/api/metrics/' + area + '?range=' + encodeURIComponent(range), {
+// GET any authenticated JSON endpoint (adds the Bearer token, logs out on 401).
+function fetchJSON(path) {
+  return fetch(path, {
     headers: { Authorization: 'Bearer ' + getToken() },
   }).then(function (res) {
     if (res.status === 401) { logout(); throw new Error('Session expired'); }
     return res.json().then(function (data) {
-      if (!res.ok) throw new Error(data.error || 'Failed to load metrics');
+      if (!res.ok) throw new Error(data.error || 'Request failed');
       return data;
     });
   });
+}
+
+function fetchMetrics(area, range) {
+  return fetchJSON('/api/metrics/' + area + '?range=' + encodeURIComponent(range));
 }
 
 /* ---------- Formatting ---------- */
@@ -78,6 +83,13 @@ function monthLabel(ym) {
 }
 // Week label from a 'YYYY-MM-DD' (ISO week start).
 function weekLabel(iso) { return shortDate(iso); }
+// Full date "12 Feb 2026" (empty string for null/invalid).
+function fmtDate(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleDateString('en-AU', { day: '2-digit', month: 'short', year: 'numeric' });
+}
 
 /* ---------- Theme ---------- */
 var THEME_KEY = 'mag_theme';
@@ -164,6 +176,95 @@ function renderTable(containerId, rows, columns) {
   }).join('');
   document.getElementById(containerId).innerHTML =
     '<table class="data"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
+}
+
+/* Sortable + searchable table. Builds its own search box and re-renders on
+   header click / typing. columns: [{key,label,unit,render}] (same shape as
+   renderTable; `unit:'date'` sorts chronologically). opts:
+   { search, searchPlaceholder, emptyText, sortKey, sortDir, onCount }.
+   Cell text is escaped unless a column supplies its own `render` (which is
+   responsible for escaping its output). */
+function renderSortableTable(containerId, rows, columns, opts) {
+  opts = opts || {};
+  var host = document.getElementById(containerId);
+  if (!host) return;
+  var state = { key: opts.sortKey || null, dir: opts.sortDir || 'asc', q: '' };
+
+  function isNum(c) { return c && c.unit && c.unit !== 'text' && c.unit !== 'date'; }
+  // Plain-text projection of a cell, used for search + text sorting.
+  function textOf(row, c) {
+    var v = row[c.key];
+    if (c.render) return String(c.render(v, row) == null ? '' : c.render(v, row)).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+    if (v == null) return '';
+    if (isNum(c)) return String(fmt(v, c.unit));
+    if (c.unit === 'date') return fmtDate(v);
+    return String(v);
+  }
+
+  function view() {
+    var list = rows.slice();
+    if (state.q) {
+      var q = state.q.toLowerCase();
+      list = list.filter(function (row) {
+        return columns.some(function (c) { return textOf(row, c).toLowerCase().indexOf(q) !== -1; });
+      });
+    }
+    if (state.key) {
+      var col = columns.filter(function (c) { return c.key === state.key; })[0];
+      list.sort(function (a, b) {
+        var av, bv;
+        if (isNum(col)) { av = Number(a[col.key]); bv = Number(b[col.key]); if (isNaN(av)) av = -Infinity; if (isNaN(bv)) bv = -Infinity; }
+        else if (col.unit === 'date') { av = new Date(a[col.key] || 0).getTime() || 0; bv = new Date(b[col.key] || 0).getTime() || 0; }
+        else { av = textOf(a, col).toLowerCase(); bv = textOf(b, col).toLowerCase(); }
+        if (av < bv) return state.dir === 'asc' ? -1 : 1;
+        if (av > bv) return state.dir === 'asc' ? 1 : -1;
+        return 0;
+      });
+    }
+    return list;
+  }
+
+  function draw() {
+    var list = view();
+    var thead = '<tr>' + columns.map(function (c) {
+      var active = state.key === c.key;
+      var caret = active ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '';
+      return '<th class="sortable ' + (isNum(c) ? 'num ' : '') + (active ? 'active' : '') +
+        '" data-key="' + esc(c.key) + '">' + esc(c.label) + caret + '</th>';
+    }).join('') + '</tr>';
+    var tbody = list.length ? list.map(function (row) {
+      return '<tr>' + columns.map(function (c) {
+        var v = row[c.key];
+        var cell = c.render ? c.render(v, row) : (v == null ? '—' : (isNum(c) ? fmt(v, c.unit) : (c.unit === 'date' ? esc(fmtDate(v)) : esc(v))));
+        return '<td class="' + (isNum(c) ? 'num' : '') + '">' + cell + '</td>';
+      }).join('') + '</tr>';
+    }).join('') : '<tr><td class="muted" colspan="' + columns.length + '">' + esc(opts.emptyText || 'No rows.') + '</td></tr>';
+
+    box.innerHTML = '<table class="data sortable-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
+    box.querySelectorAll('th.sortable').forEach(function (th) {
+      th.addEventListener('click', function () {
+        var k = th.getAttribute('data-key');
+        if (state.key === k) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
+        else { state.key = k; state.dir = 'asc'; }
+        draw();
+      });
+    });
+    if (typeof opts.onCount === 'function') opts.onCount(list.length, rows.length);
+  }
+
+  host.innerHTML = '';
+  if (opts.search !== false) {
+    var input = document.createElement('input');
+    input.type = 'search';
+    input.className = 'table-search';
+    input.placeholder = opts.searchPlaceholder || 'Search…';
+    input.addEventListener('input', function () { state.q = input.value.trim(); draw(); });
+    host.appendChild(input);
+  }
+  var box = document.createElement('div');
+  box.className = 'table-scroll';
+  host.appendChild(box);
+  draw();
 }
 
 /* ---------- Chart.js helpers ---------- */

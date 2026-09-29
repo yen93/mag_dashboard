@@ -5,6 +5,7 @@ import { authRouter, requireAuth } from './auth.js';
 import { getSales } from './metrics/sales.js';
 import { getMarketing } from './metrics/marketing.js';
 import { getOperations } from './metrics/operations.js';
+import { getLivDeals } from './metrics/liv-deals.js';
 import { cached } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
 
@@ -38,6 +39,23 @@ metrics.get('/:area', async (req, res) => {
   }
 });
 app.use('/api/metrics', metrics);
+
+// Sales sub-resources. The LIV pipeline deals table is a per-deal row list
+// (Supabase + ActiveCampaign enrichment), not a metrics payload, so it gets its
+// own endpoint. The AC per-deal fan-out makes a cold build slow, so it caches
+// for 30 min (the response is always the 2026 window — range is ignored).
+const sales = express.Router();
+sales.use(requireAuth);
+sales.get('/deals', async (_req, res) => {
+  try {
+    const payload = await cached('sales:deals', getLivDeals, 30 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[sales:deals]', err);
+    res.status(502).json({ error: 'Failed to load deals from data source.', detail: err.message });
+  }
+});
+app.use('/api/sales', sales);
 
 // Serve the plain HTML/CSS/JS pages from public/.
 const publicDir = path.join(__dirname, '..', 'public');
