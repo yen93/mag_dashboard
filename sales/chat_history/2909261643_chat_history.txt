@@ -1,0 +1,149 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-09-29
+Session: Simplify the Sales page to just the LIV pipeline table, add
+Google-Sheets-style per-column filters, fix the blank Job Title column (sourced
+from ActiveCampaign's account-contact association), rename the table, deploy to
+Cloud Run, and generate an iMAG guide page. All four changes live and verified.
+================================================================================
+
+NOTE ON REDACTIONS: While preserving existing service configuration for the
+redeploy, a `gcloud run services describe` call echoed the service's live
+JWT_SECRET env value; it has been replaced with [REDACTED_JWT_SECRET] here. The
+demo admin login used to validate the live endpoint is referred to without its
+password (a non-sensitive demo credential from server/users.js).
+
+--------------------------------------------------------------------------------
+USER:
+Pasted a 4-point request for the Sales page: (1) remove every widget except the
+"LIV pipeline deals — 2026" table; (2) add per-column filtering like a Google
+Sheets filter (choose which values to show); (3) double-check the Job title
+column, which is all blank; (4) rename the table from "LIV pipeline deals — 2026"
+to "Keynotes // Workshops // Immersive (LIV)".
+(Session started in plan mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Launched two Explore agents in parallel.
+1) Frontend — the LIV table is NOT drawn by the generic metrics flow: it uses
+   renderSortableTable() in public/app.js, fed by its own endpoint
+   /api/sales/deals (independent of the range toggle). initPage() handles login/
+   top-bar/theme wiring plus the range toggle and a metrics fetch. renderTable is
+   the static (non-interactive) builder; renderSortableTable adds a single global
+   search box + click-to-sort headers but no per-column filters. The LIV card is
+   a col-12 card with an h3 heading, chips span, and a #livDeals host.
+2) Backend — the table is built by server/metrics/liv-deals.js (GROUP_ID '3',
+   deals created in 2026). 7 columns come from Supabase; 6 are enriched from
+   ActiveCampaign in enrichFromAC(). jobTitle is hard-coded null and only ever
+   attempted from DEAL custom fields (matchFields looks for a deal field labelled
+   "job title" — none exists). A live schema check found no job-title column in
+   activecampaign_contacts, ac_custom_fields, deals, or leads (only an unrelated
+   referred_contacts.job_title).
+
+Read app.js (renderSortableTable + initPage), sales.html, and confirmed
+renderSortableTable is used ONLY by the LIV table (safe to extend). Concluded
+tasks 1/2/4 were clear but the Job title question needed a decision, so asked the
+user via AskUserQuestion whether to remove the blank column or keep it.
+
+--------------------------------------------------------------------------------
+USER:
+Answered with a screenshot: Job Title DOES exist — it's shown under a contact's
+"General Details" in ActiveCampaign (e.g. Jane Prisk → "Office Manager"), sitting
+right below "Account".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Recognised that "Account" + "Job Title" together in General Details is
+ActiveCampaign's native account↔contact ASSOCIATION field (accountContacts.
+jobTitle), not a contact or deal custom field. Verified via the AC MCP: listed
+all 50 contact custom fields — none is "Job Title". Confirmed via Supabase MCP
+that the association isn't synced (only referred_contacts.job_title exists). So
+the fix must enrich from the AC API at runtime, like the other AC-only columns.
+Read liv-deals.js in full, wrote the final plan (single-table page + column
+filters + accountContacts job-title enrichment + rename), and called
+ExitPlanMode.
+
+--------------------------------------------------------------------------------
+USER:
+Approved the plan.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented all four changes:
+- server/metrics/liv-deals.js — added `d.account AS account_id` to BASE_SQL and
+  accountId onto each row; added enrichFromAC step 5: fetch accountContacts once
+  via acPaginate, build maps by contact and by contact:account, and set
+  d.jobTitle (preferring the association matching the deal's own account).
+  Best-effort within the existing try/catch.
+- public/app.js — made initPage's renderFn optional (skip the /api/metrics fetch
+  when omitted). Extended renderSortableTable with Google-Sheets-style per-column
+  filters: state.filters map, filtering in view(), a ▾ funnel button per header
+  (kept separate from sort click), and a filter panel mounted on document.body
+  (distinct values as checkboxes, Select all / Clear, a value search box; closes
+  on outside-click/Escape/scroll; positioned via getBoundingClientRect so the
+  horizontal-scroll wrapper doesn't clip it).
+- public/app.css — styles for .th-filter-btn (+ active) and .col-filter-panel
+  (search, actions, checkbox list) using existing theme variables.
+- public/sales.html — removed the toolbar/period selector, KPI grid, "Deals over
+  time" card, and the eight-card grid; deleted the now-dead renderSales/MONTH;
+  changed initPage('sales', renderSales) → initPage('sales'); renamed the heading
+  to "Keynotes // Workshops // Immersive (LIV)".
+Ran `node --check` on app.js and liv-deals.js (both OK) and grep-confirmed no
+orphaned references (renderSales/kpis/dealsCanvas/wireViewToggle/rangeToggle/
+MONTH) remained in sales.html. Reported that the Job-title fix could only be
+verified against live AC + Supabase, and offered to run locally or deploy.
+
+--------------------------------------------------------------------------------
+USER:
+Deploy to Cloud Run.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Per CLAUDE.md, first described the existing service to preserve its config
+(gcloud isn't on PATH; Git Bash mishandled the spaced .cmd path, so used the
+PowerShell tool with the call operator). Found the service already has
+SUPABASE_DB_URL, AC_API_URL, AC_API_KEY (←secret AC_API_TOKEN) and a literal
+JWT_SECRET [REDACTED_JWT_SECRET] — so ActiveCampaign IS configured (CLAUDE.md's
+"AC not configured" note was stale). Deployed from the repo root with all three
+secrets on --set-secrets (since it replaces the full list; JWT_SECRET as a
+literal env is preserved):
+  gcloud run deploy dashboard --source <repo root> --region
+  australia-southeast1 --project claudegwscli-502400 --set-secrets
+  SUPABASE_DB_URL=...,AC_API_URL=...,AC_API_KEY=AC_API_TOKEN:latest --quiet
+Deploy succeeded — revision dashboard-00006-dzg serving 100% of traffic.
+
+Verified end-to-end: logged in via POST /api/login with the demo admin account,
+then GET /api/sales/deals. Result: status "live", source "Supabase +
+ActiveCampaign", 259 deals, and 180/259 now carry a job title (previously 0) —
+e.g. Jason Kidger → "Managing Director", Eva Adams → "Consultant". The remaining
+~79 blanks are contacts with no job title on their account association, as
+expected. Reminded the user to hard-refresh for the new static assets, and noted
+the changes are deployed but not yet committed to git.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /imag_page_local (build an iMAG-themed page locally from this chat).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the skill's template.html and wrote a self-contained iMAG-themed guide to
+C:/Users/Cloverly/claude_code/dashboard/sales-pipeline-table.html. Sections:
+intro (dark band), What you see on the page, Searching/sorting/filtering
+(including the new per-column filters), The Job title column (source + why some
+blank), How it's built (end-to-end architecture + tech-stack bullets, grounded in
+CLAUDE.md), and Getting to the page. Footer "Updated by: Julienne", "Last Update:
+29 September 2026". One placeholder image slot; no secrets included.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /save-chat-history.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote this transcript to sales/chat_history/2909261643_chat_history.txt after a
+full-conversation security scan (redacted the JWT_SECRET value that appeared in
+the service-describe output). Did NOT touch as_built.txt/CLAUDE.md and did NOT
+commit or push — that's /dcp.
+
+================================================================================
+END OF EXPORT
+================================================================================

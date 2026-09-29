@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sales Pipeline Table</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Lato:wght@300;400;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Lato', Arial, sans-serif; background: #ffffff; }
+  .col { max-width: 760px; margin: 0 auto; padding: 32px 20px; }
+  .header-band {
+    background: linear-gradient(rgba(0,0,0,0.4), rgba(0,0,0,0.4)), url(https://ssl.gstatic.com/atari/images/simple-header-blended-small.png) center/cover, #37474F;
+    min-height: 320px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 20px;
+  }
+  .header-band h1 {
+    color: #ffffff;
+    font-family: 'Lato', sans-serif;
+    font-weight: 300;
+    font-size: 44px;
+    letter-spacing: 0.5px;
+    margin: 0 0 12px 0;
+    line-height: 1.2;
+  }
+  .header-band .subtitle {
+    color: #ffffff;
+    font-family: 'Lato', sans-serif;
+    font-weight: 300;
+    font-size: 18px;
+    margin: 0;
+    opacity: 0.9;
+  }
+  .intro-band { background: #323232; }
+  .intro-band p {
+    color: #ffffff;
+    font-family: 'Lato', sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0;
+  }
+  .header-strip { background: #F2F2F2; }
+  .header-strip .col { padding: 32px 20px; }
+  .header-strip h2 {
+    color: #37474F;
+    font-family: 'Lato', sans-serif;
+    font-weight: 400;
+    font-size: 26px;
+    margin: 0;
+  }
+  .content-band { background: #ffffff; }
+  .content-band h3 {
+    color: #37474F;
+    font-family: 'Lato', sans-serif;
+    font-weight: 700;
+    font-size: 19px;
+    margin: 24px 0 8px 0;
+  }
+  .content-band h3:first-child { margin-top: 0; }
+  .content-band p {
+    color: #212121;
+    font-family: 'Lato', sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    margin: 0 0 16px 0;
+  }
+  .content-band ul, .content-band ol {
+    color: #212121;
+    font-family: 'Lato', sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    padding-left: 24px;
+    margin: 0 0 16px 0;
+  }
+  .content-band li { margin-bottom: 10px; }
+  .content-band a { color: #37474F; text-decoration: underline; }
+  .content-band code {
+    background: #F2F2F2;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 14px;
+  }
+  .placeholder-img {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+    margin: 8px 0 4px 0;
+    border: 1px solid #e0e0e0;
+  }
+  .placeholder-caption {
+    color: #757575;
+    font-family: 'Lato', sans-serif;
+    font-size: 13px;
+    font-style: italic;
+    margin: 0 0 16px 0;
+  }
+  .closing-band p {
+    color: #212121;
+    font-family: 'Lato', sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    margin: 0 0 4px 0;
+  }
+</style>
+</head>
+<body>
+
+<!-- HEADER BANNER (top of page only) -->
+<div class="header-band">
+  <div>
+    <h1>Sales Pipeline Table</h1>
+    <p class="subtitle">Keynotes // Workshops // Immersive (LIV) — MAG Metrics Dashboard</p>
+  </div>
+</div>
+
+<!-- TOP INTRO DARK BAND -->
+<div class="intro-band">
+  <div class="col">
+    <p>The Sales screen of the MAG Metrics dashboard is now a single, focused working list: the <strong>Keynotes // Workshops // Immersive (LIV)</strong> pipeline of deals created in 2026. The charts and KPI tiles have been removed so the page does one job well — let you read, search, sort and filter every deal in that pipeline, with the details pulled live from MAG's own systems.</p>
+  </div>
+</div>
+
+<!-- SECTIONS -->
+
+<div class="header-strip">
+  <div class="col"><h2>What you see on the page</h2></div>
+</div>
+<div class="content-band">
+  <div class="col">
+    <p>The page shows one table — every deal in the LIV pipeline that was created in 2026 — with a live count of how many deals are showing. Each row is one deal, with these columns:</p>
+    <ul>
+      <li><strong>Created</strong> — the date the deal was created.</li>
+      <li><strong>Account</strong> — the client organisation.</li>
+      <li><strong>Lead type</strong> — inbound or outbound.</li>
+      <li><strong>Primary contact</strong> — the person on the deal.</li>
+      <li><strong>Job title</strong> — the contact's role (see the section below).</li>
+      <li><strong>Last note</strong> and <strong>Note date</strong> — the most recent note logged against the deal.</li>
+      <li><strong>Owner</strong> — the MAG team member who owns the deal.</li>
+      <li><strong>Replied</strong> — whether the contact has replied.</li>
+      <li><strong>Status</strong> — open, won or lost (shown as a coloured pill).</li>
+      <li><strong>Demo date</strong>, <strong>Magalog</strong> and <strong>Proposal</strong> — key milestone signals for the deal.</li>
+    </ul>
+    <p>A small chip above the table shows where the data came from — Supabase plus ActiveCampaign when everything is connected.</p>
+    <img class="placeholder-img" src="https://placehold.co/900x400/eeeeee/37474f?text=Sales%20pipeline%20table" alt="Sales pipeline table">
+    <p class="placeholder-caption">Placeholder image — replace with an actual screenshot.</p>
+  </div>
+</div>
+
+<div class="header-strip">
+  <div class="col"><h2>Searching, sorting and filtering</h2></div>
+</div>
+<div class="content-band">
+  <div class="col">
+    <p>The table works like a lightweight spreadsheet. There are three ways to narrow it down:</p>
+    <h3>Search</h3>
+    <p>Type in the <strong>Search deals…</strong> box above the table to keep only rows that match your text anywhere across their columns.</p>
+    <h3>Sort</h3>
+    <p>Click any column heading to sort by that column; click it again to reverse the order. A small arrow shows which column is sorting and in which direction. Dates sort chronologically and numbers sort numerically.</p>
+    <h3>Filter by value (like a Google Sheets filter)</h3>
+    <p>Each column heading has a small filter button (▾). Click it to open a drop-down that lists every distinct value in that column as a checkbox. From there you can:</p>
+    <ul>
+      <li>Tick or untick individual values to choose exactly which ones show.</li>
+      <li>Use <strong>Select all</strong> or <strong>Clear</strong> to select or deselect everything at once.</li>
+      <li>Type in the drop-down's own search box to find a value quickly in a long list.</li>
+      <li>Filter several columns at once — for example, Owner = a specific person <em>and</em> Status = open.</li>
+    </ul>
+    <p>The filter button highlights while a filter is active, and the deal count above the table updates to show how many rows are currently visible. Filtering, sorting and search all work together.</p>
+  </div>
+</div>
+
+<div class="header-strip">
+  <div class="col"><h2>The Job title column</h2></div>
+</div>
+<div class="content-band">
+  <div class="col">
+    <p>The Job title column shows the contact's role — for example "Managing Director" or "Executive Assistant". This value lives in ActiveCampaign as part of the link between a contact and their account (the same "Job Title" you see under a contact's <em>General Details</em>, next to their Account). The dashboard reads it live from ActiveCampaign and matches it to each deal by contact.</p>
+    <p>Some rows may still be blank. That simply means no job title has been recorded against that contact's account in ActiveCampaign. To fill a gap, add the job title on the contact in ActiveCampaign and it will appear on the dashboard the next time the data refreshes.</p>
+  </div>
+</div>
+
+<div class="header-strip">
+  <div class="col"><h2>How it's built</h2></div>
+</div>
+<div class="content-band">
+  <div class="col">
+    <p>The dashboard is a single, self-contained web service. It is deliberately kept simple — plain, hand-editable web pages on the front, one small server behind them, and the real MAG data pulled in when a page loads.</p>
+    <h3>The pipeline, end to end</h3>
+    <ul>
+      <li><strong>The page</strong> — a plain HTML page (no build step) that draws the pipeline table in the browser and provides the search, sort and filter controls.</li>
+      <li><strong>The server</strong> — a small Node/Express service that serves the page and answers a single data request for it, <code>/api/sales/deals</code>.</li>
+      <li><strong>Supabase (primary data)</strong> — MAG's database, queried at load time for the core deal columns: created date, account, contact, status, demo date and proposal.</li>
+      <li><strong>ActiveCampaign (enrichment)</strong> — called to fill the columns that only live in the CRM: lead type, owner name, latest note, Magalog, and the Job title from the contact's account link.</li>
+      <li><strong>Sign-in</strong> — a login step gates the whole dashboard so only MAG staff can see it.</li>
+      <li><strong>Hosting</strong> — the service runs on Google Cloud Run and refreshes the deal data on a short cache so the table stays current without hammering the source systems.</li>
+    </ul>
+    <p>Enrichment is best-effort: if ActiveCampaign is briefly unavailable, the table still loads with the Supabase columns rather than failing — the source chip simply notes that some columns are unavailable.</p>
+    <h3>Tech stack</h3>
+    <ul>
+      <li>Plain HTML, CSS and JavaScript for the page (no framework, no bundler).</li>
+      <li>Node.js with the Express web server.</li>
+      <li>Supabase (PostgreSQL) as the primary data source.</li>
+      <li>ActiveCampaign for CRM contact, deal and note details.</li>
+      <li>JWT-based login for access control.</li>
+      <li>Google Cloud Run for hosting and deployment.</li>
+    </ul>
+  </div>
+</div>
+
+<div class="header-strip">
+  <div class="col"><h2>Getting to the page</h2></div>
+</div>
+<div class="content-band">
+  <div class="col">
+    <p>Open the dashboard and sign in with your MAG credentials, then use the <strong>Sales</strong> tab at the top. If you have the page open already, do a hard refresh (Ctrl+F5) to make sure you're seeing the latest version.</p>
+  </div>
+</div>
+
+<!-- FIXED SECTIONS -->
+<section id="h.68f0b8918457bce8_82" style="background:#ffffff;padding:8px 20px;"><div style="max-width:760px;margin:0 auto;"><hr style="border:none;border-top:1px solid #d9d9d9;margin:0;"></div></section>
+<section id="h.5a0263770fa94d5d_3" style="background:#ffffff;padding:24px 20px;"><div style="max-width:760px;margin:0 auto;"><a href="#" style="display:inline-block;font-family:'Lato',sans-serif;font-size:15px;font-weight:400;color:#ffffff;background:#37474F;padding:12px 28px;border-radius:4px;text-decoration:none;letter-spacing:0.3px;">Button label</a></div></section>
+
+<!-- CLOSING BAND -->
+<div class="closing-band">
+  <div class="col">
+    <p>Updated by: Julienne</p>
+    <p>Last Update: 29 September 2026</p>
+  </div>
+</div>
+
+</body>
+</html>

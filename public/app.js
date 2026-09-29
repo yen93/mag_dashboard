@@ -188,7 +188,11 @@ function renderSortableTable(containerId, rows, columns, opts) {
   opts = opts || {};
   var host = document.getElementById(containerId);
   if (!host) return;
-  var state = { key: opts.sortKey || null, dir: opts.sortDir || 'asc', q: '' };
+  // state.filters maps a column key -> Set of allowed plain-text values
+  // (textOf projection). A column absent from the map is unfiltered.
+  var state = { key: opts.sortKey || null, dir: opts.sortDir || 'asc', q: '', filters: {} };
+  var filterable = opts.columnFilters !== false;
+  var openPanel = null; // currently-open column-filter panel (mounted on <body>)
 
   function isNum(c) { return c && c.unit && c.unit !== 'text' && c.unit !== 'date'; }
   // Plain-text projection of a cell, used for search + text sorting.
@@ -207,6 +211,16 @@ function renderSortableTable(containerId, rows, columns, opts) {
       var q = state.q.toLowerCase();
       list = list.filter(function (row) {
         return columns.some(function (c) { return textOf(row, c).toLowerCase().indexOf(q) !== -1; });
+      });
+    }
+    var fkeys = Object.keys(state.filters);
+    if (fkeys.length) {
+      list = list.filter(function (row) {
+        return fkeys.every(function (k) {
+          var set = state.filters[k];
+          var col = columns.filter(function (c) { return c.key === k; })[0];
+          return !col || set.has(textOf(row, col));
+        });
       });
     }
     if (state.key) {
@@ -229,8 +243,12 @@ function renderSortableTable(containerId, rows, columns, opts) {
     var thead = '<tr>' + columns.map(function (c) {
       var active = state.key === c.key;
       var caret = active ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '';
+      var funnel = filterable
+        ? '<button type="button" class="th-filter-btn' + (state.filters[c.key] ? ' active' : '') +
+          '" data-fkey="' + esc(c.key) + '" aria-label="Filter ' + esc(c.label) + '" title="Filter">▾</button>'
+        : '';
       return '<th class="sortable ' + (isNum(c) ? 'num ' : '') + (active ? 'active' : '') +
-        '" data-key="' + esc(c.key) + '">' + esc(c.label) + caret + '</th>';
+        '" data-key="' + esc(c.key) + '"><span class="th-label">' + esc(c.label) + caret + '</span>' + funnel + '</th>';
     }).join('') + '</tr>';
     var tbody = list.length ? list.map(function (row) {
       return '<tr>' + columns.map(function (c) {
@@ -242,14 +260,132 @@ function renderSortableTable(containerId, rows, columns, opts) {
 
     box.innerHTML = '<table class="data sortable-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
     box.querySelectorAll('th.sortable').forEach(function (th) {
-      th.addEventListener('click', function () {
+      th.addEventListener('click', function (e) {
+        if (e.target.closest && e.target.closest('.th-filter-btn')) return; // filter button handles itself
         var k = th.getAttribute('data-key');
         if (state.key === k) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
         else { state.key = k; state.dir = 'asc'; }
         draw();
       });
     });
+    if (filterable) {
+      box.querySelectorAll('.th-filter-btn').forEach(function (btn) {
+        btn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var k = btn.getAttribute('data-fkey');
+          var col = columns.filter(function (c) { return c.key === k; })[0];
+          if (col) toggleFilter(btn.closest('th'), col);
+        });
+      });
+    }
     if (typeof opts.onCount === 'function') opts.onCount(list.length, rows.length);
+  }
+
+  // ---- per-column value filters (Google-Sheets style) ----
+  function distinctValues(col) {
+    var seen = {}, out = [];
+    rows.forEach(function (row) {
+      var t = textOf(row, col);
+      if (!Object.prototype.hasOwnProperty.call(seen, t)) { seen[t] = true; out.push(t); }
+    });
+    out.sort(function (a, b) {
+      if (a === b) return 0;
+      if (a === '') return 1;   // blanks last
+      if (b === '') return -1;
+      var la = a.toLowerCase(), lb = b.toLowerCase();
+      return la < lb ? -1 : la > lb ? 1 : 0;
+    });
+    return out;
+  }
+
+  function closePanel() {
+    if (!openPanel) return;
+    openPanel.remove();
+    openPanel = null;
+    document.removeEventListener('mousedown', onDocDown, true);
+    document.removeEventListener('keydown', onKeyDown, true);
+    window.removeEventListener('scroll', closePanel, true);
+    window.removeEventListener('resize', closePanel, true);
+  }
+  function onDocDown(e) {
+    if (!openPanel) return;
+    if (!openPanel.contains(e.target) && !(e.target.closest && e.target.closest('.th-filter-btn'))) closePanel();
+  }
+  function onKeyDown(e) { if (e.key === 'Escape') closePanel(); }
+
+  function toggleFilter(th, col) {
+    var wasThis = openPanel && openPanel.getAttribute('data-key') === col.key;
+    closePanel();
+    if (wasThis) return;
+    openFilterPanel(th, col);
+  }
+
+  function openFilterPanel(th, col) {
+    var values = distinctValues(col);
+    var allowed = state.filters[col.key]; // Set or undefined (= all)
+
+    var panel = document.createElement('div');
+    panel.className = 'col-filter-panel';
+    panel.setAttribute('data-key', col.key);
+
+    var search = document.createElement('input');
+    search.type = 'search'; search.className = 'cf-search'; search.placeholder = 'Filter values…';
+
+    var actions = document.createElement('div'); actions.className = 'cf-actions';
+    var selAll = document.createElement('button'); selAll.type = 'button'; selAll.className = 'cf-link'; selAll.textContent = 'Select all';
+    var clr = document.createElement('button'); clr.type = 'button'; clr.className = 'cf-link'; clr.textContent = 'Clear';
+    actions.appendChild(selAll); actions.appendChild(clr);
+
+    var listEl = document.createElement('div'); listEl.className = 'cf-list';
+
+    function isChecked(v) { return !allowed || allowed.has(v); }
+    function ensureSet() { if (!allowed) allowed = new Set(values); return allowed; }
+    function apply() {
+      if (allowed && allowed.size === values.length) { delete state.filters[col.key]; allowed = undefined; }
+      else if (allowed) { state.filters[col.key] = allowed; }
+      draw();
+    }
+    function renderList() {
+      var q = search.value.trim().toLowerCase();
+      listEl.innerHTML = '';
+      values.forEach(function (v) {
+        var label = v === '' ? '(Blanks)' : v;
+        if (q && label.toLowerCase().indexOf(q) === -1) return;
+        var item = document.createElement('label'); item.className = 'cf-item';
+        var cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = isChecked(v);
+        cb.addEventListener('change', function () {
+          var set = ensureSet();
+          if (cb.checked) set.add(v); else set.delete(v);
+          apply();
+        });
+        var span = document.createElement('span'); span.textContent = label;
+        item.appendChild(cb); item.appendChild(span);
+        listEl.appendChild(item);
+      });
+    }
+    search.addEventListener('input', renderList);
+    selAll.addEventListener('click', function () { allowed = new Set(values); apply(); renderList(); });
+    clr.addEventListener('click', function () { allowed = new Set(); apply(); renderList(); });
+
+    panel.appendChild(search); panel.appendChild(actions); panel.appendChild(listEl);
+    document.body.appendChild(panel);
+    renderList();
+
+    var r = th.getBoundingClientRect();
+    panel.style.top = (r.bottom + window.scrollY + 2) + 'px';
+    var left = r.left + window.scrollX;
+    var maxLeft = window.scrollX + document.documentElement.clientWidth - panel.offsetWidth - 8;
+    if (left > maxLeft) left = Math.max(window.scrollX + 8, maxLeft);
+    panel.style.left = left + 'px';
+
+    openPanel = panel;
+    setTimeout(function () {
+      document.addEventListener('mousedown', onDocDown, true);
+      document.addEventListener('keydown', onKeyDown, true);
+      window.addEventListener('scroll', closePanel, true);
+      window.addEventListener('resize', closePanel, true);
+    }, 0);
+    search.focus();
   }
 
   host.innerHTML = '';
@@ -417,5 +553,7 @@ function initPage(area, renderFn) {
       .then(function (data) { cache = data; renderFn(data); })
       .catch(function (err) { console.error(err); });
   }
-  load();
+  // Pages that render their own data (no metrics payload) call initPage with no
+  // renderFn — skip the /api/metrics/:area fetch for them.
+  if (renderFn) load();
 }

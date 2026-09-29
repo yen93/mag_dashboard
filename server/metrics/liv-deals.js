@@ -36,6 +36,7 @@ const BASE_SQL = `
     d.id,
     d.cdate                                                          AS date_created,
     COALESCE(a.name, NULLIF(TRIM(split_part(d.title, '//', 1)), '')) AS account,
+    d.account                                                        AS account_id,
     d.contact                                                        AS contact_id,
     NULLIF(TRIM(concat_ws(' ', c."firstName", c."lastName")), '')    AS primary_contact,
     d.owner                                                          AS owner_ac_id,
@@ -73,6 +74,7 @@ export async function getLivDeals() {
     id: r.id,
     dateCreated: r.date_created,
     account: r.account,
+    accountId: r.account_id,
     leadType: null, // AC
     contact: r.primary_contact,
     contactId: r.contact_id,
@@ -163,6 +165,33 @@ async function enrichFromAC(deals) {
       if (d[fb.prop] == null && d.contactId && byContact[String(d.contactId)] != null) {
         d[fb.prop] = cleanValue(byContact[String(d.contactId)]);
       }
+    }
+  }
+
+  // 5. Job title is AC's native account<->contact association field
+  //    (accountContacts.jobTitle) — the value shown under "Account" in a
+  //    contact's General Details. It is neither a contact nor a deal custom
+  //    field, so fetch the associations once and map them onto each deal by
+  //    contact, preferring the association for the deal's own account when a
+  //    contact is linked to more than one account.
+  if (deals.some((d) => d.jobTitle == null && d.contactId)) {
+    const links = await acPaginate('accountContacts', 'accountContacts', {}, { pageSize: 100, max: 20000 });
+    const byContactAccount = {}; // "contact:account" -> job title
+    const byContactAny = {};     // contact -> first non-empty job title
+    for (const l of links) {
+      const title = cleanValue(l.jobTitle);
+      if (!title) continue;
+      const c = String(l.contact);
+      byContactAccount[c + ':' + String(l.account)] = title;
+      if (byContactAny[c] == null) byContactAny[c] = title;
+    }
+    for (const d of deals) {
+      if (d.jobTitle != null || !d.contactId) continue;
+      const c = String(d.contactId);
+      d.jobTitle =
+        (d.accountId != null && byContactAccount[c + ':' + String(d.accountId)]) ||
+        byContactAny[c] ||
+        null;
     }
   }
 }

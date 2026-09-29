@@ -145,7 +145,43 @@ table.data td.num, table.data th.num { text-align: right; font-variant-numeric: 
 table.sortable-table th.sortable { cursor: pointer; white-space: nowrap; user-select: none; }
 table.sortable-table th.sortable:hover { color: var(--text); }
 table.sortable-table th.sortable.active { color: var(--accent); }
+table.sortable-table th.sortable .th-label { cursor: pointer; }
 table.sortable-table td { vertical-align: top; }
+
+/* per-column filter button + dropdown panel */
+.th-filter-btn {
+  margin-left: 6px; padding: 0 4px; line-height: 1; font-size: 11px;
+  border: 1px solid transparent; border-radius: 5px; cursor: pointer;
+  background: transparent; color: var(--text-muted); vertical-align: middle;
+}
+.th-filter-btn:hover { color: var(--text); background: var(--surface-2); }
+.th-filter-btn.active { color: #fff; background: var(--accent); border-color: transparent; }
+.col-filter-panel {
+  position: absolute; z-index: 1000; width: 240px; max-width: calc(100vw - 16px);
+  padding: 10px; border: 1px solid var(--border); border-radius: 10px;
+  background: var(--surface); color: var(--text);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.18);
+}
+.col-filter-panel .cf-search {
+  width: 100%; box-sizing: border-box; padding: 7px 10px; margin-bottom: 8px;
+  border: 1px solid var(--border); border-radius: 8px;
+  background: var(--surface-2); color: var(--text); font-size: 13px;
+}
+.col-filter-panel .cf-search:focus { outline: 2px solid var(--accent); border-color: transparent; }
+.col-filter-panel .cf-actions { display: flex; gap: 12px; margin-bottom: 8px; }
+.col-filter-panel .cf-link {
+  border: none; background: transparent; padding: 0; cursor: pointer;
+  color: var(--accent); font-size: 12px; font-weight: 600;
+}
+.col-filter-panel .cf-link:hover { text-decoration: underline; }
+.col-filter-panel .cf-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.col-filter-panel .cf-item {
+  display: flex; align-items: center; gap: 8px; padding: 4px 6px;
+  border-radius: 6px; font-size: 13px; font-weight: 400; cursor: pointer;
+}
+.col-filter-panel .cf-item:hover { background: var(--surface-2); }
+.col-filter-panel .cf-item input { flex: none; }
+.col-filter-panel .cf-item span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--border); }
 .pill .swatch { width: 9px; height: 9px; border-radius: 3px; }
