@@ -1,0 +1,181 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-09-29
+Session: Build + deploy a sortable/searchable "LIV pipeline" 2026 deals table on
+the Sales page of the MAG metrics dashboard (Supabase + live ActiveCampaign
+enrichment). Deployed to Cloud Run and validated live — all 13 columns working
+(Job Title excepted; no such field in AC).
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Pointed to sales/initial_prompt.txt. Task: create an HTML page that auto-syncs
+all deals under the "Keynotes // Workshops // Immersive (LIV)" pipeline as a
+sortable/searchable table, added to the Sales page of the live dashboard
+(https://dashboard-659687081407.australia-southeast1.run.app). Columns: date
+created, account, lead type (Inbound/Outbound? from a "General Details" group),
+primary contact name, primary contact job title, last deal note, date of latest
+deal note, deal owner, "Replied back to us" (yes/no from deal stage), deal
+status, demo date, Magalog sent?, proposal sent?
+(Session started in plan mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Launched two Explore agents in parallel:
+1) Codebase — plain HTML/CSS/JS + Express (ESM), single origin. Routes in
+   server/index.js; generic /api/metrics/:area router under requireAuth, wrapped
+   by cached(key, producer, ttlMs). supabase.js exports q()/supabaseConfigured();
+   metric.js exports live()/pending()/section(); app.js has renderKpis/
+   renderTable/charts/metaChips/initPage. Key gap: renderTable is STATIC (no
+   sort/search) — a new helper would be needed. app.css has reusable table.data /
+   .card.col-12 / .pill / chip styles.
+2) Data/schema (Supabase MCP) — data in project "MAGTestProject"
+   (ref aivitcomiywiysrfwqxt). Pipeline = activecampaign_deals."group" = '3'.
+   7 columns available in Supabase (cdate, account via activecampaign_accounts,
+   contact via activecampaign_contacts, replied from stage, status 0/1/2,
+   demo_date + proposal_sent from ac_custom_fields latest-per-deal); 6 only in
+   ActiveCampaign (lead type, job title, last note + date, owner NAME [Supabase
+   stores only numeric owner id], Magalog). Stage meanings enumerated
+   (71=NO REPLY, 70=REPLY YES, 69=REPLY NO, 58=demo booked, 59=proposal, 15=won,
+   plus 121/113/12). value is cents; currency mixed-case.
+
+--------------------------------------------------------------------------------
+USER:
+Only need deals created in 2026 (not the full pipeline).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Scoped to cdate within 2026. (Data agent: 259 such deals — 107 open / 28 won /
+124 lost.)
+
+--------------------------------------------------------------------------------
+ASSISTANT (after data agent returned):
+Flagged that 6 of 13 columns aren't in Supabase and asked, via AskUserQuestion:
+(1) how to source the AC-only columns, and (2) the "Replied back to us" mapping.
+
+--------------------------------------------------------------------------------
+USER:
+(1) Wire ActiveCampaign into the app now so all 13 columns are live.
+(2) "Replied = Yes" for any reply — stages 70, 69, and all downstream; No only
+for 71 (contact made, no reply) and earlier.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the critical files (config.js already has activecampaign.apiUrl/apiKey +
+hasSource('activecampaign'); metric.js; sales.js; app.js; sales.html; index.js;
+cache.js; app.css). Validated the core Supabase SELECT live via MCP (join
+accounts/contacts + LATERAL latest ac_custom_fields; CASE for replied/status;
+COALESCE account to the deal title's first segment) — returned expected rows.
+Wrote the plan file and called ExitPlanMode.
+
+--------------------------------------------------------------------------------
+USER:
+Approved the plan.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented:
+- NEW server/providers/activecampaign.js — acConfigured(), acGet() (Api-Token
+  header; retry/backoff on 429/5xx honouring Retry-After), acGetSafe(),
+  acPaginate(), pMapLimit().
+- NEW server/metrics/liv-deals.js — getLivDeals(): Supabase query (group '3',
+  2026) then enrichFromAC() for owner name (/users), lead type/job title/Magalog
+  (dealCustomFieldMeta label match + per-deal dealCustomFieldData), last note +
+  date (per-deal /notes). Fail-soft: missing AC config or errors -> section
+  "partial", cells null.
+- server/index.js — new requireAuth router GET /api/sales/deals wrapped in
+  cached('sales:deals', getLivDeals, 30 min).
+- public/app.js — added fetchJSON() and renderSortableTable() (header sorting +
+  search box) and fmtDate().
+- public/sales.html — full-width "LIV pipeline deals — 2026" card (chips + row
+  count + search) rendered from /api/sales/deals via loadLivDeals(), 13 columns.
+- public/app.css — .table-search/.table-scroll, sortable-th, .pill.pos/.neg.
+node --check clean on all files. Booted locally: /api/health OK, login OK,
+/api/sales/deals correctly returned the "pending" shape (no local Supabase),
+proving wiring + fallback. Stopped the server.
+
+--------------------------------------------------------------------------------
+USER:
+The AC credentials are already in Google Secret Manager.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+gcloud API calls all failed with "Reauthentication failed. cannot prompt during
+non-interactive execution" — the org reauth policy can't be satisfied in a
+non-interactive shell (not a sandbox issue; the in-session "!" prefix and a
+fresh auth login didn't help). Concluded the deploy must run in the user's
+external terminal; everything else could be done from here.
+
+--------------------------------------------------------------------------------
+USER:
+Provided sales/ac_creds.txt (AC API URL + key).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Used the file ONLY inside throwaway scratchpad scripts (never read into chat),
+printing non-secret diagnostics. Findings:
+- Host myadventuregroup.api-us1.com; 8 users (owner id->name works).
+- These are DEAL custom fields: "Inbound/ Outbound?" = field 14 (lead type),
+  "Magalog sent?" = field 11. (Demo date=17, Proposal sent=15 exist but come
+  from Supabase already.)
+- "Job Title" does NOT exist as a deal or contact field in AC -> that column
+  shows "—".
+- Single-deal ?include= does NOT sideload; sub-resource endpoints
+  deals/{id}/dealCustomFieldData and deals/{id}/notes both work; cfd records
+  carry customFieldId == meta id.
+- Bulk-filtering dealCustomFieldData by field is unsupported (filters[...] 422;
+  bare param ignored, 25,471 rows) -> must fetch per deal.
+Updated code: per-deal two sub-resource calls (dropped useless include),
+concurrency 6, provider retries on 429. Validated the REAL provider + enrichment
+against live AC on 6 known 2026 deals — field ids leadType=14 / magalog=11 /
+jobTitle=null; owner names, lead type, Magalog, latest note + date all correct;
+~2.2s for 6 deals (=> ~90s cold for 259, then 30-min cache).
+
+--------------------------------------------------------------------------------
+USER:
+Provided sales/gsm_secrets.txt (Secret Manager secret NAMES only).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Names: AC_API_URL, AC_API_TOKEN (the AC key; app env var AC_API_KEY maps to it),
+SUPABASE_DB_URL (plus unrelated OpenAI/n8n/supabase secrets). DELETED
+ac_creds.txt and gsm_secrets.txt from the repo tree (not git-ignored; would have
+been uploaded by `gcloud run deploy --source .`). Prepared the external-terminal
+deploy: discover runtime service account, grant it secretAccessor on AC_API_URL
+and AC_API_TOKEN (idempotent), then deploy with
+--set-secrets SUPABASE_DB_URL=SUPABASE_DB_URL:latest,AC_API_URL=AC_API_URL:latest,
+AC_API_KEY=AC_API_TOKEN:latest (JWT_SECRET is a plain env var, untouched).
+
+--------------------------------------------------------------------------------
+USER:
+Asked whether to use cmd; then requested cmd one-liners; then ran
+/save-chat-history (first export, file 2909261539_chat_history.txt).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Advised PowerShell for the multi-line block, then provided cmd-friendly
+single-line commands: (1) describe the runtime service account (default
+659687081407-compute@developer.gserviceaccount.com), (2)/(3) add-iam-policy-
+binding for AC_API_URL and AC_API_TOKEN, (4) cd /d to the repo root, (5) the
+one-line `gcloud run deploy`.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /save-chat-history with arg "done deploy" (reporting the deploy completed).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Validated the LIVE service directly (no gcloud needed): /api/health OK; logged
+in with the demo admin account; fetched /api/sales/deals. Result: count = 259,
+meta.status = "live", source = "Supabase + ActiveCampaign". Column coverage —
+owner 259/259, lastNote 257/259, lastNoteDate 257/259, leadType 231/259,
+Magalog 231/259, jobTitle 0/259 (expected, no field); account/contact/replied/
+status 259/259; demoDate 2, proposalSent 31 (genuinely sparse in
+ac_custom_fields). Sample row correct: ICMI / Eva Adams / Inbound Enquiry /
+owner Marielle Buscato / Replied Yes / open / Magalog No / latest note present.
+Deployment is live and working end-to-end. Saved this chat history.
+(Note: git commit/push and as_built.txt/CLAUDE.md updates were NOT done — that's
+/dcp.)
+
+================================================================================
+END OF EXPORT
+================================================================================
