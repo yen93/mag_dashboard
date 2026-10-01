@@ -174,7 +174,7 @@ table.sortable-table td { vertical-align: top; }
   color: var(--accent); font-size: 12px; font-weight: 600;
 }
 .col-filter-panel .cf-link:hover { text-decoration: underline; }
-.col-filter-panel .cf-list { max-height: 240px; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.col-filter-panel .cf-list { max-height: 240px; overflow-y: auto; overscroll-behavior: contain; display: flex; flex-direction: column; gap: 2px; }
 .col-filter-panel .cf-item {
   display: flex; align-items: center; gap: 8px; padding: 4px 6px;
   border-radius: 6px; font-size: 13px; font-weight: 400; cursor: pointer;

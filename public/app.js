@@ -304,12 +304,26 @@ function renderSortableTable(containerId, rows, columns, opts) {
     openPanel = null;
     document.removeEventListener('mousedown', onDocDown, true);
     document.removeEventListener('keydown', onKeyDown, true);
-    window.removeEventListener('scroll', closePanel, true);
+    window.removeEventListener('scroll', onScroll, true);
     window.removeEventListener('resize', closePanel, true);
   }
   function onDocDown(e) {
     if (!openPanel) return;
     if (!openPanel.contains(e.target) && !(e.target.closest && e.target.closest('.th-filter-btn'))) closePanel();
+  }
+  function onScroll(e) {
+    if (!openPanel) return;
+    var t = e.target;
+    // The panel is positioned to the document, so it scrolls with the page —
+    // a window/page scroll must NOT close it.
+    if (t === document || t === window || t === document.documentElement || t === document.body) return;
+    // Scrolling the panel's own value list (mouse wheel or the scrollbar
+    // up/down buttons) fires a captured scroll event too — don't treat that
+    // as a scroll-away, or the panel closes the moment you scroll it.
+    if (t && t.nodeType === 1 && openPanel.contains(t)) return;
+    // A real scroll-away (e.g. the horizontally-scrolling table container
+    // moving the header cell out from under the panel) — close it.
+    closePanel();
   }
   function onKeyDown(e) { if (e.key === 'Escape') closePanel(); }
 
@@ -382,7 +396,7 @@ function renderSortableTable(containerId, rows, columns, opts) {
     setTimeout(function () {
       document.addEventListener('mousedown', onDocDown, true);
       document.addEventListener('keydown', onKeyDown, true);
-      window.addEventListener('scroll', closePanel, true);
+      window.addEventListener('scroll', onScroll, true);
       window.addEventListener('resize', closePanel, true);
     }, 0);
     search.focus();
