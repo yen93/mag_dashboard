@@ -5,6 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sales — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
+  <style>
+    /* The LIV deals table is a wide 13-column table — let it use the full screen
+       width instead of the default 1200px cap, so the table grows as the window
+       grows (it still scrolls horizontally on narrow screens). Matches the
+       Buyer Sheet page. */
+    .content { max-width: none; }
+  </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
 <body>

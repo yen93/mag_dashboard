@@ -1,0 +1,66 @@
+================================================================================
+AS-BUILT — MAG Buyer Sheet (dashboard feature)
+Last updated: 2026-10-01
+================================================================================
+Scope: the "Buyer Sheet" page on the MAG Metrics dashboard and the daily pipeline
+that feeds it. Code lives in the dashboard repo (one level up from this folder);
+this folder holds the user guide + diagrams + chat history for the feature.
+Paths below are relative to the dashboard repo root (C:/Users/Cloverly/claude_code/dashboard).
+
+CODE / FILES
+- supabase/functions/buyer-sheet-sync/index.ts — Supabase Edge Function
+  (Deno/TypeScript). Reads WON deals from the Supabase AC mirror, upserts base
+  columns, enriches candidates from ActiveCampaign (event date, audience, deal
+  source, job title via accountContacts, industry) and OpenAI web search
+  (business size, seniority, key decision maker), and reconciles deals that left
+  the won set. Deployed to the Supabase project via MCP deploy_edge_function
+  (verify_jwt:false). Env/secrets read: SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY,
+  OPENAI_API_KEY, AC_API_URL, AC_API_TOKEN, optional OPENAI_MODEL (set to
+  gpt-4o-mini), OPENAI_SEARCH_CONTEXT (low), MAX_ENRICH_ATTEMPTS (2) — all held
+  as Supabase function secrets, never in the repo.
+- server/metrics/mag-buyer-sheet.js — reads public.mag_buyer_sheet and maps it to
+  the page payload; computes the source chip status (live/partial/pending).
+- server/index.js — mounts GET /api/operations/buyer-sheet (requireAuth,
+  10-min cache) that returns the above.
+- public/mag_buyer_sheet.html — the page; reuses app.js renderSortableTable
+  (sort + search + per-column filters). Full-width (.content max-width:none,
+  page-scoped). "Buyer Sheet" nav tab added to all public/*.html pages.
+- operations/mag_buyer_sheet/mag-buyer-sheet-guide.html — self-contained iMAG
+  guide page with 4 embedded PNG diagrams (diagram-architecture/-daily-run/
+  -column-sources/-enrichment-flow.png in this folder).
+
+EXTERNAL INTEGRATIONS
+- ActiveCampaign (REST API v3) — deal custom fields, accountContacts (job title),
+  contact field values (industry). Edge function uses AC_API_URL + AC_API_TOKEN
+  (Supabase function secrets). Dashboard server also has AC_API_URL + AC_API_KEY
+  (Cloud Run secrets, from Google Secret Manager) for the Sales page.
+- OpenAI (Responses API, web_search_preview tool, model gpt-4o-mini) — fills
+  business size / seniority / decision maker. OPENAI_API_KEY is a Supabase
+  function secret.
+- Supabase — project MAGTestProject (ref aivitcomiywiysrfwqxt). Dashboard connects
+  via SUPABASE_DB_URL (Google Secret Manager → Cloud Run secret, gitignored).
+- Google Cloud Run — hosts the dashboard (service "dashboard", project
+  claudegwscli-502400, region australia-southeast1). Redeploy with
+  `gcloud run deploy dashboard --source . --region australia-southeast1` and NO
+  secret flags (preserves JWT_SECRET + SUPABASE_DB_URL + AC_API_URL + AC_API_KEY).
+
+DATA STORES
+- public.mag_buyer_sheet (Supabase, project aivitcomiywiysrfwqxt) — one row per
+  WON deal (activecampaign_deals.status = 1), keyed by deal_id. Holds the 17
+  buyer-sheet columns (year, event_date, company, direct_indirect,
+  program_delivered, audience_size, value_aud, currency, industry, business_size,
+  ipoc_* and kdm_* name/email/job_title/seniority) plus bookkeeping:
+  deal_title, deal_mdate, deal_status ('won'/'lost'/'open'/'removed'), lost_at,
+  base_synced_at, enriched_at, enrichment_attempts, enrichment_source, updated_at.
+  RLS enabled with NO policies (off the anon key; read via service-level
+  SUPABASE_DB_URL). deal_status/lost_at are tracked but intentionally not served
+  to the page.
+- Source of truth mirrored in the same project: activecampaign_deals / _contacts
+  / _accounts, ac_custom_fields (pre-existing).
+
+AUTOMATIONS / ROUTINES
+- pg_cron job "buyer-sheet-sync-daily" (schedule `0 22 * * 0-4` UTC =
+  Mon–Fri 6:00am Philippine time) → net.http_post to the buyer-sheet-sync edge
+  function (?limit=50). Enrichment is incremental: only new/changed/un-enriched
+  rows are touched; rows that fail web-search twice are parked (left blank).
+================================================================================

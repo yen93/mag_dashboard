@@ -41,15 +41,16 @@ metrics.get('/:area', async (req, res) => {
 });
 app.use('/api/metrics', metrics);
 
-// Sales sub-resources. The LIV pipeline deals table is a per-deal row list
-// (Supabase + ActiveCampaign enrichment), not a metrics payload, so it gets its
-// own endpoint. The AC per-deal fan-out makes a cold build slow, so it caches
-// for 30 min (the response is always the 2026 window — range is ignored).
+// Sales sub-resources. The LIV pipeline deals table reads a pre-computed
+// Supabase cache (public.sales_liv_deals), refreshed Mon–Fri by the
+// sales-deals-sync edge function. It's a plain SELECT (no AC calls at request
+// time), so a short cache is plenty. The response is always the 2026 window —
+// range is ignored.
 const sales = express.Router();
 sales.use(requireAuth);
 sales.get('/deals', async (_req, res) => {
   try {
-    const payload = await cached('sales:deals', getLivDeals, 30 * 60 * 1000);
+    const payload = await cached('sales:deals', getLivDeals, 10 * 60 * 1000);
     res.json(payload);
   } catch (err) {
     console.error('[sales:deals]', err);
