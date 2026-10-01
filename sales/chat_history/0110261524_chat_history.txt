@@ -1,0 +1,162 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-01
+Session: Add a caching system to the Sales page — a Supabase cache table
+(sales_liv_deals) mirroring the deals-table columns, filled by a new daily
+(Mon–Fri 6am PH) Supabase edge function (sales-deals-sync) that appends/updates
+without clearing; swap the dashboard reader to a plain SELECT; make the table
+full-width like the Buyer Sheet; deploy live; then build an iMAG guide page and
+save this transcript. All provisioned live and verified.
+================================================================================
+
+NOTE ON REDACTIONS: While querying the Supabase pg_cron schedule (cron.job) to
+learn the existing daily-job pattern, the tool output echoed OTHER jobs' cron
+commands, which embedded live Supabase credentials in their Authorization
+headers — a service-role JWT, an anon JWT, and a secret key. These values are
+NOT reproduced anywhere in this file (referred to only as [REDACTED_SUPABASE_KEY]
+in concept). Nothing the user pasted was secret; no project connection string or
+JWT_SECRET was printed this session.
+
+--------------------------------------------------------------------------------
+USER:
+Update the Sales page to implement a caching system: create a Supabase table
+that serves as the cache and mirrors the exact same column data; create a
+Supabase edge function that runs Mon–Fri daily at 6am PH time to fetch from the
+main sources; the Sales page should then just fetch from the cache table; the
+daily fetch must NOT clear the table — only append and update as needed.
+(Mid-turn, added:) also implement the same dynamic/responsive design as the MAG
+Buyer page so that extending the screen also extends the table.
+(Session started in plan mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Launched three Explore agents in parallel and inspected the live Supabase project
+directly via MCP.
+
+Findings:
+- The Sales page (public/sales.html) does NOT use /api/metrics/sales. It fetches
+  its own endpoint GET /api/sales/deals → getLivDeals() in
+  server/metrics/liv-deals.js, rendering a 13-column sortable/searchable table
+  via renderSortableTable(). The slow part: getLivDeals queries Supabase for the
+  ~259 deals (pipeline group='3', created in 2026) then fans out to the live
+  ActiveCampaign API (owner lookup, deal-custom-field metadata, per-deal custom
+  fields + notes, bulk fieldValues/accountContacts pagination). 7 columns come
+  from Supabase; 6 (lead type, job title, last note + date, owner name, Magalog)
+  are AC-only.
+- An existing precedent to mirror exactly: the Buyer Sheet. public.mag_buyer_sheet
+  is a cache table filled by the buyer-sheet-sync edge function (Deno), scheduled
+  by pg_cron at '0 22 * * 0-4' UTC = Mon–Fri 6am PH, UPSERT on deal_id (never
+  truncated, reconciles non-won deals). server/metrics/mag-buyer-sheet.js reads it
+  with a plain aliased SELECT; server/index.js serves /api/operations/buyer-sheet.
+- Supabase project = MAGTestProject, ref aivitcomiywiysrfwqxt. Pulled the live
+  buyer-sheet-sync source, the mag_buyer_sheet schema, and the cron definitions
+  (service-role/anon/secret keys in other jobs' headers were seen but not reused).
+- Deal volume: 258–259 deals in scope (70 open, 28 won, 161 lost).
+- Responsive design: the Buyer Sheet page adds `.content { max-width: none }` in a
+  page <style> to beat app.css's default 1200px cap (app.css:92); the Sales page
+  lacked it.
+
+Asked the user two decision questions via AskUserQuestion:
+1) Execution scope → "Provision everything live" (create table, deploy function,
+   add cron, initial sync, swap reader, redeploy Cloud Run).
+2) Stale rows → "Reconcile-tag, never delete" (pure upsert for in-scope deals;
+   out-of-scope deals get an in_scope=false flag and are filtered out, row kept).
+
+Wrote the full plan to the plan file and called ExitPlanMode.
+
+--------------------------------------------------------------------------------
+USER:
+Approved the plan.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Executed end-to-end, mirroring the Buyer Sheet architecture:
+
+1. apply_migration → created public.sales_liv_deals (PK deal_id; the 13 page
+   columns in snake_case: date_created, account, account_id, contact, contact_id,
+   replied, status, demo_date, proposal_sent, lead_type, job_title, last_note,
+   last_note_date, owner, magalog_sent; plus bookkeeping deal_mdate, deal_group,
+   in_scope, base_synced_at, enriched_at, enrichment_attempts, updated_at) +
+   date_created index; RLS enabled, no policies (reads go via the service-level
+   SUPABASE_DB_URL pool, same as mag_buyer_sheet).
+
+2. Wrote supabase/functions/sales-deals-sync/index.ts (Deno/TS, single
+   @supabase/supabase-js@2.45.4 esm.sh import, service-role client, AC REST v3 via
+   fetch with Api-Token header, ?sync=1/?limit=N modes, wall-clock budget; reuses
+   existing function secrets SUPABASE_URL/SERVICE_ROLE_KEY/AC_API_URL/AC_API_TOKEN;
+   NO OpenAI). Logic ports getLivDeals: base pass upserts all in-scope deals
+   (Supabase mirror only, + owner-name map from one AC users call) on conflict
+   deal_id; reconcile pass tags out-of-scope rows in_scope=false (never deletes);
+   enrichment pass fills the 6 AC-only columns for new/changed deals
+   (enriched_at null, attempts < MAX_ENRICH_ATTEMPTS=2), bounded by limit +
+   wall-clock. Deployed via MCP deploy_edge_function (verify_jwt:false), version 1.
+
+3. Initial populate: ran curl ".../sales-deals-sync?sync=1&limit=100" five times
+   (each enriched ~60 before the wall-clock guard tripped). Final state: 258 base
+   rows, 258/258 enriched, 0 pending, 0 errors. Verified columns via SQL:
+   has_owner 258, has_leadtype 249, has_jobtitle 193, has_note 256, has_magalog
+   230 — nulls only where AC genuinely has no value (matches the old live path).
+   Spot-checked rows (e.g. ICMI / Eva Adams / Consultant / owner Marielle Buscato;
+   Platinum Speakers / Jason Kidger / Managing Director / status won).
+
+4. execute_sql cron.schedule('sales-deals-sync-daily', '0 22 * * 0-4', …
+   net.http_post to .../sales-deals-sync?limit=50 …) → jobid 7, active. Confirmed
+   via cron.job that it's the Mon–Fri 6am PH expression.
+
+5. Dashboard code:
+   - server/metrics/liv-deals.js — rewritten from live AC-enrichment to a plain
+     cache SELECT (WHERE in_scope = true), aliasing snake_case → the same 13
+     camelCase keys the page expects; status chip logic live/partial/pending like
+     the Buyer Sheet; source "Supabase + ActiveCampaign (Supabase cache)". Dropped
+     the activecampaign.js import and all request-time AC code.
+   - server/index.js — /api/sales/deals cache TTL 30min → 10min (now a cheap
+     SELECT); updated the comment.
+   - public/sales.html — added a <style> with `.content { max-width: none }` so
+     the 13-column table grows with the window (matches the Buyer Sheet).
+   Verified the exact reader SELECT returns the right shape against live Supabase.
+
+6. Redeployed Cloud Run with a BARE source deploy (no --set-secrets, to preserve
+   the existing secret set): gcloud run deploy dashboard --source . --region
+   australia-southeast1 --project claudegwscli-502400 --quiet (gcloud via its full
+   path; run in background). Result: revision dashboard-00012-kml serving 100%;
+   /api/health → {"status":"ok"}.
+
+Also saved a project memory (sales-page-cache-feature) + MEMORY.md index line, and
+flagged a PRE-EXISTING security advisory (14 tables incl. ac_custom_fields have
+RLS disabled / anon-exposed) as out of scope but worth a separate fix.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /imag_page_local (build an iMAG-themed page locally from this chat).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the skill's template.html and diagrams.py. Wrote a scratch Python script
+that rendered two iMAG-palette PNG diagrams with the Pillow helper — Figure 1
+"How the daily job fills the cache" (Supabase mirror + ActiveCampaign API →
+sales-deals-sync → sales_liv_deals, with the pg_cron Mon–Fri 6am PH label) and
+Figure 2 "How the Sales page reads the cache" (cache → GET /api/sales/deals →
+Sales page, "no ActiveCampaign calls at request time") — then filled the template
+and wrote a self-contained guide to
+C:/Users/Cloverly/claude_code/dashboard/sales-dashboard-caching-system.html.
+Sections: intro (dark band), What changed, How the data flows (Fig 1), How the
+page reads it (Fig 2), The daily refresh (base/reconcile/enrichment, never
+clears), How it's built (architecture + tech-stack bullets), What's stored in the
+cache. Footer "Updated by: Julienne", "Last Update: 1 October 2026". Read both
+PNGs back to confirm no clipping/overflow; verified the HTML had 0 leftover tokens
+and 2 embedded base64 images. Kept the two PNGs on disk next to the HTML. No
+secrets included.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /save-chat-history.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote this transcript to sales/chat_history/0110261524_chat_history.txt after a
+full-conversation security scan (noted that live Supabase keys appeared only
+inside other jobs' cron-command output and were never reproduced here). Did NOT
+touch as_built.txt/CLAUDE.md and did NOT commit or push — that's /dcp.
+
+================================================================================
+END OF EXPORT
+================================================================================
