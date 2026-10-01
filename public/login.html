@@ -16,41 +16,96 @@
 
       <div class="error" id="error" hidden></div>
 
-      <div class="field">
-        <label for="email">Email</label>
-        <input id="email" type="email" autocomplete="username" value="admin@myadventuregroup.com.au" required />
+      <!-- Step 1: email -->
+      <div id="step-email">
+        <div class="field">
+          <label for="email">Email</label>
+          <input id="email" type="email" autocomplete="email"
+                 placeholder="you@myadventuregroup.com.au" required />
+        </div>
+        <button class="btn" type="submit" id="sendBtn">Send code</button>
       </div>
-      <div class="field">
-        <label for="password">Password</label>
-        <input id="password" type="password" autocomplete="current-password" required />
+
+      <!-- Step 2: code (revealed after a code is sent) -->
+      <div id="step-code" hidden>
+        <p class="sub" id="sentTo"></p>
+        <div class="field">
+          <label for="code">Code</label>
+          <input id="code" type="text" inputmode="numeric" autocomplete="one-time-code"
+                 maxlength="6" pattern="[0-9]*" placeholder="6-digit code" />
+        </div>
+        <button class="btn" type="submit" id="verifyBtn">Sign in</button>
+        <div class="login-links">
+          <a href="#" id="resendLink">Resend code</a>
+          <a href="#" id="changeLink">Use a different email</a>
+        </div>
       </div>
-
-      <button class="btn" type="submit" id="submitBtn">Sign in</button>
-
-
     </form>
   </div>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
   <script>
     // Already signed in? Go straight to the dashboard.
     if (currentUser()) window.location.href = 'sales.html';
 
     var form = document.getElementById('loginForm');
     var errBox = document.getElementById('error');
-    var btn = document.getElementById('submitBtn');
+    var stepEmail = document.getElementById('step-email');
+    var stepCode = document.getElementById('step-code');
+    var emailInput = document.getElementById('email');
+    var codeInput = document.getElementById('code');
+    var sendBtn = document.getElementById('sendBtn');
+    var verifyBtn = document.getElementById('verifyBtn');
+    var sentTo = document.getElementById('sentTo');
+
+    var stage = 'email'; // 'email' | 'code'
+
+    function showError(msg) { errBox.textContent = msg; errBox.hidden = false; }
+    function clearError() { errBox.hidden = true; }
+
+    function requestCode() {
+      clearError();
+      sendBtn.disabled = true; sendBtn.textContent = 'Sending…';
+      return apiRequestCode(emailInput.value.trim())
+        .then(function () {
+          stage = 'code';
+          sentTo.textContent = 'We sent a code to ' + emailInput.value.trim() + '.';
+          stepEmail.hidden = true;
+          stepCode.hidden = false;
+          codeInput.value = '';
+          codeInput.focus();
+        })
+        .catch(function (err) { showError(err.message || 'Could not send code.'); })
+        .finally(function () { sendBtn.disabled = false; sendBtn.textContent = 'Send code'; });
+    }
+
+    function verify() {
+      clearError();
+      verifyBtn.disabled = true; verifyBtn.textContent = 'Signing in…';
+      apiVerifyCode(emailInput.value.trim(), codeInput.value.trim())
+        .then(function (data) { setToken(data.token); window.location.href = 'sales.html'; })
+        .catch(function (err) {
+          showError(err.message || 'Sign-in failed.');
+          verifyBtn.disabled = false; verifyBtn.textContent = 'Sign in';
+        });
+    }
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
-      errBox.hidden = true;
-      btn.disabled = true; btn.textContent = 'Signing in…';
-      apiLogin(document.getElementById('email').value, document.getElementById('password').value)
-        .then(function (data) { setToken(data.token); window.location.href = 'sales.html'; })
-        .catch(function (err) {
-          errBox.textContent = err.message || 'Login failed.';
-          errBox.hidden = false;
-          btn.disabled = false; btn.textContent = 'Sign in';
-        });
+      if (stage === 'email') requestCode(); else verify();
+    });
+
+    document.getElementById('resendLink').addEventListener('click', function (e) {
+      e.preventDefault(); requestCode();
+    });
+
+    document.getElementById('changeLink').addEventListener('click', function (e) {
+      e.preventDefault();
+      clearError();
+      stage = 'email';
+      stepCode.hidden = true;
+      stepEmail.hidden = false;
+      emailInput.focus();
     });
   </script>
 </body>

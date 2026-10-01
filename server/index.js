@@ -19,7 +19,7 @@ app.use(express.json());
 // Health check (useful for Cloud Run / uptime checks).
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
 
-// Auth routes: /api/login, /api/me
+// Auth routes: /api/request-code, /api/verify-code, /api/me
 app.use('/api', authRouter);
 
 // Protected metrics routes. Each area is composed from live data providers,

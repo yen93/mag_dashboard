@@ -45,9 +45,19 @@ Cloud Run.
     hard-fails on a missing credential**, tiles just show "needs setup".
   - `server/index.js` metrics route is generic (`/api/metrics/:area`) and
     caches each `(area, range)` response briefly via `server/lib/cache.js`.
-- **Auth (unchanged).** `server/users.js` seeds users, bcrypt-hashes passwords
-  at load. `server/auth.js` issues/verifies JWTs with `JWT_SECRET`. Frontend
-  keeps the token in `localStorage`, and a 401 triggers logout → `login.html`.
+- **Auth = passwordless email code (OTP).** No passwords, no user table.
+  `login.html` is a two-step form (email → code). `POST /api/request-code`
+  accepts any `@myadventuregroup.com.au` email, generates a 6-digit code, stores
+  its **bcrypt hash** in Supabase table `dashboard_login_codes` (10-min expiry,
+  60s resend throttle, 5-attempt cap — see `server/lib/loginCodes.js`), and
+  emails it via Gmail SMTP from `julienne@myadventuregroup.com.au`
+  (`server/lib/mailer.js`; logs the code to console when email isn't
+  configured). `POST /api/verify-code` checks the code, then `server/users.js`
+  derives the user from the email (`userFromEmail`/`isAllowedEmail`; `admin`
+  role only for an allowlist, everyone else `viewer`) and `server/auth.js` signs
+  the same JWT payload (`{sub,email,name,role}`) with `JWT_SECRET`. Frontend
+  keeps the token in `localStorage`; a 401 triggers logout → `login.html`.
+  `requireAuth`/`/api/me` and all `/api/*` guards are unchanged.
 
 ## Data caveats — read before touching any query
 - `activecampaign_deals.value` is in **CENTS** — divide by 100. `currency` is
@@ -92,6 +102,12 @@ before changing them).
   `secretAccessor`. **Never put this in the repo or a local file that isn't
   gitignored** — `.gitignore` blocks `*connection_string*`, `*_secret*`,
   `*credentials*`, `service-account*.json`, `scratch_*`.
+- **`GMAIL_USER` / `GMAIL_APP_PASSWORD`** — sends the login-code emails from
+  `julienne@myadventuregroup.com.au` via Gmail SMTP (`server/lib/mailer.js`).
+  `GMAIL_APP_PASSWORD` is a 16-char Google app password (requires 2-Step
+  Verification on that account). Store both in Secret Manager + `--set-secrets`,
+  same as Supabase. Without them the server still boots and logs codes to the
+  console (dev), but no real emails go out.
 - Not yet configured: `AC_API_URL`/`AC_API_KEY` (ActiveCampaign), `XERO_*`
   (Xero OAuth), `CALENDLY_TOKEN`, `MONDAY_TOKEN`,
   `GOOGLE_SERVICE_ACCOUNT_JSON`/`BUYER_ANALYSIS_SHEET_ID` (the MAG Buyer
@@ -110,7 +126,10 @@ before changing them).
   delete/rename fails with "resource busy".
 - Dockerfile uses `npm install` (not `npm ci`); no lockfile-strict install.
 
-## Demo logins
-admin@myadventuregroup.com.au / admin123 (also sales@ / sales123,
-marketing@ / marketing123). Defined in `server/users.js` — unrelated to the
-data-source credentials above.
+## Signing in
+No demo passwords anymore — any `@myadventuregroup.com.au` email can sign in by
+requesting a code (emailed to that address) and entering it. `admin` role is
+limited to the allowlist in `server/users.js` (`ADMIN_EMAILS`); everyone else is
+`viewer`. Locally, when `GMAIL_*` isn't set, the code is printed to the server
+console (`[mailer] … login code for …`), so you can sign in without real SMTP —
+but you still need `SUPABASE_DB_URL` set, since codes are stored in Supabase.

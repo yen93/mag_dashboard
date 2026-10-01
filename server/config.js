@@ -35,6 +35,13 @@ export const config = {
     serviceAccountJson: env.GOOGLE_SERVICE_ACCOUNT_JSON || '',
     buyerAnalysisSheetId: env.BUYER_ANALYSIS_SHEET_ID || '1jaRNT-YCJsBx7cD05Q7bk3-p8vjhWVVxWxdpCMT7YnU',
   },
+  email: {
+    // Gmail (Google Workspace) account that sends the login-code emails, via
+    // SMTP with an app password. When unset, the mailer logs codes to the
+    // console instead (dev fallback) — see server/lib/mailer.js.
+    gmailUser: env.GMAIL_USER || 'julienne@myadventuregroup.com.au',
+    gmailAppPassword: env.GMAIL_APP_PASSWORD || '',
+  },
 };
 
 export function hasSource(name) {
@@ -51,6 +58,8 @@ export function hasSource(name) {
       return Boolean(config.monday.token);
     case 'googleSheet':
       return Boolean(config.googleSheet.serviceAccountJson);
+    case 'email':
+      return Boolean(config.email.gmailUser && config.email.gmailAppPassword);
     default:
       return false;
   }

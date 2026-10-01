@@ -1,0 +1,106 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-01
+Session: Fixed the per-column filter dropdown that auto-closed whenever its
+value list was scrolled (mouse wheel or scrollbar up/down buttons), seen on the
+Sales "Created" column and the Buyer Sheet "Year" column. Hardened the
+scroll-close logic in public/app.js, added overscroll containment, cache-busted
+app.js across all pages, and deployed the fix to Cloud Run.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Reported that the filter dropdown's scrollbar wasn't working: using either the
+mouse scroll or the up/down buttons of the right-hand scrollbar caused the
+filter to auto-close. Reproduced on both the "Created" column of the Sales page
+and the "Year" column of the Buyer Sheet page.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Traced the filter UI to the shared renderSortableTable() in public/app.js
+(both pages use it via the Buyer Sheet's loadBuyerSheet() and the Sales table).
+The column-filter panel is mounted on <body> and, while open, registers a
+capture-phase scroll listener on window that called closePanel() directly
+(app.js:385). Because it was capture-phase, scrolling the panel's own value
+list (.cf-list, which has max-height:240px; overflow-y:auto) also fired that
+listener and closed the panel — the bug.
+
+First fix: replaced the direct closePanel scroll handler with an onScroll()
+wrapper that ignored scroll events originating inside the panel
+(openPanel.contains(e.target)). Updated both the add and remove listener calls
+to reference onScroll. Told the user it was shared by both pages and to hard-
+refresh since app.js was cached.
+
+--------------------------------------------------------------------------------
+USER:
+"same issue"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Re-examined the flow and CSS. Confirmed .cf-list scrolls at 240px and that the
+table sits in a .table-scroll (overflow-x:auto) container. Reasoned the first
+patch was logically correct for the reported case, so the most likely causes
+were (a) a cached app.js (the HTML referenced "app.js" with no version string,
+so browsers/Cloud Run served the stale file) or (b) the user testing the live
+Cloud Run site, which still had the old code.
+
+Hardened the fix anyway to cover edge cases:
+- Rewrote onScroll() to return early for window/page scroll (document,
+  window, documentElement, body) — the panel is positioned to the document
+  and scrolls with it, so a page scroll shouldn't close it — and to return
+  early for scrolls inside the panel; it now closes only on a genuine
+  scroll-away such as the table's horizontal .table-scroll moving the header
+  cell out from under the panel.
+- Added overscroll-behavior:contain to .cf-list in app.css so wheeling past
+  the list's top/bottom doesn't chain into a page scroll (which would have
+  closed the panel).
+- Cache-busted by bumping the script reference to app.js?v=2 in all five
+  pages: sales.html, mag_buyer_sheet.html, marketing.html, operations.html,
+  login.html.
+
+Walked the user through the three handler cases (list scroll → stays open;
+page scroll → stays open; table sideways scroll → closes) and offered to
+deploy.
+
+--------------------------------------------------------------------------------
+USER:
+"deploy it"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Deployed to Cloud Run per the project's deploy notes — no secret flags, so the
+existing Supabase/AC secrets wouldn't be dropped — using the full gcloud path
+(not on PATH on this machine):
+  gcloud run deploy dashboard --source . --region australia-southeast1
+  --project claudegwscli-502400 --quiet
+Ran it in the background. Build completed successfully: revision
+dashboard-00013-8vk, serving 100% of traffic, exit code 0.
+
+--------------------------------------------------------------------------------
+USER:
+Asked to verify the filter scroll works now.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Was upfront that this environment can't physically drag a scrollbar in a real
+browser, so a literal click-demo wasn't possible — but verified the two things
+that could be verified: (1) the handler logic is correct and the add/remove
+listeners are consistent on onScroll; (2) production actually serves the patch.
+Curled the live site and confirmed https://dashboard-659687081407.australia-
+southeast1.run.app/app.js?v=2 contains the patched onScroll() (line 314+) and
+that sales.html references app.js?v=2. Asked the user to give it a quick click
+on their end to confirm it feels right.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /save-chat-history to document this session (chat transcript only — no
+as_built.txt, CLAUDE.md, or git commit/push).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked existing chat_history/ files to match their format, ran the mandatory
+security scan (no secrets, keys, tokens, or connection strings appeared in this
+session — no redactions needed), and wrote this export.
+
+================================================================================
+END OF EXPORT
+================================================================================

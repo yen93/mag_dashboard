@@ -29,14 +29,29 @@ function requireLogin() {
 }
 
 /* ---------- API ---------- */
-function apiLogin(email, password) {
-  return fetch('/api/login', {
+// Step 1 of sign-in: email a short code to the address.
+function apiRequestCode(email) {
+  return fetch('/api/request-code', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: email, password: password }),
+    body: JSON.stringify({ email: email }),
   }).then(function (res) {
     return res.json().then(function (data) {
-      if (!res.ok) throw new Error(data.error || 'Login failed');
+      if (!res.ok) throw new Error(data.error || 'Could not send code');
+      return data;
+    });
+  });
+}
+
+// Step 2 of sign-in: exchange the code for a token ({ token, user }).
+function apiVerifyCode(email, code) {
+  return fetch('/api/verify-code', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ email: email, code: code }),
+  }).then(function (res) {
+    return res.json().then(function (data) {
+      if (!res.ok) throw new Error(data.error || 'Sign-in failed');
       return data;
     });
   });

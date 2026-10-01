@@ -1,6 +1,8 @@
 import jwt from 'jsonwebtoken';
 import { Router } from 'express';
-import { findUserByEmail, verifyPassword, publicUser } from './users.js';
+import { isAllowedEmail, userFromEmail, publicUser } from './users.js';
+import { createCode, verifyCode } from './lib/loginCodes.js';
+import { sendLoginCode } from './lib/mailer.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'dev-only-insecure-secret-change-me';
 const TOKEN_TTL = process.env.JWT_TTL || '8h';
@@ -14,13 +16,42 @@ if (!process.env.JWT_SECRET) {
 
 export const authRouter = Router();
 
-// POST /api/login  { email, password } -> { token, user }
-authRouter.post('/login', (req, res) => {
-  const { email, password } = req.body || {};
-  const user = findUserByEmail(email);
-  if (!user || !verifyPassword(user, password)) {
-    return res.status(401).json({ error: 'Invalid email or password.' });
+// POST /api/request-code  { email } -> { ok: true }
+// Emails a short sign-in code to any @myadventuregroup.com.au address.
+authRouter.post('/request-code', async (req, res) => {
+  const { email } = req.body || {};
+  if (!isAllowedEmail(email)) {
+    return res.status(400).json({ error: 'Use your @myadventuregroup.com.au email address.' });
   }
+  try {
+    const code = await createCode(email);
+    // `null` means a code was just sent (throttled) — treat as success so we
+    // neither resend nor leak timing; the earlier code is still valid.
+    if (code) await sendLoginCode(email, code);
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('[auth] request-code failed:', err.message);
+    return res.status(500).json({ error: 'Could not send the code, please try again.' });
+  }
+});
+
+// POST /api/verify-code  { email, code } -> { token, user }
+authRouter.post('/verify-code', async (req, res) => {
+  const { email, code } = req.body || {};
+  if (!isAllowedEmail(email)) {
+    return res.status(400).json({ error: 'Use your @myadventuregroup.com.au email address.' });
+  }
+  let ok = false;
+  try {
+    ok = await verifyCode(email, code);
+  } catch (err) {
+    console.error('[auth] verify-code failed:', err.message);
+    return res.status(500).json({ error: 'Could not verify the code, please try again.' });
+  }
+  if (!ok) {
+    return res.status(401).json({ error: 'Invalid or expired code.' });
+  }
+  const user = userFromEmail(email);
   const token = jwt.sign(
     { sub: user.id, email: user.email, name: user.name, role: user.role },
     JWT_SECRET,
