@@ -1,0 +1,5 @@
+mag_buyer_sheet=https://docs.google.com/spreadsheets/d/1jaRNT-YCJsBx7cD05Q7bk3-p8vjhWVVxWxdpCMT7YnU/edit?gid=1098028303#gid=1098028303
+dashboard_site=https://dashboard-659687081407.australia-southeast1.run.app
+
+## your task:
+create a single mag_buyer_sheet table in the dashboard_site. it should have the same columns as the 2026 and 2027 sheets. fetch data directly from AC. any creds you might need is in gsm. use the sales page table design on filtering, sorting, and overall setup as reference.

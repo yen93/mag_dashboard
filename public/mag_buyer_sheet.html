@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Buyer Sheet — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* The Buyer Sheet is a wide 17-column table — let it use the full screen
+       width instead of the default 1200px cap, so the table grows as the window
+       grows (it still scrolls horizontally on narrow screens). */
+    .content { max-width: none; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab active" href="mag_buyer_sheet.html">Buyer Sheet</a>
+  </nav>
+
+  <main class="content">
+    <div class="grid" style="margin-bottom:16px">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>MAG Buyer Sheet</h3>
+          <span class="chips" id="buyerChips"></span>
+          <div class="spacer"></div>
+          <span class="muted" id="buyerCount" style="font-size:13px"></span>
+        </div>
+        <div id="buyerRows"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js"></script>
+  <script>
+    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+
+    // ---- cell renderers ----
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    function yr(v) { return v ? esc(String(v)) : '—'; } // plain year, no thousands grouping
+    function pill(v) {
+      if (!v) return '—';
+      var s = String(v), cls = s.toLowerCase() === 'indirect' ? 'partial' : '';
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+
+    function loadBuyerSheet() {
+      var host = document.getElementById('buyerRows');
+      host.innerHTML = '<div class="muted" style="padding:14px">Loading buyer sheet…</div>';
+      fetchJSON('/api/operations/buyer-sheet').then(function (data) {
+        setChips('buyerChips', data.rows.meta);
+        renderSortableTable('buyerRows', data.rows.data || [], [
+          { key: 'year', label: 'Year', render: yr },
+          { key: 'eventDate', label: 'Date of Event', unit: 'date' },
+          { key: 'company', label: 'Company', render: txt },
+          { key: 'directIndirect', label: 'Direct/Indirect', render: pill },
+          { key: 'program', label: 'Program Delivered', render: txt },
+          { key: 'audienceSize', label: 'Audience Size', render: txt },
+          { key: 'valueAud', label: 'Value (AUD)', unit: 'currency' },
+          { key: 'industry', label: 'Industry', render: txt },
+          { key: 'businessSize', label: 'Business Size', render: txt },
+          { key: 'ipocName', label: 'Initial Point of Contact', render: txt },
+          { key: 'ipocEmail', label: 'Email', render: txt },
+          { key: 'ipocTitle', label: 'Job Title', render: txt },
+          { key: 'ipocSeniority', label: 'Seniority', render: txt },
+          { key: 'kdmName', label: 'Key Decision Maker', render: txt },
+          { key: 'kdmEmail', label: 'KDM Email', render: txt },
+          { key: 'kdmTitle', label: 'KDM Job Title', render: txt },
+          { key: 'kdmSeniority', label: 'KDM Seniority', render: txt },
+        ], {
+          searchPlaceholder: 'Search buyers…',
+          sortKey: 'eventDate', sortDir: 'desc',
+          emptyText: 'No buyers yet — the daily buyer-sheet-sync job will populate this table.',
+          onCount: function (shown, total) {
+            var el = document.getElementById('buyerCount');
+            if (el) el.textContent = shown === total ? (total + ' buyers') : (shown + ' of ' + total + ' buyers');
+          },
+        });
+      }).catch(function (err) {
+        console.error(err);
+        host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load buyer sheet</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('operations'); // login / top-bar / theme only — this page renders its own table
+    if (currentUser()) loadBuyerSheet();
+  </script>
+</body>
+</html>

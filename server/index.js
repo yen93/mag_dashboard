@@ -6,6 +6,7 @@ import { getSales } from './metrics/sales.js';
 import { getMarketing } from './metrics/marketing.js';
 import { getOperations } from './metrics/operations.js';
 import { getLivDeals } from './metrics/liv-deals.js';
+import { getMagBuyerSheet } from './metrics/mag-buyer-sheet.js';
 import { cached } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
 
@@ -56,6 +57,22 @@ sales.get('/deals', async (_req, res) => {
   }
 });
 app.use('/api/sales', sales);
+
+// Operations sub-resources. The Buyer Sheet table reads a pre-computed Supabase
+// cache (public.mag_buyer_sheet), refreshed Mon–Fri by the buyer-sheet-sync edge
+// function. It's a plain SELECT, so a short cache is plenty.
+const operations = express.Router();
+operations.use(requireAuth);
+operations.get('/buyer-sheet', async (_req, res) => {
+  try {
+    const payload = await cached('operations:buyer-sheet', getMagBuyerSheet, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:buyer-sheet]', err);
+    res.status(502).json({ error: 'Failed to load buyer sheet from data source.', detail: err.message });
+  }
+});
+app.use('/api/operations', operations);
 
 // Serve the plain HTML/CSS/JS pages from public/.
 const publicDir = path.join(__dirname, '..', 'public');
