@@ -1,0 +1,268 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-02
+Session: Build the "Invoice Tracking" feature on the MAG Metrics dashboard — a
+Supabase-cached, sortable invoices table sourced from Xero (read-only), kept
+fresh by a scheduled Claude Code routine (via the Xero + Supabase MCPs) instead
+of an edge function; add an "AC Deal" column matched to ActiveCampaign deals;
+fix the matching; and generate a local iMAG-themed user guide.
+================================================================================
+
+NOTE ON REDACTIONS: This transcript involved values that must never be committed.
+They have been replaced with placeholders and never written here:
+- [REDACTED_SUPABASE_JWT] — anon / service_role JWTs and an `sb_secret_…` bearer
+  token that appeared inside an existing pg_cron job's command when the cron.job
+  table was listed (used only to copy the no-auth net.http_post pattern; the
+  tokens were never reproduced in replies).
+- [REDACTED_OTP] — three 6-digit passwordless sign-in codes emailed during live
+  end-to-end login verification (each single-use and 10-minute expiry; now spent).
+No other secrets (no Xero client secret, no SUPABASE_DB_URL, no JWT_SECRET value)
+were shown this session.
+
+--------------------------------------------------------------------------------
+USER:
+(In plan mode) Pointed at a prior chat-history file and an initial_prompt.txt:
+create a new invoice-tracking page on the dashboard, modelled on the MAG Buyer
+Sheet — a sortable/filterable table with the exact columns A–G of a given
+"INVOICE + REVIEW INVITES" Google Sheet; add a Supabase cache table and a daily
+(Mon–Fri 6am PH) edge function that fills it from source; the page reads only the
+cache.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the brief and the Buyer Sheet's build transcript. Launched an Explore agent
+that mapped the Buyer Sheet end-to-end (public/mag_buyer_sheet.html + app.js
+renderSortableTable; server/metrics/mag-buyer-sheet.js; the /api/operations/
+buyer-sheet route; supabase/functions/buyer-sheet-sync; the public.mag_buyer_sheet
+table + pg_cron). Read the source Google Sheet via the Drive connector: its
+INVOICES tabs are columns A–J (Date of Event, Company, Invoice no., Invoice
+status, Invoice followed up?, Invoice paid?, Invoice issued?, Remarks, review
+columns). Asked four clarifying questions (source tab, Sheets auth, refresh mode,
+column scope).
+
+--------------------------------------------------------------------------------
+USER:
+Answers: source is 2026 onwards; the daily job pulls from Xero, ActiveCampaign
+and Supabase — NOT the sheet (the sheet only defines which columns to build);
+caching is incremental like the Buyer Sheet (never clear, just upsert). Later
+clarified: one row per Xero ACCREC invoice (keyed by Xero invoice_id), scope =
+invoice date ≥ 2026, drop column E ("Invoice followed up?"), and (after the
+plan) make all Xero access READ-ONLY.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the real data: no Xero mirror exists in Supabase, so "Supabase" =
+the existing activecampaign_deals mirror; Xero supplies the invoice fields. Via
+the Xero MCP, found invoices expose a `reference` of the form "Company_Program"
+(the Xero contact is often a bureau like Claxton/Saxton), with event date and
+Deposit/Final wording inside line-item descriptions. Mapped the 6 columns
+(A Date of Event, B Company, C Invoice no., D Invoice status, F Invoice paid?,
+G Invoice issued?). Validated the parsing (company from reference prefix, event
+date from line text, status/paid/issued maps) against real Q1-2026 invoices.
+
+Built (first design, edge-function based): created public.invoice_tracking
+(RLS on, no policies; PK invoice_id); wrote + deployed supabase/functions/
+invoice-tracking-sync (Deno, verify_jwt:false, read-only Xero via a Custom
+Connection's client-credentials, GET only); added server/metrics/
+invoice-tracking.js + the GET /api/operations/invoice-tracking route (10-min
+cache); created public/invoice_tracking.html (reuses renderSortableTable,
+full-width) and added an "Invoices" nav tab to sales/marketing/operations/
+mag_buyer_sheet; scheduled pg_cron invoice-tracking-sync-daily (0 22 * * 0-4 UTC
+= Mon–Fri 6am PH), copying the no-auth net.http_post pattern from the existing
+jobs (whose commands held [REDACTED_SUPABASE_JWT]). Wrote as_built.txt + a memory
+file. Surfaced the pre-existing Supabase advisory (14 public tables with RLS
+disabled). The Cloud Run redeploy FAILED — gcloud's auth token had expired
+(a `| tail` had masked the error on the first attempt). The edge function ran
+and cleanly reported "Xero credentials not set".
+
+--------------------------------------------------------------------------------
+USER:
+A series of Xero Custom Connection setup questions: what to put in the "Company
+or application URL" field; a Xero "Prohibited data use" (AI-training) warning;
+and which scopes are needed.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Answered: the URL field is informational (not a redirect) — use the company
+site. The AI-training prohibition doesn't apply (this feature does no AI
+training; it only reads invoices into a table). Scopes needed: exactly the two
+read-only ones, accounting.transactions.read and accounting.contacts.read.
+
+--------------------------------------------------------------------------------
+USER:
+"simple, create a Claude Code routine that uses the mcp and stores the data into
+supabase. the edge function then calls the routine api." (i.e. sync via MCP
+instead of a Custom Connection.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained the tradeoff: the Xero MCP is the interactive session's connection; an
+unattended edge function can't use it, so a scheduled cloud routine is the way —
+and it self-schedules, so no edge function is needed to trigger it (caveats:
+each run costs model tokens, and the account's Xero MCP connector must stay
+authorised). The user chose the routine approach and asked to backfill now.
+
+Pivot executed: unscheduled the pg_cron job; deleted the dead local edge
+function dir. Loaded the `schedule` skill and created a cloud routine
+"invoice-tracking-sync" (trigger_id trig_013TGsR7euBvPbAz45UpS8tb; cron
+0 22 * * 0-4 = Mon–Fri 6am PH; model claude-sonnet-5-5; repo yen93/mag_dashboard;
+Xero + Supabase MCP connectors attached) whose prompt embeds a deterministic
+Node transform. First run: Xero read worked (103 ACCREC invoices, read-only) but
+it STALLED — it tried to hand-transcribe all invoices into one file and its Bash
+file-write was denied by the sandbox permission classifier ("Modify Shared
+Resources"). Fixed by rewriting the routine to process ONE page at a time and to
+create files with the Write tool (Bash only to run node, no redirection).
+Re-ran: it fetched all 4 pages and upserted 103 rows. Verified in Supabase:
+103 rows, clean status split (94 Done/Paid, 9 Sent/Unpaid), correct parsing
+(e.g. INV-0756 → NSW Revenue Professionals / 5 Mar 2026 / Done / Yes / Full;
+INV-0870 nCino → Sent / No). Updated as_built + memory to the routine design.
+
+--------------------------------------------------------------------------------
+USER:
+(Ran `! gcloud auth login` and re-authenticated as julienne.) Asked to verify
+the invoices page is live.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Redeployed the dashboard with NO secret flags (preserving JWT_SECRET +
+SUPABASE_DB_URL + AC_API_URL + AC_API_KEY + GMAIL_*), revision dashboard-00015.
+Verified: invoice_tracking.html serves (200), the API route is auth-gated (401
+without a token), and the "Invoices" tab is on all four authenticated pages.
+Then signed in end-to-end via the real OTP flow — requested a code, read it from
+Gmail ([REDACTED_OTP]), verified to get a JWT, and confirmed
+GET /api/operations/invoice-tracking returns 103 rows, status "live", source
+"Xero (Supabase cache)".
+
+--------------------------------------------------------------------------------
+USER:
+Add an "AC Deal" column whose value is the matching ActiveCampaign deal title.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Noted both invoice_tracking and the activecampaign_deals mirror live in the same
+Supabase project, so matching is a SQL join (no AC API call). Measured options:
+company-only match hit 73/103 but was very ambiguous (one company had 137 deals);
+company+program only 26. Asked how to disambiguate and where to place the column.
+User chose "best match" (company + event-date proximity, tie-break newest won
+deal) and "after Company, full title". Implemented: ALTER TABLE … ADD COLUMN
+ac_deal_title; a match UPDATE; added ac_deal_title to the metrics SELECT and a
+{key:'acDealTitle', label:'AC Deal'} column after Company; appended the match
+step to the routine's prompt; redeployed (dashboard-00016). Verified live: 73
+filled, Sydney Water's multiple events each mapped to the right deal.
+
+--------------------------------------------------------------------------------
+USER:
+This one's wrong: "Vistage // CE420 & SB230 // Keynote // 2 December 2026" — Dec 2
+is the event date, but the matched row shows an Oct 1 event date.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Diagnosed via the Xero line ("…Vistage CE4 - 1 October 2026") and the deals: the
+invoice's Oct 1 is correct (the CE4 keynote); the MATCH was wrong (paired with a
+different Vistage deal 62 days away) because company-only + unbounded "closest
+date" is too loose for a 137-deal bureau, and the matcher read deal event dates
+only from mag_buyer_sheet (incomplete). Rebuilt the match to: prefix-aware
+company match (deal title's first //-segment starts with the invoice company),
+with the deal's event date taken from the AC Event Date field (via
+mag_buyer_sheet) OR parsed from the deal title, and REQUIRE the invoice and deal
+event dates to agree within 7 days — else leave blank. Backfilled and updated the
+routine's STEP C. Result: 55/103 filled (down from 73, which had included wrong
+matches); INV-0884 now correctly matches "Vistage CE4 // Immersive // 1 October
+2026", INV-0864 matched via the AC field (title had no date). Verified live.
+
+--------------------------------------------------------------------------------
+USER:
+Also: there's an event-date FIELD in the deal (use it, not just the title).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed activecampaign_deals.event_date is 0/3484 populated and ac_custom_fields
+holds only demo_date/proposal_sent — so the AC Event Date field is mirrored only
+via mag_buyer_sheet.event_date (won deals). Folded it in as the primary deal-date
+signal with the deal-title date as fallback (match if EITHER agrees within 7
+days); kept the same 55/103 result and the Vistage fix. Hardened the title-date
+regex (end-anchored, day-range guarded) to avoid a to_date crash.
+
+--------------------------------------------------------------------------------
+USER:
+Still wrong: "Sydney Water // Immersive // 27 Aug 2026" but the event-date column
+says 19 Aug 2026.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated: the Xero line is "…WEIP All-Hands Day - 19 August 2026…" and the
+deal's AC Event Date field is also 19 Aug — so the match (deal 4211) is CORRECT;
+only that deal's TITLE text carries a stale "27 Aug". Explained it's an AC
+data-quality quirk, not a matching error, and asked how to display it. User:
+"no changes needed… the event date field is more accurate. display the title as
+is." Left as-is.
+
+--------------------------------------------------------------------------------
+USER:
+Why are there rows where the AC Deal column is blank?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Broke down the 48 blanks: 12 invoices have no parseable event date; 14 have no
+AC deal for that company; 22 have a company deal but no event date within 7 days
+(mostly correctly excluded old/2024–2025/"prior lead"/negotiation deals, plus a
+few genuine near-misses — The Tailor 9d, EFI 14d — and multi-date or dateless
+deals). Framed the blanks as intentional (correct-or-blank) and offered to widen
+the window / parse multi-date titles / fall back for dateless deals if desired.
+
+--------------------------------------------------------------------------------
+USER:
+Where did the "Date of Event" column come from, and why are some blank?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained Xero has no event-date field — it's parsed from the invoice line-item
+text (first date with a 20xx year). Listed the 12 blank rows; nearly all are
+ancillary charges (travel reimbursements, books, allowances, deposits, post-con
+video) whose text has no event date. Offered to borrow the date from the related
+AC deal / main event invoice for the dateless ones (safe for single-deal
+companies, risky for repeat clients).
+
+--------------------------------------------------------------------------------
+USER:
+If we update the Xero descriptions and the AC deal event-date field, will there
+be no blanks anymore?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Answered honestly: Date of Event — yes, if every line includes a parseable
+day-month-name-year date. AC Deal — mostly, but not automatically: it also needs
+a correctly-named deal to actually exist, the company names to match (watch
+typos like "Kiurnai" vs "Kurnai" and bureau names), and the dates to agree; and
+the AC field reaches the matcher only for won deals via the daily buyer-sheet
+cache, so for non-won deals the deal TITLE's date is what's used. Offered to make
+the routine read the AC Event Date field live for every deal if needed.
+
+--------------------------------------------------------------------------------
+USER:
+/imag_page_local
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Built a self-contained iMAG-themed guide for the feature. Read the skill's
+template.html + diagrams.py; drew three PNG diagrams with the Pillow helper
+(end-to-end data flow; where each column comes from; the AC-deal match decision
+flow), reviewed each PNG for overflow, then assembled operations/invoice_tracking/
+invoice-tracking-guide.html (189 KB, diagrams embedded as base64) with seven
+sections including a "How it's built" (architecture + tech stack), footer "Updated
+by: Julienne / Last Update: 2 October 2026". Kept the three .png files on disk;
+no Drive upload, no routine fired, no secrets in the page.
+
+--------------------------------------------------------------------------------
+USER:
+/save-chat-history
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Scanned the whole conversation for secrets (redactions noted above) and wrote
+this transcript to operations/invoice_tracking/chat_history/
+0210261247_chat_history.txt. Did not touch as_built.txt or CLAUDE.md and did not
+commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================
