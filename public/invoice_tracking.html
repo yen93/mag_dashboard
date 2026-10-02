@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Invoices — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* The invoice table is wide — let it use the full screen width instead of
+       the default 1200px cap, so it grows with the window (still scrolls
+       horizontally on narrow screens). */
+    .content { max-width: none; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="mag_buyer_sheet.html">Buyer Sheet</a>
+    <a class="tab active" href="invoice_tracking.html">Invoices</a>
+  </nav>
+
+  <main class="content">
+    <div class="grid" style="margin-bottom:16px">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>Invoice Tracking</h3>
+          <span class="chips" id="invoiceChips"></span>
+          <div class="spacer"></div>
+          <span class="muted" id="invoiceCount" style="font-size:13px"></span>
+        </div>
+        <div id="invoiceRows"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js?v=2"></script>
+  <script>
+    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+
+    // ---- cell renderers ----
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    // Paid? pill: "No" is highlighted (amber), "Yes"/"No Fee" neutral.
+    function paidPill(v) {
+      if (!v) return '—';
+      var s = String(v), cls = s.toLowerCase() === 'no' ? 'partial' : '';
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+    function statusPill(v) {
+      if (!v) return '—';
+      var s = String(v), low = s.toLowerCase(), cls = '';
+      if (low === 'to draft' || low === 'void/deleted') cls = 'partial';
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+
+    function loadInvoiceTracking() {
+      var host = document.getElementById('invoiceRows');
+      host.innerHTML = '<div class="muted" style="padding:14px">Loading invoices…</div>';
+      fetchJSON('/api/operations/invoice-tracking').then(function (data) {
+        setChips('invoiceChips', data.rows.meta);
+        renderSortableTable('invoiceRows', data.rows.data || [], [
+          { key: 'eventDate', label: 'Date of Event', unit: 'date' },
+          { key: 'company', label: 'Company', render: txt },
+          { key: 'acDealTitle', label: 'AC Deal', render: txt },
+          { key: 'invoiceNumber', label: 'Invoice no.', render: txt },
+          { key: 'invoiceStatus', label: 'Invoice status', render: statusPill },
+          { key: 'invoicePaid', label: 'Invoice paid?', render: paidPill },
+          { key: 'invoiceIssued', label: 'Invoice issued?', render: txt },
+        ], {
+          searchPlaceholder: 'Search invoices…',
+          sortKey: 'eventDate', sortDir: 'desc',
+          emptyText: 'No invoices yet — the daily invoice-tracking-sync job will populate this table.',
+          onCount: function (shown, total) {
+            var el = document.getElementById('invoiceCount');
+            if (el) el.textContent = shown === total ? (total + ' invoices') : (shown + ' of ' + total + ' invoices');
+          },
+        });
+      }).catch(function (err) {
+        console.error(err);
+        host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load invoices</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('operations'); // login / top-bar / theme only — this page renders its own table
+    if (currentUser()) loadInvoiceTracking();
+  </script>
+</body>
+</html>

@@ -7,6 +7,7 @@ import { getMarketing } from './metrics/marketing.js';
 import { getOperations } from './metrics/operations.js';
 import { getLivDeals } from './metrics/liv-deals.js';
 import { getMagBuyerSheet } from './metrics/mag-buyer-sheet.js';
+import { getInvoiceTracking } from './metrics/invoice-tracking.js';
 import { cached } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
 
@@ -71,6 +72,18 @@ operations.get('/buyer-sheet', async (_req, res) => {
   } catch (err) {
     console.error('[operations:buyer-sheet]', err);
     res.status(502).json({ error: 'Failed to load buyer sheet from data source.', detail: err.message });
+  }
+});
+// Invoice Tracking table reads a pre-computed Supabase cache
+// (public.invoice_tracking), refreshed Mon–Fri by the invoice-tracking-sync edge
+// function from Xero (read-only). Plain SELECT, so a short cache is plenty.
+operations.get('/invoice-tracking', async (_req, res) => {
+  try {
+    const payload = await cached('operations:invoice-tracking', getInvoiceTracking, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:invoice-tracking]', err);
+    res.status(502).json({ error: 'Failed to load invoices from data source.', detail: err.message });
   }
 });
 app.use('/api/operations', operations);

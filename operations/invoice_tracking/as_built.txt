@@ -1,0 +1,110 @@
+================================================================================
+AS-BUILT — Invoice Tracking (dashboard feature)
+Last updated: 2026-10-02
+================================================================================
+Scope: the "Invoices" page on the MAG Metrics dashboard and the daily pipeline
+that feeds it. Code lives in the dashboard repo (two levels up from this folder);
+this folder holds the brief + chat history for the feature. Paths below are
+relative to the dashboard repo root (C:/Users/Cloverly/claude_code/dashboard).
+
+Modelled on the MAG Buyer Sheet (cache table + thin Express route + one static
+page using renderSortableTable). The DATA SOURCE is Xero (sales invoices). The
+daily sync is a **scheduled Claude Code routine (cloud agent)** that uses the
+Xero + Supabase MCP connectors — NOT a Supabase edge function, and NOT a Xero
+Custom Connection (that approach was abandoned; see HISTORY).
+
+WHAT IT SHOWS
+- One row per Xero sales invoice (ACCREC) issued 2026 onwards. Columns mirror
+  A–G of the MAG "INVOICE + REVIEW INVITES" Google Sheet, minus the manual
+  "Invoice followed up?" column (no data source), i.e. 6 columns:
+    A Date of Event   — parsed from Xero line-item descriptions (a date carrying
+                        an explicit 20xx year; ranges/comma-lists -> first date).
+    B Company         — Xero reference prefix before "_" (e.g.
+                        "National Tiles_MAG Program" -> "National Tiles"); the
+                        Xero contact is often a bureau, so the reference is the
+                        more reliable client name. Fallback = contact name.
+    C Invoice no.     — Xero invoice_number.
+    D Invoice status  — mapped from Xero status (PAID->Done, AUTHORISED->Sent,
+                        SUBMITTED->Awaiting approval, DRAFT->To draft,
+                        VOIDED/DELETED->Void/deleted; zero-total->No Fee).
+    F Invoice paid?   — Yes / No / No Fee (from amount_due / amount_total / status).
+    G Invoice issued? — Full / Deposit / Balance / No Fee (parsed from line text).
+- The Google Sheet is NOT a data source — it only defined the column set.
+
+CODE / FILES
+- server/metrics/invoice-tracking.js — reads public.invoice_tracking and maps it
+  to the page payload; status chip = live (rows) / pending (empty).
+- server/index.js — mounts GET /api/operations/invoice-tracking (requireAuth,
+  10-min cache) on the existing operations router.
+- public/invoice_tracking.html — the page; reuses app.js renderSortableTable
+  (sort + search + per-column filters). Full-width (.content max-width:none,
+  page-scoped). "Invoices" nav tab added to sales/marketing/operations/
+  mag_buyer_sheet pages (NOT login.html).
+- (No edge function. The transform logic lives in the routine prompt — see below.)
+
+DATA PIPELINE — scheduled Claude Code routine
+- Routine name: "invoice-tracking-sync" (id trig_013TGsR7euBvPbAz45UpS8tb).
+  Managed at https://claude.ai/code/routines/trig_013TGsR7euBvPbAz45UpS8tb
+  (routines cannot be deleted via API — use that page).
+- Schedule: cron `0 22 * * 0-4` UTC = Mon–Fri 6:00am Philippine time.
+- Runs as a cloud agent (model claude-sonnet-5-5, Default environment, repo
+  github.com/yen93/mag_dashboard) with two MCP connectors attached: Xero
+  (read-only use) and Supabase.
+- Each run: (1) via the Xero MCP, fetch ALL ACCREC invoices issued 2026-01-01→
+  today, with line items, paging through all; (2) write them to invoices.json;
+  (3) run an embedded deterministic Node transform (transform.mjs) that emits an
+  INSERT … ON CONFLICT (invoice_id) DO UPDATE upsert; (4) run that SQL via the
+  Supabase MCP execute_sql against project aivitcomiywiysrfwqxt. Upsert is
+  idempotent and NEVER clears the table (status/paid changes flow through,
+  new invoices append). READ-ONLY against Xero (list/read invoices only).
+- The exact transform script is embedded in the routine prompt (kept there so
+  parsing is deterministic regardless of repo state). To change parsing, update
+  the routine prompt (RemoteTrigger update, or the routines web page).
+
+DATA STORES
+- public.invoice_tracking (Supabase, project aivitcomiywiysrfwqxt) — one row per
+  Xero ACCREC invoice, keyed by invoice_id (Xero InvoiceID GUID). Served columns:
+  event_date, company, ac_deal_title, invoice_number, invoice_status, invoice_paid,
+  invoice_issued, invoice_date. ac_deal_title ("AC Deal" on the page) = the matched
+  ActiveCampaign deal title. Match rule (SQL join against activecampaign_deals +
+  mag_buyer_sheet in the routine's final step, STEP C; no AC API call): the deal title's
+  first //-segment equals or starts with the invoice company, AND the deal's event date
+  — the AC "Event Date" custom field (materialised in mag_buyer_sheet.event_date for won
+  deals) OR the date parsed from the end of the deal title — is within 7 days of the
+  invoice's event date (tie-break: smallest gap, then won deal, then newest). This
+  date-agreement requirement prevents mismatches for bureaus/repeat clients (e.g.
+  Vistage has 137 deals). ac_deal_title is left NULL when there is no confident match.
+  ~55/103 fill; unmatched stay blank. (activecampaign_deals.event_date itself is NOT
+  populated in the mirror — the only event-date signal is mag_buyer_sheet or the title.)
+  Bookkeeping (not served): reference, xero_status,
+  contact_name, amount_total/paid/due, currency, due_date, fully_paid_on_date,
+  synced_at, updated_at. RLS enabled with NO policies (off the anon key; read via
+  service-level SUPABASE_DB_URL). Indexes on invoice_date DESC + event_date DESC.
+
+HOSTING / DEPLOY
+- Google Cloud Run — service "dashboard", project claudegwscli-502400, region
+  australia-southeast1. Redeploy with
+  `gcloud run deploy dashboard --source . --region australia-southeast1` and NO
+  secret flags (preserves JWT_SECRET + SUPABASE_DB_URL + AC_API_URL + AC_API_KEY).
+  The dashboard server only reads Supabase; it makes no Xero calls, so no Xero
+  secret is needed on Cloud Run.
+
+CAVEATS
+- Event date and the Full/Deposit/Balance classification are parsed from Xero
+  line-item free text; validated against the 2026 Q1 sample but a novel phrasing
+  could miss (event date is then left blank).
+- "Invoice followed up?" (sheet column E) is intentionally omitted — manual field
+  with no Xero source.
+- The routine uses the account's Xero MCP connector; if that connector's
+  authorisation lapses, a run will fail until it is reconnected
+  (https://claude.ai/customize/connectors). Check run health via the routines
+  page or RemoteTrigger list_runs / get_run_log.
+
+HISTORY
+- First built (2026-10-02 AM) as a Supabase edge function (invoice-tracking-sync)
+  authenticating to Xero via a Custom Connection, with a pg_cron job
+  (invoice-tracking-sync-daily). Abandoned the same day in favour of the routine
+  above (to avoid the Xero Custom Connection setup). The pg_cron job was
+  unscheduled; the deployed edge function is dormant/unused (delete it in the
+  Supabase dashboard if desired).
+================================================================================

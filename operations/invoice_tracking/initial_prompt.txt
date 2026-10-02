@@ -1,0 +1,5 @@
+invoice_sheet=https://docs.google.com/spreadsheets/d/1Pwb-DraACOujICubmMSjX_q2jlhzN_Yh4ccoxITVXDQ/edit?gid=1590693584#gid=1590693584
+
+
+## your main task:
+create a new invoice tracking page in the mag metrics dashboard site. page is much like the mag buyer page which is a table that can be sorted and filtered. columns should be the exact same columns A-G as the invoice_sheet. apply the same caching system where you create a cache table in supabase where the data for the whole table is stored there. and there is also a new edge function that fetches the cache table data directly from source daily mon-fri at 6am ph time. the dashboard page just then fetches from the cache table not the original source. you may use mag buy page as reference cos it is built exactly like this.
