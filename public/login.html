@@ -46,7 +46,7 @@
   <script src="app.js?v=3"></script>
   <script>
     // Already signed in? Go straight to the dashboard.
-    if (currentUser()) window.location.href = 'sales.html';
+    if (currentUser()) window.location.href = 'sales_overview.html';
 
     var form = document.getElementById('loginForm');
     var errBox = document.getElementById('error');
@@ -83,7 +83,7 @@
       clearError();
       verifyBtn.disabled = true; verifyBtn.textContent = 'Signing in…';
       apiVerifyCode(emailInput.value.trim(), codeInput.value.trim())
-        .then(function (data) { setToken(data.token); window.location.href = 'sales.html'; })
+        .then(function (data) { setToken(data.token); window.location.href = 'sales_overview.html'; })
         .catch(function (err) {
           showError(err.message || 'Sign-in failed.');
           verifyBtn.disabled = false; verifyBtn.textContent = 'Sign in';

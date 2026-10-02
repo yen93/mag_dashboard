@@ -12,11 +12,15 @@ Cloud Run.
 
 ## Architecture (the non-obvious bits)
 - **Single origin.** `server/index.js` serves both `/api/*` and the static pages
-  in `public/`. `/` redirects to `/sales.html`. No SPA fallback — each page is a
-  real file.
+  in `public/`. `/` redirects to `/sales_overview.html` (the first tab). No SPA
+  fallback — each page is a real file.
 - **Frontend = static files in `public/`, no build.** One HTML file per screen
-  (`login.html`, `sales.html`, `marketing.html`, `operations.html`). The tab bar
-  is just links between those pages. Shared styling in `public/app.css` (CSS
+  Tab bar (in order): `sales_overview.html` ("Sales"), `marketing.html`,
+  `operations.html`, `mag_buyer_sheet.html` ("Buyer Sheet"),
+  `invoice_tracking.html` ("Invoices"), `sales.html` ("Conferences"); plus
+  `login.html`. **Naming gotcha:** the "Sales" tab is `sales_overview.html`;
+  `sales.html` is the **Conferences** page (legacy name). The `<nav class="tabbar">`
+  block is duplicated in every page, so reordering/adding a tab = edit them all. Shared styling in `public/app.css` (CSS
   variables drive theming). Shared logic in `public/app.js`. Each page has an
   inline `<script>` that calls `initPage(area, renderFn)` and maps API data onto
   charts/tables. **Do not add a bundler** — the point is hand-editability.
@@ -45,6 +49,14 @@ Cloud Run.
     hard-fails on a missing credential**, tiles just show "needs setup".
   - `server/index.js` metrics route is generic (`/api/metrics/:area`) and
     caches each `(area, range)` response briefly via `server/lib/cache.js`.
+  - **Cached sub-resources** (plain SELECT of a pre-filled Supabase cache, no
+    source calls at request time): `server/metrics/{liv-deals,mag-buyer-sheet,
+    invoice-tracking,sales-topline}.js`. `sales-topline.js` (`/api/sales/topline`)
+    backs the **Sales** page from `public.sales_topline`, refreshed **weekly**
+    (Mon 6am PH) by the `sales-topline-sync` Claude routine — see
+    `routines/sales-topline-sync.md`. Live: total_income, bureau, tailor;
+    "needs setup" until their AC fields/tags are mirrored: direct/indirect split,
+    speaking_enquiries, inbound/outbound.
 - **Auth = passwordless email code (OTP).** No passwords, no user table.
   `login.html` is a two-step form (email → code). `POST /api/request-code`
   accepts any `@myadventuregroup.com.au` email, generates a 6-digit code, stores

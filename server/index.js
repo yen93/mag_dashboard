@@ -6,8 +6,10 @@ import { getSales } from './metrics/sales.js';
 import { getMarketing } from './metrics/marketing.js';
 import { getOperations } from './metrics/operations.js';
 import { getLivDeals } from './metrics/liv-deals.js';
+import { getSalesTopline } from './metrics/sales-topline.js';
 import { getMagBuyerSheet } from './metrics/mag-buyer-sheet.js';
 import { getInvoiceTracking } from './metrics/invoice-tracking.js';
+import { ga4AgentRouter } from './ga4Agent.js';
 import { cached } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
 
@@ -58,6 +60,18 @@ sales.get('/deals', async (_req, res) => {
     res.status(502).json({ error: 'Failed to load deals from data source.', detail: err.message });
   }
 });
+// Sales page Top-Line KPIs — a pre-computed Supabase cache (public.sales_topline),
+// refreshed weekly (Mon 6am PH) by the sales-topline-sync Claude routine. Plain
+// SELECT, so a short cache is plenty.
+sales.get('/topline', async (_req, res) => {
+  try {
+    const payload = await cached('sales:topline', getSalesTopline, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[sales:topline]', err);
+    res.status(502).json({ error: 'Failed to load sales metrics from data source.', detail: err.message });
+  }
+});
 app.use('/api/sales', sales);
 
 // Operations sub-resources. The Buyer Sheet table reads a pre-computed Supabase
@@ -88,12 +102,15 @@ operations.get('/invoice-tracking', async (_req, res) => {
 });
 app.use('/api/operations', operations);
 
+// MAG GA4 Agent — on-demand GA4 reports via the GA4 On-Demand Report Claude routine.
+app.use('/api/ga4-agent', ga4AgentRouter);
+
 // Serve the plain HTML/CSS/JS pages from public/.
 const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
 
 // Root -> the first dashboard page (which bounces to login if not signed in).
-app.get('/', (_req, res) => res.redirect('/sales.html'));
+app.get('/', (_req, res) => res.redirect('/sales_overview.html'));
 
 app.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);

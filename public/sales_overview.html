@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sales — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab active" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="mag_buyer_sheet.html">Buyer Sheet</a>
+    <a class="tab" href="invoice_tracking.html">Invoices</a>
+    <a class="tab" href="sales.html">Conferences</a>
+    <a class="tab" href="ga4_agent.html">GA4 Agent</a>
+  </nav>
+
+  <main class="content">
+    <div class="toolbar">
+      <strong>Sales overview</strong>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:13px">Top-line KPIs · Supabase cache, refreshed weekly (Mon 6am PH)</span>
+    </div>
+
+    <div class="kpi-grid" id="kpis"></div>
+
+    <div class="grid">
+      <div class="card col-7">
+        <div class="card-head"><h3>Total income by month</h3><span class="chips" id="incChips"></span></div>
+        <div class="chart-box" id="income-box"><canvas id="incomeCanvas"></canvas></div>
+      </div>
+      <div class="card col-5">
+        <div class="card-head"><h3>Direct vs Indirect income (YTD)</h3><span class="chips" id="splitChips"></span></div>
+        <div class="chart-box" id="split-box"><canvas id="splitCanvas"></canvas></div>
+      </div>
+
+      <div class="card col-7">
+        <div class="card-head"><h3>Enquiries per month — Bureau vs Tailor</h3><span class="chips" id="enqChips"></span></div>
+        <div class="chart-box" id="enquiry-box"><canvas id="enquiryCanvas"></canvas></div>
+      </div>
+      <div class="card col-5">
+        <div class="card-head"><h3>Inbound vs Outbound enquiries</h3><span class="chips" id="ioChips"></span></div>
+        <div id="io-body"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js?v=2"></script>
+  <script>
+    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+
+    function renderTopline(data) {
+      renderKpis('kpis', [
+        { label: 'Total income (YTD)', metric: data.kpis.totalIncome },
+        { label: 'Bureau enquiries (this month)', metric: data.kpis.bureau },
+        { label: 'Tailor deals (this month)', metric: data.kpis.tailor },
+        { label: 'Speaking enquiries (this month)', metric: data.kpis.speakingEnquiries },
+      ]);
+
+      // Total income by month (bar)
+      setChips('incChips', data.incomeTrend.meta);
+      if (data.incomeTrend.meta.status === 'pending') {
+        renderPendingBody('income-box', data.incomeTrend.meta);
+      } else {
+        barChart('incomeCanvas',
+          data.incomeTrend.data.map(function (d) { return monthLabel(d.month); }),
+          data.incomeTrend.data.map(function (d) { return d.value; }),
+          { colors: '#17a673' });
+      }
+
+      // Direct vs Indirect (pie) — pending until the AC "Deal Source?" field is mirrored
+      setChips('splitChips', data.splitBreakdown.meta);
+      if (data.splitBreakdown.meta.status === 'pending' || !data.splitBreakdown.data.length) {
+        renderPendingBody('split-box', data.splitBreakdown.meta);
+      } else {
+        pieChart('splitCanvas', data.splitBreakdown.data);
+      }
+
+      // Bureau vs Tailor enquiries per month (multi-series line)
+      setChips('enqChips', data.enquiryTrend.meta);
+      if (data.enquiryTrend.meta.status === 'pending') {
+        renderPendingBody('enquiry-box', data.enquiryTrend.meta);
+      } else {
+        lineChart('enquiryCanvas', data.enquiryTrend.data, [
+          { label: 'Bureau', key: 'bureau', color: '#3b6ef0' },
+          { label: 'Tailor', key: 'tailor', color: '#f0a63b' },
+        ], { xKey: 'month', xLabel: monthLabel });
+      }
+
+      // Inbound vs Outbound — pending until the AC "Inbound/ Outbound?" field is mirrored
+      setChips('ioChips', data.inboundOutbound.meta);
+      renderPendingBody('io-body', data.inboundOutbound.meta);
+    }
+
+    function loadTopline() {
+      fetchJSON('/api/sales/topline')
+        .then(renderTopline)
+        .catch(function (err) { console.error('[sales overview]', err); });
+    }
+
+    initPage('sales'); // login / top-bar / theme only — this page renders its own KPIs
+    if (currentUser()) loadTopline();
+  </script>
+</body>
+</html>

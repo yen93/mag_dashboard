@@ -1,0 +1,143 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-02
+Session: Rename first tab to "Conferences", then add a new "Sales" top-line KPI
+         page (Supabase cache + weekly Claude routine) and reorder the tab bar.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Change the "sales" tab name to "Conferences".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Found the hardcoded <nav class="tabbar"> block duplicated across the five pages
+(sales.html, marketing.html, operations.html, mag_buyer_sheet.html,
+invoice_tracking.html). Changed the first tab's label from "Sales" to
+"Conferences" in all five, and updated the <title> in sales.html to
+"Conferences — MAG Metrics". Left the sales.html filename, the /api/sales/* routes,
+and initPage('sales') untouched — only the visible label changed.
+
+--------------------------------------------------------------------------------
+USER:
+Deploy it.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Deployed to Cloud Run from the project root with no --set-secrets flags (per the
+deploy-secrets rule, so existing secrets are preserved):
+`gcloud run deploy dashboard --source . --region australia-southeast1 --project
+claudegwscli-502400 --quiet`. Succeeded — revision dashboard-00017-gh9 serving
+100% traffic.
+
+--------------------------------------------------------------------------------
+USER:
+Verify the tab shows on the live site.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+curl'd the live sales.html and extracted the tab labels: first tab now reads
+"Conferences" (active), followed by Marketing / Operations / Buyer Sheet /
+Invoices. Confirmed live.
+
+--------------------------------------------------------------------------------
+USER:
+Move the "Conferences" tab next to "Invoices" and create a new "Sales" tab as the
+first tab (or before "Marketing"). The new Sales page should display rows 2–8 of
+this Google Sheet: <MAG_Sales_Metrics spreadsheet link, gid 596815583>.
+
+--------------------------------------------------------------------------------
+ASSISTANT (plan mode):
+Explored the codebase (Explore agent) and read the target sheet via the Google
+Drive connector. gid 596815583 = the "dev_sheet" tab; rows 2–8 are the 7
+"Top-Line Header" KPIs: Total Income by Year (YTD), Direct vs Indirect income
+split %, Total Speaking Enquiries/month, Bureau, Tailor, inbound, outbound — each
+with a "Data Source" column mapping it to invoice_tracking / ActiveCampaign.
+
+Asked clarifying questions. User answers:
+  1. Show LIVE computed values, BUT using the same caching model as the
+     Conferences tab — the dashboard never fetches from source at request time.
+     Store needed data in Supabase; a weekly Claude routine (Mon 06:00 PH)
+     populates it.
+  2. Confirmed dev_sheet rows 2–8 / the 7 KPIs.
+  3. Tab order: Sales first, Conferences last.
+
+Wrote an approved plan: tab reorder across all pages; a new sales_overview.html
+page; a Supabase cache table public.sales_topline; a composer + /api/sales/topline
+route; and a weekly Claude routine, with graceful degradation for any KPI whose
+source isn't yet in Supabase.
+
+IMPLEMENTATION:
+- Tab reorder: rewrote the <nav> block in all 5 existing pages to
+  Sales | Marketing | Operations | Buyer Sheet | Invoices | Conferences (correct
+  tab marked active per page). New "Sales" tab → sales_overview.html; "Conferences"
+  keeps the legacy sales.html filename (renaming it was avoided to not churn the /
+  redirect, login redirects, and /api/sales/deals). Updated login.html's two
+  post-login redirects and server/index.js's / redirect to sales_overview.html.
+
+- Schema discovery (Supabase project aivitcomiywiysrfwqxt = MAGTestProject):
+  invoice_tracking has amount_total/amount_paid/currency/invoice_date (income is
+  computable); ac_custom_fields only mirrors demo_date/proposal_sent/debrief —
+  NOT "Deal Source?" or "Inbound/Outbound?". Resolved AC pipeline/stage ids via
+  the ActiveCampaign connector: LIV pipeline = dealGroup 3; BUREAU ENQUIRY =
+  dealStage 113; The Tailor = dealGroup 7.
+  → Computable from Supabase now: total_income, bureau (group 3 stage 113),
+    tailor (group 7). Needs AC fields/tags not mirrored: direct/indirect split,
+    speaking enquiries (tag), inbound/outbound.
+
+- Created cache table public.sales_topline (long format metric/bucket/dimension/
+  value/unit, RLS enabled) via a Supabase migration; also saved the DDL as
+  supabase/migrations/20261002000000_create_sales_topline.sql.
+
+- Seeded the 3 computable metrics with idempotent UPSERTs over a 12-month window.
+  Result: income $832,352.52 YTD (AUD only; one USD invoice excluded) across 10
+  months; bureau 67 deals / 11 months; tailor 30 / 11 months.
+
+- Added server/metrics/sales-topline.js (plain SELECT of the cache, wraps values
+  with live()/pending()/section(); the 3 AC-only metrics render as "needs setup"
+  until cache rows appear) and wired sales.get('/topline') in server/index.js.
+
+- Built public/sales_overview.html: 4 KPI tiles (income, bureau, tailor,
+  speaking enquiries) + cards for income-by-month (bar), direct/indirect (pie,
+  pending), bureau-vs-tailor (multi-series line), inbound/outbound (pending),
+  reusing app.js helpers.
+
+- Documented the routine in routines/sales-topline-sync.md (full SQL + the AC
+  backfill TODO for the pending metrics).
+
+- Deployed to Cloud Run (no secret flags) → revision dashboard-00018-872.
+
+- Created the weekly Claude routine "sales-topline-sync"
+  (trig_011z2MX6Sh5gsBY6JncmDmss) via the schedule skill: cron 0 22 * * 0 UTC =
+  Mon 06:00 Asia/Manila, Supabase connector attached, repo yen93/mag_dashboard,
+  model claude-sonnet-5-5, SQL embedded in the prompt. Triggered it once to
+  validate — the cloud run cloned the repo, ran all UPSERTs via the Supabase MCP,
+  and restamped the cache (updated_at 06:05), confirming the chain works.
+
+VERIFICATION (live): tab order correct on all pages with the right active tab; /
+redirects to /sales_overview.html; /api/sales/topline is auth-gated (401, i.e.
+wired, not 404); cache populated and refreshed by the routine.
+
+Flagged to the user: (a) repo not yet committed; (b) a pre-existing Supabase
+advisory — 14 tables have RLS disabled (doesn't affect the dashboard, which uses
+a direct Postgres role; the new sales_topline table has RLS enabled).
+
+Saved a project memory (sales-topline-feature) and updated the memory index.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (document, commit, push)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed the git root is C:/Users/Cloverly/claude_code/dashboard (the sales/
+subfolder holds session artifacts), remote origin = github.com/yen93/mag_dashboard,
+branch main. Security-scanned the working tree: my changes plus a pre-existing,
+unrelated GA4-agent feature (server/config.js ga4Agent block, public/ga4_agent.html,
+server/ga4Agent.js) — all env-var-driven, no hardcoded secrets; .gitignore covers
+.env and secret patterns. No secrets in the transcript (Supabase was accessed via
+MCP, never the raw connection string), so no redactions. Wrote this chat-history
+file, updated as_built.txt and CLAUDE.md, then committed and pushed.
+
+================================================================================
+END OF EXPORT
+================================================================================

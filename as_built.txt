@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-09-11 (wired Sales/Operations to real MAG data via Supabase)
+Last updated: 2026-10-02 (added the "Sales" top-line KPI page + sales_topline cache + weekly sales-topline-sync routine; reordered the tab bar)
 ================================================================================
 
 OVERVIEW
@@ -19,17 +19,19 @@ OVERVIEW
 
 SCRIPTS / APP CODE
 - server/index.js — Express app: mounts /api routes, serves public/ as static
-  files, / redirects to /sales.html. Metrics routes are generic
-  (/api/metrics/:area) and cached briefly per (area, range) via
-  server/lib/cache.js so repeat loads don't re-hit external APIs. Listens on
-  $PORT (default 8080).
+  files, / redirects to /sales_overview.html (the first tab). Generic metrics
+  routes (/api/metrics/:area) are cached briefly per (area, range) via
+  server/lib/cache.js. Dedicated sub-resource routers read pre-computed Supabase
+  cache tables (plain SELECTs, 10-min cache): /api/sales/deals (LIV deals),
+  /api/sales/topline (Sales top-line KPIs), /api/operations/buyer-sheet,
+  /api/operations/invoice-tracking. Listens on $PORT (default 8080).
 - server/auth.js / server/users.js — unchanged: JWT login, 3 bcrypt-hashed
   seed users (see README for demo credentials).
 - server/config.js — reads every data-source credential from env vars
   (SUPABASE_DB_URL, AC_API_URL/AC_API_KEY, XERO_*, CALENDLY_TOKEN,
-  MONDAY_TOKEN, GOOGLE_SERVICE_ACCOUNT_JSON/BUYER_ANALYSIS_SHEET_ID) and
-  exposes `hasSource(name)` so metric composers can degrade gracefully when a
-  credential is absent.
+  MONDAY_TOKEN, GOOGLE_SERVICE_ACCOUNT_JSON/BUYER_ANALYSIS_SHEET_ID,
+  GA4_ROUTINE_FIRE_URL/GA4_ROUTINE_FIRE_TOKEN) and exposes `hasSource(name)` so
+  metric composers can degrade gracefully when a credential is absent.
 - server/providers/supabase.js — pooled `pg` connection to the MAG Supabase
   Postgres database (SSL, rejectUnauthorized:false as required by Supabase's
   managed cert). This is the primary data source.
@@ -49,8 +51,20 @@ SCRIPTS / APP CODE
   each returns a `notConfigured()` fallback (all metrics "pending") if
   SUPABASE_DB_URL isn't set, so the app never hard-fails on a missing
   credential.
+- server/metrics/{liv-deals,mag-buyer-sheet,invoice-tracking,sales-topline}.js —
+  sub-resource composers that each do a plain SELECT of a pre-computed Supabase
+  cache table (no source calls at request time). sales-topline.js reads
+  public.sales_topline for the Sales page: total_income (invoice_tracking, AUD,
+  YTD + 12-mo trend), bureau (AC LIV pipeline group 3 / stage 113) and tailor
+  (AC The Tailor pipeline group 7) are live; direct/indirect split, speaking
+  enquiries and inbound/outbound stay "needs setup" until their AC fields/tags
+  are mirrored to Supabase.
 - public/ — plain static frontend, served directly (NO build step):
-  - login.html, sales.html, marketing.html, operations.html (tab bar = links)
+  - login.html + the tab pages (tab bar = links, in order): sales_overview.html
+    ("Sales" top-line KPIs), marketing.html, operations.html, mag_buyer_sheet.html
+    ("Buyer Sheet"), invoice_tracking.html ("Invoices"), sales.html
+    ("Conferences" — legacy filename; it is the LIV deals table). ga4_agent.html
+    ("GA4 On-Demand Report") also present.
   - app.css — shared styling incl. chip/"needs setup" placeholder styles
   - app.js — shared logic: auth/token, fetchMetrics, formatting, theme,
     Chart.js helpers (lineChart/barChart/pieChart/renderKpis/renderTable),
@@ -121,10 +135,18 @@ EXTERNAL INTEGRATIONS
   CONNECTED from the deployed app (no credentials configured). See PENDING
   METRICS.
 
-DATA STORES
-- No app-owned database. All metrics are read live (with a short in-memory
-  cache) from MAG's existing Supabase Postgres project; users for login are
-  the seeded array in server/users.js (unrelated to the data layer).
+DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
+- Most metrics are read live from MAG's existing AC-mirror / leads / reviews
+  tables. In addition, several dashboard-owned cache tables are filled on a
+  schedule and only SELECTed at request time:
+  - public.sales_liv_deals — LIV pipeline deal rows (Conferences page).
+  - public.mag_buyer_sheet — Buyer Sheet rows.
+  - public.invoice_tracking — Xero sales invoices (Invoices page).
+  - public.sales_topline — Sales page top-line KPIs (long format
+    metric/bucket/dimension/value/unit; RLS enabled). NEW this session.
+  - public.dashboard_login_codes — bcrypt-hashed login OTP codes.
+- Login is passwordless email OTP (codes stored in dashboard_login_codes); the
+  old seeded-user array is no longer the auth path.
 
 PENDING METRICS (flagged "needs setup" in the UI, not silently faked)
 - Sales: Google Ads inquiry attribution (no tagging in any source yet);
@@ -141,7 +163,15 @@ PENDING METRICS (flagged "needs setup" in the UI, not silently faked)
   Keynote Management boards — real data exists there, just not wired in).
 
 AUTOMATIONS / ROUTINES
-- None owned by this app. (MAG's own lead-generation/outreach automations —
-  LinkedIn scraping, cold-lead sequencing, proposal routing — write into the
-  Supabase tables this dashboard reads; they are external to this repo.)
+- sales-topline-sync (Claude cloud routine, trig_011z2MX6Sh5gsBY6JncmDmss) —
+  runs weekly, Mon 06:00 Asia/Manila (cron `0 22 * * 0` UTC), via the Supabase
+  MCP connector. Recomputes public.sales_topline (idempotent UPSERTs over a
+  rolling 12-month window) from invoice_tracking + activecampaign_deals. SQL is
+  documented in routines/sales-topline-sync.md. NEW this session.
+- The sales_liv_deals / mag_buyer_sheet cache tables are refreshed Mon–Fri 6am PH
+  by Supabase Edge Functions (sales-deals-sync, buyer-sheet-sync); invoice_tracking
+  is refreshed by a separate scheduled Claude routine from Xero.
+- MAG's own lead-gen/outreach automations (LinkedIn scraping, cold-lead
+  sequencing, proposal routing) write into the Supabase tables this dashboard
+  reads; they are external to this repo.
 ================================================================================
