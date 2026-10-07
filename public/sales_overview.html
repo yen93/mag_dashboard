@@ -24,13 +24,22 @@
     <a class="tab" href="invoice_tracking.html">Invoices</a>
     <a class="tab" href="sales.html">Conferences</a>
     <a class="tab" href="ga4_agent.html">GA4 Agent</a>
+    <a class="tab" href="ac_contact_sources.html">Historical Paid Leads Tracking</a>
+    <a class="tab" href="new_paid_leads_tracking.html">New Paid Leads Tracking</a>
+    <a class="tab" href="mag_sales_pulse.html">MAG Sales Pulse</a>
   </nav>
 
   <main class="content">
     <div class="toolbar">
       <strong>Sales overview</strong>
       <div class="spacer"></div>
-      <span class="muted" style="font-size:13px">Top-line KPIs · Supabase cache, refreshed weekly (Mon 6am PH)</span>
+      <span class="muted" style="font-size:13px">Sectioned per the MAG_Sales_Metrics dev_sheet · Supabase cache, refreshed weekly (Mon 6am PH)</span>
+    </div>
+
+    <!-- ============ 1. TOP-LINE HEADER ============ -->
+    <div class="section-head">
+      <span class="step">1</span><h2>Top-Line Header</h2>
+      <span class="sub">Year-to-date income &amp; this month's enquiry volume</span>
     </div>
 
     <div class="kpi-grid" id="kpis"></div>
@@ -54,6 +63,70 @@
         <div id="io-body"></div>
       </div>
     </div>
+
+    <!-- ============ 2. TOTAL SALES / ENQUIRIES ============ -->
+    <div class="section-head">
+      <span class="step">2</span><h2>Total Sales / Enquiries</h2>
+      <span class="sub">Income by stream, year to date</span>
+    </div>
+
+    <div class="kpi-grid" id="salesKpis"></div>
+
+    <div class="grid">
+      <div class="card col-6">
+        <div class="card-head"><h3>Conference income by year</h3><span class="chips" id="confIncChips"></span></div>
+        <div class="chart-box short" id="confInc-box"></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-head"><h3>MAG Experiences income by year</h3><span class="chips" id="magIncChips"></span></div>
+        <div class="chart-box short" id="magInc-box"></div>
+      </div>
+    </div>
+
+    <!-- ============ 3. CONFERENCE › OVERVIEW ============ -->
+    <div class="section-head">
+      <span class="step">3</span><h2>Conference — Overview</h2>
+      <span class="sub">LIV pipeline (Keynotes // Workshops // Immersive), last 12 months</span>
+    </div>
+
+    <div class="kpi-grid" id="confKpis"></div>
+
+    <div class="grid">
+      <div class="card col-6">
+        <div class="card-head"><h3>Deals won (locked in) per month</h3><span class="chips" id="wonChips"></span></div>
+        <div class="chart-box short" id="won-box"><canvas id="wonCanvas"></canvas></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-head"><h3>Win rate per month</h3><span class="chips" id="wrChips"></span></div>
+        <div class="chart-box short" id="wr-box"><canvas id="winRateCanvas"></canvas></div>
+      </div>
+
+      <div class="card col-6">
+        <div class="card-head"><h3>Won revenue per month</h3><span class="chips" id="wrevChips"></span></div>
+        <div class="chart-box short" id="wrev-box"><canvas id="wonRevCanvas"></canvas></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-head"><h3>Demos booked per month</h3><span class="chips" id="demoChips"></span></div>
+        <div class="chart-box short" id="demo-box"><canvas id="demoCanvas"></canvas></div>
+      </div>
+
+      <div class="card col-6">
+        <div class="card-head"><h3>Direct vs Indirect — share of income</h3><span class="chips" id="diShareChips"></span></div>
+        <div id="diShare-body"></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-head"><h3>Direct vs Indirect — # of leads</h3><span class="chips" id="diLeadsChips"></span></div>
+        <div id="diLeads-body"></div>
+      </div>
+    </div>
+
+    <!-- ============ CONFERENCE — DEEPER BREAKDOWNS (dev_sheet, not yet wired) ============ -->
+    <div class="section-head">
+      <span class="step">·</span><h2>Conference — deeper breakdowns</h2>
+      <span class="sub">Further dev_sheet sections — queued for data wiring</span>
+    </div>
+
+    <div class="grid" id="deeperGrid"></div>
   </main>
 
   <script src="vendor/chart.umd.min.js"></script>
@@ -61,7 +134,16 @@
   <script>
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
+    // Render a live bar section, or a "needs setup" body if pending/empty.
+    function barSection(boxId, canvasId, chipsId, sec, mapLabel, mapValue, opts) {
+      setChips(chipsId, sec.meta);
+      if (sec.meta.status === 'pending' || !sec.data.length) { renderPendingBody(boxId, sec.meta); return; }
+      document.getElementById(boxId).innerHTML = '<canvas id="' + canvasId + '"></canvas>';
+      barChart(canvasId, sec.data.map(mapLabel), sec.data.map(mapValue), opts || {});
+    }
+
     function renderTopline(data) {
+      // ---- 1. Top-Line Header ----
       renderKpis('kpis', [
         { label: 'Total income (YTD)', metric: data.kpis.totalIncome },
         { label: 'Bureau enquiries (this month)', metric: data.kpis.bureau },
@@ -69,18 +151,9 @@
         { label: 'Speaking enquiries (this month)', metric: data.kpis.speakingEnquiries },
       ]);
 
-      // Total income by month (bar)
-      setChips('incChips', data.incomeTrend.meta);
-      if (data.incomeTrend.meta.status === 'pending') {
-        renderPendingBody('income-box', data.incomeTrend.meta);
-      } else {
-        barChart('incomeCanvas',
-          data.incomeTrend.data.map(function (d) { return monthLabel(d.month); }),
-          data.incomeTrend.data.map(function (d) { return d.value; }),
-          { colors: '#17a673' });
-      }
+      barSection('income-box', 'incomeCanvas', 'incChips', data.incomeTrend,
+        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#17a673' });
 
-      // Direct vs Indirect (pie) — pending until the AC "Deal Source?" field is mirrored
       setChips('splitChips', data.splitBreakdown.meta);
       if (data.splitBreakdown.meta.status === 'pending' || !data.splitBreakdown.data.length) {
         renderPendingBody('split-box', data.splitBreakdown.meta);
@@ -88,7 +161,6 @@
         pieChart('splitCanvas', data.splitBreakdown.data);
       }
 
-      // Bureau vs Tailor enquiries per month (multi-series line)
       setChips('enqChips', data.enquiryTrend.meta);
       if (data.enquiryTrend.meta.status === 'pending') {
         renderPendingBody('enquiry-box', data.enquiryTrend.meta);
@@ -99,18 +171,82 @@
         ], { xKey: 'month', xLabel: monthLabel });
       }
 
-      // Inbound vs Outbound — pending until the AC "Inbound/ Outbound?" field is mirrored
       setChips('ioChips', data.inboundOutbound.meta);
       renderPendingBody('io-body', data.inboundOutbound.meta);
+
+      // ---- 2. Total Sales / Enquiries ----
+      renderKpis('salesKpis', [
+        { label: 'Total income by year (YTD)', metric: data.sales.totalIncome },
+        { label: 'Conference income (YTD)', metric: data.sales.conferenceIncome },
+        { label: 'MAG Experiences income (YTD)', metric: data.sales.magExperiences },
+      ]);
+      setChips('confIncChips', data.sales.conferenceIncome.meta);
+      renderPendingBody('confInc-box', data.sales.conferenceIncome.meta);
+      setChips('magIncChips', data.sales.magExperiences.meta);
+      renderPendingBody('magInc-box', data.sales.magExperiences.meta);
+
+      // ---- 3. Conference › Overview ----
+      var c = data.conference;
+      renderKpis('confKpis', [
+        { label: 'Deals won (YTD)', metric: c.kpis.dealsWon },
+        { label: 'Win rate (YTD)', metric: c.kpis.winRate },
+        { label: 'Avg deal value', metric: c.kpis.avgDealValue },
+        { label: 'Demos booked (YTD)', metric: c.kpis.demosBooked },
+      ]);
+
+      barSection('won-box', 'wonCanvas', 'wonChips', c.dealsWonTrend,
+        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#3b6ef0' });
+
+      setChips('wrChips', c.winRateTrend.meta);
+      if (c.winRateTrend.meta.status === 'pending' || !c.winRateTrend.data.length) {
+        renderPendingBody('wr-box', c.winRateTrend.meta);
+      } else {
+        lineChart('winRateCanvas', c.winRateTrend.data,
+          [{ label: 'Win rate %', key: 'value', color: '#7c5cff' }],
+          { xKey: 'month', xLabel: monthLabel });
+      }
+
+      barSection('wrev-box', 'wonRevCanvas', 'wrevChips', c.wonRevenueTrend,
+        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#17a673' });
+
+      barSection('demo-box', 'demoCanvas', 'demoChips', c.demosTrend,
+        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#f0a63b' });
+
+      setChips('diShareChips', c.directIndirectShare.meta);
+      renderPendingBody('diShare-body', c.directIndirectShare.meta);
+      setChips('diLeadsChips', c.directIndirectLeads.meta);
+      renderPendingBody('diLeads-body', c.directIndirectLeads.meta);
     }
 
+    // Static "needs setup" scaffolding for the dev_sheet's deeper Conference groups.
+    var DEEPER = [
+      { title: 'Inbound', note: 'Inbound enquiries, direct/indirect split, demos booked & conversion — needs the AC "[SALES] Inbound Enquiry" tag and "Deal Source?" / "Inbound/ Outbound?" fields mirrored to Supabase.' },
+      { title: 'Outbound', note: 'Outreach volume, replies, demos & locked-in revenue — from cold_leads_follow_up_sequence_threads / follow_up_sequence_threads and the AC "Inbound/ Outbound?" field (not fully mirrored yet).' },
+      { title: 'Post Conference', note: 'Post-conference gifts sent & video-package revenue — needs the "Post conference gift sent?" custom field under Post Conference - Liv.' },
+      { title: 'Paid Ads', note: 'Google Ads ROI, revenue won, deals won & enquiries — needs the Google Ads connector.' },
+      { title: 'Trojan Horse — Debrief calls', note: 'Debrief-call ratios and leads generated — needs the "Debrief call organised?" field under Project Trojan Horse.' },
+      { title: 'Executive X', note: 'Invite → accepted → attended ratios and revenue per season — needs the Executive X pipeline fields (dev_sheet: "need more details").' },
+      { title: 'Leader X', note: 'Invitations, acceptances & revenue per season — Leader X pipeline fields (dev_sheet: "need more details").' },
+      { title: 'MAG Experiences', note: 'Won deals, upsells & proposals sent in the MAG_Team_Offsite pipeline (dev_sheet: "need more details").' },
+    ];
+    function renderDeeper() {
+      document.getElementById('deeperGrid').innerHTML = DEEPER.map(function (d) {
+        return '<div class="card col-4"><div class="card-head"><h3>' + esc(d.title) +
+          '</h3><span class="chips"><span class="chip warn">needs setup</span></span></div>' +
+          '<div class="needs-setup"><strong>Needs setup</strong><span>' + esc(d.note) + '</span></div></div>';
+      }).join('');
+    }
+
+    var _last = null;
     function loadTopline() {
       fetchJSON('/api/sales/topline')
-        .then(renderTopline)
+        .then(function (data) { _last = data; renderTopline(data); })
         .catch(function (err) { console.error('[sales overview]', err); });
     }
 
     initPage('sales'); // login / top-bar / theme only — this page renders its own KPIs
+    window.onThemeChange = function () { if (_last) renderTopline(_last); }; // re-colour charts
+    renderDeeper();
     if (currentUser()) loadTopline();
   </script>
 </body>

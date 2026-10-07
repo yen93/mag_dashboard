@@ -42,6 +42,14 @@ export const config = {
     gmailUser: env.GMAIL_USER || 'julienne@myadventuregroup.com.au',
     gmailAppPassword: env.GMAIL_APP_PASSWORD || '',
   },
+  ga4Agent: {
+    // The "GA4 On-Demand Report" Claude routine's one-time fire endpoint + token.
+    // The dashboard POSTs here (server-side only) to trigger a GA4 pull; the
+    // routine writes its answer back to public.ga4_agent_requests. The token is a
+    // secret — set it via Secret Manager / --set-env-vars, never in the client.
+    fireUrl: env.GA4_ROUTINE_FIRE_URL || '',
+    fireToken: env.GA4_ROUTINE_FIRE_TOKEN || '',
+  },
 };
 
 export function hasSource(name) {
@@ -60,6 +68,8 @@ export function hasSource(name) {
       return Boolean(config.googleSheet.serviceAccountJson);
     case 'email':
       return Boolean(config.email.gmailUser && config.email.gmailAppPassword);
+    case 'ga4Agent':
+      return Boolean(config.ga4Agent.fireUrl && config.ga4Agent.fireToken);
     default:
       return false;
   }

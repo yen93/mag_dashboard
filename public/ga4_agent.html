@@ -1,0 +1,231 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAG GA4 Agent — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    .agent-form { display: flex; flex-direction: column; gap: 12px; }
+    .agent-form textarea {
+      width: 100%; min-height: 84px; resize: vertical; padding: 12px 14px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--surface-2); color: var(--text); font-size: 14px; font-family: inherit;
+    }
+    .agent-form textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .agent-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .agent-row .btn { width: auto; padding: 11px 18px; }
+    .examples { display: flex; gap: 8px; flex-wrap: wrap; }
+    .example {
+      font-size: 12px; font-weight: 600; cursor: pointer; padding: 5px 10px; border-radius: 999px;
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text-muted);
+    }
+    .example:hover { border-color: var(--accent); color: var(--accent); }
+    .result-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .result-head h3 { margin: 0; font-size: 15px; }
+    .status-pill { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+    .status-pill.working { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+    .status-pill.done { background: color-mix(in srgb, var(--pos) 14%, transparent); color: var(--pos); border-color: transparent; }
+    .status-pill.error { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); border-color: transparent; }
+    .result-md h4 { margin: 4px 0 12px; font-size: 15px; }
+    .result-md p { color: var(--text-muted); font-size: 13px; }
+    .result-md pre { white-space: pre-wrap; word-break: break-word; background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 12px; font-size: 13px; }
+    .agent-hint { font-size: 12px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="mag_buyer_sheet.html">Buyer Sheet</a>
+    <a class="tab" href="invoice_tracking.html">Invoices</a>
+    <a class="tab" href="sales.html">Conferences</a>
+    <a class="tab active" href="ga4_agent.html">GA4 Agent</a>
+    <a class="tab" href="ac_contact_sources.html">Historical Paid Leads Tracking</a>
+    <a class="tab" href="new_paid_leads_tracking.html">New Paid Leads Tracking</a>
+    <a class="tab" href="mag_sales_pulse.html">MAG Sales Pulse</a>
+  </nav>
+
+  <main class="content">
+    <div class="toolbar">
+      <strong>MAG GA4 Agent</strong>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:13px">Live Google Analytics 4 · runs a Claude cloud routine on demand</span>
+    </div>
+
+    <div class="card col-12">
+      <div class="agent-form">
+        <label for="prompt" style="font-size:13px;font-weight:600">Ask about your Google Analytics / Google Ads data</label>
+        <textarea id="prompt" placeholder="e.g. Google Ads conversions in the last 30 days"></textarea>
+        <div class="examples" id="examples">
+          <span class="example">Google Ads conversions last 30 days</span>
+          <span class="example">All traffic sources last 7 days</span>
+          <span class="example">Google Ads campaigns last 90 days</span>
+        </div>
+        <div class="agent-row">
+          <button class="btn" id="runBtn">⚡ GA4 On-Demand Report</button>
+          <span class="agent-hint" id="hint">Typically takes ~1–2 minutes (a fresh cloud session runs the query).</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="card col-12" id="resultCard" hidden style="margin-top:16px">
+      <div class="result-head">
+        <h3>Result</h3>
+        <span class="status-pill" id="statusPill">queued</span>
+        <div class="spacer" style="flex:1"></div>
+        <span class="muted" id="askedFor" style="font-size:12px"></span>
+      </div>
+      <div class="result-md" id="resultBody"></div>
+    </div>
+  </main>
+
+  <script src="app.js?v=3"></script>
+  <script>
+    initPage('ga4'); // login / top bar / theme only
+
+    var promptEl = document.getElementById('prompt');
+    var runBtn = document.getElementById('runBtn');
+    var resultCard = document.getElementById('resultCard');
+    var statusPill = document.getElementById('statusPill');
+    var resultBody = document.getElementById('resultBody');
+    var askedFor = document.getElementById('askedFor');
+
+    document.getElementById('examples').addEventListener('click', function (e) {
+      if (e.target.classList.contains('example')) { promptEl.value = e.target.textContent; promptEl.focus(); }
+    });
+
+    var POLL_MS = 3000;
+    var MAX_POLLS = 60; // ~3 min safety cap
+    var timer = null;
+
+    function authHeaders() { return { Authorization: 'Bearer ' + getToken() }; }
+
+    function setStatus(text, cls) {
+      statusPill.textContent = text;
+      statusPill.className = 'status-pill' + (cls ? ' ' + cls : '');
+    }
+
+    // Minimal, safe markdown renderer for the routine's output (heading + table + lines).
+    function renderMarkdown(md) {
+      var lines = String(md || '').split('\n');
+      var html = '';
+      var i = 0;
+      while (i < lines.length) {
+        var line = lines[i];
+        if (/^#{1,6}\s/.test(line)) {
+          html += '<h4>' + esc(line.replace(/^#{1,6}\s/, '')) + '</h4>';
+          i++; continue;
+        }
+        if (line.trim().indexOf('|') === 0) {
+          // consume a contiguous block of table rows
+          var rows = [];
+          while (i < lines.length && lines[i].trim().indexOf('|') === 0) { rows.push(lines[i]); i++; }
+          html += renderTableRows(rows);
+          continue;
+        }
+        if (line.trim()) html += '<p>' + esc(line) + '</p>';
+        i++;
+      }
+      return html || '<pre>' + esc(md) + '</pre>';
+    }
+    function splitRow(r) {
+      var cells = r.trim().replace(/^\|/, '').replace(/\|$/, '').split('|');
+      return cells.map(function (c) { return c.trim(); });
+    }
+    function isSeparator(r) { return /^\s*\|?[\s:|-]+\|?\s*$/.test(r) && r.indexOf('-') !== -1; }
+    function renderTableRows(rows) {
+      rows = rows.filter(function (r) { return r.trim(); });
+      if (!rows.length) return '';
+      var header = splitRow(rows[0]);
+      var bodyRows = rows.slice(1).filter(function (r) { return !isSeparator(r); });
+      var thead = '<tr>' + header.map(function (h) { return '<th>' + esc(h) + '</th>'; }).join('') + '</tr>';
+      var tbody = bodyRows.map(function (r) {
+        var cells = splitRow(r);
+        return '<tr>' + cells.map(function (c, idx) {
+          var num = idx > 0 && /^[\d,.\-]+$/.test(c);
+          return '<td class="' + (num ? 'num' : '') + '">' + esc(c) + '</td>';
+        }).join('') + '</tr>';
+      }).join('');
+      return '<div class="table-scroll"><table class="data"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table></div>';
+    }
+
+    function finish() { if (timer) { clearInterval(timer); timer = null; } runBtn.disabled = false; }
+
+    function poll(id, attempt) {
+      fetch('/api/ga4-agent/result?id=' + encodeURIComponent(id), { headers: authHeaders() })
+        .then(function (res) {
+          if (res.status === 401) { logout(); throw new Error('Session expired'); }
+          return res.json().then(function (d) { if (!res.ok) throw new Error(d.error || 'Request failed'); return d; });
+        })
+        .then(function (row) {
+          if (row.status === 'done') {
+            setStatus('done', 'done');
+            resultBody.innerHTML = renderMarkdown(row.result);
+            finish();
+          } else if (row.status === 'error') {
+            setStatus('error', 'error');
+            resultBody.innerHTML = '<p>' + esc(row.error || 'The agent could not complete this request.') + '</p>';
+            finish();
+          } else {
+            setStatus(row.status === 'processing' ? 'running…' : 'queued…', 'working');
+          }
+        })
+        .catch(function (err) {
+          setStatus('error', 'error');
+          resultBody.innerHTML = '<p>' + esc(err.message || 'Something went wrong.') + '</p>';
+          finish();
+        });
+    }
+
+    function run() {
+      var prompt = promptEl.value.trim();
+      if (!prompt) { promptEl.focus(); return; }
+      runBtn.disabled = true;
+      resultCard.hidden = false;
+      askedFor.textContent = '“' + prompt + '”';
+      setStatus('queued…', 'working');
+      resultBody.innerHTML = '<p>Starting a cloud session and querying GA4…</p>';
+
+      fetch('/api/ga4-agent/run', {
+        method: 'POST',
+        headers: Object.assign({ 'Content-Type': 'application/json' }, authHeaders()),
+        body: JSON.stringify({ prompt: prompt }),
+      })
+        .then(function (res) {
+          if (res.status === 401) { logout(); throw new Error('Session expired'); }
+          return res.json().then(function (d) { if (!res.ok) throw new Error(d.error || 'Could not start the report'); return d; });
+        })
+        .then(function (d) {
+          var attempt = 0;
+          poll(d.id, attempt);
+          timer = setInterval(function () {
+            attempt++;
+            if (attempt > MAX_POLLS) { setStatus('timed out', 'error'); resultBody.innerHTML = '<p>This is taking longer than expected. Try again shortly.</p>'; finish(); return; }
+            poll(d.id, attempt);
+          }, POLL_MS);
+        })
+        .catch(function (err) {
+          setStatus('error', 'error');
+          resultBody.innerHTML = '<p>' + esc(err.message || 'Something went wrong.') + '</p>';
+          finish();
+        });
+    }
+
+    runBtn.addEventListener('click', run);
+    promptEl.addEventListener('keydown', function (e) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') run();
+    });
+  </script>
+</body>
+</html>

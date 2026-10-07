@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MAG Sales Pulse — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    /* The MAG Sales Pulse board is a self-contained page embedded in its own
+       frame so its styling stays isolated from the dashboard shell. */
+    .pulse-frame-wrap { padding: 0; }
+    iframe.pulse-frame {
+      display: block;
+      width: 100%;
+      border: none;
+      background: transparent;
+      min-height: 600px;
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="mag_buyer_sheet.html">Buyer Sheet</a>
+    <a class="tab" href="invoice_tracking.html">Invoices</a>
+    <a class="tab" href="sales.html">Conferences</a>
+    <a class="tab" href="ga4_agent.html">GA4 Agent</a>
+    <a class="tab" href="ac_contact_sources.html">Historical Paid Leads Tracking</a>
+    <a class="tab" href="new_paid_leads_tracking.html">New Paid Leads Tracking</a>
+    <a class="tab active" href="mag_sales_pulse.html">MAG Sales Pulse</a>
+  </nav>
+
+  <main class="content pulse-frame-wrap">
+    <iframe class="pulse-frame" id="pulseFrame" src="mag_sales_pulse_artifact.html" title="MAG Sales Pulse" scrolling="no"></iframe>
+  </main>
+
+  <script src="app.js?v=2"></script>
+  <script>
+    // Auth guard + topbar (user chip, theme toggle, sign out). No renderFn: this
+    // page renders its own embedded board, so initPage skips the metrics fetch.
+    initPage('mag_sales_pulse');
+
+    var frame = document.getElementById('pulseFrame');
+
+    // Size the frame to its content so the whole board scrolls with the page
+    // (the embedded page itself has scrolling off).
+    function sizeFrame() {
+      try {
+        var doc = frame.contentDocument || frame.contentWindow.document;
+        if (doc && doc.documentElement) {
+          var h = Math.max(doc.documentElement.scrollHeight, doc.body ? doc.body.scrollHeight : 0);
+          if (h) frame.style.height = h + 'px';
+        }
+      } catch (e) {}
+    }
+
+    // Propagate the dashboard's explicitly-chosen theme into the embedded board.
+    // If the user hasn't picked one, leave the board to follow the OS setting.
+    function syncFrameTheme() {
+      try {
+        var chosen = null;
+        try { chosen = localStorage.getItem('mag_theme'); } catch (e) {}
+        var doc = frame.contentDocument || frame.contentWindow.document;
+        if (doc && doc.documentElement) {
+          if (chosen) doc.documentElement.setAttribute('data-theme', chosen);
+          else doc.documentElement.removeAttribute('data-theme');
+        }
+      } catch (e) {}
+      // Theme change can reflow the board (fonts, chips) — re-measure shortly after.
+      setTimeout(sizeFrame, 60);
+    }
+
+    frame.addEventListener('load', function () {
+      syncFrameTheme();
+      sizeFrame();
+      // Re-measure a few times as fonts/charts settle.
+      setTimeout(sizeFrame, 150);
+      setTimeout(sizeFrame, 500);
+      setTimeout(sizeFrame, 1200);
+    });
+
+    // Keep height correct on viewport resize (layout is responsive).
+    window.addEventListener('resize', sizeFrame);
+
+    // Hook the dashboard theme toggle through to the embedded board.
+    window.onThemeChange = syncFrameTheme;
+  </script>
+</body>
+</html>

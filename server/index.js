@@ -9,6 +9,8 @@ import { getLivDeals } from './metrics/liv-deals.js';
 import { getSalesTopline } from './metrics/sales-topline.js';
 import { getMagBuyerSheet } from './metrics/mag-buyer-sheet.js';
 import { getInvoiceTracking } from './metrics/invoice-tracking.js';
+import { getAcContactSources } from './metrics/ac-contact-sources.js';
+import { getNewPaidLeads } from './metrics/new-paid-leads.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { cached } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
@@ -98,6 +100,30 @@ operations.get('/invoice-tracking', async (_req, res) => {
   } catch (err) {
     console.error('[operations:invoice-tracking]', err);
     res.status(502).json({ error: 'Failed to load invoices from data source.', detail: err.message });
+  }
+});
+// AC Contact Sources table reads a pre-computed Supabase cache
+// (public.ga4_ac_contact_source), populated by scripts/map_ga4_ac.py in the
+// google_ads_leads_tracking repo. Plain SELECT, so a short cache is plenty.
+operations.get('/contact-sources', async (_req, res) => {
+  try {
+    const payload = await cached('operations:contact-sources', getAcContactSources, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:contact-sources]', err);
+    res.status(502).json({ error: 'Failed to load contact sources from data source.', detail: err.message });
+  }
+});
+// New Paid Leads table reads a pre-computed Supabase cache (public.ac_new_leads),
+// filled Mon–Fri by the new-paid-leads-sync edge function from ActiveCampaign's
+// "Src - *" acquisition fields. Plain SELECT, so a short cache is plenty.
+operations.get('/new-paid-leads', async (_req, res) => {
+  try {
+    const payload = await cached('operations:new-paid-leads', getNewPaidLeads, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:new-paid-leads]', err);
+    res.status(502).json({ error: 'Failed to load new paid leads from data source.', detail: err.message });
   }
 });
 app.use('/api/operations', operations);

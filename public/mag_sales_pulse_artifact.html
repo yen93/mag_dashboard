@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>MAG Sales Pulse</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    color-scheme: light;
+    --page: #f9f9f7;
+    --surface-1: #fcfcfb;
+    --surface-2: #ffffff;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --grid: #e1e0d9;
+    --baseline: #c3c2b7;
+    --border: rgba(11,11,11,0.10);
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --good: #2f9e56;
+    --bad: #c0392b;
+    --accent: #2a78d6;
+    --sample-border: #b9b6ab;
+    --sample-bg: rgba(137,135,129,0.07);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      color-scheme: dark;
+      --page: #0d0d0d; --surface-1: #1a1a19; --surface-2: #202020;
+      --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #948f89;
+      --grid: #2c2c2a; --baseline: #3a3a37; --border: rgba(255,255,255,0.10);
+      --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+      --good: #3ecb6c; --bad: #e0574a; --accent: #3987e5;
+      --sample-border: #55524c; --sample-bg: rgba(148,143,137,0.08);
+    }
+  }
+  :root[data-theme="dark"] {
+    color-scheme: dark;
+    --page: #0d0d0d; --surface-1: #1a1a19; --surface-2: #202020;
+    --text-primary: #ffffff; --text-secondary: #c3c2b7; --text-muted: #948f89;
+    --grid: #2c2c2a; --baseline: #3a3a37; --border: rgba(255,255,255,0.10);
+    --series-1: #3987e5; --series-2: #d95926; --series-3: #199e70; --series-4: #c98500;
+    --good: #3ecb6c; --bad: #e0574a; --accent: #3987e5;
+    --sample-border: #55524c; --sample-bg: rgba(148,143,137,0.08);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--page); color: var(--text-primary); font-family: system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: 1220px; margin: 0 auto; padding: 28px 20px 64px; }
+
+  header.masthead {
+    display: flex; justify-content: space-between; align-items: flex-end; flex-wrap: wrap; gap: 14px;
+    padding-bottom: 18px; border-bottom: 1px solid var(--border); margin-bottom: 22px;
+  }
+  .masthead h1 { font-family: "Fraunces", Georgia, "Times New Roman", serif; font-weight: 600; font-size: 30px; letter-spacing: -0.01em; margin: 0 0 4px; text-wrap: balance; }
+  .masthead .sub { font-size: 13.5px; color: var(--text-secondary); margin: 0; }
+  .refresh-chip { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); background: var(--surface-1); border: 1px solid var(--border); border-radius: 999px; padding: 7px 14px; }
+  .refresh-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--good); flex-shrink: 0; }
+  .refresh-chip .stamp { color: var(--text-muted); }
+
+  .wip-banner {
+    display: flex; align-items: center; gap: 10px;
+    background: var(--sample-bg); border: 1px dashed var(--sample-border);
+    border-radius: 10px; padding: 10px 16px; margin-bottom: 26px;
+    font-size: 12.5px; color: var(--text-secondary);
+  }
+  .wip-banner strong { color: var(--text-primary); }
+
+  nav.toc { display: flex; flex-wrap: wrap; gap: 6px 4px; margin-bottom: 30px; }
+  nav.toc a { font-size: 12.5px; color: var(--text-secondary); text-decoration: none; padding: 6px 12px; border-radius: 7px; border: 1px solid transparent; }
+  nav.toc a:hover, nav.toc a:focus-visible { border-color: var(--border); background: var(--surface-1); color: var(--text-primary); }
+
+  .kpi-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-bottom: 44px; }
+  .kpi-tile { background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px; }
+  .kpi-label { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--text-muted); font-weight: 600; }
+  .kpi-value { font-size: 26px; font-weight: 650; font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+  .kpi-meta { font-size: 12.5px; color: var(--text-secondary); display: flex; align-items: center; gap: 6px; }
+  .delta { display: inline-flex; align-items: center; gap: 3px; font-weight: 650; font-variant-numeric: tabular-nums; }
+  .delta.up { color: var(--good); } .delta.down { color: var(--bad); } .delta .arrow { font-size: 11px; }
+  .split-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin: 2px 0 1px; }
+  .split-bar .seg-a { background: var(--series-1); } .split-bar .seg-b { background: var(--series-2); }
+
+  h2.top-section-title {
+    font-size: 20px; font-weight: 650; margin: 0 0 4px; letter-spacing: -0.005em;
+    font-family: "Fraunces", Georgia, serif;
+  }
+  .top-section-sub { font-size: 13px; color: var(--text-secondary); margin: 0 0 16px; }
+  section.top-section { margin-bottom: 52px; scroll-margin-top: 16px; padding-top: 6px; border-top: 1px solid var(--border); }
+  section.top-section:first-of-type { border-top: none; padding-top: 0; }
+
+  .panel-grid { display: grid; gap: 16px; }
+  .panel-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+  .panel-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+
+  .panel {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 12px;
+    padding: 16px 18px 14px; position: relative;
+  }
+  .panel.sample { border-style: dashed; border-color: var(--sample-border); background: var(--sample-bg); }
+  .panel-title { font-size: 13.5px; font-weight: 650; margin: 0 0 2px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .panel-sub { font-size: 11.5px; color: var(--text-muted); margin: 0 0 10px; }
+  .sample-badge {
+    font-size: 9.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--text-muted); background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 5px; padding: 2px 6px;
+  }
+  .mini-legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 11px; color: var(--text-secondary); margin-bottom: 6px; }
+  .mini-legend .li { display: flex; align-items: center; gap: 5px; }
+  .mini-legend .sw { width: 9px; height: 9px; border-radius: 2px; flex-shrink: 0; }
+  svg.mini-chart { width: 100%; height: auto; display: block; overflow: visible; font-family: inherit; }
+  .mini-axis { fill: var(--text-muted); font-size: 8.5px; }
+  .mini-grid-line { stroke: var(--grid); stroke-width: 1; }
+  .mini-baseline { stroke: var(--baseline); stroke-width: 1; }
+  .mini-line { fill: none; stroke-width: 2; }
+  .mini-line.dashed { stroke-dasharray: 4 3; }
+  .mini-bar { rx: 2; }
+  .panel-note { font-size: 11px; color: var(--text-muted); margin-top: 10px; line-height: 1.5; }
+  .panel-note.flag { color: var(--bad); }
+
+  .subsection-label {
+    font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted);
+    font-weight: 650; margin: 20px 0 10px;
+  }
+  .subsection-label:first-child { margin-top: 0; }
+
+  .frame-shell { border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--surface-1); margin-bottom: 16px; }
+  iframe.chart-frame { display: block; width: 100%; border: none; background: transparent; }
+
+  .outbound-note { font-size: 12.5px; color: var(--text-secondary); margin: 0 0 12px; }
+
+  footer { margin-top: 46px; padding-top: 18px; border-top: 1px solid var(--border); font-size: 11.5px; color: var(--text-muted); line-height: 1.6; }
+
+  @media (max-width: 980px) { .panel-grid.cols-3 { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 860px) { .kpi-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 640px) { .panel-grid.cols-3, .panel-grid.cols-2 { grid-template-columns: 1fr; } }
+  @media (max-width: 520px) { .kpi-grid { grid-template-columns: 1fr; } .masthead h1 { font-size: 25px; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="masthead">
+    <div>
+      <h1>MAG Sales Pulse</h1>
+      <p class="sub">MyAdventure Group &middot; revenue &amp; pipeline, in one place</p>
+    </div>
+    <div class="refresh-chip">
+      <span class="refresh-dot"></span>
+      <span id="stampText">Generated 2 Sep 2026</span>
+      <span class="stamp">&middot; refreshes daily</span>
+    </div>
+  </header>
+
+  <div class="wip-banner">
+    <span>🚧</span>
+    <span><strong>Wireframe pass:</strong> layout is still moving. Panels marked <span class="sample-badge" style="vertical-align:middle">Sample data</span> are placeholders showing the intended chart shape &mdash; not real figures yet. Everything else on the page is live.</span>
+  </div>
+
+  <nav class="toc">
+    <a href="#fyprogress">FY progress</a>
+    <a href="#conference">Conference</a>
+    <a href="#paidads">Paid ads</a>
+    <a href="#outbound">Outbound</a>
+    <a href="#trojanhorse">Project Trojan Horse</a>
+  </nav>
+
+  <div class="kpi-grid" id="kpiGrid"></div>
+
+  <section class="top-section" id="fyprogress">
+    <h2 class="top-section-title">FY Progress, Year on Year</h2>
+    <p class="top-section-sub">Three headline revenue lines, each compared across the last four years.</p>
+    <div class="panel-grid cols-3">
+      <div class="panel" id="panel-totalIncome">
+        <div class="panel-title">Total Income</div>
+        <div class="panel-sub">All revenue &middot; live from the booking tracker</div>
+        <div class="mini-legend" id="legend-totalIncome"></div>
+        <svg class="mini-chart" id="chart-totalIncome" viewBox="0 0 380 220" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="panel sample" id="panel-conferenceIncome">
+        <div class="panel-title">Conference Income <span class="sample-badge">Sample data</span></div>
+        <div class="panel-sub">Keynotes / workshops / immersives</div>
+        <div class="mini-legend" id="legend-conferenceIncome"></div>
+        <svg class="mini-chart" id="chart-conferenceIncome" viewBox="0 0 380 220" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="panel-note">Placeholder shape. Real version needs the income tracker's "Program Delivered" column split into Conference vs MAG Experience categories.</p>
+      </div>
+      <div class="panel sample" id="panel-magIncome">
+        <div class="panel-title">MAG Experiences Income <span class="sample-badge">Sample data</span></div>
+        <div class="panel-sub">Offsites &amp; team experiences</div>
+        <div class="mini-legend" id="legend-magIncome"></div>
+        <svg class="mini-chart" id="chart-magIncome" viewBox="0 0 380 220" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="panel-note">Same caveat as Conference Income &mdash; needs the program-type split defined first.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="top-section" id="conference">
+    <h2 class="top-section-title">Conference / Keynotes</h2>
+    <p class="top-section-sub">Direct vs indirect revenue, inbound enquiries, demo activity and the qualification funnel.</p>
+
+    <div class="subsection-label">Revenue</div>
+    <div class="frame-shell"><iframe class="chart-frame" id="frame-splitYear" scrolling="no"></iframe></div>
+    <div class="frame-shell"><iframe class="chart-frame" id="frame-ratio" scrolling="no"></iframe></div>
+
+    <div class="subsection-label">Pipeline</div>
+    <div class="frame-shell"><iframe class="chart-frame" id="frame-enquiries" scrolling="no"></iframe></div>
+
+    <div class="panel-grid cols-2">
+      <div class="panel sample" id="panel-demos">
+        <div class="panel-title">Demos Booked vs Delivered <span class="sample-badge">Sample data</span></div>
+        <div class="panel-sub">Monthly, current year</div>
+        <div class="mini-legend" id="legend-demos"></div>
+        <svg class="mini-chart" id="chart-demos" viewBox="0 0 460 220" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="panel-note">Placeholder. Real version needs a clear definition of "delivered" in ActiveCampaign (deal stage or a task type) for the F2F/Sales Demo Booked stage.</p>
+      </div>
+      <div class="panel sample" id="panel-funnel">
+        <div class="panel-title">Qualified / Unqualified / Bureau <span class="sample-badge">Sample data</span></div>
+        <div class="panel-sub">By year, Keynotes pipeline</div>
+        <div class="mini-legend" id="legend-funnel"></div>
+        <svg class="mini-chart" id="chart-funnel" viewBox="0 0 460 220" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="panel-note flag">This is the metric we flagged earlier: current-stage snapshots undercount history because deals move on. Still needs your call &mdash; snapshot vs. "ever reached this stage."</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="top-section" id="paidads">
+    <h2 class="top-section-title">Paid Ads</h2>
+    <p class="top-section-sub">Google Ads enquiries, spend and revenue.</p>
+
+    <div class="frame-shell"><iframe class="chart-frame" id="frame-googleAds" scrolling="no"></iframe></div>
+
+    <div class="panel-grid cols-3">
+      <div class="panel" id="panel-gadsYtd">
+        <div class="panel-title">YTD Enquiries (Jan&ndash;Aug)</div>
+        <div class="panel-sub">Last 4 years &middot; live from ActiveCampaign</div>
+        <svg class="mini-chart" id="chart-gadsYtd" viewBox="0 0 340 200" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="panel" id="panel-gadsRevenue">
+        <div class="panel-title">Ad Revenue by Year</div>
+        <div class="panel-sub">Won deals tagged Google Ads &middot; live</div>
+        <svg class="mini-chart" id="chart-gadsRevenue" viewBox="0 0 340 200" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="panel sample" id="panel-adSpend">
+        <div class="panel-title">Ad Spend by Year <span class="sample-badge">Sample data</span></div>
+        <div class="panel-sub">Needs a Google Ads connection</div>
+        <svg class="mini-chart" id="chart-adSpend" viewBox="0 0 340 200" preserveAspectRatio="xMidYMid meet"></svg>
+        <p class="panel-note">No Google Ads account is connected here yet &mdash; this can only be sourced once one is.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="top-section" id="outbound">
+    <h2 class="top-section-title">Outbound</h2>
+    <p class="top-section-sub">Leads reached out to, by channel &mdash; week to week.</p>
+    <p class="outbound-note">"Social" and "Cold" map to the two tags we already track (LinkedIn scraper, cold-lead scraping automation). <strong>Reengagement</strong> has no ActiveCampaign tag yet &mdash; recommend creating one so it can be tracked the same way.</p>
+    <div class="frame-shell"><iframe class="chart-frame" id="frame-weeklyTags" scrolling="no"></iframe></div>
+    <div class="panel sample" id="panel-reengagement" style="max-width:460px">
+      <div class="panel-title">Reengagement Leads <span class="sample-badge">Sample data</span></div>
+      <div class="panel-sub">Week to week</div>
+      <svg class="mini-chart" id="chart-reengagement" viewBox="0 0 420 180" preserveAspectRatio="xMidYMid meet"></svg>
+      <p class="panel-note">Not tracked yet &mdash; needs a "reengagement" tag applied consistently in ActiveCampaign.</p>
+    </div>
+  </section>
+
+  <section class="top-section" id="trojanhorse">
+    <h2 class="top-section-title">Project Trojan Horse</h2>
+    <p class="top-section-sub">Executive X invitations, acceptance and revenue by season; post-conference debrief follow-through.</p>
+    <div class="panel-grid cols-3">
+      <div class="panel sample" id="panel-execInvite">
+        <div class="panel-title">Exec X Invited vs Accepted <span class="sample-badge">Sample data</span></div>
+        <div class="panel-sub">By season, last 3 years</div>
+        <div class="mini-legend" id="legend-execInvite"></div>
+        <svg class="mini-chart" id="chart-execInvite" viewBox="0 0 340 200" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="panel sample" id="panel-execRevenue">
+        <div class="panel-title">Exec X Revenue <span class="sample-badge">Sample data</span></div>
+        <div class="panel-sub">By season, last 3 years</div>
+        <svg class="mini-chart" id="chart-execRevenue" viewBox="0 0 340 200" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+      <div class="panel sample" id="panel-debrief">
+        <div class="panel-title">Debrief Calls vs Conferences <span class="sample-badge">Sample data</span></div>
+        <div class="panel-sub">Ratio, month to month</div>
+        <svg class="mini-chart" id="chart-debrief" viewBox="0 0 340 200" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+    <p class="panel-note" style="margin-top:14px">This whole section needs scoping in ActiveCampaign: which pipelines/stages count as "invited" vs "accepted" for Executive X (groups exist for EXECUTIVE X 2024, EXECUTIVE X MASTER, and both Trojan Horse pipelines, but none map cleanly to these labels yet), and how debrief calls are logged (task type or custom field &mdash; not yet identified).</p>
+  </section>
+
+  <footer>
+    Sources: booking/income tracker (Google Sheets) and the MyAdventure Group ActiveCampaign CRM. "Sample data" panels are wireframe placeholders only, sized and shaped like the real thing but not sourced yet &mdash; see each panel's note for what's needed to make it real.
+    This dashboard is refreshed daily by a scheduled pull; while the layout is in flux, that refresh currently only touches the live panels, not the placeholders.
+  </footer>
+</div>
+
+<script>
+const KPI = {"incomeEarnedYtd": 541030, "incomeBooked": 229700, "directPct2026": 83.4, "indirectPct2026": 16.6, "enqAug2026": 24, "enqAugYoyPct": -4.0, "enqYtd2026": 217, "enqYoyPct": -43.5, "gadsAug2026": 1, "gadsYtd2026": 22, "gadsYoyPct": -38.9, "weeklyTagTotal": 5};
+const REAL = {"totalIncome": {"2023": [16875, 63487.5, 91540, 21500, 116315, 47468, 32450, 36000, 75600, 41300, 65493.5, 24875], "2024": [43026.36, 19866, 40950, 8500, 68750, 61260, 15050, 71775, 32250, 51437.5, 259965, 43625], "2025": [64760.25, 69595, 54350, 25790, 84905, 55525, 76525, 73600, 111300, 97390, 295622, 112610], "2026": {"values": [37720, 17250, 176145, 22400, 109665, 29800, 65700, 82350, 22000, 37395, 148140, 22165], "unearnedFrom": 8}}, "gadsYtd": {"2023": 17, "2024": 29, "2025": 36, "2026": 22}, "gadsRevenue": {"2023": 53500, "2024": 92450, "2025": 162845, "2026": 34700}};
+const SAMPLE = {"conferenceIncome": {"2023": [12000, 45000, 65000, 15000, 82000, 33000, 22000, 25000, 53000, 29000, 46000, 17000], "2024": [30000, 14000, 29000, 6000, 48000, 43000, 10000, 50000, 22000, 36000, 182000, 30000], "2025": [45000, 49000, 38000, 18000, 59000, 39000, 54000, 51000, 78000, 68000, 207000, 79000], "2026": {"values": [26000, 12000, 123000, 15000, 76000, 21000, 46000, 58000, 15000, 26000, 104000, 15000], "unearnedFrom": 8}}, "magExperiencesIncome": {"2023": [4800, 18000, 26000, 6000, 34000, 14000, 10000, 11000, 22000, 12000, 19000, 7800], "2024": [13000, 5800, 12000, 2500, 20700, 18000, 5000, 21700, 10000, 15400, 78000, 13600], "2025": [19700, 20600, 16300, 7800, 25900, 16500, 22500, 22600, 33300, 29400, 88600, 33600], "2026": {"values": [11700, 5200, 53100, 7400, 33600, 8800, 19700, 24300, 6900, 11400, 44100, 7100], "unearnedFrom": 8}}, "adSpend": {"2023": 8200, "2024": 11400, "2025": 15800, "2026": 9600}, "demosBooked": [3, 4, 2, 5, 6, 4, 3, 5, 4, 6, 3, 2], "demosDelivered": [2, 3, 2, 4, 5, 3, 3, 4, 3, 5, 3, 2], "funnelStages": {"years": ["2023", "2024", "2025", "2026"], "qualified": [38, 46, 41, 27], "unqualified": [64, 71, 58, 33], "bureau": [22, 29, 34, 19]}, "execX": {"seasons": ["2024", "2025", "2026"], "invited": [34, 41, 45], "accepted": [21, 27, 26], "revenue": [485000, 612000, 590000]}, "debriefRatio": {"conferencesDelivered": [4, 6, 8, 3, 9, 5, 6, 7, 9, 8, 11, 4], "debriefCallsDone": [3, 5, 6, 2, 7, 4, 4, 6, 6, 6, 8, 3]}};
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+const YEAR_COLORS = ["var(--series-1)","var(--series-2)","var(--series-3)","var(--series-4)"];
+const svgns = "http://www.w3.org/2000/svg";
+
+function el(tag, attrs) {
+  const e = document.createElementNS(svgns, tag);
+  for (const k in attrs) e.setAttribute(k, attrs[k]);
+  return e;
+}
+function fmtMoney(v) { return "$" + Math.round(v).toLocaleString("en-AU"); }
+function fmtMoneyK(v) { return "$" + Math.round(v/1000).toLocaleString("en-AU") + "k"; }
+function fmtInt(v) { return Math.round(v).toLocaleString("en-AU"); }
+function deltaSpan(pct, invert) {
+  const good = invert ? pct < 0 : pct >= 0;
+  const arrow = pct >= 0 ? "↑" : "↓";
+  return '<span class="delta ' + (good ? "up" : "down") + '"><span class="arrow">' + arrow + '</span>' + Math.abs(pct).toFixed(1) + '%</span>';
+}
+
+// ---------------- KPI strip ----------------
+document.getElementById("kpiGrid").innerHTML =
+  '<div class="kpi-tile"><div class="kpi-label">2026 Income (Jan–Aug, earned)</div><div class="kpi-value">' + fmtMoneyK(KPI.incomeEarnedYtd) + '</div><div class="kpi-meta">+ ' + fmtMoneyK(KPI.incomeBooked) + ' booked, Sep–Dec</div></div>' +
+  '<div class="kpi-tile"><div class="kpi-label">2026 Direct vs Indirect</div><div class="kpi-value">' + KPI.directPct2026.toFixed(0) + '% <span style="font-size:14px;color:var(--text-muted);font-weight:500">direct</span></div><div class="split-bar"><span class="seg-a" style="width:' + KPI.directPct2026 + '%"></span><span class="seg-b" style="width:' + KPI.indirectPct2026 + '%"></span></div><div class="kpi-meta">' + KPI.indirectPct2026.toFixed(0) + '% indirect (agents/resellers)</div></div>' +
+  '<div class="kpi-tile"><div class="kpi-label">Enquiries — August</div><div class="kpi-value">' + KPI.enqAug2026 + '</div><div class="kpi-meta">' + deltaSpan(KPI.enqAugYoyPct, false) + ' vs Aug 2025</div></div>' +
+  '<div class="kpi-tile"><div class="kpi-label">Enquiries — YTD (Jan–Aug)</div><div class="kpi-value">' + KPI.enqYtd2026 + '</div><div class="kpi-meta">' + deltaSpan(KPI.enqYoyPct, false) + ' vs same period 2025</div></div>' +
+  '<div class="kpi-tile"><div class="kpi-label">Google Ads Enquiries — YTD</div><div class="kpi-value">' + KPI.gadsYtd2026 + '</div><div class="kpi-meta">' + deltaSpan(KPI.gadsYoyPct, false) + ' vs same period 2025 &middot; ' + KPI.gadsAug2026 + ' in August</div></div>' +
+  '<div class="kpi-tile"><div class="kpi-label">Scraped / LinkedIn Leads — 8wk</div><div class="kpi-value">' + KPI.weeklyTagTotal + '</div><div class="kpi-meta">new tagged deals, last 2 months</div></div>';
+
+// ---------------- mini line chart (years x months) ----------------
+function renderYearLineChart(svgId, legendId, dataByYear, opts) {
+  opts = opts || {};
+  const svg = document.getElementById(svgId);
+  const vb = svg.getAttribute("viewBox").split(" ").map(Number);
+  const W = vb[2], H = vb[3];
+  const mT = 8, mR = 8, mB = 20, mL = opts.mL || 34;
+  const plotW = W - mL - mR, plotH = H - mT - mB;
+  const years = Object.keys(dataByYear);
+  const seriesVals = years.map(y => {
+    const d = dataByYear[y];
+    return Array.isArray(d) ? d : d.values;
+  });
+  const allVals = seriesVals.flat();
+  const maxVal = Math.max(...allVals, 1);
+  const niceMax = opts.niceMax ? opts.niceMax(maxVal) : Math.ceil(maxVal / 10) * 10;
+  function x(i) { return mL + (i / 11) * plotW; }
+  function y(v) { return mT + plotH - (v / niceMax) * plotH; }
+
+  const gridSteps = 3;
+  for (let i = 0; i <= gridSteps; i++) {
+    const v = (niceMax / gridSteps) * i;
+    const gy = y(v);
+    svg.appendChild(el("line", { x1: mL, x2: W - mR, y1: gy, y2: gy, class: i === 0 ? "mini-baseline" : "mini-grid-line" }));
+    const lbl = el("text", { x: mL - 6, y: gy + 3, "text-anchor": "end", class: "mini-axis" });
+    lbl.textContent = opts.fmtAxis ? opts.fmtAxis(v) : Math.round(v);
+    svg.appendChild(lbl);
+  }
+  [0, 6].forEach(i => {
+    const lbl = el("text", { x: x(i), y: H - mB + 13, "text-anchor": "middle", class: "mini-axis" });
+    lbl.textContent = MONTHS[i];
+    svg.appendChild(lbl);
+  });
+
+  years.forEach((yr, yi) => {
+    const d = dataByYear[yr];
+    const vals = Array.isArray(d) ? d : d.values;
+    const uf = Array.isArray(d) ? undefined : d.unearnedFrom;
+    const color = YEAR_COLORS[yi % YEAR_COLORS.length];
+    const idxs = vals.map((v, i) => i);
+    if (uf === undefined) {
+      const path = idxs.map((i, k) => (k === 0 ? "M" : "L") + x(i).toFixed(1) + "," + y(vals[i]).toFixed(1)).join(" ");
+      svg.appendChild(el("path", { d: path, class: "mini-line", stroke: color }));
+    } else {
+      const earned = idxs.filter(i => i <= uf);
+      const unearned = idxs.filter(i => i >= uf);
+      svg.appendChild(el("path", { d: earned.map((i,k)=>(k===0?"M":"L")+x(i).toFixed(1)+","+y(vals[i]).toFixed(1)).join(" "), class: "mini-line", stroke: color }));
+      svg.appendChild(el("path", { d: unearned.map((i,k)=>(k===0?"M":"L")+x(i).toFixed(1)+","+y(vals[i]).toFixed(1)).join(" "), class: "mini-line dashed", stroke: color }));
+    }
+  });
+
+  if (legendId) {
+    const legend = document.getElementById(legendId);
+    legend.innerHTML = years.map((yr, yi) => '<span class="li"><span class="sw" style="background:' + YEAR_COLORS[yi % YEAR_COLORS.length] + '"></span>' + yr + '</span>').join("");
+  }
+}
+
+// ---------------- mini grouped bar chart ----------------
+function renderGroupedBars(svgId, legendId, categories, series, opts) {
+  opts = opts || {};
+  const svg = document.getElementById(svgId);
+  const vb = svg.getAttribute("viewBox").split(" ").map(Number);
+  const W = vb[2], H = vb[3];
+  const mT = 8, mR = 8, mB = 20, mL = opts.mL || 34;
+  const plotW = W - mL - mR, plotH = H - mT - mB;
+  const allVals = series.flatMap(s => s.values);
+  const maxVal = Math.max(...allVals, 1);
+  const niceMax = opts.niceMax ? opts.niceMax(maxVal) : Math.ceil(maxVal / 10) * 10;
+  const n = categories.length;
+  const groupW = plotW / n;
+  const barW = (groupW * 0.7) / series.length;
+
+  function y(v) { return mT + plotH - (v / niceMax) * plotH; }
+
+  const gridSteps = 3;
+  for (let i = 0; i <= gridSteps; i++) {
+    const v = (niceMax / gridSteps) * i;
+    const gy = y(v);
+    svg.appendChild(el("line", { x1: mL, x2: W - mR, y1: gy, y2: gy, class: i === 0 ? "mini-baseline" : "mini-grid-line" }));
+    const lbl = el("text", { x: mL - 6, y: gy + 3, "text-anchor": "end", class: "mini-axis" });
+    lbl.textContent = opts.fmtAxis ? opts.fmtAxis(v) : Math.round(v);
+    svg.appendChild(lbl);
+  }
+
+  categories.forEach((cat, ci) => {
+    const groupX = mL + ci * groupW + groupW * 0.15;
+    series.forEach((s, si) => {
+      const v = s.values[ci];
+      const bx = groupX + si * barW;
+      const yTop = y(v), yBase = y(0);
+      svg.appendChild(el("rect", { x: bx, y: yTop, width: barW * 0.86, height: (yBase - yTop), fill: s.color, class: "mini-bar" }));
+    });
+    const lbl = el("text", { x: mL + ci * groupW + groupW / 2, y: H - mB + 13, "text-anchor": "middle", class: "mini-axis" });
+    lbl.textContent = cat;
+    svg.appendChild(lbl);
+  });
+
+  if (legendId) {
+    const legend = document.getElementById(legendId);
+    legend.innerHTML = series.map(s => '<span class="li"><span class="sw" style="background:' + s.color + '"></span>' + s.label + '</span>').join("");
+  }
+}
+
+// ---------------- mini single-series bar (by year) ----------------
+function renderSingleBars(svgId, dataObj, opts) {
+  opts = opts || {};
+  const svg = document.getElementById(svgId);
+  const vb = svg.getAttribute("viewBox").split(" ").map(Number);
+  const W = vb[2], H = vb[3];
+  const mT = 8, mR = 8, mB = 20, mL = opts.mL || 40;
+  const plotW = W - mL - mR, plotH = H - mT - mB;
+  const keys = Object.keys(dataObj);
+  const vals = keys.map(k => dataObj[k]);
+  const maxVal = Math.max(...vals, 1);
+  const niceMax = opts.niceMax ? opts.niceMax(maxVal) : Math.ceil(maxVal / 10) * 10;
+  const n = keys.length;
+  const slot = plotW / n;
+  const barW = slot * 0.5;
+  function y(v) { return mT + plotH - (v / niceMax) * plotH; }
+
+  const gridSteps = 3;
+  for (let i = 0; i <= gridSteps; i++) {
+    const v = (niceMax / gridSteps) * i;
+    const gy = y(v);
+    svg.appendChild(el("line", { x1: mL, x2: W - mR, y1: gy, y2: gy, class: i === 0 ? "mini-baseline" : "mini-grid-line" }));
+    const lbl = el("text", { x: mL - 6, y: gy + 3, "text-anchor": "end", class: "mini-axis" });
+    lbl.textContent = opts.fmtAxis ? opts.fmtAxis(v) : Math.round(v);
+    svg.appendChild(lbl);
+  }
+
+  keys.forEach((k, i) => {
+    const v = dataObj[k];
+    const cx = mL + i * slot + slot / 2;
+    const yTop = y(v), yBase = y(0);
+    const color = opts.color || YEAR_COLORS[i % YEAR_COLORS.length];
+    svg.appendChild(el("rect", { x: cx - barW / 2, y: yTop, width: barW, height: (yBase - yTop), fill: color, class: "mini-bar" }));
+    const lbl = el("text", { x: cx, y: H - mB + 13, "text-anchor": "middle", class: "mini-axis" });
+    lbl.textContent = k;
+    svg.appendChild(lbl);
+    const vlbl = el("text", { x: cx, y: yTop - 5, "text-anchor": "middle", class: "mini-axis" });
+    vlbl.textContent = opts.fmtValue ? opts.fmtValue(v) : v;
+    svg.appendChild(vlbl);
+  });
+}
+
+// ---------------- FY Progress ----------------
+renderYearLineChart("chart-totalIncome", "legend-totalIncome", REAL.totalIncome, { niceMax: m => Math.ceil(m/50000)*50000, fmtAxis: v => "$" + Math.round(v/1000) + "k" });
+renderYearLineChart("chart-conferenceIncome", "legend-conferenceIncome", SAMPLE.conferenceIncome, { niceMax: m => Math.ceil(m/50000)*50000, fmtAxis: v => "$" + Math.round(v/1000) + "k" });
+renderYearLineChart("chart-magIncome", "legend-magIncome", SAMPLE.magExperiencesIncome, { niceMax: m => Math.ceil(m/25000)*25000, fmtAxis: v => "$" + Math.round(v/1000) + "k" });
+
+// ---------------- Conference section: demos + funnel ----------------
+renderGroupedBars("chart-demos", "legend-demos", MONTHS, [
+  { label: "Booked", color: "var(--series-1)", values: SAMPLE.demosBooked },
+  { label: "Delivered", color: "var(--series-3)", values: SAMPLE.demosDelivered },
+], { niceMax: m => Math.ceil(m/2)*2 });
+
+renderGroupedBars("chart-funnel", "legend-funnel", SAMPLE.funnelStages.years, [
+  { label: "Qualified", color: "var(--series-1)", values: SAMPLE.funnelStages.qualified },
+  { label: "Unqualified", color: "var(--series-2)", values: SAMPLE.funnelStages.unqualified },
+  { label: "Bureau", color: "var(--series-4)", values: SAMPLE.funnelStages.bureau },
+], { niceMax: m => Math.ceil(m/20)*20 });
+
+// ---------------- Paid Ads ----------------
+renderSingleBars("chart-gadsYtd", REAL.gadsYtd, { fmtValue: v => v, color: "var(--series-1)" });
+renderSingleBars("chart-gadsRevenue", REAL.gadsRevenue, { fmtValue: fmtMoneyK, fmtAxis: v => "$" + Math.round(v/1000) + "k", color: "var(--series-3)", niceMax: m => Math.ceil(m/50000)*50000 });
+renderSingleBars("chart-adSpend", SAMPLE.adSpend, { fmtValue: fmtMoneyK, fmtAxis: v => "$" + Math.round(v/1000) + "k", color: "var(--sample-border)", niceMax: m => Math.ceil(m/5000)*5000 });
+
+// ---------------- Outbound: reengagement placeholder ----------------
+(function() {
+  const weeks = ["29 Jun","6 Jul","13 Jul","20 Jul","27 Jul","3 Aug","10 Aug","17 Aug","24 Aug","31 Aug"];
+  const sampleVals = [0,0,1,0,2,1,3,2,4,3];
+  const svg = document.getElementById("chart-reengagement");
+  const vb = svg.getAttribute("viewBox").split(" ").map(Number);
+  const W = vb[2], H = vb[3];
+  const mT = 8, mR = 8, mB = 24, mL = 26;
+  const plotW = W - mL - mR, plotH = H - mT - mB;
+  const maxVal = Math.max(...sampleVals, 1);
+  const niceMax = Math.ceil(maxVal/2)*2;
+  const n = weeks.length, slot = plotW/n, barW = slot*0.55;
+  function y(v) { return mT + plotH - (v/niceMax)*plotH; }
+  for (let i=0;i<=2;i++){
+    const v=(niceMax/2)*i, gy=y(v);
+    svg.appendChild(el("line",{x1:mL,x2:W-mR,y1:gy,y2:gy,class:i===0?"mini-baseline":"mini-grid-line"}));
+  }
+  weeks.forEach((wk,i)=>{
+    const cx = mL + i*slot + slot/2;
+    const v = sampleVals[i];
+    const yTop=y(v), yBase=y(0);
+    svg.appendChild(el("rect",{x:cx-barW/2,y:yTop,width:barW,height:yBase-yTop,fill:"var(--sample-border)",class:"mini-bar"}));
+    if (i % 2 === 0) {
+      const lbl = el("text",{x:cx,y:H-mB+13,"text-anchor":"middle",class:"mini-axis"});
+      lbl.textContent = wk;
+      svg.appendChild(lbl);
+    }
+  });
+})();
+
+// ---------------- Project Trojan Horse ----------------
+renderGroupedBars("chart-execInvite", "legend-execInvite", SAMPLE.execX.seasons, [
+  { label: "Invited", color: "var(--series-1)", values: SAMPLE.execX.invited },
+  { label: "Accepted", color: "var(--series-3)", values: SAMPLE.execX.accepted },
+], { niceMax: m => Math.ceil(m/10)*10 });
+
+renderSingleBars("chart-execRevenue", Object.fromEntries(SAMPLE.execX.seasons.map((s,i)=>[s, SAMPLE.execX.revenue[i]])), { fmtValue: fmtMoneyK, fmtAxis: v => "$" + Math.round(v/1000) + "k", color: "var(--series-4)", niceMax: m => Math.ceil(m/200000)*200000 });
+
+(function() {
+  const conf = SAMPLE.debriefRatio.conferencesDelivered;
+  const done = SAMPLE.debriefRatio.debriefCallsDone;
+  const ratio = conf.map((c,i) => c > 0 ? (100 * done[i] / c) : 0);
+  const svg = document.getElementById("chart-debrief");
+  const vb = svg.getAttribute("viewBox").split(" ").map(Number);
+  const W = vb[2], H = vb[3];
+  const mT = 8, mR = 8, mB = 20, mL = 30;
+  const plotW = W - mL - mR, plotH = H - mT - mB;
+  function x(i) { return mL + (i/11) * plotW; }
+  function y(v) { return mT + plotH - (v/100) * plotH; }
+  [0,50,100].forEach(p => {
+    const gy = y(p);
+    svg.appendChild(el("line",{x1:mL,x2:W-mR,y1:gy,y2:gy,class:p===0?"mini-baseline":"mini-grid-line"}));
+    const lbl = el("text",{x:mL-6,y:gy+3,"text-anchor":"end",class:"mini-axis"});
+    lbl.textContent = p + "%";
+    svg.appendChild(lbl);
+  });
+  const path = ratio.map((v,i) => (i===0?"M":"L") + x(i).toFixed(1) + "," + y(v).toFixed(1)).join(" ");
+  svg.appendChild(el("path",{d:path, class:"mini-line", stroke:"var(--sample-border)"}));
+  [0,6].forEach(i => {
+    const lbl = el("text",{x:x(i),y:H-mB+13,"text-anchor":"middle",class:"mini-axis"});
+    lbl.textContent = MONTHS[i];
+    svg.appendChild(lbl);
+  });
+})();
+
+// ---------------- iframe embeds (real, existing charts) ----------------
+const charts = {
+  "frame-splitYear": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>Direct vs Indirect Income by Year</title>\n<style>\n  .viz-root {\n    color-scheme: light;\n    --surface-1: #fcfcfb;\n    --page: #f9f9f7;\n    --text-primary: #0b0b0b;\n    --text-secondary: #52514e;\n    --text-muted: #898781;\n    --grid: #e1e0d9;\n    --baseline: #c3c2b7;\n    --border: rgba(11,11,11,0.10);\n    --series-1: #2a78d6; /* Direct */\n    --series-2: #eb6834; /* Indirect */\n    font-family: system-ui, -apple-system, \"Segoe UI\", sans-serif;\n    background: var(--page);\n    color: var(--text-primary);\n    margin: 0;\n    padding: 32px 16px;\n    box-sizing: border-box;\n  }\n  @media (prefers-color-scheme: dark) {\n    :root:where(:not([data-theme=\"light\"])) .viz-root {\n      color-scheme: dark;\n      --surface-1: #1a1a19;\n      --page: #0d0d0d;\n      --text-primary: #ffffff;\n      --text-secondary: #c3c2b7;\n      --text-muted: #898781;\n      --grid: #2c2c2a;\n      --baseline: #383835;\n      --border: rgba(255,255,255,0.10);\n      --series-1: #3987e5;\n      --series-2: #d95926;\n    }\n  }\n  :root[data-theme=\"dark\"] .viz-root {\n    color-scheme: dark;\n    --surface-1: #1a1a19;\n    --page: #0d0d0d;\n    --text-primary: #ffffff;\n    --text-secondary: #c3c2b7;\n    --text-muted: #898781;\n    --grid: #2c2c2a;\n    --baseline: #383835;\n    --border: rgba(255,255,255,0.10);\n    --series-1: #3987e5;\n    --series-2: #d95926;\n  }\n  .card {\n    max-width: 1080px;\n    margin: 0 auto;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 12px;\n    padding: 28px 32px 20px;\n  }\n  h1 { font-size: 19px; font-weight: 650; margin: 0 0 2px; }\n  .subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 16px; }\n  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 8px; font-size: 13px; color: var(--text-secondary); }\n  .legend-item { display: flex; align-items: center; gap: 7px; }\n  .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }\n  .legend-note { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }\n  .legend-note .dash-swatch { width: 16px; height: 0; border-top: 2px dashed var(--text-muted); flex-shrink: 0; }\n  .grid-panels {\n    display: grid;\n    grid-template-columns: 1fr 1fr;\n    gap: 20px 28px;\n    margin-top: 12px;\n  }\n  .panel { position: relative; }\n  .panel-title { font-size: 13.5px; font-weight: 650; margin-bottom: 4px; }\n  .panel-total { font-size: 11.5px; color: var(--text-muted); margin-bottom: 8px; }\n  svg.chart { width: 100%; height: auto; overflow: visible; font-family: inherit; }\n  .gridline { stroke: var(--grid); stroke-width: 1; }\n  .baseline { stroke: var(--baseline); stroke-width: 1; }\n  .axis-label { fill: var(--text-muted); font-size: 9.5px; }\n  .series-line { fill: none; stroke-width: 2; }\n  .series-line.unearned { stroke-dasharray: 5 4; }\n  .tooltip {\n    position: absolute;\n    pointer-events: none;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 8px;\n    padding: 8px 11px;\n    font-size: 12px;\n    color: var(--text-primary);\n    box-shadow: 0 4px 16px rgba(0,0,0,0.12);\n    opacity: 0;\n    transition: opacity 0.1s;\n    white-space: nowrap;\n    z-index: 5;\n  }\n  .tooltip .t-month { color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; }\n  .tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }\n  .tooltip .t-dot { width: 8px; height: 8px; border-radius: 2px; }\n  .footnote { font-size: 11.5px; color: var(--text-muted); margin-top: 20px; line-height: 1.5; }\n  .toggle-btn {\n    font-size: 12px;\n    color: var(--text-secondary);\n    background: none;\n    border: 1px solid var(--border);\n    border-radius: 6px;\n    padding: 5px 10px;\n    cursor: pointer;\n    margin-top: 14px;\n  }\n  .toggle-btn:hover { background: var(--grid); }\n  table { width: 100%; border-collapse: collapse; font-size: 12px; margin-top: 14px; display: none; }\n  table.show { display: table; }\n  th, td { text-align: right; padding: 5px 7px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }\n  th:first-child, td:first-child { text-align: left; }\n  th { color: var(--text-muted); font-weight: 600; }\n  td.total { font-weight: 650; }\n  .year-hdr td { padding-top: 12px; font-weight: 650; color: var(--text-secondary); border-bottom: 1px solid var(--baseline); }\n  @media (max-width: 640px) {\n    .grid-panels { grid-template-columns: 1fr; }\n  }\n</style>\n</head>\n<body>\n<div class=\"viz-root\">\n  <div class=\"card\">\n    <h1>Direct vs Indirect Income, Month by Month</h1>\n    <p class=\"subtitle\">MyAdventure Group &middot; 2023&ndash;2026 &middot; sum of Value (AUD) per month, split by lead source</p>\n    <div class=\"legend\" id=\"legend\"></div>\n    <div class=\"grid-panels\" id=\"panels\"></div>\n    <button class=\"toggle-btn\" id=\"toggleTable\">Show as table</button>\n    <table id=\"dataTable\">\n      <thead><tr><th>Month</th><th>Direct</th><th>Indirect</th></tr></thead>\n      <tbody id=\"tableBody\"></tbody>\n    </table>\n    <p class=\"footnote\">\n      \"Direct\" and \"Indirect\" reflect the Direct/Indirect column in the tracking spreadsheet (indirect = booked via an agent/reseller such as The Tailor).\n      2026's dashed segment (Sep&ndash;Dec, marked * in the table) is unearned revenue &mdash; already booked but not yet delivered as of September 2026.\n      Entries marked \"FREE\" are counted as $0. All four panels share the same $0&ndash;$300k y-axis so magnitudes are directly comparable across years.\n    </p>\n  </div>\n</div>\n<script>\nconst months = [\"Jan\",\"Feb\",\"Mar\",\"Apr\",\"May\",\"Jun\",\"Jul\",\"Aug\",\"Sep\",\"Oct\",\"Nov\",\"Dec\"];\n\nconst data = {\n  2023: {\n    direct:   [16875, 57487.5, 91540, 21500, 94990, 13500, 15000, 36000, 47500, 35000, 44500, 0],\n    indirect: [0, 6000, 0, 0, 21325, 33968, 17450, 0, 28100, 6300, 20993.5, 24875],\n  },\n  2024: {\n    direct:   [0, 11616, 40950, 8500, 57200, 23760, 10500, 51500, 21000, 31187.5, 259965, 11500],\n    indirect: [43026.36, 8250, 0, 0, 11550, 37500, 4550, 20275, 11250, 20250, 0, 32125],\n  },\n  2025: {\n    direct:   [64760.25, 65995, 34950, 17990, 66875, 27500, 34800, 68350, 101000, 81640, 288272, 87300],\n    indirect: [0, 3600, 19400, 7800, 18030, 28025, 41725, 5250, 10300, 15750, 7350, 25310],\n  },\n  2026: {\n    direct:   [22300, 8500, 170895, 12500, 92000, 22500, 38500, 75000, 22000, 30195, 148140, 0],\n    indirect: [15420, 8750, 5250, 9900, 17665, 7300, 27200, 7350, 0, 7200, 0, 22165],\n    unearnedFrom: 8,\n  },\n};\n\nconst YMAX = 300000;\nconst W = 460, H = 220;\nconst marginTop = 10, marginRight = 10, marginBottom = 24, marginLeft = 46;\nconst plotW = W - marginLeft - marginRight;\nconst plotH = H - marginTop - marginBottom;\nconst svgns = \"http://www.w3.org/2000/svg\";\n\nfunction x(i) { return marginLeft + (i / (months.length - 1)) * plotW; }\nfunction y(v) { return marginTop + plotH - (v / YMAX) * plotH; }\nfunction fmtCurrency(v) { return \"$\" + Math.round(v).toLocaleString(\"en-AU\"); }\nfunction fmtShort(v) { return v === 0 ? \"$0\" : \"$\" + Math.round(v / 1000) + \"k\"; }\n\nfunction el(tag, attrs) {\n  const e = document.createElementNS(svgns, tag);\n  for (const k in attrs) e.setAttribute(k, attrs[k]);\n  return e;\n}\n\nconst seriesDefs = [\n  { key: \"direct\", label: \"Direct\", color: \"var(--series-1)\" },\n  { key: \"indirect\", label: \"Indirect\", color: \"var(--series-2)\" },\n];\n\n// legend\nconst legend = document.getElementById(\"legend\");\nseriesDefs.forEach(s => {\n  const item = document.createElement(\"div\");\n  item.className = \"legend-item\";\n  item.innerHTML = '<span class=\"swatch\" style=\"background:' + s.color + '\"></span>' + s.label;\n  legend.appendChild(item);\n});\nconst note = document.createElement(\"div\");\nnote.className = \"legend-note\";\nnote.innerHTML = '<span class=\"dash-swatch\"></span>booked, not yet delivered (2026)';\nlegend.appendChild(note);\n\nconst panelsWrap = document.getElementById(\"panels\");\nconst tooltip = document.createElement(\"div\");\ntooltip.className = \"tooltip\";\ndocument.querySelector(\".card\").appendChild(tooltip);\n\nObject.keys(data).forEach(year => {\n  const yearData = data[year];\n  const panel = document.createElement(\"div\");\n  panel.className = \"panel\";\n  const directTotal = yearData.direct.reduce((a, b) => a + b, 0);\n  const indirectTotal = yearData.indirect.reduce((a, b) => a + b, 0);\n  panel.innerHTML = '<div class=\"panel-title\">' + year + '</div>' +\n    '<div class=\"panel-total\">Direct ' + fmtCurrency(directTotal) + ' &middot; Indirect ' + fmtCurrency(indirectTotal) + '</div>';\n  const svg = el(\"svg\", { class: \"chart\", viewBox: \"0 0 \" + W + \" \" + H, preserveAspectRatio: \"xMidYMid meet\" });\n  panel.appendChild(svg);\n  panelsWrap.appendChild(panel);\n\n  const gridSteps = 3;\n  for (let i = 0; i <= gridSteps; i++) {\n    const v = (YMAX / gridSteps) * i;\n    const gy = y(v);\n    svg.appendChild(el(\"line\", { x1: marginLeft, x2: W - marginRight, y1: gy, y2: gy, class: i === 0 ? \"baseline\" : \"gridline\" }));\n    const label = el(\"text\", { x: marginLeft - 8, y: gy + 3, \"text-anchor\": \"end\", class: \"axis-label\" });\n    label.textContent = fmtShort(v);\n    svg.appendChild(label);\n  }\n  months.forEach((m, i) => {\n    if (i % 2 !== 0) return;\n    const label = el(\"text\", { x: x(i), y: H - marginBottom + 15, \"text-anchor\": \"middle\", class: \"axis-label\" });\n    label.textContent = m;\n    svg.appendChild(label);\n  });\n\n  const uf = yearData.unearnedFrom;\n  seriesDefs.forEach(s => {\n    const vals = yearData[s.key];\n    const idxs = vals.map((v, i) => i);\n    if (uf === undefined) {\n      const path = idxs.map((i, k) => (k === 0 ? \"M\" : \"L\") + x(i).toFixed(1) + \",\" + y(vals[i]).toFixed(1)).join(\" \");\n      svg.appendChild(el(\"path\", { d: path, class: \"series-line\", stroke: s.color }));\n    } else {\n      const earnedIdxs = idxs.filter(i => i <= uf);\n      const unearnedIdxs = idxs.filter(i => i >= uf);\n      const earnedPath = earnedIdxs.map((i, k) => (k === 0 ? \"M\" : \"L\") + x(i).toFixed(1) + \",\" + y(vals[i]).toFixed(1)).join(\" \");\n      const unearnedPath = unearnedIdxs.map((i, k) => (k === 0 ? \"M\" : \"L\") + x(i).toFixed(1) + \",\" + y(vals[i]).toFixed(1)).join(\" \");\n      svg.appendChild(el(\"path\", { d: earnedPath, class: \"series-line\", stroke: s.color }));\n      svg.appendChild(el(\"path\", { d: unearnedPath, class: \"series-line unearned\", stroke: s.color }));\n    }\n    vals.forEach((v, i) => {\n      const isUnearned = uf !== undefined && i >= uf;\n      const dot = el(\"circle\", { cx: x(i), cy: y(v), r: 2.8 });\n      dot.setAttribute(\"style\", isUnearned ? (\"fill: var(--surface-1); stroke: \" + s.color + \"; stroke-width: 1.8\") : (\"fill: \" + s.color + \"; stroke: var(--surface-1); stroke-width: 1.5\"));\n      svg.appendChild(dot);\n    });\n  });\n\n  // hover zones\n  const crosshair = el(\"line\", { x1: 0, x2: 0, y1: marginTop, y2: marginTop + plotH, stroke: \"var(--baseline)\", \"stroke-width\": 1, opacity: 0 });\n  svg.appendChild(crosshair);\n  months.forEach((m, i) => {\n    const zoneW = plotW / months.length;\n    const zoneX = marginLeft + i * zoneW;\n    const rect = el(\"rect\", { x: zoneX, y: marginTop, width: zoneW, height: plotH, fill: \"transparent\" });\n    rect.addEventListener(\"mouseenter\", () => {\n      crosshair.setAttribute(\"x1\", x(i));\n      crosshair.setAttribute(\"x2\", x(i));\n      crosshair.setAttribute(\"opacity\", 1);\n      const isUnearned = uf !== undefined && i >= uf;\n      let html = '<div class=\"t-month\">' + year + \" \" + months[i] + (isUnearned ? ' <span style=\"color:var(--text-muted)\">(booked)</span>' : '') + '</div>';\n      seriesDefs.forEach(s => {\n        html += '<div class=\"t-row\"><span class=\"t-dot\" style=\"background:' + s.color + (isUnearned ? '; opacity:0.35' : '') + '\"></span>' + s.label + ': ' + fmtCurrency(yearData[s.key][i]) + '</div>';\n      });\n      tooltip.innerHTML = html;\n      tooltip.style.opacity = 1;\n    });\n    rect.addEventListener(\"mousemove\", (ev) => {\n      const cardRect = document.querySelector(\".card\").getBoundingClientRect();\n      tooltip.style.left = (ev.clientX - cardRect.left + 14) + \"px\";\n      tooltip.style.top = (ev.clientY - cardRect.top - 40) + \"px\";\n    });\n    rect.addEventListener(\"mouseleave\", () => {\n      crosshair.setAttribute(\"opacity\", 0);\n      tooltip.style.opacity = 0;\n    });\n    svg.appendChild(rect);\n  });\n});\n\n// table\nconst tableBody = document.getElementById(\"tableBody\");\nObject.keys(data).forEach(year => {\n  const yearData = data[year];\n  const uf = yearData.unearnedFrom;\n  tableBody.innerHTML += '<tr class=\"year-hdr\"><td>' + year + '</td><td></td><td></td></tr>';\n  months.forEach((m, i) => {\n    const isUnearned = uf !== undefined && i >= uf;\n    const style = isUnearned ? ' style=\"color:var(--text-muted); font-style:italic\"' : '';\n    tableBody.innerHTML += '<tr><td>' + m + '</td><td' + style + '>' + fmtCurrency(yearData.direct[i]) + (isUnearned ? '*' : '') + '</td><td' + style + '>' + fmtCurrency(yearData.indirect[i]) + (isUnearned ? '*' : '') + '</td></tr>';\n  });\n  const directTotal = yearData.direct.reduce((a, b) => a + b, 0);\n  const indirectTotal = yearData.indirect.reduce((a, b) => a + b, 0);\n  tableBody.innerHTML += '<tr><td class=\"total\">' + year + ' Total</td><td class=\"total\">' + fmtCurrency(directTotal) + '</td><td class=\"total\">' + fmtCurrency(indirectTotal) + '</td></tr>';\n});\n\nconst toggleBtn = document.getElementById(\"toggleTable\");\nconst dataTable = document.getElementById(\"dataTable\");\nconst panelsEl = document.getElementById(\"panels\");\ntoggleBtn.addEventListener(\"click\", () => {\n  const showing = dataTable.classList.toggle(\"show\");\n  toggleBtn.textContent = showing ? \"Hide table\" : \"Show as table\";\n  panelsEl.style.display = showing ? \"none\" : \"grid\";\n  legend.style.display = showing ? \"none\" : \"flex\";\n});\n<\/script>\n</body>\n</html>\n",
+  "frame-ratio":     "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>Direct vs Indirect Ratio</title>\n<style>\n  .viz-root {\n    color-scheme: light;\n    --surface-1: #fcfcfb;\n    --page: #f9f9f7;\n    --text-primary: #0b0b0b;\n    --text-secondary: #52514e;\n    --text-muted: #898781;\n    --grid: #e1e0d9;\n    --baseline: #c3c2b7;\n    --border: rgba(11,11,11,0.10);\n    --series-1: #2a78d6; /* Direct */\n    --series-2: #eb6834; /* Indirect */\n    font-family: system-ui, -apple-system, \"Segoe UI\", sans-serif;\n    background: var(--page);\n    color: var(--text-primary);\n    margin: 0;\n    padding: 32px 16px;\n    box-sizing: border-box;\n  }\n  @media (prefers-color-scheme: dark) {\n    :root:where(:not([data-theme=\"light\"])) .viz-root {\n      color-scheme: dark;\n      --surface-1: #1a1a19;\n      --page: #0d0d0d;\n      --text-primary: #ffffff;\n      --text-secondary: #c3c2b7;\n      --text-muted: #898781;\n      --grid: #2c2c2a;\n      --baseline: #383835;\n      --border: rgba(255,255,255,0.10);\n      --series-1: #3987e5;\n      --series-2: #d95926;\n    }\n  }\n  :root[data-theme=\"dark\"] .viz-root {\n    color-scheme: dark;\n    --surface-1: #1a1a19;\n    --page: #0d0d0d;\n    --text-primary: #ffffff;\n    --text-secondary: #c3c2b7;\n    --text-muted: #898781;\n    --grid: #2c2c2a;\n    --baseline: #383835;\n    --border: rgba(255,255,255,0.10);\n    --series-1: #3987e5;\n    --series-2: #d95926;\n  }\n  .card {\n    max-width: 1080px;\n    margin: 0 auto;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 12px;\n    padding: 28px 32px 20px;\n  }\n  h1 { font-size: 19px; font-weight: 650; margin: 0 0 2px; }\n  .subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 18px; }\n\n  .stat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 22px; }\n  .stat-tile { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; }\n  .stat-year { font-size: 12px; color: var(--text-muted); margin-bottom: 6px; }\n  .stat-bar { display: flex; height: 8px; border-radius: 4px; overflow: hidden; margin-bottom: 8px; }\n  .stat-bar .seg-direct { background: var(--series-1); }\n  .stat-bar .seg-indirect { background: var(--series-2); }\n  .stat-pct { font-size: 13px; font-weight: 650; }\n  .stat-pct .muted { font-weight: 500; color: var(--text-secondary); }\n\n  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 10px; font-size: 13px; color: var(--text-secondary); }\n  .legend-item { display: flex; align-items: center; gap: 7px; }\n  .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }\n  .legend-note { font-size: 12px; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }\n  .legend-note .hatch-swatch {\n    width: 14px; height: 14px; border-radius: 3px; flex-shrink: 0;\n    background: repeating-linear-gradient(45deg, var(--text-muted) 0 1.5px, transparent 1.5px 6px);\n    opacity: 0.6;\n  }\n\n  .chart-wrap { position: relative; }\n  svg.chart { width: 100%; height: auto; overflow: visible; font-family: inherit; }\n  .gridline { stroke: var(--grid); stroke-width: 1; }\n  .baseline { stroke: var(--baseline); stroke-width: 1; }\n  .axis-label { fill: var(--text-muted); font-size: 10px; }\n  .year-sep { stroke: var(--baseline); stroke-width: 1; stroke-dasharray: 2 3; }\n  .year-label { fill: var(--text-secondary); font-size: 12px; font-weight: 650; }\n\n  .tooltip {\n    position: absolute;\n    pointer-events: none;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 8px;\n    padding: 9px 12px;\n    font-size: 12px;\n    color: var(--text-primary);\n    box-shadow: 0 4px 16px rgba(0,0,0,0.12);\n    opacity: 0;\n    transition: opacity 0.1s;\n    white-space: nowrap;\n    z-index: 5;\n  }\n  .tooltip .t-month { color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; }\n  .tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }\n  .tooltip .t-dot { width: 8px; height: 8px; border-radius: 2px; }\n\n  .footnote { font-size: 11.5px; color: var(--text-muted); margin-top: 18px; line-height: 1.5; }\n  .toggle-btn {\n    font-size: 12px; color: var(--text-secondary); background: none;\n    border: 1px solid var(--border); border-radius: 6px; padding: 5px 10px;\n    cursor: pointer; margin-top: 14px;\n  }\n  .toggle-btn:hover { background: var(--grid); }\n  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 14px; display: none; }\n  table.show { display: table; }\n  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }\n  th:first-child, td:first-child { text-align: left; }\n  th { color: var(--text-muted); font-weight: 600; }\n  td.total { font-weight: 650; }\n  .year-hdr td { padding-top: 12px; font-weight: 650; color: var(--text-secondary); border-bottom: 1px solid var(--baseline); }\n  @media (max-width: 640px) {\n    .stat-row { grid-template-columns: repeat(2, 1fr); }\n  }\n</style>\n</head>\n<body>\n<div class=\"viz-root\">\n  <div class=\"card\">\n    <h1>Direct vs Indirect: Share of Income</h1>\n    <p class=\"subtitle\">MyAdventure Group &middot; 2023&ndash;2026 &middot; % of monthly income by lead source (100% stacked)</p>\n\n    <div class=\"stat-row\" id=\"statRow\"></div>\n\n    <div class=\"legend\" id=\"legend\"></div>\n    <div class=\"chart-wrap\" id=\"chartWrap\">\n      <svg id=\"chart\" class=\"chart\" viewBox=\"0 0 1000 300\" preserveAspectRatio=\"xMidYMid meet\"></svg>\n      <div class=\"tooltip\" id=\"tooltip\"></div>\n    </div>\n\n    <button class=\"toggle-btn\" id=\"toggleTable\">Show as table</button>\n    <table id=\"dataTable\">\n      <thead><tr><th>Month</th><th>Direct %</th><th>Indirect %</th><th>Direct $</th><th>Indirect $</th></tr></thead>\n      <tbody id=\"tableBody\"></tbody>\n    </table>\n\n    <p class=\"footnote\">\n      Each bar is one month's total income split into its Direct and Indirect share. Hatched bars (Sep&ndash;Dec 2026) are unearned &mdash; booked but not yet delivered, so their ratio is provisional and will shift as more 2026 events are confirmed.\n      Months with $0 total income (e.g. no bookings recorded) are left blank.\n    </p>\n  </div>\n</div>\n<script>\nconst months = [\"Jan\",\"Feb\",\"Mar\",\"Apr\",\"May\",\"Jun\",\"Jul\",\"Aug\",\"Sep\",\"Oct\",\"Nov\",\"Dec\"];\n\nconst data = {\n  2023: {\n    direct:   [16875, 57487.5, 91540, 21500, 94990, 13500, 15000, 36000, 47500, 35000, 44500, 0],\n    indirect: [0, 6000, 0, 0, 21325, 33968, 17450, 0, 28100, 6300, 20993.5, 24875],\n  },\n  2024: {\n    direct:   [0, 11616, 40950, 8500, 57200, 23760, 10500, 51500, 21000, 31187.5, 259965, 11500],\n    indirect: [43026.36, 8250, 0, 0, 11550, 37500, 4550, 20275, 11250, 20250, 0, 32125],\n  },\n  2025: {\n    direct:   [64760.25, 65995, 34950, 17990, 66875, 27500, 34800, 68350, 101000, 81640, 288272, 87300],\n    indirect: [0, 3600, 19400, 7800, 18030, 28025, 41725, 5250, 10300, 15750, 7350, 25310],\n  },\n  2026: {\n    direct:   [22300, 8500, 170895, 12500, 92000, 22500, 38500, 75000, 22000, 30195, 148140, 0],\n    indirect: [15420, 8750, 5250, 9900, 17665, 7300, 27200, 7350, 0, 7200, 0, 22165],\n    unearnedFrom: 8,\n  },\n};\n\nfunction fmtCurrency(v) { return \"$\" + Math.round(v).toLocaleString(\"en-AU\"); }\nfunction fmtPct(v) { return Math.round(v) + \"%\"; }\n\n// flatten into 48-month timeline\nconst years = Object.keys(data).map(Number);\nconst flat = [];\nyears.forEach(year => {\n  const yd = data[year];\n  months.forEach((m, i) => {\n    const d = yd.direct[i], ind = yd.indirect[i];\n    const total = d + ind;\n    const isUnearned = yd.unearnedFrom !== undefined && i >= yd.unearnedFrom;\n    flat.push({ year, month: m, monthIdx: i, direct: d, indirect: ind, total, isUnearned });\n  });\n});\n\n// annual stat tiles\nconst statRow = document.getElementById(\"statRow\");\nyears.forEach(year => {\n  const yd = data[year];\n  const dt = yd.direct.reduce((a, b) => a + b, 0);\n  const it = yd.indirect.reduce((a, b) => a + b, 0);\n  const tot = dt + it;\n  const dPct = (100 * dt / tot);\n  const iPct = 100 - dPct;\n  const tile = document.createElement(\"div\");\n  tile.className = \"stat-tile\";\n  tile.innerHTML =\n    '<div class=\"stat-year\">' + year + (year === 2026 ? ' (YTD, Jan\u2013Aug earned)' : '') + '</div>' +\n    '<div class=\"stat-bar\"><span class=\"seg-direct\" style=\"width:' + dPct.toFixed(1) + '%\"></span><span class=\"seg-indirect\" style=\"width:' + iPct.toFixed(1) + '%\"></span></div>' +\n    '<div class=\"stat-pct\"><span style=\"color:var(--series-1)\">' + fmtPct(dPct) + '</span> <span class=\"muted\">direct</span> &middot; <span style=\"color:var(--series-2)\">' + fmtPct(iPct) + '</span> <span class=\"muted\">indirect</span></div>';\n  statRow.appendChild(tile);\n});\n\n// legend\nconst legend = document.getElementById(\"legend\");\n[{label:\"Direct\", color:\"var(--series-1)\"},{label:\"Indirect\", color:\"var(--series-2)\"}].forEach(s => {\n  const item = document.createElement(\"div\");\n  item.className = \"legend-item\";\n  item.innerHTML = '<span class=\"swatch\" style=\"background:' + s.color + '\"></span>' + s.label;\n  legend.appendChild(item);\n});\nconst note = document.createElement(\"div\");\nnote.className = \"legend-note\";\nnote.innerHTML = '<span class=\"hatch-swatch\"></span>booked, not yet delivered (2026)';\nlegend.appendChild(note);\n\n// chart geometry\nconst W = 1000, H = 300;\nconst marginTop = 16, marginRight = 12, marginBottom = 46, marginLeft = 40;\nconst plotW = W - marginLeft - marginRight;\nconst plotH = H - marginTop - marginBottom;\nconst n = flat.length;\nconst gap = 2;\nconst barW = (plotW / n) - gap;\n\nconst svgns = \"http://www.w3.org/2000/svg\";\nconst svg = document.getElementById(\"chart\");\nfunction el(tag, attrs) {\n  const e = document.createElementNS(svgns, tag);\n  for (const k in attrs) e.setAttribute(k, attrs[k]);\n  return e;\n}\n\nfunction barX(idx) { return marginLeft + idx * (plotW / n); }\nfunction yAt(pct) { return marginTop + plotH - (pct / 100) * plotH; }\n\n// gridlines at 0/25/50/75/100%\n[0, 25, 50, 75, 100].forEach(p => {\n  const gy = yAt(p);\n  svg.appendChild(el(\"line\", { x1: marginLeft, x2: W - marginRight, y1: gy, y2: gy, class: p === 0 ? \"baseline\" : \"gridline\" }));\n  const label = el(\"text\", { x: marginLeft - 8, y: gy + 3, \"text-anchor\": \"end\", class: \"axis-label\" });\n  label.textContent = p + \"%\";\n  svg.appendChild(label);\n});\n\n// pattern defs for unearned hatch\nconst defs = el(\"defs\", {});\n[\"direct\", \"indirect\"].forEach(key => {\n  const pattern = el(\"pattern\", { id: \"hatch-\" + key, patternUnits: \"userSpaceOnUse\", width: 6, height: 6, patternTransform: \"rotate(45)\" });\n  pattern.appendChild(el(\"rect\", { width: 6, height: 6, fill: \"var(--series-\" + (key === \"direct\" ? \"1\" : \"2\") + \")\", opacity: 0.28 }));\n  pattern.appendChild(el(\"line\", { x1: 0, y1: 0, x2: 0, y2: 6, stroke: \"var(--series-\" + (key === \"direct\" ? \"1\" : \"2\") + \")\", \"stroke-width\": 2.5 }));\n  defs.appendChild(pattern);\n});\nsvg.appendChild(defs);\n\nconst tooltip = document.getElementById(\"tooltip\");\nconst chartWrap = document.getElementById(\"chartWrap\");\n\nflat.forEach((rec, idx) => {\n  if (rec.total <= 0) return;\n  const bx = barX(idx);\n  const dPct = 100 * rec.direct / rec.total;\n  const iPct = 100 - dPct;\n  const yDirectTop = yAt(dPct);\n  const yBase = yAt(0);\n  const yIndirectTop = yAt(100);\n\n  const directFill = rec.isUnearned ? \"url(#hatch-direct)\" : \"var(--series-1)\";\n  const indirectFill = rec.isUnearned ? \"url(#hatch-indirect)\" : \"var(--series-2)\";\n\n  svg.appendChild(el(\"rect\", { x: bx, y: yDirectTop, width: barW, height: (yBase - yDirectTop), fill: directFill, rx: 1.5 }));\n  svg.appendChild(el(\"rect\", { x: bx, y: yIndirectTop, width: barW, height: (yDirectTop - yIndirectTop), fill: indirectFill, rx: 1.5 }));\n\n  const hit = el(\"rect\", { x: bx - gap / 2, y: marginTop, width: barW + gap, height: plotH, fill: \"transparent\" });\n  hit.addEventListener(\"mouseenter\", () => {\n    let html = '<div class=\"t-month\">' + rec.year + \" \" + rec.month + (rec.isUnearned ? ' <span style=\"color:var(--text-muted)\">(booked)</span>' : '') + '</div>';\n    html += '<div class=\"t-row\"><span class=\"t-dot\" style=\"background:var(--series-1)\"></span>Direct: ' + fmtPct(dPct) + ' (' + fmtCurrency(rec.direct) + ')</div>';\n    html += '<div class=\"t-row\"><span class=\"t-dot\" style=\"background:var(--series-2)\"></span>Indirect: ' + fmtPct(iPct) + ' (' + fmtCurrency(rec.indirect) + ')</div>';\n    tooltip.innerHTML = html;\n    tooltip.style.opacity = 1;\n  });\n  hit.addEventListener(\"mousemove\", (ev) => {\n    const wrapRect = chartWrap.getBoundingClientRect();\n    const svgRect = svg.getBoundingClientRect();\n    const scale = svgRect.width / W;\n    let left = (bx + barW) * scale + 10;\n    if (left + 170 > wrapRect.width) left = bx * scale - 180;\n    tooltip.style.left = left + \"px\";\n    tooltip.style.top = (ev.clientY - wrapRect.top - 50) + \"px\";\n  });\n  hit.addEventListener(\"mouseleave\", () => { tooltip.style.opacity = 0; });\n  svg.appendChild(hit);\n});\n\n// year separators + labels\nyears.forEach((year, yi) => {\n  const startIdx = yi * 12;\n  const midX = barX(startIdx + 5.5) + barW / 2;\n  const label = el(\"text\", { x: midX, y: H - marginBottom + 34, \"text-anchor\": \"middle\", class: \"year-label\" });\n  label.textContent = year;\n  svg.appendChild(label);\n  if (yi > 0) {\n    const sepX = barX(startIdx) - gap;\n    svg.appendChild(el(\"line\", { x1: sepX, x2: sepX, y1: marginTop, y2: marginTop + plotH, class: \"year-sep\" }));\n  }\n});\n// light month ticks (Jan/Jul of each year only, to avoid clutter)\nflat.forEach((rec, idx) => {\n  if (rec.monthIdx !== 0 && rec.monthIdx !== 6) return;\n  const label = el(\"text\", { x: barX(idx) + barW / 2, y: H - marginBottom + 15, \"text-anchor\": \"middle\", class: \"axis-label\" });\n  label.textContent = rec.month;\n  svg.appendChild(label);\n});\n\n// table\nconst tableBody = document.getElementById(\"tableBody\");\nyears.forEach(year => {\n  const yd = data[year];\n  tableBody.innerHTML += '<tr class=\"year-hdr\"><td>' + year + '</td><td></td><td></td><td></td><td></td></tr>';\n  months.forEach((m, i) => {\n    const d = yd.direct[i], ind = yd.indirect[i], tot = d + ind;\n    const isUnearned = yd.unearnedFrom !== undefined && i >= yd.unearnedFrom;\n    const style = isUnearned ? ' style=\"color:var(--text-muted); font-style:italic\"' : '';\n    if (tot <= 0) {\n      tableBody.innerHTML += '<tr><td>' + m + '</td><td colspan=\"4\" style=\"color:var(--text-muted)\">&mdash;</td></tr>';\n      return;\n    }\n    const dPct = fmtPct(100 * d / tot), iPct = fmtPct(100 * ind / tot);\n    tableBody.innerHTML += '<tr><td>' + m + '</td><td' + style + '>' + dPct + (isUnearned ? '*' : '') + '</td><td' + style + '>' + iPct + (isUnearned ? '*' : '') + '</td><td' + style + '>' + fmtCurrency(d) + '</td><td' + style + '>' + fmtCurrency(ind) + '</td></tr>';\n  });\n  const dt = yd.direct.reduce((a, b) => a + b, 0);\n  const it = yd.indirect.reduce((a, b) => a + b, 0);\n  const tot = dt + it;\n  tableBody.innerHTML += '<tr><td class=\"total\">' + year + ' Total</td><td class=\"total\">' + fmtPct(100 * dt / tot) + '</td><td class=\"total\">' + fmtPct(100 * it / tot) + '</td><td class=\"total\">' + fmtCurrency(dt) + '</td><td class=\"total\">' + fmtCurrency(it) + '</td></tr>';\n});\n\nconst toggleBtn = document.getElementById(\"toggleTable\");\nconst dataTable = document.getElementById(\"dataTable\");\ntoggleBtn.addEventListener(\"click\", () => {\n  const showing = dataTable.classList.toggle(\"show\");\n  toggleBtn.textContent = showing ? \"Hide table\" : \"Show as table\";\n  document.getElementById(\"chartWrap\").style.display = showing ? \"none\" : \"block\";\n  legend.style.display = showing ? \"none\" : \"flex\";\n});\n<\/script>\n</body>\n</html>\n",
+  "frame-enquiries": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>Inbound Speaking Enquiries</title>\n<style>\n  .viz-root {\n    color-scheme: light;\n    --surface-1: #fcfcfb;\n    --page: #f9f9f7;\n    --text-primary: #0b0b0b;\n    --text-secondary: #52514e;\n    --text-muted: #898781;\n    --grid: #e1e0d9;\n    --baseline: #c3c2b7;\n    --border: rgba(11,11,11,0.10);\n    --series-1: #2a78d6; /* 2023 */\n    --series-2: #eb6834; /* 2024 */\n    --series-3: #1baf7a; /* 2025 */\n    --series-4: #eda100; /* 2026 */\n    font-family: system-ui, -apple-system, \"Segoe UI\", sans-serif;\n    background: var(--page);\n    color: var(--text-primary);\n    margin: 0;\n    padding: 32px 16px;\n    box-sizing: border-box;\n  }\n  @media (prefers-color-scheme: dark) {\n    :root:where(:not([data-theme=\"light\"])) .viz-root {\n      color-scheme: dark;\n      --surface-1: #1a1a19;\n      --page: #0d0d0d;\n      --text-primary: #ffffff;\n      --text-secondary: #c3c2b7;\n      --text-muted: #898781;\n      --grid: #2c2c2a;\n      --baseline: #383835;\n      --border: rgba(255,255,255,0.10);\n      --series-1: #3987e5;\n      --series-2: #d95926;\n      --series-3: #199e70;\n      --series-4: #c98500;\n    }\n  }\n  :root[data-theme=\"dark\"] .viz-root {\n    color-scheme: dark;\n    --surface-1: #1a1a19;\n    --page: #0d0d0d;\n    --text-primary: #ffffff;\n    --text-secondary: #c3c2b7;\n    --text-muted: #898781;\n    --grid: #2c2c2a;\n    --baseline: #383835;\n    --border: rgba(255,255,255,0.10);\n    --series-1: #3987e5;\n    --series-2: #d95926;\n    --series-3: #199e70;\n    --series-4: #c98500;\n  }\n  .card {\n    max-width: 980px;\n    margin: 0 auto;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 12px;\n    padding: 28px 32px 20px;\n  }\n  h1 { font-size: 19px; font-weight: 650; margin: 0 0 2px; }\n  .subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 20px; }\n  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary); }\n  .legend-item { display: flex; align-items: center; gap: 7px; }\n  .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }\n  .chart-wrap { position: relative; margin-top: 8px; }\n  svg { width: 100%; height: auto; overflow: visible; font-family: inherit; }\n  .gridline { stroke: var(--grid); stroke-width: 1; }\n  .baseline { stroke: var(--baseline); stroke-width: 1; }\n  .axis-label { fill: var(--text-muted); font-size: 11px; }\n  .series-line { fill: none; stroke-width: 2; }\n  .series-dot { stroke-width: 2; stroke: var(--surface-1); }\n  .tooltip {\n    position: absolute;\n    pointer-events: none;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 8px;\n    padding: 8px 11px;\n    font-size: 12px;\n    color: var(--text-primary);\n    box-shadow: 0 4px 16px rgba(0,0,0,0.12);\n    opacity: 0;\n    transition: opacity 0.1s;\n    white-space: nowrap;\n    z-index: 5;\n  }\n  .tooltip .t-month { color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; }\n  .tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }\n  .tooltip .t-dot { width: 8px; height: 8px; border-radius: 2px; }\n  .footnote { font-size: 11.5px; color: var(--text-muted); margin-top: 18px; line-height: 1.5; }\n  .toggle-btn {\n    font-size: 12px;\n    color: var(--text-secondary);\n    background: none;\n    border: 1px solid var(--border);\n    border-radius: 6px;\n    padding: 5px 10px;\n    cursor: pointer;\n    margin-top: 14px;\n  }\n  .toggle-btn:hover { background: var(--grid); }\n  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 14px; display: none; }\n  table.show { display: table; }\n  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }\n  th:first-child, td:first-child { text-align: left; }\n  th { color: var(--text-muted); font-weight: 600; }\n  td.total { font-weight: 650; }\n</style>\n</head>\n<body>\n<div class=\"viz-root\">\n  <div class=\"card\">\n    <h1>Inbound Speaking Enquiries by Month</h1>\n    <p class=\"subtitle\">MyAdventure Group &middot; 2023&ndash;2026 &middot; new deals created in the \"Keynotes // Workshops // Immersive\" ActiveCampaign pipeline</p>\n    <div class=\"legend\" id=\"legend\"></div>\n    <div class=\"chart-wrap\" id=\"chartWrap\">\n      <svg id=\"chart\" viewBox=\"0 0 900 380\" preserveAspectRatio=\"xMidYMid meet\"></svg>\n      <div class=\"tooltip\" id=\"tooltip\"></div>\n    </div>\n    <button class=\"toggle-btn\" id=\"toggleTable\">Show as table</button>\n    <table id=\"dataTable\">\n      <thead><tr id=\"tableHead\"></tr></thead>\n      <tbody id=\"tableBody\"></tbody>\n    </table>\n    <p class=\"footnote\">\n      Counts every new deal created in the Keynotes/Workshops/Immersive pipeline that month, regardless of outcome (won, lost, no reply, bureau enquiry, etc.) &mdash; this is the CRM's record of inbound interest, not just bookings that converted.\n      2026 shown January&ndash;August only (year to date as of September 2026). Gmail alone couldn't reconstruct this reliably: the website's enquiry-form emails stopped generating a consistent pattern after mid-2023, with enquiries routing straight into this CRM pipeline instead.\n    </p>\n  </div>\n</div>\n<script>\nconst months = [\"Jan\",\"Feb\",\"Mar\",\"Apr\",\"May\",\"Jun\",\"Jul\",\"Aug\",\"Sep\",\"Oct\",\"Nov\",\"Dec\"];\n\nconst series = [\n  { key: \"2023\", color: \"var(--series-1)\",\n    values: [15, 33, 27, 62, 68, 54, 35, 25, 28, 58, 24, 11] },\n  { key: \"2024\", color: \"var(--series-2)\",\n    values: [22, 39, 39, 63, 113, 42, 54, 49, 44, 38, 22, 8] },\n  { key: \"2025\", color: \"var(--series-3)\",\n    values: [16, 42, 52, 87, 79, 36, 47, 25, 24, 23, 30, 19] },\n  { key: \"2026\", color: \"var(--series-4)\",\n    values: [19, 37, 23, 27, 33, 37, 17, 24, null, null, null, null] },\n];\n\nconst W = 900, H = 380;\nconst marginTop = 16, marginRight = 16, marginBottom = 36, marginLeft = 46;\nconst plotW = W - marginLeft - marginRight;\nconst plotH = H - marginTop - marginBottom;\n\nconst allVals = series.flatMap(s => s.values).filter(v => v !== null);\nconst maxVal = Math.max(...allVals);\nconst niceMax = Math.ceil(maxVal / 20) * 20;\n\nfunction x(i) { return marginLeft + (i / (months.length - 1)) * plotW; }\nfunction y(v) { return marginTop + plotH - (v / niceMax) * plotH; }\n\nfunction fmtCount(v) { return Math.round(v).toLocaleString(\"en-AU\"); }\n\nconst svgns = \"http://www.w3.org/2000/svg\";\nconst svg = document.getElementById(\"chart\");\n\nfunction el(tag, attrs) {\n  const e = document.createElementNS(svgns, tag);\n  for (const k in attrs) e.setAttribute(k, attrs[k]);\n  return e;\n}\n\nconst gridSteps = 5;\nfor (let i = 0; i <= gridSteps; i++) {\n  const v = (niceMax / gridSteps) * i;\n  const gy = y(v);\n  svg.appendChild(el(\"line\", { x1: marginLeft, x2: W - marginRight, y1: gy, y2: gy, class: i === 0 ? \"baseline\" : \"gridline\" }));\n  const label = el(\"text\", { x: marginLeft - 10, y: gy + 4, \"text-anchor\": \"end\", class: \"axis-label\" });\n  label.textContent = Math.round(v);\n  svg.appendChild(label);\n}\n\nmonths.forEach((m, i) => {\n  const label = el(\"text\", { x: x(i), y: H - marginBottom + 20, \"text-anchor\": \"middle\", class: \"axis-label\" });\n  label.textContent = m;\n  svg.appendChild(label);\n});\n\nseries.forEach(s => {\n  const idxs = s.values.map((v, i) => v === null ? null : i).filter(i => i !== null);\n  const path = idxs.map((i, k) => (k === 0 ? \"M\" : \"L\") + x(i).toFixed(1) + \",\" + y(s.values[i]).toFixed(1)).join(\" \");\n  svg.appendChild(el(\"path\", { d: path, class: \"series-line\", stroke: s.color }));\n  s.values.forEach((v, i) => {\n    if (v === null) return;\n    svg.appendChild(el(\"circle\", { cx: x(i), cy: y(v), r: 3.5, fill: s.color, class: \"series-dot\" }));\n  });\n});\n\nconst tooltip = document.getElementById(\"tooltip\");\nconst chartWrap = document.getElementById(\"chartWrap\");\nconst crosshair = el(\"line\", { x1: 0, x2: 0, y1: marginTop, y2: marginTop + plotH, stroke: \"var(--baseline)\", \"stroke-width\": 1, opacity: 0 });\nsvg.appendChild(crosshair);\n\nconst hitZones = el(\"g\", {});\nmonths.forEach((m, i) => {\n  const zoneW = plotW / months.length;\n  const zoneX = marginLeft + i * zoneW;\n  const rect = el(\"rect\", { x: zoneX, y: marginTop, width: zoneW, height: plotH, fill: \"transparent\" });\n  rect.addEventListener(\"mouseenter\", () => showTooltip(i));\n  rect.addEventListener(\"mousemove\", (ev) => positionTooltip(ev, i));\n  rect.addEventListener(\"mouseleave\", hideTooltip);\n  hitZones.appendChild(rect);\n});\nsvg.appendChild(hitZones);\n\nfunction showTooltip(i) {\n  crosshair.setAttribute(\"x1\", x(i));\n  crosshair.setAttribute(\"x2\", x(i));\n  crosshair.setAttribute(\"opacity\", 1);\n  let html = '<div class=\"t-month\">' + months[i] + '</div>';\n  series.forEach(s => {\n    const v = s.values[i];\n    if (v === null) return;\n    html += '<div class=\"t-row\"><span class=\"t-dot\" style=\"background:' + s.color + '\"></span>' + s.key + ': ' + fmtCount(v) + ' enquiries</div>';\n  });\n  tooltip.innerHTML = html;\n  tooltip.style.opacity = 1;\n}\nfunction positionTooltip(ev, i) {\n  const wrapRect = chartWrap.getBoundingClientRect();\n  const svgRect = svg.getBoundingClientRect();\n  const scale = svgRect.width / W;\n  const px = (x(i)) * scale;\n  let left = px + 14;\n  if (left + 170 > wrapRect.width) left = px - 180;\n  tooltip.style.left = left + \"px\";\n  tooltip.style.top = (ev.clientY - wrapRect.top - 40) + \"px\";\n}\nfunction hideTooltip() {\n  crosshair.setAttribute(\"opacity\", 0);\n  tooltip.style.opacity = 0;\n}\n\nconst legend = document.getElementById(\"legend\");\nseries.forEach(s => {\n  const item = document.createElement(\"div\");\n  item.className = \"legend-item\";\n  item.innerHTML = '<span class=\"swatch\" style=\"background:' + s.color + '\"></span>' + s.key;\n  legend.appendChild(item);\n});\n\nconst tableHead = document.getElementById(\"tableHead\");\nconst tableBody = document.getElementById(\"tableBody\");\nlet headHtml = \"<th>Month</th>\";\nseries.forEach(s => headHtml += \"<th>\" + s.key + \"</th>\");\ntableHead.innerHTML = headHtml;\n\nmonths.forEach((m, i) => {\n  let row = \"<tr><td>\" + m + \"</td>\";\n  series.forEach(s => {\n    const v = s.values[i];\n    row += \"<td>\" + (v === null ? \"&mdash;\" : fmtCount(v)) + \"</td>\";\n  });\n  row += \"</tr>\";\n  tableBody.innerHTML += row;\n});\nlet totalRow = '<tr><td class=\"total\">Total</td>';\nseries.forEach(s => {\n  const total = s.values.filter(v => v !== null).reduce((a, b) => a + b, 0);\n  totalRow += '<td class=\"total\">' + fmtCount(total) + \"</td>\";\n});\ntotalRow += \"</tr>\";\ntableBody.innerHTML += totalRow;\n\nconst toggleBtn = document.getElementById(\"toggleTable\");\nconst dataTable = document.getElementById(\"dataTable\");\ntoggleBtn.addEventListener(\"click\", () => {\n  const showing = dataTable.classList.toggle(\"show\");\n  toggleBtn.textContent = showing ? \"Hide table\" : \"Show as table\";\n  document.getElementById(\"chartWrap\").style.display = showing ? \"none\" : \"block\";\n  legend.style.display = showing ? \"none\" : \"flex\";\n});\n<\/script>\n</body>\n</html>\n",
+  "frame-googleAds": "<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>Google Ads Enquiries</title>\n<style>\n  .viz-root {\n    color-scheme: light;\n    --surface-1: #fcfcfb;\n    --page: #f9f9f7;\n    --text-primary: #0b0b0b;\n    --text-secondary: #52514e;\n    --text-muted: #898781;\n    --grid: #e1e0d9;\n    --baseline: #c3c2b7;\n    --border: rgba(11,11,11,0.10);\n    --series-1: #2a78d6; /* 2023 */\n    --series-2: #eb6834; /* 2024 */\n    --series-3: #1baf7a; /* 2025 */\n    --series-4: #eda100; /* 2026 */\n    font-family: system-ui, -apple-system, \"Segoe UI\", sans-serif;\n    background: var(--page);\n    color: var(--text-primary);\n    margin: 0;\n    padding: 32px 16px;\n    box-sizing: border-box;\n  }\n  @media (prefers-color-scheme: dark) {\n    :root:where(:not([data-theme=\"light\"])) .viz-root {\n      color-scheme: dark;\n      --surface-1: #1a1a19;\n      --page: #0d0d0d;\n      --text-primary: #ffffff;\n      --text-secondary: #c3c2b7;\n      --text-muted: #898781;\n      --grid: #2c2c2a;\n      --baseline: #383835;\n      --border: rgba(255,255,255,0.10);\n      --series-1: #3987e5;\n      --series-2: #d95926;\n      --series-3: #199e70;\n      --series-4: #c98500;\n    }\n  }\n  :root[data-theme=\"dark\"] .viz-root {\n    color-scheme: dark;\n    --surface-1: #1a1a19;\n    --page: #0d0d0d;\n    --text-primary: #ffffff;\n    --text-secondary: #c3c2b7;\n    --text-muted: #898781;\n    --grid: #2c2c2a;\n    --baseline: #383835;\n    --border: rgba(255,255,255,0.10);\n    --series-1: #3987e5;\n    --series-2: #d95926;\n    --series-3: #199e70;\n    --series-4: #c98500;\n  }\n  .card {\n    max-width: 980px;\n    margin: 0 auto;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 12px;\n    padding: 28px 32px 20px;\n  }\n  h1 { font-size: 19px; font-weight: 650; margin: 0 0 2px; }\n  .subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 20px; }\n  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary); }\n  .legend-item { display: flex; align-items: center; gap: 7px; }\n  .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }\n  .chart-wrap { position: relative; margin-top: 8px; }\n  svg { width: 100%; height: auto; overflow: visible; font-family: inherit; }\n  .gridline { stroke: var(--grid); stroke-width: 1; }\n  .baseline { stroke: var(--baseline); stroke-width: 1; }\n  .axis-label { fill: var(--text-muted); font-size: 11px; }\n  .series-line { fill: none; stroke-width: 2; }\n  .series-dot { stroke-width: 2; stroke: var(--surface-1); }\n  .tooltip {\n    position: absolute;\n    pointer-events: none;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 8px;\n    padding: 8px 11px;\n    font-size: 12px;\n    color: var(--text-primary);\n    box-shadow: 0 4px 16px rgba(0,0,0,0.12);\n    opacity: 0;\n    transition: opacity 0.1s;\n    white-space: nowrap;\n    z-index: 5;\n  }\n  .tooltip .t-month { color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; }\n  .tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }\n  .tooltip .t-dot { width: 8px; height: 8px; border-radius: 2px; }\n  .footnote { font-size: 11.5px; color: var(--text-muted); margin-top: 18px; line-height: 1.5; }\n  .toggle-btn {\n    font-size: 12px;\n    color: var(--text-secondary);\n    background: none;\n    border: 1px solid var(--border);\n    border-radius: 6px;\n    padding: 5px 10px;\n    cursor: pointer;\n    margin-top: 14px;\n  }\n  .toggle-btn:hover { background: var(--grid); }\n  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 14px; display: none; }\n  table.show { display: table; }\n  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }\n  th:first-child, td:first-child { text-align: left; }\n  th { color: var(--text-muted); font-weight: 600; }\n  td.total { font-weight: 650; }\n</style>\n</head>\n<body>\n<div class=\"viz-root\">\n  <div class=\"card\">\n    <h1>Google Ads Enquiries by Month</h1>\n    <p class=\"subtitle\">MyAdventure Group &middot; 2023&ndash;2026 &middot; deals whose contact carries the \"[SALES] source: Google Ads\" tag, by month created</p>\n    <div class=\"legend\" id=\"legend\"></div>\n    <div class=\"chart-wrap\" id=\"chartWrap\">\n      <svg id=\"chart\" viewBox=\"0 0 900 380\" preserveAspectRatio=\"xMidYMid meet\"></svg>\n      <div class=\"tooltip\" id=\"tooltip\"></div>\n    </div>\n    <button class=\"toggle-btn\" id=\"toggleTable\">Show as table</button>\n    <table id=\"dataTable\">\n      <thead><tr id=\"tableHead\"></tr></thead>\n      <tbody id=\"tableBody\"></tbody>\n    </table>\n    <p class=\"footnote\">\n      Counts every deal in the Keynotes/Workshops/Immersive pipeline whose contact is tagged \"[SALES] source: Google Ads\", by the month the deal was created &mdash; regardless of outcome (won, lost, no reply, etc.). This is a subset of the total inbound enquiries chart shown earlier; the tag is applied manually/via automation when a lead's origin is identified as Google Ads, so a small number of Google-Ads-sourced enquiries that were never tagged this way won't appear here.\n      2026 shown January&ndash;August only (year to date as of September 2026).\n    </p>\n  </div>\n</div>\n<script>\nconst months = [\"Jan\",\"Feb\",\"Mar\",\"Apr\",\"May\",\"Jun\",\"Jul\",\"Aug\",\"Sep\",\"Oct\",\"Nov\",\"Dec\"];\n\nconst series = [\n  { key: \"2023\", color: \"var(--series-1)\",\n    values: [2, 3, 4, 4, 1, 1, 1, 1, 3, 1, 1, 0] },\n  { key: \"2024\", color: \"var(--series-2)\",\n    values: [3, 2, 1, 7, 2, 1, 5, 8, 3, 4, 2, 3] },\n  { key: \"2025\", color: \"var(--series-3)\",\n    values: [5, 4, 4, 5, 7, 1, 3, 7, 2, 2, 2, 1] },\n  { key: \"2026\", color: \"var(--series-4)\",\n    values: [5, 3, 0, 5, 5, 2, 1, 1, null, null, null, null] },\n];\n\nconst W = 900, H = 380;\nconst marginTop = 16, marginRight = 16, marginBottom = 36, marginLeft = 46;\nconst plotW = W - marginLeft - marginRight;\nconst plotH = H - marginTop - marginBottom;\n\nconst allVals = series.flatMap(s => s.values).filter(v => v !== null);\nconst maxVal = Math.max(...allVals);\nconst niceMax = Math.ceil(maxVal / 2) * 2;\n\nfunction x(i) { return marginLeft + (i / (months.length - 1)) * plotW; }\nfunction y(v) { return marginTop + plotH - (v / niceMax) * plotH; }\n\nfunction fmtCount(v) { return Math.round(v).toLocaleString(\"en-AU\"); }\n\nconst svgns = \"http://www.w3.org/2000/svg\";\nconst svg = document.getElementById(\"chart\");\n\nfunction el(tag, attrs) {\n  const e = document.createElementNS(svgns, tag);\n  for (const k in attrs) e.setAttribute(k, attrs[k]);\n  return e;\n}\n\nconst gridSteps = 5;\nfor (let i = 0; i <= gridSteps; i++) {\n  const v = (niceMax / gridSteps) * i;\n  const gy = y(v);\n  svg.appendChild(el(\"line\", { x1: marginLeft, x2: W - marginRight, y1: gy, y2: gy, class: i === 0 ? \"baseline\" : \"gridline\" }));\n  const label = el(\"text\", { x: marginLeft - 10, y: gy + 4, \"text-anchor\": \"end\", class: \"axis-label\" });\n  label.textContent = Math.round(v);\n  svg.appendChild(label);\n}\n\nmonths.forEach((m, i) => {\n  const label = el(\"text\", { x: x(i), y: H - marginBottom + 20, \"text-anchor\": \"middle\", class: \"axis-label\" });\n  label.textContent = m;\n  svg.appendChild(label);\n});\n\nseries.forEach(s => {\n  const idxs = s.values.map((v, i) => v === null ? null : i).filter(i => i !== null);\n  const path = idxs.map((i, k) => (k === 0 ? \"M\" : \"L\") + x(i).toFixed(1) + \",\" + y(s.values[i]).toFixed(1)).join(\" \");\n  svg.appendChild(el(\"path\", { d: path, class: \"series-line\", stroke: s.color }));\n  s.values.forEach((v, i) => {\n    if (v === null) return;\n    svg.appendChild(el(\"circle\", { cx: x(i), cy: y(v), r: 3.5, fill: s.color, class: \"series-dot\" }));\n  });\n});\n\nconst tooltip = document.getElementById(\"tooltip\");\nconst chartWrap = document.getElementById(\"chartWrap\");\nconst crosshair = el(\"line\", { x1: 0, x2: 0, y1: marginTop, y2: marginTop + plotH, stroke: \"var(--baseline)\", \"stroke-width\": 1, opacity: 0 });\nsvg.appendChild(crosshair);\n\nconst hitZones = el(\"g\", {});\nmonths.forEach((m, i) => {\n  const zoneW = plotW / months.length;\n  const zoneX = marginLeft + i * zoneW;\n  const rect = el(\"rect\", { x: zoneX, y: marginTop, width: zoneW, height: plotH, fill: \"transparent\" });\n  rect.addEventListener(\"mouseenter\", () => showTooltip(i));\n  rect.addEventListener(\"mousemove\", (ev) => positionTooltip(ev, i));\n  rect.addEventListener(\"mouseleave\", hideTooltip);\n  hitZones.appendChild(rect);\n});\nsvg.appendChild(hitZones);\n\nfunction showTooltip(i) {\n  crosshair.setAttribute(\"x1\", x(i));\n  crosshair.setAttribute(\"x2\", x(i));\n  crosshair.setAttribute(\"opacity\", 1);\n  let html = '<div class=\"t-month\">' + months[i] + '</div>';\n  series.forEach(s => {\n    const v = s.values[i];\n    if (v === null) return;\n    html += '<div class=\"t-row\"><span class=\"t-dot\" style=\"background:' + s.color + '\"></span>' + s.key + ': ' + fmtCount(v) + ' enquiries</div>';\n  });\n  tooltip.innerHTML = html;\n  tooltip.style.opacity = 1;\n}\nfunction positionTooltip(ev, i) {\n  const wrapRect = chartWrap.getBoundingClientRect();\n  const svgRect = svg.getBoundingClientRect();\n  const scale = svgRect.width / W;\n  const px = (x(i)) * scale;\n  let left = px + 14;\n  if (left + 170 > wrapRect.width) left = px - 180;\n  tooltip.style.left = left + \"px\";\n  tooltip.style.top = (ev.clientY - wrapRect.top - 40) + \"px\";\n}\nfunction hideTooltip() {\n  crosshair.setAttribute(\"opacity\", 0);\n  tooltip.style.opacity = 0;\n}\n\nconst legend = document.getElementById(\"legend\");\nseries.forEach(s => {\n  const item = document.createElement(\"div\");\n  item.className = \"legend-item\";\n  item.innerHTML = '<span class=\"swatch\" style=\"background:' + s.color + '\"></span>' + s.key;\n  legend.appendChild(item);\n});\n\nconst tableHead = document.getElementById(\"tableHead\");\nconst tableBody = document.getElementById(\"tableBody\");\nlet headHtml = \"<th>Month</th>\";\nseries.forEach(s => headHtml += \"<th>\" + s.key + \"</th>\");\ntableHead.innerHTML = headHtml;\n\nmonths.forEach((m, i) => {\n  let row = \"<tr><td>\" + m + \"</td>\";\n  series.forEach(s => {\n    const v = s.values[i];\n    row += \"<td>\" + (v === null ? \"&mdash;\" : fmtCount(v)) + \"</td>\";\n  });\n  row += \"</tr>\";\n  tableBody.innerHTML += row;\n});\nlet totalRow = '<tr><td class=\"total\">Total</td>';\nseries.forEach(s => {\n  const total = s.values.filter(v => v !== null).reduce((a, b) => a + b, 0);\n  totalRow += '<td class=\"total\">' + fmtCount(total) + \"</td>\";\n});\ntotalRow += \"</tr>\";\ntableBody.innerHTML += totalRow;\n\nconst toggleBtn = document.getElementById(\"toggleTable\");\nconst dataTable = document.getElementById(\"dataTable\");\ntoggleBtn.addEventListener(\"click\", () => {\n  const showing = dataTable.classList.toggle(\"show\");\n  toggleBtn.textContent = showing ? \"Hide table\" : \"Show as table\";\n  document.getElementById(\"chartWrap\").style.display = showing ? \"none\" : \"block\";\n  legend.style.display = showing ? \"none\" : \"flex\";\n});\n<\/script>\n</body>\n</html>\n",
+  "frame-weeklyTags":"<!DOCTYPE html>\n<html lang=\"en\">\n<head>\n<meta charset=\"UTF-8\">\n<title>Weekly Tagged Deals</title>\n<style>\n  .viz-root {\n    color-scheme: light;\n    --surface-1: #fcfcfb;\n    --page: #f9f9f7;\n    --text-primary: #0b0b0b;\n    --text-secondary: #52514e;\n    --text-muted: #898781;\n    --grid: #e1e0d9;\n    --baseline: #c3c2b7;\n    --border: rgba(11,11,11,0.10);\n    --series-1: #2a78d6; /* LinkedIn scraper */\n    --series-2: #eb6834; /* Cold lead scraping automation */\n    font-family: system-ui, -apple-system, \"Segoe UI\", sans-serif;\n    background: var(--page);\n    color: var(--text-primary);\n    margin: 0;\n    padding: 32px 16px;\n    box-sizing: border-box;\n  }\n  @media (prefers-color-scheme: dark) {\n    :root:where(:not([data-theme=\"light\"])) .viz-root {\n      color-scheme: dark;\n      --surface-1: #1a1a19;\n      --page: #0d0d0d;\n      --text-primary: #ffffff;\n      --text-secondary: #c3c2b7;\n      --text-muted: #898781;\n      --grid: #2c2c2a;\n      --baseline: #383835;\n      --border: rgba(255,255,255,0.10);\n      --series-1: #3987e5;\n      --series-2: #d95926;\n    }\n  }\n  :root[data-theme=\"dark\"] .viz-root {\n    color-scheme: dark;\n    --surface-1: #1a1a19;\n    --page: #0d0d0d;\n    --text-primary: #ffffff;\n    --text-secondary: #c3c2b7;\n    --text-muted: #898781;\n    --grid: #2c2c2a;\n    --baseline: #383835;\n    --border: rgba(255,255,255,0.10);\n    --series-1: #3987e5;\n    --series-2: #d95926;\n  }\n  .card {\n    max-width: 980px;\n    margin: 0 auto;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 12px;\n    padding: 28px 32px 20px;\n  }\n  h1 { font-size: 19px; font-weight: 650; margin: 0 0 2px; }\n  .subtitle { font-size: 13px; color: var(--text-secondary); margin: 0 0 20px; }\n  .legend { display: flex; gap: 18px; flex-wrap: wrap; margin-bottom: 4px; font-size: 13px; color: var(--text-secondary); }\n  .legend-item { display: flex; align-items: center; gap: 7px; }\n  .swatch { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }\n  .chart-wrap { position: relative; margin-top: 8px; }\n  svg { width: 100%; height: auto; overflow: visible; font-family: inherit; }\n  .gridline { stroke: var(--grid); stroke-width: 1; }\n  .baseline { stroke: var(--baseline); stroke-width: 1; }\n  .axis-label { fill: var(--text-muted); font-size: 11px; }\n  .bar-seg { }\n  .tooltip {\n    position: absolute;\n    pointer-events: none;\n    background: var(--surface-1);\n    border: 1px solid var(--border);\n    border-radius: 8px;\n    padding: 8px 11px;\n    font-size: 12px;\n    color: var(--text-primary);\n    box-shadow: 0 4px 16px rgba(0,0,0,0.12);\n    opacity: 0;\n    transition: opacity 0.1s;\n    white-space: nowrap;\n    z-index: 5;\n  }\n  .tooltip .t-week { color: var(--text-secondary); margin-bottom: 4px; font-weight: 600; }\n  .tooltip .t-row { display: flex; align-items: center; gap: 6px; margin-top: 2px; }\n  .tooltip .t-dot { width: 8px; height: 8px; border-radius: 2px; }\n  .tooltip .t-total { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--border); font-weight: 650; }\n  .footnote { font-size: 11.5px; color: var(--text-muted); margin-top: 18px; line-height: 1.5; }\n  .toggle-btn {\n    font-size: 12px;\n    color: var(--text-secondary);\n    background: none;\n    border: 1px solid var(--border);\n    border-radius: 6px;\n    padding: 5px 10px;\n    cursor: pointer;\n    margin-top: 14px;\n  }\n  .toggle-btn:hover { background: var(--grid); }\n  table { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 14px; display: none; }\n  table.show { display: table; }\n  th, td { text-align: right; padding: 6px 8px; border-bottom: 1px solid var(--grid); font-variant-numeric: tabular-nums; }\n  th:first-child, td:first-child { text-align: left; }\n  th { color: var(--text-muted); font-weight: 600; }\n  td.total { font-weight: 650; }\n</style>\n</head>\n<body>\n<div class=\"viz-root\">\n  <div class=\"card\">\n    <h1>New Deals by Week &mdash; Scraping / Manual-List Tags</h1>\n    <p class=\"subtitle\">MyAdventure Group &middot; 6 Jul &ndash; 1 Sep 2026 &middot; deals created whose contact carries either tag, by week created</p>\n    <div class=\"legend\" id=\"legend\"></div>\n    <div class=\"chart-wrap\" id=\"chartWrap\">\n      <svg id=\"chart\" viewBox=\"0 0 900 380\" preserveAspectRatio=\"xMidYMid meet\"></svg>\n      <div class=\"tooltip\" id=\"tooltip\"></div>\n    </div>\n    <button class=\"toggle-btn\" id=\"toggleTable\">Show as table</button>\n    <table id=\"dataTable\">\n      <thead><tr id=\"tableHead\"></tr></thead>\n      <tbody id=\"tableBody\"></tbody>\n    </table>\n    <p class=\"footnote\">\n      Counts new deals in ActiveCampaign whose contact carries the \"manually_listed_from_linkedin_scraper\" tag or the \"manually_listed_cold_lead_from_scraping_automation\" tag, grouped by the Monday-starting week the deal was created, regardless of pipeline or outcome. Both tags were only introduced recently (17 Jul and 12 Aug 2026 respectively), which is why every week before their creation shows zero &mdash; this is not a gap in the data, the automations simply weren't running yet. The final week (31 Aug&ndash;1 Sep) is a partial week (1 day only, since today is 1 Sep 2026).\n    </p>\n  </div>\n</div>\n<script>\nconst weeks = [\"29 Jun\",\"6 Jul\",\"13 Jul\",\"20 Jul\",\"27 Jul\",\"3 Aug\",\"10 Aug\",\"17 Aug\",\"24 Aug\",\"31 Aug*\"];\n\nconst series = [\n  { key: \"LinkedIn scraper\", color: \"var(--series-1)\",\n    values: [0, 0, 0, 0, 0, 0, 3, 1, 0, 0] },\n  { key: \"Cold lead automation\", color: \"var(--series-2)\",\n    values: [0, 0, 0, 0, 0, 0, 1, 0, 0, 0] },\n];\n\nconst W = 900, H = 380;\nconst marginTop = 16, marginRight = 16, marginBottom = 36, marginLeft = 40;\nconst plotW = W - marginLeft - marginRight;\nconst plotH = H - marginTop - marginBottom;\n\nconst totals = weeks.map((_, i) => series.reduce((sum, s) => sum + s.values[i], 0));\nconst maxVal = Math.max(...totals);\nconst niceMax = Math.max(4, Math.ceil(maxVal / 2) * 2);\n\nconst n = weeks.length;\nconst bandW = plotW / n;\nconst barW = bandW * 0.52;\n\nfunction xCenter(i) { return marginLeft + bandW * i + bandW / 2; }\nfunction y(v) { return marginTop + plotH - (v / niceMax) * plotH; }\n\nfunction fmtCount(v) { return Math.round(v).toLocaleString(\"en-AU\"); }\n\nconst svgns = \"http://www.w3.org/2000/svg\";\nconst svg = document.getElementById(\"chart\");\n\nfunction el(tag, attrs) {\n  const e = document.createElementNS(svgns, tag);\n  for (const k in attrs) e.setAttribute(k, attrs[k]);\n  return e;\n}\n\nconst gridSteps = 4;\nfor (let i = 0; i <= gridSteps; i++) {\n  const v = (niceMax / gridSteps) * i;\n  const gy = y(v);\n  svg.appendChild(el(\"line\", { x1: marginLeft, x2: W - marginRight, y1: gy, y2: gy, class: i === 0 ? \"baseline\" : \"gridline\" }));\n  const label = el(\"text\", { x: marginLeft - 10, y: gy + 4, \"text-anchor\": \"end\", class: \"axis-label\" });\n  label.textContent = Math.round(v);\n  svg.appendChild(label);\n}\n\nweeks.forEach((wLabel, i) => {\n  const label = el(\"text\", { x: xCenter(i), y: H - marginBottom + 20, \"text-anchor\": \"middle\", class: \"axis-label\" });\n  label.textContent = wLabel;\n  svg.appendChild(label);\n});\n\nconst barGroups = [];\nweeks.forEach((_, i) => {\n  let cumulative = 0;\n  const rects = [];\n  series.forEach(s => {\n    const v = s.values[i];\n    if (v > 0) {\n      const yTop = y(cumulative + v);\n      const yBot = y(cumulative);\n      const rect = el(\"rect\", {\n        x: xCenter(i) - barW / 2,\n        y: yTop,\n        width: barW,\n        height: yBot - yTop,\n        fill: s.color,\n        class: \"bar-seg\"\n      });\n      svg.appendChild(rect);\n      rects.push(rect);\n    }\n    cumulative += v;\n  });\n  barGroups.push(rects);\n});\n\nconst tooltip = document.getElementById(\"tooltip\");\nconst chartWrap = document.getElementById(\"chartWrap\");\n\nconst hitZones = el(\"g\", {});\nweeks.forEach((_, i) => {\n  const zoneX = marginLeft + i * bandW;\n  const rect = el(\"rect\", { x: zoneX, y: marginTop, width: bandW, height: plotH, fill: \"transparent\" });\n  rect.addEventListener(\"mouseenter\", () => showTooltip(i));\n  rect.addEventListener(\"mousemove\", (ev) => positionTooltip(ev, i));\n  rect.addEventListener(\"mouseleave\", hideTooltip);\n  hitZones.appendChild(rect);\n});\nsvg.appendChild(hitZones);\n\nfunction showTooltip(i) {\n  let html = '<div class=\"t-week\">Week of ' + weeks[i].replace(\"*\", \"\") + '</div>';\n  series.forEach(s => {\n    const v = s.values[i];\n    html += '<div class=\"t-row\"><span class=\"t-dot\" style=\"background:' + s.color + '\"></span>' + s.key + ': ' + fmtCount(v) + '</div>';\n  });\n  html += '<div class=\"t-total\">Total: ' + fmtCount(totals[i]) + '</div>';\n  tooltip.innerHTML = html;\n  tooltip.style.opacity = 1;\n}\nfunction positionTooltip(ev, i) {\n  const wrapRect = chartWrap.getBoundingClientRect();\n  const svgRect = svg.getBoundingClientRect();\n  const scale = svgRect.width / W;\n  const px = xCenter(i) * scale;\n  let left = px + 14;\n  if (left + 180 > wrapRect.width) left = px - 190;\n  tooltip.style.left = left + \"px\";\n  tooltip.style.top = (ev.clientY - wrapRect.top - 40) + \"px\";\n}\nfunction hideTooltip() {\n  tooltip.style.opacity = 0;\n}\n\nconst legend = document.getElementById(\"legend\");\nseries.forEach(s => {\n  const item = document.createElement(\"div\");\n  item.className = \"legend-item\";\n  item.innerHTML = '<span class=\"swatch\" style=\"background:' + s.color + '\"></span>' + s.key;\n  legend.appendChild(item);\n});\n\nconst tableHead = document.getElementById(\"tableHead\");\nconst tableBody = document.getElementById(\"tableBody\");\nlet headHtml = \"<th>Week of</th>\";\nseries.forEach(s => headHtml += \"<th>\" + s.key + \"</th>\");\nheadHtml += \"<th>Total</th>\";\ntableHead.innerHTML = headHtml;\n\nweeks.forEach((wLabel, i) => {\n  let row = \"<tr><td>\" + wLabel.replace(\"*\", \"\") + \"</td>\";\n  series.forEach(s => {\n    row += \"<td>\" + fmtCount(s.values[i]) + \"</td>\";\n  });\n  row += \"<td class=\\\"total\\\">\" + fmtCount(totals[i]) + \"</td></tr>\";\n  tableBody.innerHTML += row;\n});\nlet totalRow = '<tr><td class=\"total\">Total</td>';\nseries.forEach(s => {\n  const total = s.values.reduce((a, b) => a + b, 0);\n  totalRow += '<td class=\"total\">' + fmtCount(total) + \"</td>\";\n});\ntotalRow += '<td class=\"total\">' + fmtCount(totals.reduce((a,b)=>a+b,0)) + \"</td></tr>\";\ntableBody.innerHTML += totalRow;\n\nconst toggleBtn = document.getElementById(\"toggleTable\");\nconst dataTable = document.getElementById(\"dataTable\");\ntoggleBtn.addEventListener(\"click\", () => {\n  const showing = dataTable.classList.toggle(\"show\");\n  toggleBtn.textContent = showing ? \"Hide table\" : \"Show as table\";\n  document.getElementById(\"chartWrap\").style.display = showing ? \"none\" : \"block\";\n  legend.style.display = showing ? \"none\" : \"flex\";\n});\n<\/script>\n</body>\n</html>\n",
+};
+Object.keys(charts).forEach(function(id) {
+  const iframe = document.getElementById(id);
+  iframe.srcdoc = charts[id];
+  iframe.addEventListener("load", function() {
+    try {
+      const doc = iframe.contentWindow.document;
+      function setH() { iframe.style.height = (Math.max(doc.documentElement.scrollHeight, doc.body.scrollHeight) + 2) + "px"; }
+      setH();
+      if (window.ResizeObserver) new ResizeObserver(setH).observe(doc.body);
+      else setTimeout(setH, 300);
+    } catch (e) {}
+  });
+});
+</script>
+</body>
+</html>

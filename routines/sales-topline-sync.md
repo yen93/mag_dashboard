@@ -25,8 +25,22 @@ dashboard only ever `SELECT`s it (no source calls at request time).
 | `inbound` | 7 — inbound | ⚠ AC **"Inbound/ Outbound?"** field = Inbound Enquiry — not yet mirrored |
 | `outbound` | 8 — outbound | ⚠ AC **"Inbound/ Outbound?"** field = Outbound* — not yet mirrored |
 
+Also populated here for the **CONFERENCE › Overview** section (dev_sheet rows 15–20),
+all from the LIV pipeline (`group='3'`), bucketed by `mdate` (close-date proxy):
+
+| metric | dev_sheet row | computed from |
+|--------|---------------|---------------|
+| `deals_won` | 15 — Number of Deals Won (Locked In) | LIV deals `status=1` (won), monthly count + `ytd` |
+| `deals_lost` | 16 — Win Rate denominator | LIV deals `status=2` (lost), monthly count + `ytd` (win rate = won/(won+lost) is derived in the API) |
+| `won_value` | 17 — Average Speaking Deal Value | LIV won deals `sum(value)/100` AUD, monthly + `ytd` (avg = won_value/deals_won, derived in the API) |
+| `demos_booked` | 19 — # of demos booked | `ac_custom_fields.demo_date` (the AC "Demo date?" field) joined to LIV deals, monthly + `ytd` |
+
+Still "needs setup" in CONFERENCE (same blockers as above): `direct_indirect_share`,
+`direct_indirect_leads` (AC "Deal Source?" field), and Conference/MAG income split.
+
 LIV pipeline = dealGroup `3` "Keynotes // Workshops // Immersive (LIV)";
 BUREAU ENQUIRY = dealStage `113`; The Tailor = dealGroup `7`.
+AC deal `status`: `0`=open, `1`=won, `2`=lost.
 
 ## Step 1 — compute + upsert the Supabase-derived metrics (live today)
 Run this SQL via Supabase MCP each Monday. Idempotent (UPSERT on PK), 12-month
@@ -79,6 +93,66 @@ from public.activecampaign_deals
 where "group"='7'
   and cdate >= (date_trunc('month',current_date)-interval '11 months')
 group by 2
+on conflict (metric,bucket,dimension) do update set value=excluded.value,unit=excluded.unit,updated_at=now();
+
+-- ===== CONFERENCE › Overview (LIV pipeline group 3), by mdate =====
+-- deals_won / deals_lost: monthly counts (status 1=won, 2=lost), last 12 months
+insert into public.sales_topline(metric,bucket,dimension,value,unit,updated_at)
+select 'deals_won', date_trunc('month',mdate)::date, '', count(*), 'count', now()
+from public.activecampaign_deals
+where "group"='3' and status=1 and mdate >= (date_trunc('month',current_date)-interval '11 months')
+group by 2
+on conflict (metric,bucket,dimension) do update set value=excluded.value,unit=excluded.unit,updated_at=now();
+
+insert into public.sales_topline(metric,bucket,dimension,value,unit,updated_at)
+select 'deals_lost', date_trunc('month',mdate)::date, '', count(*), 'count', now()
+from public.activecampaign_deals
+where "group"='3' and status=2 and mdate >= (date_trunc('month',current_date)-interval '11 months')
+group by 2
+on conflict (metric,bucket,dimension) do update set value=excluded.value,unit=excluded.unit,updated_at=now();
+
+-- won_value: monthly won deal value (AUD; value is in cents), last 12 months
+insert into public.sales_topline(metric,bucket,dimension,value,unit,updated_at)
+select 'won_value', date_trunc('month',mdate)::date, '', coalesce(round(sum(value)/100.0),0), 'aud', now()
+from public.activecampaign_deals
+where "group"='3' and status=1 and lower(coalesce(currency,'aud'))='aud'
+  and mdate >= (date_trunc('month',current_date)-interval '11 months')
+group by 2
+on conflict (metric,bucket,dimension) do update set value=excluded.value,unit=excluded.unit,updated_at=now();
+
+-- demos_booked: monthly count of LIV deals with the AC "Demo date?" field set
+insert into public.sales_topline(metric,bucket,dimension,value,unit,updated_at)
+select 'demos_booked', date_trunc('month',cf.demo_date)::date, '', count(*), 'count', now()
+from public.ac_custom_fields cf
+join public.activecampaign_deals d on d.id = cf.deal_id and d."group"='3'
+where cf.demo_date is not null and cf.demo_date >= (date_trunc('month',current_date)-interval '11 months')
+group by 2
+on conflict (metric,bucket,dimension) do update set value=excluded.value,unit=excluded.unit,updated_at=now();
+
+-- YTD figures (dimension 'ytd') for the Conference KPI row
+insert into public.sales_topline(metric,bucket,dimension,value,unit,updated_at)
+select 'deals_won', date_trunc('year',current_date)::date, 'ytd', count(*), 'count', now()
+from public.activecampaign_deals
+where "group"='3' and status=1 and mdate >= date_trunc('year',current_date)
+on conflict (metric,bucket,dimension) do update set value=excluded.value,unit=excluded.unit,updated_at=now();
+
+insert into public.sales_topline(metric,bucket,dimension,value,unit,updated_at)
+select 'deals_lost', date_trunc('year',current_date)::date, 'ytd', count(*), 'count', now()
+from public.activecampaign_deals
+where "group"='3' and status=2 and mdate >= date_trunc('year',current_date)
+on conflict (metric,bucket,dimension) do update set value=excluded.value,unit=excluded.unit,updated_at=now();
+
+insert into public.sales_topline(metric,bucket,dimension,value,unit,updated_at)
+select 'won_value', date_trunc('year',current_date)::date, 'ytd', coalesce(round(sum(value)/100.0),0), 'aud', now()
+from public.activecampaign_deals
+where "group"='3' and status=1 and lower(coalesce(currency,'aud'))='aud' and mdate >= date_trunc('year',current_date)
+on conflict (metric,bucket,dimension) do update set value=excluded.value,unit=excluded.unit,updated_at=now();
+
+insert into public.sales_topline(metric,bucket,dimension,value,unit,updated_at)
+select 'demos_booked', date_trunc('year',current_date)::date, 'ytd', count(*), 'count', now()
+from public.ac_custom_fields cf
+join public.activecampaign_deals d on d.id = cf.deal_id and d."group"='3'
+where cf.demo_date is not null and cf.demo_date >= date_trunc('year',current_date)
 on conflict (metric,bucket,dimension) do update set value=excluded.value,unit=excluded.unit,updated_at=now();
 ```
 

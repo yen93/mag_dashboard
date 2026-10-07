@@ -1,0 +1,262 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Lead Source Guide — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    .guide-wrap { max-width: 920px; }
+    .guide-intro { color: var(--text-muted); margin: 2px 0 18px; line-height: 1.5; }
+    .guide-sec { border: 1px solid var(--border); border-radius: 14px; padding: 16px 18px;
+      margin-bottom: 14px; background: var(--surface); scroll-margin-top: 90px; }
+    .guide-sec h3 { margin: 0 0 6px; display: flex; align-items: center; gap: 10px; }
+    .guide-sec .code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 13px;
+      background: var(--bg); border: 1px solid var(--border); border-radius: 7px; padding: 2px 8px; }
+    .guide-sec p { margin: 6px 0 10px; color: var(--text); line-height: 1.5; }
+    .guide-sec .lbl { font-size: 12px; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+    .link-list { display: flex; flex-wrap: wrap; gap: 8px; }
+    .link-list a { font-size: 13px; text-decoration: none; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 999px; padding: 5px 11px; color: var(--accent); }
+    .link-list a:hover { border-color: var(--accent); }
+    .guide-sec.highlight { border-color: var(--accent); }
+    .legend-row { display: flex; gap: 10px; align-items: baseline; margin: 6px 0; }
+    .legend-row .pill { flex: 0 0 auto; }
+    .backlink { display: inline-block; margin-bottom: 12px; font-size: 14px; text-decoration: none; color: var(--accent); }
+    .guide-group { margin: 26px 0 10px; font-size: 16px; font-weight: 700; }
+    .chan-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .chan-table th, .chan-table td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--border); vertical-align: top; }
+    .chan-table th { color: var(--text-muted); text-transform: uppercase; font-size: 11px; letter-spacing: .04em; }
+    .chan-table td .code { white-space: nowrap; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="mag_buyer_sheet.html">Buyer Sheet</a>
+    <a class="tab" href="invoice_tracking.html">Invoices</a>
+    <a class="tab" href="sales.html">Conferences</a>
+    <a class="tab" href="ga4_agent.html">GA4 Agent</a>
+    <a class="tab active" href="ac_contact_sources.html">Historical Paid Leads Tracking</a>
+    <a class="tab" href="new_paid_leads_tracking.html">New Paid Leads Tracking</a>
+    <a class="tab" href="mag_sales_pulse.html">MAG Sales Pulse</a>
+  </nav>
+
+  <main class="content guide-wrap">
+    <a class="backlink" href="ac_contact_sources.html">← Back to Historical Paid Leads Tracking</a>
+    <h2 style="margin:0 0 4px">Lead Source Guide</h2>
+    <p class="guide-intro">
+      Each lead's <strong>Conversion Action</strong> is the GA4 event that marked them as an
+      enquiry. This guide shows what each one means and which website form(s) it fires on.
+      Links open the live page on
+      <a href="https://www.myadventuregroup.com.au" target="_blank" rel="noopener">myadventuregroup.com.au</a>.
+    </p>
+
+    <h3 class="guide-group">Channels — how the lead arrived</h3>
+    <p class="guide-intro">
+      A lead's <strong>Channel</strong> is the traffic source GA4 attributed to their session,
+      shown as <span class="code">source / medium</span>. GA4 works this out
+      <strong>automatically</strong> for every visit — you don't set these up inside GA4.
+      Paid and email channels rely on the link being tagged upstream (ad auto-tagging / UTM);
+      referral, direct and organic are detected automatically. The channel is an attribute of
+      the session, carried by the conversion event — not a separate click event.
+    </p>
+
+    <div class="guide-sec" id="channel-values">
+      <h3>The channel values in your data</h3>
+      <table class="chan-table">
+        <thead><tr><th>Channel</th><th>What it means</th></tr></thead>
+        <tbody>
+          <tr><td><span class="code">google / cpc</span></td><td>A <strong>paid</strong> click from a Google Ads ad.</td></tr>
+          <tr><td><span class="code">bing / cpc</span></td><td>A <strong>paid</strong> click from a Microsoft / Bing ad.</td></tr>
+          <tr><td><span class="code">google / organic</span></td><td>A free (unpaid) click from Google search results.</td></tr>
+          <tr><td><span class="code">bing / organic</span></td><td>A free (unpaid) click from Bing search results.</td></tr>
+          <tr><td><span class="code">ActiveCampaign / email</span></td><td>A click from one of your ActiveCampaign emails (the link is tagged <span class="code">utm_source=ActiveCampaign, utm_medium=email</span>).</td></tr>
+          <tr><td><span class="code">myadventuregroup.ac-page.com / referral</span></td><td>A click through from your own ActiveCampaign-hosted landing / opt-in pages (<span class="code">ac-page.com</span> is AC's hosted-pages domain) — an internal / AC-driven visit, not an external website.</td></tr>
+          <tr><td><span class="code">linkedin.com / referral</span></td><td>A click from a link on LinkedIn.</td></tr>
+          <tr><td><span class="code">teams.public.onecdn.static.microsoft / referral</span></td><td>A click from a link opened in Microsoft Teams (its link-preview domain) — usually your link shared in a Teams chat.</td></tr>
+          <tr><td><span class="code">(direct) / (none)</span></td><td>No source could be detected — the visitor typed the URL, used a bookmark, clicked an untagged link (a PDF, an app, some emails), or the referrer was stripped.</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:10px; color:var(--text-muted); font-size:13px">
+        Note: referrals like <span class="code">ads.google.com</span> and
+        <span class="code">tagassistant.google.com</span> are internal / preview-tool
+        artifacts (your own ad interface or Tag Assistant), not real visitors.
+      </p>
+    </div>
+
+    <div class="guide-sec highlight" id="channel-paid">
+      <h3>Paid search / ads</h3>
+      <p>A paid ad click — e.g. <span class="code">google / cpc</span>,
+         <span class="code">bing / cpc</span>. GA4 reads it from the ad click ID (Google
+         auto-tagging, Microsoft UET) or <span class="code">utm_medium=cpc</span>. These are
+         your Google Ads and Microsoft/Bing Ads clicks.</p>
+    </div>
+
+    <div class="guide-sec highlight" id="channel-organic">
+      <h3>Organic search</h3>
+      <p>A free, unpaid click from a search engine results page — e.g.
+         <span class="code">google / organic</span>, <span class="code">bing / organic</span>.</p>
+    </div>
+
+    <div class="guide-sec" id="channel-referral">
+      <h3>Referral</h3>
+      <p>Arrived via a link on another website; GA4 shows the referring domain (e.g.
+         <span class="code">linkedin.com / referral</span>). Heads up: some referrals like
+         <span class="code">ads.google.com</span> and <span class="code">tagassistant.google.com</span>
+         are internal/preview artifacts, not real visitors.</p>
+    </div>
+
+    <div class="guide-sec" id="channel-email">
+      <h3>Email</h3>
+      <p>A click from an email link tagged <span class="code">utm_medium=email</span> — e.g. your
+         ActiveCampaign campaigns (<span class="code">ActiveCampaign / email</span>).</p>
+    </div>
+
+    <div class="guide-sec" id="channel-direct">
+      <h3>Direct / unknown</h3>
+      <p>No source could be detected — the visitor typed the URL, used a bookmark, or the
+         referrer was stripped. GA4 labels this <span class="code">(direct) / (none)</span>.</p>
+    </div>
+
+    <div class="guide-sec" id="channel-social">
+      <h3>Social</h3>
+      <p>A click from a social network such as LinkedIn or Facebook.</p>
+    </div>
+
+    <div class="guide-sec" id="channel-video">
+      <h3>Video</h3>
+      <p>A click from a video platform such as YouTube (<span class="code">youtube / video</span>).</p>
+    </div>
+
+    <div class="guide-sec" id="channel-other">
+      <h3>Other</h3>
+      <p>Any other source/medium GA4 detected automatically from UTM tags, the referring site,
+         or the ad click ID.</p>
+    </div>
+
+    <h3 class="guide-group">Conversion actions — what they did</h3>
+
+    <div class="guide-sec highlight" id="calendly_form_submit">
+      <h3><span class="code">calendly_form_submit</span></h3>
+      <p>A Calendly consult / discovery / debrief call was booked. Fires on the booking
+         confirmation page; the booking itself happens in the Calendly scheduler embedded on
+         the consult pages.</p>
+      <div class="lbl">Fires on</div>
+      <div class="link-list">
+        <a href="https://www.myadventuregroup.com.au/thank-you-2/" target="_blank" rel="noopener">/thank-you-2/ (confirmation)</a>
+        <a href="https://www.myadventuregroup.com.au/free-consult/" target="_blank" rel="noopener">/free-consult/</a>
+      </div>
+    </div>
+
+    <div class="guide-sec" id="form_submit">
+      <h3><span class="code">form_submit</span></h3>
+      <p>Generic website form submission (GTM form-submit trigger). This one fires across many
+         different forms, so the page tells you which form it was.</p>
+      <div class="lbl">Fires on</div>
+      <div class="link-list">
+        <a href="https://www.myadventuregroup.com.au/careers-seasonal/" target="_blank" rel="noopener">/careers-seasonal/</a>
+        <a href="https://www.myadventuregroup.com.au/executive-x/" target="_blank" rel="noopener">/executive-x/</a>
+        <a href="https://www.myadventuregroup.com.au/careersph-based/" target="_blank" rel="noopener">/careersph-based/</a>
+        <a href="https://www.myadventuregroup.com.au/free-gift-opt-in/" target="_blank" rel="noopener">/free-gift-opt-in/</a>
+        <a href="https://www.myadventuregroup.com.au/free-consult/" target="_blank" rel="noopener">/free-consult/</a>
+        <a href="https://www.myadventuregroup.com.au/team-building/" target="_blank" rel="noopener">/team-building/</a>
+        <a href="https://www.myadventuregroup.com.au/" target="_blank" rel="noopener">/ (home)</a>
+      </div>
+    </div>
+
+    <div class="guide-sec" id="form_submissions">
+      <h3><span class="code">form_submissions</span></h3>
+      <p>Submission of the Contact-page enquiry form.</p>
+      <div class="lbl">Fires on</div>
+      <div class="link-list">
+        <a href="https://www.myadventuregroup.com.au/contact/" target="_blank" rel="noopener">/contact/</a>
+      </div>
+    </div>
+
+    <div class="guide-sec" id="Contact_Form_Submit_Alt">
+      <h3><span class="code">Contact_Form_Submit_Alt</span></h3>
+      <p>Alternate contact / speaking-request form (a second contact form variant used on the
+         home page, contact page and speaking-request page).</p>
+      <div class="lbl">Fires on</div>
+      <div class="link-list">
+        <a href="https://www.myadventuregroup.com.au/" target="_blank" rel="noopener">/ (home)</a>
+        <a href="https://www.myadventuregroup.com.au/contact/" target="_blank" rel="noopener">/contact/</a>
+        <a href="https://www.myadventuregroup.com.au/speaking-request/" target="_blank" rel="noopener">/speaking-request/</a>
+      </div>
+    </div>
+
+    <div class="guide-sec highlight" id="Form_submission_thankyou_1">
+      <h3><span class="code">Form_submission_thankyou_1</span></h3>
+      <p>An enquiry form was submitted — tracked as a view of the enquiry thank-you page. This
+         is one of the dashboard's "T1 Enquiry" conversions.</p>
+      <div class="lbl">Fires on</div>
+      <div class="link-list">
+        <a href="https://www.myadventuregroup.com.au/thank-you/" target="_blank" rel="noopener">/thank-you/</a>
+      </div>
+    </div>
+
+    <div class="guide-sec" id="subscribe">
+      <h3><span class="code">subscribe</span></h3>
+      <p>Newsletter / email subscribe opt-in.</p>
+      <div class="lbl">Fires on</div>
+      <div class="link-list">
+        <a href="https://www.myadventuregroup.com.au/free-consult/" target="_blank" rel="noopener">/free-consult/</a>
+        <a href="https://www.myadventuregroup.com.au/keynote-speaker/" target="_blank" rel="noopener">/keynote-speaker/</a>
+        <a href="https://www.myadventuregroup.com.au/team-building-with-james-castrission/" target="_blank" rel="noopener">/team-building-with-james-castrission/</a>
+      </div>
+    </div>
+
+    <div class="guide-sec" id="free_gifts_opt_ins">
+      <h3><span class="code">free_gifts_opt_ins</span></h3>
+      <p>Free-gift opt-in form (lead magnet).</p>
+      <div class="lbl">Fires on</div>
+      <div class="link-list">
+        <a href="https://www.myadventuregroup.com.au/free-gift-delivery-page/" target="_blank" rel="noopener">/free-gift-delivery-page/</a>
+      </div>
+    </div>
+
+    <div class="guide-sec" id="confidence">
+      <h3>How the Match &amp; Confidence are decided</h3>
+      <p><strong>Calendly (email)</strong> — the booking's email also exists as an AC contact
+         (exact identity). Always <span class="pill pos">high</span>.</p>
+      <p><strong>GA4 (time)</strong> — matched by timestamp: a GA4 form event fired within
+         ±5 minutes of the contact's AC creation time. Confidence then depends on how close
+         (Δ seconds) and whether the minute was ambiguous (more than one possible source):</p>
+      <div class="legend-row"><span class="pill pos">high</span><span>Only one possible source in the window <em>and</em> within 90 seconds.</span></div>
+      <div class="legend-row"><span class="pill partial">medium</span><span>Unambiguous but 90–300s away, <em>or</em> within 90s but several possible sources.</span></div>
+      <div class="legend-row"><span class="pill neg">low</span><span>Several possible sources <em>and</em> 90–300s away.</span></div>
+      <div class="legend-row"><span class="pill">none</span><span>No source could be matched (unmatched).</span></div>
+    </div>
+  </main>
+
+  <script src="app.js?v=2"></script>
+  <script>
+    initPage('operations');
+    // highlight the section linked via #hash
+    (function () {
+      function hl() {
+        document.querySelectorAll('.guide-sec').forEach(function (s) { s.style.outline = ''; });
+        var id = decodeURIComponent((location.hash || '').slice(1));
+        if (!id) return;
+        var el = document.getElementById(id);
+        if (el) { el.scrollIntoView(); el.style.outline = '2px solid var(--accent)'; }
+      }
+      window.addEventListener('hashchange', hl);
+      hl();
+    })();
+  </script>
+</body>
+</html>

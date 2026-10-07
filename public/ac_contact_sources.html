@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Historical Paid Leads Tracking — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* Wide table — use the full screen width (still scrolls on narrow screens). */
+    .content { max-width: none; }
+    .acs-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .acs-field { display: flex; flex-direction: column; gap: 4px; }
+    .acs-field label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .acs-field input[type="date"] {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 10px; font: inherit;
+    }
+    .acs-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+    .acs-quick button, .acs-reset {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .acs-quick button.active { background: var(--accent); color: #fff; border-color: transparent; }
+    .acs-spacer { flex: 1; }
+    /* Conversion Action tooltip */
+    .conv-cell, .chan-cell, .conf-cell { cursor: help; }
+    .conv-cell .pill, .chan-cell .pill, .conf-cell .pill { border-bottom: 1px dotted currentColor; }
+    #convTip {
+      position: fixed; z-index: 9999; max-width: 300px; display: none;
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 10px 12px; box-shadow: 0 10px 28px rgba(0,0,0,.28);
+      font-size: 13px; line-height: 1.45;
+    }
+    #convTip a { color: var(--accent); text-decoration: none; font-weight: 700; display: inline-block; margin-top: 8px; }
+    #convTip a:hover { text-decoration: underline; }
+    .guide-link { font-size: 13px; text-decoration: none; color: var(--accent); font-weight: 600; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="mag_buyer_sheet.html">Buyer Sheet</a>
+    <a class="tab" href="invoice_tracking.html">Invoices</a>
+    <a class="tab" href="sales.html">Conferences</a>
+    <a class="tab" href="ga4_agent.html">GA4 Agent</a>
+    <a class="tab active" href="ac_contact_sources.html">Historical Paid Leads Tracking</a>
+    <a class="tab" href="new_paid_leads_tracking.html">New Paid Leads Tracking</a>
+    <a class="tab" href="mag_sales_pulse.html">MAG Sales Pulse</a>
+  </nav>
+
+  <main class="content">
+    <!-- metrics widget -->
+    <div class="kpi-grid" id="acsKpis"></div>
+
+    <div class="grid">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>Historical Paid Leads Tracking</h3>
+          <span class="chips" id="acsChips"></span>
+          <a class="guide-link" href="lead_source_guide.html" style="margin-left:10px">ⓘ Channel &amp; conversion guide</a>
+          <div class="spacer"></div>
+          <span class="muted" id="acsCount" style="font-size:13px"></span>
+        </div>
+
+        <!-- date-range filter (filters on contact Created date) -->
+        <div class="acs-toolbar">
+          <div class="acs-field">
+            <label for="acsFrom">From (created)</label>
+            <input type="date" id="acsFrom" />
+          </div>
+          <div class="acs-field">
+            <label for="acsTo">To (created)</label>
+            <input type="date" id="acsTo" />
+          </div>
+          <div class="acs-quick" id="acsQuick">
+            <button type="button" data-days="7">7d</button>
+            <button type="button" data-days="30">30d</button>
+            <button type="button" data-days="60">60d</button>
+            <button type="button" data-days="90">90d</button>
+            <button type="button" data-days="0" class="active">All</button>
+          </div>
+          <button type="button" class="acs-reset" id="acsReset">Reset</button>
+        </div>
+
+        <div id="acsRows"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js?v=2"></script>
+  <script>
+    var ALL_ROWS = [];
+
+    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+
+    // ---- cell renderers ----
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    function methodPill(v) {
+      if (!v) return '—';
+      var s = String(v), cls = s === 'calendly_email' ? 'pos' : (s === 'unmatched' ? 'neg' : '');
+      var label = s === 'calendly_email' ? 'Calendly (email)' : (s === 'ga4_time' ? 'GA4 (time)' : 'Unmatched');
+      return '<span class="pill ' + cls + '">' + esc(label) + '</span>';
+    }
+    var CONF_INFO = {
+      high: 'Reliable — an exact Calendly email match, or a GA4 time match within 90s with only one possible source.',
+      medium: 'Fairly reliable — a GA4 time match 90–300s away, or within 90s but with several possible sources in that minute.',
+      low: 'Weak — a GA4 time match that was both ambiguous (several possible sources) and 90–300s away.',
+      none: 'No source could be matched to this contact.'
+    };
+    function confPill(v) {
+      var val = v || 'none';
+      var cls = val === 'high' ? 'pos' : (val === 'low' ? 'neg' : (val === 'none' ? '' : 'partial'));
+      return '<span class="conf-cell" data-conf="' + esc(val) + '"><span class="pill ' + cls + '">' + esc(val) + '</span></span>';
+    }
+    // Channel = GA4 session source/medium; the three marketing channels are highlighted.
+    var AD_SOURCES = ['google / cpc', 'bing / cpc', 'google / organic'];
+    function channelPill(v) {
+      if (!v) return '—';
+      var s = String(v), cls = AD_SOURCES.indexOf(s) >= 0 ? 'pos' : '';
+      return '<span class="chan-cell" data-chan="' + esc(s) + '"><span class="pill ' + cls + '">' + esc(s) + '</span></span>';
+    }
+    // Classify a "source / medium" channel into a category (for its tooltip + guide link).
+    function channelCategory(v) {
+      var s = String(v || '').toLowerCase(), parts = s.split(' / '), src = parts[0] || '', med = parts[1] || '';
+      if (med === 'cpc' || med === 'ppc' || med === 'paid')
+        return { key: 'paid', title: 'Paid search / ads', desc: 'A paid ad click. GA4 reads it from the ad click ID (Google auto-tagging / Microsoft) or utm_medium=cpc. e.g. google / cpc, bing / cpc.' };
+      if (med === 'organic')
+        return { key: 'organic', title: 'Organic search', desc: 'A free, unpaid click from a search engine results page (e.g. google / organic).' };
+      if (med === 'email')
+        return { key: 'email', title: 'Email', desc: 'A click from an email link tagged utm_medium=email — e.g. your ActiveCampaign campaigns.' };
+      if (med === 'referral')
+        return { key: 'referral', title: 'Referral', desc: 'Arrived via a link on another website (the referring domain is shown). Some — ads.google.com, tagassistant.google.com — are internal/preview artifacts, not real visitors.' };
+      if (med === 'video' || src.indexOf('youtube') >= 0)
+        return { key: 'video', title: 'Video', desc: 'A click from a video platform such as YouTube (youtube / video).' };
+      if (med === 'social' || /(linkedin|facebook|instagram|twitter|t\.co)/.test(src))
+        return { key: 'social', title: 'Social', desc: 'A click from a social network such as LinkedIn or Facebook.' };
+      if (src === '(direct)' || med === '(none)')
+        return { key: 'direct', title: 'Direct / unknown', desc: 'No source detected — typed URL, bookmark, or stripped referrer. GA4 labels it (direct) / (none).' };
+      return { key: 'other', title: 'Other', desc: 'A source/medium GA4 detected automatically from UTM tags, the referrer, or the ad click ID.' };
+    }
+    // Short description per conversion action (full detail lives in lead_source_guide.html).
+    var ACTION_INFO = {
+      calendly_form_submit: 'A Calendly consult/discovery call was booked (confirmation on /thank-you-2/).',
+      form_submit: 'Generic website form submission — fires across many forms (careers, Executive X, free-gift opt-in, free consult, team building, home).',
+      form_submissions: 'Contact-page enquiry form (/contact/).',
+      Contact_Form_Submit_Alt: 'Alternate contact / speaking-request form (home, /contact/, /speaking-request/).',
+      Form_submission_thankyou_1: 'Enquiry form submission — enquiry thank-you page (/thank-you/).',
+      subscribe: 'Newsletter / subscribe opt-in (free consult, keynote, team-building pages).',
+      free_gifts_opt_ins: 'Free-gift opt-in form (/free-gift-delivery-page/).'
+    };
+    function convPill(v) {
+      if (!v) return '—';
+      var s = String(v), cls = s === 'calendly_form_submit' ? 'pos' : 'partial';
+      return '<span class="conv-cell" data-act="' + esc(s) + '"><span class="pill ' + cls + '">' + esc(s) + '</span></span>';
+    }
+    // Floating, interactive tooltip for the Channel + Conversion Action columns (delegated,
+    // so it survives table re-renders). Hovering a value shows a description + a guide link.
+    (function () {
+      var tip = document.createElement('div'); tip.id = 'convTip'; document.body.appendChild(tip);
+      var hideT = null;
+      function info(cell) {
+        if (cell.classList.contains('conv-cell')) {
+          var act = cell.getAttribute('data-act');
+          return { title: act, desc: ACTION_INFO[act] || 'GA4 conversion event.',
+                   href: 'lead_source_guide.html#' + encodeURIComponent(act) };
+        }
+        if (cell.classList.contains('conf-cell')) {
+          var cf = cell.getAttribute('data-conf');
+          return { title: cf.charAt(0).toUpperCase() + cf.slice(1) + ' confidence',
+                   desc: CONF_INFO[cf] || '', href: 'lead_source_guide.html#confidence' };
+        }
+        var c = channelCategory(cell.getAttribute('data-chan'));
+        return { title: c.title, desc: c.desc, href: 'lead_source_guide.html#channel-' + c.key };
+      }
+      function show(cell) {
+        var i = info(cell);
+        tip.innerHTML = '<div><strong>' + esc(i.title) + '</strong></div>' +
+          '<div style="margin-top:4px">' + esc(i.desc) + '</div>' +
+          '<a href="' + i.href + '">Open guide →</a>';
+        var r = cell.getBoundingClientRect();
+        tip.style.display = 'block';
+        var left = r.left, top = r.bottom + 8;
+        if (left + 312 > window.innerWidth) left = window.innerWidth - 320;
+        if (top + tip.offsetHeight + 8 > window.innerHeight) top = r.top - tip.offsetHeight - 8;
+        tip.style.left = Math.max(8, left) + 'px';
+        tip.style.top = Math.max(8, top) + 'px';
+      }
+      function hide() { tip.style.display = 'none'; }
+      document.addEventListener('mouseover', function (e) {
+        var cell = e.target.closest && e.target.closest('.conv-cell, .chan-cell, .conf-cell');
+        if (cell) { clearTimeout(hideT); show(cell); }
+      });
+      document.addEventListener('mouseout', function (e) {
+        if (e.target.closest && e.target.closest('.conv-cell, .chan-cell, .conf-cell')) { hideT = setTimeout(hide, 250); }
+      });
+      tip.addEventListener('mouseenter', function () { clearTimeout(hideT); });
+      tip.addEventListener('mouseleave', hide);
+    })();
+
+    // ---- date-range filtering ----
+    function parseInput(id) {
+      var el = document.getElementById(id);
+      return el && el.value ? el.value : ''; // 'YYYY-MM-DD' or ''
+    }
+    function inRange(iso, from, to) {
+      if (!iso) return false;
+      var d = String(iso).slice(0, 10); // compare on YYYY-MM-DD (cdate is UTC)
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }
+    function filteredRows() {
+      var from = parseInput('acsFrom'), to = parseInput('acsTo');
+      if (!from && !to) return ALL_ROWS.slice();
+      return ALL_ROWS.filter(function (r) { return inRange(r.cdate, from, to); });
+    }
+
+    // ---- metrics widget ----
+    function kpi(label, value, sub, subClass) {
+      return '<div class="kpi"><div class="label">' + esc(label) + '</div>' +
+        '<div class="value">' + esc(String(value)) + '</div>' +
+        (sub ? '<div class="delta ' + (subClass || '') + '">' + esc(sub) + '</div>' : '') + '</div>';
+    }
+    function renderKpis(rows) {
+      var total = rows.length;
+      var matched = rows.filter(function (r) { return r.matchMethod && r.matchMethod !== 'unmatched'; }).length;
+      function bySource(ls) { return rows.filter(function (r) { return (r.channel || '') === ls; }).length; }
+      var gcpc = bySource('google / cpc');
+      var bcpc = bySource('bing / cpc');
+      var gorg = bySource('google / organic');
+      var borg = bySource('bing / organic');
+      var unmatched = rows.filter(function (r) { return !r.matchMethod || r.matchMethod === 'unmatched'; }).length;
+      var pct = total ? Math.round((matched / total) * 100) : 0;
+      var host = document.getElementById('acsKpis');
+      host.innerHTML =
+        kpi('Contacts', total, 'in selected range') +
+        kpi('Paid Google (google / cpc)', gcpc, 'paid search', gcpc ? 'pos' : '') +
+        kpi('Paid Bing (bing / cpc)', bcpc, 'paid search', bcpc ? 'pos' : '') +
+        kpi('Organic search (google / organic)', gorg, 'organic search', gorg ? 'pos' : '') +
+        kpi('Organic search (bing / organic)', borg, 'organic search', borg ? 'pos' : '');
+    }
+
+    // ---- table ----
+    function renderTable(rows) {
+      renderSortableTable('acsRows', rows, [
+        { key: 'cdate', label: 'Created', unit: 'date' },
+        { key: 'contactId', label: 'AC ID', render: txt },
+        { key: 'email', label: 'Email', render: txt },
+        { key: 'channel', label: 'Channel', render: channelPill },
+        { key: 'conversionAction', label: 'Conversion Action', render: convPill },
+        { key: 'matchMethod', label: 'Match', render: methodPill },
+        { key: 'confidence', label: 'Confidence', render: confPill },
+        { key: 'timeDeltaSeconds', label: 'Δ (s)', unit: 'num' },
+        { key: 'matchedAt', label: 'Matched At', unit: 'date' },
+      ], {
+        searchPlaceholder: 'Search contacts…',
+        sortKey: 'cdate', sortDir: 'desc',
+        emptyText: 'No contacts in this date range.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('acsCount');
+          if (el) el.textContent = shown === total ? (total + ' contacts') : (shown + ' of ' + total + ' contacts');
+        },
+      });
+    }
+
+    function apply() {
+      var rows = filteredRows();
+      renderKpis(rows);
+      renderTable(rows);
+    }
+
+    function setQuick(days) {
+      var from = document.getElementById('acsFrom'), to = document.getElementById('acsTo');
+      if (!days) { from.value = ''; to.value = ''; }
+      else {
+        var end = new Date();
+        var start = new Date(); start.setDate(start.getDate() - days);
+        to.value = end.toISOString().slice(0, 10);
+        from.value = start.toISOString().slice(0, 10);
+      }
+      apply();
+    }
+
+    function wireToolbar() {
+      document.getElementById('acsFrom').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.getElementById('acsTo').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.querySelectorAll('#acsQuick button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          document.querySelectorAll('#acsQuick button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          setQuick(Number(b.getAttribute('data-days')));
+        });
+      });
+      document.getElementById('acsReset').addEventListener('click', function () {
+        document.querySelectorAll('#acsQuick button').forEach(function (x) { x.classList.remove('active'); });
+        document.querySelector('#acsQuick button[data-days="0"]').classList.add('active');
+        setQuick(0);
+      });
+    }
+    function clearQuickActive() {
+      document.querySelectorAll('#acsQuick button').forEach(function (x) { x.classList.remove('active'); });
+    }
+
+    function loadContactSources() {
+      var host = document.getElementById('acsRows');
+      host.innerHTML = '<div class="muted" style="padding:14px">Loading contact sources…</div>';
+      fetchJSON('/api/operations/contact-sources').then(function (data) {
+        ALL_ROWS = (data.rows && data.rows.data) || [];
+        setChips('acsChips', data.rows.meta);
+        apply();
+      }).catch(function (err) {
+        console.error(err);
+        host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load contact sources</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('operations'); // login / top-bar / theme only — this page renders its own table
+    if (currentUser()) { wireToolbar(); loadContactSources(); }
+  </script>
+</body>
+</html>

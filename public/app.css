@@ -116,8 +116,17 @@ body {
 .kpi .delta.pos { color: var(--pos); }
 .kpi .delta.neg { color: var(--neg); }
 
+/* section header (groups cards into dev_sheet-style sections) */
+.section-head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; margin: 28px 0 14px; padding-bottom: 8px; border-bottom: 1px solid var(--border); }
+.section-head:first-of-type { margin-top: 4px; }
+.section-head h2 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: .01em; }
+.section-head .step { display: inline-flex; align-items: center; justify-content: center; min-width: 22px; height: 22px; padding: 0 6px; border-radius: 7px; background: var(--accent); color: #fff; font-size: 12px; font-weight: 700; }
+.section-head .sub { color: var(--text-muted); font-size: 12px; }
+.section-head .spacer { flex: 1; }
+
 /* panels */
 .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+.grid + .grid { margin-top: 16px; }
 .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 18px; box-shadow: var(--shadow); }
 .card.col-12 { grid-column: span 12; }
 .card.col-8 { grid-column: span 8; }
