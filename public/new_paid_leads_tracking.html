@@ -176,6 +176,26 @@
       tip.addEventListener('mouseleave', hide);
     })();
 
+    // Exclude rows from website display (data remains intact in DB):
+    // channels in referrals, MS teams, AC email campaign
+    function isExcludedLead(r) {
+      if (!r) return false;
+      var ch = String(r.channel || '').trim().toLowerCase();
+      var med = String(r.utmMedium || '').trim().toLowerCase();
+      var src = String(r.utmSource || '').trim().toLowerCase();
+
+      // Referrals
+      if (med === 'referral' || ch.indexOf('referral') !== -1 || src.indexOf('referral') !== -1) return true;
+
+      // MS Teams
+      if (ch.indexOf('teams') !== -1 || src.indexOf('teams') !== -1) return true;
+
+      // AC email campaign
+      if (med === 'email' || ch.indexOf('email') !== -1 || ch.indexOf('activecampaign') !== -1 || src.indexOf('activecampaign') !== -1) return true;
+
+      return false;
+    }
+
     // ---- date-range filtering ----
     function parseInput(id) {
       var el = document.getElementById(id);
@@ -190,8 +210,10 @@
     }
     function filteredRows() {
       var from = parseInput('acsFrom'), to = parseInput('acsTo');
-      if (!from && !to) return ALL_ROWS.slice();
-      return ALL_ROWS.filter(function (r) { return inRange(r.bookingDate, from, to); });
+      return ALL_ROWS.filter(function (r) {
+        if (isExcludedLead(r)) return false;
+        return inRange(r.bookingDate, from, to);
+      });
     }
 
     // ---- metrics widget ----
@@ -227,7 +249,8 @@
 
     // ---- table ----
     function renderTable(rows) {
-      renderSortableTable('acsRows', rows, [
+      var visibleRows = rows.filter(function (r) { return !isExcludedLead(r); });
+      renderSortableTable('acsRows', visibleRows, [
         { key: 'bookingDate', label: 'Booking date', unit: 'date' },
         { key: 'name', label: 'Name', render: txt },
         { key: 'email', label: 'Email', render: txt },
@@ -295,8 +318,9 @@
       var host = document.getElementById('acsRows');
       host.innerHTML = '<div class="muted" style="padding:14px">Loading Calendly bookings…</div>';
       fetchJSON('/api/operations/new-paid-leads').then(function (data) {
-        ALL_ROWS = (data.rows && data.rows.data) || [];
-        setChips('acsChips', data.rows.meta);
+        var rawRows = (data.rows && data.rows.data) || [];
+        ALL_ROWS = rawRows.filter(function (r) { return !isExcludedLead(r); });
+        setChips('acsChips', data.rows && data.rows.meta);
         apply();
       }).catch(function (err) {
         console.error(err);

@@ -21,6 +21,7 @@ const SRC = 'GA4 + Calendly → ActiveCampaign (Supabase cache)';
 // from the audit table ga4_ac_event_matches (Calendly matches are labelled
 // calendly_form_submit; time-matched form contacts whose exact event can't be pinned
 // fall back to "form_submit").
+// link = the page path the conversion event fired on (conversion_link from ga4_ac_event_matches).
 const SELECT = `
   SELECT
     cs.contact_id          AS "contactId",
@@ -28,10 +29,12 @@ const SELECT = `
     cs.cdate               AS "cdate",
     cs.channel             AS "channel",
     CASE
-      WHEN cs.match_method = 'calendly_email' THEN 'calendly_form_submit'
-      WHEN cs.match_method = 'ga4_time'       THEN COALESCE(ev.event_name, 'form_submit')
-      ELSE NULL
+      WHEN cs.match_method IS NULL OR ev.conversion_link IS NULL THEN NULL
+      WHEN cs.match_method = 'calendly_email' OR ev.event_kind = 'calendly' THEN 'calendly_form_submit'
+      ELSE COALESCE(ev.event_name, 'form_submit')
     END                    AS "conversionAction",
+    ev.conversion_link     AS "link",
+    ev.conversion_link     AS "conversionLink",
     cs.source              AS "source",
     cs.medium              AS "medium",
     cs.campaign            AS "campaign",
@@ -40,6 +43,9 @@ const SELECT = `
     cs.candidate_count     AS "candidateCount",
     cs.matched_at          AS "matchedAt",
     cs.time_delta_seconds  AS "timeDeltaSeconds",
+    cs.deal_id             AS "dealId",
+    cs.google_ads_ac_field AS "googleAdsAcField",
+    cs.deal_source_ac_field AS "dealSourceAcField",
     dl.title               AS "dealTitle",
     dl.value               AS "dealValue",
     dl.status              AS "dealStatus",
@@ -47,22 +53,46 @@ const SELECT = `
     cpc.cost_per_conversion AS "cpc"
   FROM public.ga4_ac_contact_source cs
   LEFT JOIN LATERAL (
-    SELECT em.event_name
+    SELECT em.event_name, em.conversion_link, em.event_kind
     FROM public.ga4_ac_event_matches em
-    WHERE em.matched_contact_id = cs.contact_id
-      AND em.event_time = cs.matched_at
+    WHERE (
+      em.matched_contact_id = cs.contact_id
+      OR (cs.email IS NOT NULL AND em.matched_email = lower(cs.email))
+      OR (
+        cs.matched_at IS NOT NULL
+        AND em.event_time = cs.matched_at
+        AND (cs.source IS NULL OR em.source = cs.source)
+        AND (cs.medium IS NULL OR em.medium = cs.medium)
+      )
+      OR (
+        cs.matched_at IS NOT NULL
+        AND abs(extract(epoch from (em.event_time - cs.matched_at))) <= 300
+        AND (cs.source IS NULL OR em.source = cs.source)
+        AND (cs.medium IS NULL OR em.medium = cs.medium)
+      )
+    )
+    ORDER BY
+      (em.matched_contact_id = cs.contact_id) DESC NULLS LAST,
+      (cs.email IS NOT NULL AND em.matched_email = lower(cs.email)) DESC NULLS LAST,
+      (cs.matched_at IS NOT NULL AND em.event_time = cs.matched_at) DESC NULLS LAST,
+      (cs.source IS NOT NULL AND em.source = cs.source AND em.medium = cs.medium) DESC NULLS LAST,
+      (em.conversion_link IS NOT NULL) DESC,
+      abs(extract(epoch from (em.event_time - coalesce(cs.matched_at, cs.cdate)))) ASC,
+      em.event_time DESC
     LIMIT 1
   ) ev ON true
-  -- Latest ActiveCampaign deal for this contact (status: 0=open, 1=won, 2=lost).
-  -- Contacts here have at most one deal (one has two); newest by cdate wins.
+  -- ActiveCampaign deal for this contact, joined by deal_id on ga4_ac_contact_source
+  -- (with fallback to primary contact match d.contact = cs.contact_id).
   LEFT JOIN LATERAL (
     SELECT d.title, d.value / 100.0 AS value,  -- AC stores deal value in cents
            CASE d.status WHEN 1 THEN 'won' WHEN 2 THEN 'lost' ELSE 'open' END AS status,
            st.source_type  -- AC deal "Inbound/ Outbound?" field (Qualification Details)
     FROM public.activecampaign_deals d
     LEFT JOIN public.ac_deal_source_type st ON st.deal_id = d.id
-    WHERE d.contact = cs.contact_id
-    ORDER BY d.cdate DESC NULLS LAST
+    WHERE (cs.deal_id IS NOT NULL AND d.id::text = cs.deal_id::text)
+       OR (cs.deal_id IS NULL AND d.contact::text = cs.contact_id::text)
+    ORDER BY (cs.deal_id IS NOT NULL AND d.id::text = cs.deal_id::text) DESC,
+             d.cdate DESC NULLS LAST
     LIMIT 1
   ) dl ON true
   -- Paid-ad cost for this contact's matched conversion (Google/Microsoft Ads,
@@ -80,6 +110,53 @@ const SELECT = `
   ) cpc ON true
   ORDER BY cs.cdate DESC NULLS LAST`;
 
+const EXCLUDED_CONVERSION_LINKS = new Set([
+  '/careers-seasonal/',
+  '/executive-x/',
+  '/careersph-based/',
+  '/free-gift-opt-in/',
+  '/leader-x-payment-gateway/',
+  '/execx/',
+  '/executive-x-payment-gateway/',
+]);
+
+function isExcludedConversionLink(link) {
+  if (!link) return false;
+  let s = String(link).trim().toLowerCase();
+  if (!s) return false;
+  try {
+    if (s.startsWith('http://') || s.startsWith('https://')) {
+      s = new URL(s).pathname.toLowerCase();
+    }
+  } catch (e) {}
+  const path = (s.startsWith('/') ? s : '/' + s).split(/[?#\s]/)[0].replace(/\/+$/, '') + '/';
+  return EXCLUDED_CONVERSION_LINKS.has(path);
+}
+
+function isExcludedRow(r) {
+  if (!r) return false;
+  const act = (r.conversionAction || '').trim().toLowerCase();
+  if (act === 'free_gifts_opt_ins') return true;
+
+  const ch = String(r.channel || '').trim().toLowerCase();
+  const med = String(r.medium || '').trim().toLowerCase();
+  const src = String(r.source || '').trim().toLowerCase();
+
+  // Referrals
+  if (med === 'referral' || ch.includes('referral') || src.includes('referral')) return true;
+
+  // MS Teams
+  if (ch.includes('teams') || src.includes('teams')) return true;
+
+  // AC email campaign
+  if (med === 'email' || ch.includes('email') || ch.includes('activecampaign') || src.includes('activecampaign')) return true;
+
+  // Conversion link exclusion
+  if (isExcludedConversionLink(r.link || r.conversionLink)) return true;
+
+  return false;
+}
+
 export async function getAcContactSources() {
   if (!supabaseConfigured()) {
     return {
@@ -89,7 +166,11 @@ export async function getAcContactSources() {
     };
   }
 
-  const rows = await q(SELECT);
+  const allRows = await q(SELECT);
+  // Exclude free_gifts_opt_ins, channels in referrals, MS teams, AC email campaign,
+  // and non-lead conversion links (/careers-seasonal/, /executive-x/, /careersph-based/, /free-gift-opt-in/)
+  // from website display (data remains intact in DB)
+  const rows = allRows.filter((r) => !isExcludedRow(r));
   const matched = rows.filter((r) => r.matchMethod && r.matchMethod !== 'unmatched').length;
 
   let status = 'live';

@@ -37,6 +37,8 @@
     /* Info ⓘ on each KPI card — native tooltip via the title attribute. */
     .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
     .kpi-info:hover, .kpi-info:focus { color: var(--accent); outline: none; }
+    .conv-link { color: var(--accent); text-decoration: none; word-break: break-all; }
+    .conv-link:hover { text-decoration: underline; }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -107,6 +109,9 @@
 
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
+    var _aud = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    function money(v) { return _aud.format(Number(v) || 0); }
+
     // ---- cell renderers ----
     function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
     function methodPill(v) {
@@ -167,6 +172,25 @@
       var s = String(v), cls = s === 'calendly_form_submit' ? 'pos' : 'partial';
       return '<span class="conv-cell" data-act="' + esc(s) + '"><span class="pill ' + cls + '">' + esc(s) + '</span></span>';
     }
+    // Link = the page path the conversion event fired on (conversion_link from ga4_ac_event_matches)
+    function linkCell(v, row) {
+      var val = (v !== null && v !== undefined && v !== '') ? v : (row && (row.link || row.conversionLink));
+      if (val === null || val === undefined || val === '') return '—';
+      var s = String(val).trim();
+      if (!s || s === '—' || s.toLowerCase() === '(not set)') return '—';
+      var href = s;
+      if (/^https?:\/\//i.test(s)) {
+        href = s;
+      } else if (s === '/ (home)') {
+        href = 'https://www.myadventuregroup.com.au/';
+      } else if (s.charAt(0) === '/') {
+        var path = s.split(/\s+/)[0];
+        href = 'https://www.myadventuregroup.com.au' + path;
+      } else {
+        href = 'https://www.myadventuregroup.com.au/' + s;
+      }
+      return '<a class="conv-link" href="' + esc(href) + '" target="_blank" rel="noopener" title="' + esc(s) + '">' + esc(s) + '</a>';
+    }
     // CPC = the paid-ad cost of this contact's matched conversion (AUD, 2 decimals).
     // Blank for contacts with no paid-ad match (older than ~60d, or non-paid channel).
     var _aud2 = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -176,6 +200,19 @@
       if (!v) return '—';
       var s = String(v), cls = s === 'won' ? 'pos' : (s === 'lost' ? 'neg' : 'partial');
       return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+    // "Google Ads?" custom field from AC deal (Qualification Details)
+    function googleAdsPill(v) {
+      if (!v) return '—';
+      var s = String(v).trim(), low = s.toLowerCase();
+      var cls = low === 'yes' ? 'pos' : (low === 'no' ? 'neg' : 'partial');
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+    // "Deal Source?" custom field from AC deal (Qualification Details)
+    function dealSourcePill(v) {
+      if (!v) return '—';
+      var s = String(v).trim();
+      return '<span class="pill" title="' + esc(s) + '">' + esc(s) + '</span>';
     }
     // Deal "Inbound/ Outbound?" field (Qualification Details) → short, colored pill;
     // full AC value kept in the title tooltip. Blank when the deal has no value set.
@@ -234,6 +271,57 @@
       tip.addEventListener('mouseleave', hide);
     })();
 
+    var EXCLUDED_CONVERSION_LINKS = [
+      '/careers-seasonal/',
+      '/executive-x/',
+      '/careersph-based/',
+      '/free-gift-opt-in/',
+      '/leader-x-payment-gateway/',
+      '/execx/',
+      '/executive-x-payment-gateway/'
+    ];
+
+    function isExcludedConversionLink(link) {
+      if (!link) return false;
+      var s = String(link).trim().toLowerCase();
+      if (!s) return false;
+      try {
+        if (s.indexOf('http://') === 0 || s.indexOf('https://') === 0) {
+          s = new URL(s).pathname.toLowerCase();
+        }
+      } catch (e) {}
+      var path = (s.charAt(0) === '/' ? s : '/' + s).split(/[?#\s]/)[0].replace(/\/+$/, '') + '/';
+      return EXCLUDED_CONVERSION_LINKS.indexOf(path) !== -1;
+    }
+
+    // Exclude rows from website display (data remains intact in DB):
+    // - conversionAction = "free_gifts_opt_ins"
+    // - channels in referrals, MS teams, AC email campaign
+    // - conversion_link in ("/careers-seasonal/", "/executive-x/", "/careersph-based/", "/free-gift-opt-in/")
+    function isExcludedRow(r) {
+      if (!r) return false;
+      var act = (r.conversionAction || '').trim().toLowerCase();
+      if (act === 'free_gifts_opt_ins') return true;
+
+      var ch = String(r.channel || '').trim().toLowerCase();
+      var med = String(r.medium || '').trim().toLowerCase();
+      var src = String(r.source || '').trim().toLowerCase();
+
+      // Referrals (e.g. *.ac-page.com / referral, linkedin.com / referral)
+      if (med === 'referral' || ch.indexOf('referral') !== -1 || src.indexOf('referral') !== -1) return true;
+
+      // MS Teams (e.g. teams.public.onecdn.static.microsoft / referral)
+      if (ch.indexOf('teams') !== -1 || src.indexOf('teams') !== -1) return true;
+
+      // AC email campaign (e.g. ActiveCampaign / email)
+      if (med === 'email' || ch.indexOf('email') !== -1 || ch.indexOf('activecampaign') !== -1 || src.indexOf('activecampaign') !== -1) return true;
+
+      // Excluded conversion links
+      if (isExcludedConversionLink(r.link || r.conversionLink)) return true;
+
+      return false;
+    }
+
     // ---- date-range filtering ----
     function parseInput(id) {
       var el = document.getElementById(id);
@@ -248,8 +336,10 @@
     }
     function filteredRows() {
       var from = parseInput('acsFrom'), to = parseInput('acsTo');
-      if (!from && !to) return ALL_ROWS.slice();
-      return ALL_ROWS.filter(function (r) { return inRange(r.cdate, from, to); });
+      return ALL_ROWS.filter(function (r) {
+        if (isExcludedRow(r)) return false;
+        return inRange(r.cdate, from, to);
+      });
     }
 
     // ---- metrics widget ----
@@ -262,14 +352,26 @@
     }
     function renderKpis(rows) {
       var total = rows.length;
+      var revenue = rows.reduce(function (a, r) { return a + (r.dealStatus === 'won' ? (Number(r.dealValue) || 0) : 0); }, 0);
+      var wonDeals = rows.filter(function (r) { return r.dealStatus === 'won'; }).length;
+      var openPipeline = rows.reduce(function (a, r) { return a + (r.dealStatus === 'open' ? (Number(r.dealValue) || 0) : 0); }, 0);
+      var openDeals = rows.filter(function (r) { return r.dealStatus === 'open'; }).length;
+
       function bySource(ls) { return rows.filter(function (r) { return (r.channel || '') === ls; }).length; }
       var gcpc = bySource('google / cpc');
       var bcpc = bySource('bing / cpc');
       var gorg = bySource('google / organic');
       var borg = bySource('bing / organic');
       var host = document.getElementById('acsKpis');
+
+      var revSub = wonDeals > 0
+        ? (wonDeals + (wonDeals === 1 ? ' won deal' : ' won deals') + (openPipeline > 0 ? ' · ' + money(openPipeline) + ' open' : ''))
+        : (openPipeline > 0 ? money(openPipeline) + ' open pipeline' : '0 won deals');
+
       host.innerHTML =
-        kpi('Total inbound enquiries', total, 'in selected range', '',
+        kpi('Total Deal Value', money(revenue), revSub, revenue ? 'pos' : '',
+            'Total value of all deals (AUD) for contacts in the current view. AC deal value is CRM-contracted, not billed revenue.' + (openPipeline > 0 ? ' Open pipeline: ' + money(openPipeline) + ' across ' + openDeals + ' open deals.' : '')) +
+        kpi('Total Leads', total, 'in selected range', '',
             'Every ActiveCampaign contact created in the selected date range — the total inbound enquiries for that period.') +
         kpi('Paid Google (google / cpc)', gcpc, 'paid search', gcpc ? 'pos' : '',
             'Contacts whose GA4 session channel was google / cpc — a paid Google Ads click. Channel is only known for contacts in the last ~60 days (GA4 data retention).') +
@@ -286,14 +388,17 @@
     // calendly_email or ga4_time). The KPI cards above still count ALL contacts in
     // range (that's what "Total inbound enquiries" means), so they use the unfiltered set.
     function renderTable(rows) {
-      var leads = rows.filter(function (r) { return r.conversionAction; });
+      var leads = rows.filter(function (r) { return !isExcludedRow(r); });
       renderSortableTable('acsRows', leads, [
         { key: 'cdate', label: 'Created', unit: 'date' },
         { key: 'contactId', label: 'AC ID', render: txt },
         { key: 'email', label: 'Email', render: txt },
         { key: 'channel', label: 'Channel', render: channelPill },
         { key: 'conversionAction', label: 'Conversion Action', render: convPill },
+        { key: 'link', label: 'Link', render: linkCell },
         { key: 'cpc', label: 'CPC (AUD)', unit: 'currency', render: cpcCell },
+        { key: 'googleAdsAcField', label: 'Google Ads (AC)', render: googleAdsPill },
+        { key: 'dealSourceAcField', label: 'Deal Source', render: dealSourcePill },
         { key: 'dealTitle', label: 'Deal', render: txt },
         { key: 'dealValue', label: 'Value', unit: 'currency' },
         { key: 'dealStatus', label: 'Status', render: statusPill },
@@ -305,7 +410,7 @@
       ], {
         searchPlaceholder: 'Search contacts…',
         sortKey: 'cdate', sortDir: 'desc',
-        emptyText: 'No leads with a conversion action in this date range.',
+        emptyText: 'No leads in this date range.',
         onCount: function (shown, total) {
           var el = document.getElementById('acsCount');
           if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
@@ -358,8 +463,9 @@
       var host = document.getElementById('acsRows');
       host.innerHTML = '<div class="muted" style="padding:14px">Loading contact sources…</div>';
       fetchJSON('/api/operations/contact-sources').then(function (data) {
-        ALL_ROWS = (data.rows && data.rows.data) || [];
-        setChips('acsChips', data.rows.meta);
+        var rawRows = (data.rows && data.rows.data) || [];
+        ALL_ROWS = rawRows.filter(function (r) { return !isExcludedRow(r); });
+        setChips('acsChips', data.rows && data.rows.meta);
         apply();
       }).catch(function (err) {
         console.error(err);

@@ -97,13 +97,22 @@ function wallToUtcIso(y: number, mo: number, d: number, h: number, mi: number, t
 }
 
 // ---- GA4 Data API: runReport ---------------------------------------------
-interface Ga4Row { event_time_utc: string; event_name: string; source: string; medium: string; campaign: string; event_count: number; }
+// page_path = the GA4 `pagePath` dimension (the page the event fired on, no query
+// string), normalised for display: '/' -> '/ (home)', '(not set)'/'' -> null.
+// Stored as ga4_ac_event_matches.conversion_link by rebuild_ga4_ac_matches().
+interface Ga4Row { event_time_utc: string; event_name: string; source: string; medium: string; campaign: string; event_count: number; page_path: string | null; }
+function normalisePagePath(p: string | undefined): string | null {
+  const s = (p ?? "").trim();
+  if (!s || s === "(not set)") return null;
+  if (s === "/") return "/ (home)";
+  return s;
+}
 async function ga4Events(token: string): Promise<Ga4Row[]> {
   const body = {
     dateRanges: [{ startDate: `${WINDOW_DAYS}daysAgo`, endDate: "today" }],
     dimensions: [
       { name: "dateHourMinute" }, { name: "eventName" }, { name: "sessionSource" },
-      { name: "sessionMedium" }, { name: "sessionCampaignName" },
+      { name: "sessionMedium" }, { name: "sessionCampaignName" }, { name: "pagePath" },
     ],
     metrics: [{ name: "eventCount" }],
     dimensionFilter: { filter: { fieldName: "eventName", inListFilter: { values: [...FORM_EVENTS, CALENDLY_EVENT] } } },
@@ -124,6 +133,7 @@ async function ga4Events(token: string): Promise<Ga4Row[]> {
       event_time_utc: wallToUtcIso(y, mo, d, h, mi, tz),
       event_name: dv[1].value, source: dv[2].value, medium: dv[3].value, campaign: dv[4].value,
       event_count: parseInt(row.metricValues[0].value, 10) || 0,
+      page_path: normalisePagePath(dv[5]?.value),
     });
   }
   return out;
@@ -216,7 +226,7 @@ async function run(): Promise<Summary> {
   const ga4 = await ga4Events(token);
   const formRows = ga4.filter((r) => r.event_name !== CALENDLY_EVENT);
   const calEventRows = ga4.filter((r) => r.event_name === CALENDLY_EVENT)
-    .map((r) => ({ event_time_utc: r.event_time_utc, source: r.source, medium: r.medium, campaign: r.campaign, event_count: r.event_count }));
+    .map((r) => ({ event_time_utc: r.event_time_utc, source: r.source, medium: r.medium, campaign: r.campaign, event_count: r.event_count, page_path: r.page_path }));
   s.ga4_form_rows = formRows.length;
   s.ga4_calendly_rows = calEventRows.length;
 

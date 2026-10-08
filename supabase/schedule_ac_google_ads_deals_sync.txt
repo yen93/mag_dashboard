@@ -1,0 +1,26 @@
+-- Schedule the ac-google-ads-deals-sync edge function daily at 05:30 AM Philippine time.
+-- 05:30 AM PH (UTC+8) = 21:30 UTC previous day -> cron '30 21 * * *'
+
+CREATE EXTENSION IF NOT EXISTS pg_cron;
+CREATE EXTENSION IF NOT EXISTS pg_net;
+
+-- Unschedule first if it already exists (prevents duplicate job errors)
+DO $$
+BEGIN
+  PERFORM cron.unschedule('ac-google-ads-deals-sync-daily');
+EXCEPTION WHEN OTHERS THEN
+  -- ignore if job did not exist yet
+END $$;
+
+SELECT cron.schedule(
+  'ac-google-ads-deals-sync-daily',
+  '30 21 * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://aivitcomiywiysrfwqxt.supabase.co/functions/v1/ac-google-ads-deals-sync?sync=1',
+    headers := jsonb_build_object('Content-Type', 'application/json'),
+    body := '{}'::jsonb,
+    timeout_milliseconds := 120000
+  );
+  $$
+);

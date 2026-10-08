@@ -52,6 +52,24 @@ const SELECT = `
 // the dashboard cards agree with the automation's own run totals.
 const isPaidChannel = (c) => c === 'Google Ads' || c === 'Microsoft Ads';
 
+function isExcludedLead(r) {
+  if (!r) return false;
+  const ch = String(r.channel || '').trim().toLowerCase();
+  const med = String(r.utmMedium || '').trim().toLowerCase();
+  const src = String(r.utmSource || '').trim().toLowerCase();
+
+  // Referrals
+  if (med === 'referral' || ch.includes('referral') || src.includes('referral')) return true;
+
+  // MS Teams
+  if (ch.includes('teams') || src.includes('teams')) return true;
+
+  // AC email campaign
+  if (med === 'email' || ch.includes('email') || ch.includes('activecampaign') || src.includes('activecampaign')) return true;
+
+  return false;
+}
+
 export async function getNewPaidLeads() {
   if (!supabaseConfigured()) {
     return {
@@ -61,7 +79,9 @@ export async function getNewPaidLeads() {
     };
   }
 
-  const rows = await q(SELECT);
+  const allRows = await q(SELECT);
+  // Exclude channels in referrals, MS teams, AC email campaign from website display (data remains intact in DB)
+  const rows = allRows.filter((r) => !isExcludedLead(r));
   const paid = rows.filter((r) => isPaidChannel(r.channel)).length;
 
   let status = 'live';
