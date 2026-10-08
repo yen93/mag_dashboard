@@ -1,0 +1,158 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-07
+Session: Expand the dashboard "Sales" tab — reorganize it into the MAG_Sales_Metrics
+         dev_sheet's sections and add more charts/widgets, wiring the newly-
+         computable Conference metrics live; then deploy to Cloud Run.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Provided two links (the MAG_Sales_Metrics dev_sheet and the live mag_dashboard
+URL) and asked: update the Sales tab in the dashboard, add more graphs/charts/
+widgets, with the data based on the dev_sheet and arranged/sectioned the way the
+dev_sheet is arranged.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the current Sales tab end-to-end: public/sales_overview.html (the "Sales"
+page; note the naming gotcha — sales.html is the legacy "Conferences" page),
+server/metrics/sales-topline.js (reads the public.sales_topline Supabase cache,
+filled weekly by the sales-topline-sync Claude routine; only 3 live metrics:
+total_income, bureau, tailor), public/app.js (shared Chart.js helpers:
+lineChart/barChart/pieChart/renderKpis/metaChips/renderPendingBody,
+monthLabel), server/lib/metric.js (live()/pending()/section() wrappers), and
+routines/sales-topline-sync.md.
+
+Read the Google Sheet via the Google Drive connector. The "dev_sheet" tab
+(gid 596815583) is the implementation spec with columns KPI / Period / Data
+Source / Blocker / Status, arranged into sections: (1) Top-Line Header,
+(2) Total Sales / Enquiries, (3) CONFERENCE › Overview, then deeper CONFERENCE
+groups (Inbound, Outbound, Post Conference, Paid Ads, Trojan Horse, Executive X,
+Leader X, MAG Experiences). Pulled the full row list via get_file_metadata
+(MAX_ALLOWED) since the first read truncated the Conference rows.
+
+Inspected the live Supabase project (aivitcomiywiysrfwqxt, MAGTestProject):
+ - sales_topline currently holds total_income (+ytd/ytd_prev), bureau, tailor.
+ - activecampaign_deals: group/stage/status(int 0=open,1=won,2=lost)/value(cents)/
+   currency/cdate/mdate; LIV pipeline = group 3, Tailor = group 7, Bureau stage 113.
+ - ac_custom_fields.demo_date is the real "Demo date?" field (the dev_sheet's
+   source for demos booked); "Deal Source?" and "Inbound/ Outbound?" are NOT
+   mirrored to Supabase.
+ - invoice_tracking (Xero mirror) has amount_total/currency/invoice_date but no
+   category column, so Conference-vs-MAG income split isn't derivable yet.
+Confirmed won-deal counts/revenue and demo counts produce sane 12-month series.
+
+Determined what could be wired LIVE now (from already-mirrored tables) vs. what
+stays "needs setup": live = Deals Won, Win Rate, Won Revenue, Avg Deal Value,
+Demos Booked (all LIV pipeline); pending = direct/indirect split + leads,
+speaking enquiries, inbound/outbound, conference/MAG income split, and the
+deeper sections (matching the dev_sheet's own blockers).
+
+Asked the user two scoping questions (data scope; section breadth).
+
+--------------------------------------------------------------------------------
+USER:
+(Via the scoping prompts) Chose: (1) "Wire live + populate cache" — add the
+newly-computable Conference metrics to the sales_topline cache now, wire them in
+the backend, and update the weekly routine. (2) "3 main sections, rich" — build
+out the top 3 dev_sheet sections fully plus lightweight "needs setup" headers for
+the deeper groups.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented the full change:
+
+1. Populated the cache (idempotent UPSERT via Supabase MCP, 12-month window + YTD
+   dimension rows) with new LIV-pipeline metrics bucketed by mdate: deals_won
+   (status=1), deals_lost (status=2, for win-rate denominator), won_value
+   (sum(value)/100 AUD), and demos_booked (ac_custom_fields.demo_date joined to
+   LIV deals). Verified: YTD 52 won, 302 lost (~15% win rate), A$415,835 won
+   revenue, 33 demos.
+
+2. Rewrote server/metrics/sales-topline.js to expose the three dev_sheet sections.
+   Added a `sales` object (Total Sales/Enquiries: total income live; conference &
+   MAG income pending) and a `conference` object (KPIs dealsWon/winRate/
+   avgDealValue/demosBooked + trends dealsWonTrend/winRateTrend/wonRevenueTrend/
+   demosTrend, with win rate and avg deal value derived in-API; direct/indirect
+   share & leads pending). Kept the original top-line keys for back-compat. Added
+   a fill12() helper (complete trailing-12-month axis) and extended
+   notConfigured() so nothing hard-fails without SUPABASE_DB_URL.
+
+3. Rebuilt public/sales_overview.html into three numbered sections
+   (Top-Line Header / Total Sales / Enquiries / Conference — Overview) each with
+   its own KPI grid + charts, plus a "Conference — deeper breakdowns" section of
+   static "needs setup" tiles (Inbound, Outbound, Post-Conference, Paid Ads,
+   Trojan Horse, Exec X, Leader X, MAG Experiences), each carrying its dev_sheet
+   data-source note. Added a barSection() helper (live bar or pending body) and a
+   theme-toggle re-render hook. Added a .section-head style to public/app.css.
+
+4. Updated routines/sales-topline-sync.md: documented the new Conference metrics
+   (table + SQL in Step 1) so the weekly Mon-6am job keeps them fresh; noted AC
+   status semantics (0=open/1=won/2=lost).
+
+Verification: node --check on the backend passed; ran a throwaway ESM script
+(scratch_verify.mjs) that imported getSalesTopline() against the live DB — the
+Supabase connection string was loaded from Google Secret Manager into an env var
+and never printed — confirming the full payload (top-line + sales + conference
+all live with correct values/point counts), then deleted the script. Updated the
+sales-topline-feature memory. Did not commit/push (not requested); flagged that a
+Cloud Run redeploy was needed for the new code to reach the live URL and offered
+to deploy.
+
+--------------------------------------------------------------------------------
+USER:
+(Ran at the ! prompt) `gcloud run deploy dashboard --source . --region
+australia-southeast1` — which FAILED: "Building using Buildpacks ... Build failed".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Diagnosed: the "Buildpacks" message (instead of Dockerfile) meant --source . had
+pointed at the wrong directory. The session/! shell cwd is the sales/ subfolder,
+which contains no Dockerfile/package.json/server/public — those live one level up
+in dashboard/. Confirmed by listing both directories. Kicked off a corrected
+deploy myself in the background from the project root using the full gcloud path:
+`cd .../dashboard && gcloud.cmd run deploy dashboard --source . --region
+australia-southeast1 --project claudegwscli-502400`. Advised the user to prefix
+their ! deploys with a cd to the root.
+
+--------------------------------------------------------------------------------
+USER:
+(Ran at the ! prompt) `cd .../dashboard && gcloud run deploy dashboard --source .
+--region australia-southeast1` — this time it used the Dockerfile (dir fix worked)
+but FAILED: "ABORTED: Conflict for resource 'dashboard': version ... was specified
+but current version is ...".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained the conflict: two deploys hit the service at once (the in-flight
+background deploy + the manual retry), so one aborted on a version mismatch — the
+directory fix itself had worked. Asked the user to hold off on re-running and let
+the background deploy finish.
+
+--------------------------------------------------------------------------------
+USER:
+(No message — background task completion notification.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Background deploy completed exit 0: revision dashboard-00035-dcv serving 100% of
+traffic at https://dashboard-659687081407.australia-southeast1.run.app. Smoke-
+checked the live /sales_overview.html (HTTP 200) and confirmed all four section
+headings are present in the served page. Reported done, summarized the live
+Conference KPIs, and noted the repo changes (sales_overview.html, app.css,
+sales-topline.js, sales-topline-sync.md) are still uncommitted — offered to
+commit to a branch.
+
+--------------------------------------------------------------------------------
+USER:
+/save-chat-history
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the security scan over the full transcript (no live secrets were pasted — the
+Supabase connection string was only ever read into an env var from Secret Manager,
+never printed), then wrote this chat-history file.
+
+================================================================================
+END OF EXPORT
+================================================================================

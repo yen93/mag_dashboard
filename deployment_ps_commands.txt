@@ -1,0 +1,26 @@
+## before deployment: login to cloud run
+& "C:\Users\Cloverly\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd" auth login
+
+
+## 1. deploy new updates
+## IMPORTANT: --set-secrets REPLACES the whole secret set, so you MUST list
+## every secret here. Listing only SUPABASE_DB_URL drops the Gmail + AC secrets
+## and breaks login emails. Plain env vars (JWT_SECRET, GA4_*) are preserved.
+& "C:\Users\Cloverly\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd" run deploy dashboard --source C:\Users\Cloverly\claude_code\dashboard --region australia-southeast1 --set-secrets "SUPABASE_DB_URL=SUPABASE_DB_URL:latest,GMAIL_USER=GMAIL_USER:latest,GMAIL_APP_PASSWORD=GMAIL_APP_PASSWORD:latest,AC_API_URL=AC_API_URL:latest,AC_API_KEY=AC_API_TOKEN:latest"
+
+
+## 2. (verify) list mounted env var NAMES only -- confirms all secrets are attached, prints no values
+$gcloud = "C:\Users\Cloverly\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
+$raw = & $gcloud run services describe dashboard --region australia-southeast1 --project claudegwscli-502400 --format="value(spec.template.spec.containers[0].env[].name)"
+$names = $raw -split '[;\t]' | ForEach-Object { $_.Trim() } | Where-Object { $_ }
+"Mounted env vars: $($names -join ', ')"
+foreach ($req in 'SUPABASE_DB_URL','GMAIL_USER','GMAIL_APP_PASSWORD','AC_API_URL','AC_API_KEY') {
+  if ($names -contains $req) { "  OK       $req" } else { "  MISSING  $req   <-- re-run step 1" }
+}
+
+
+## 3. (only if step 2 shows a secret MISSING but you don't want a full redeploy)
+## --update-secrets ADDS/updates just the named secrets without dropping the rest
+& $gcloud run services update dashboard `
+  --region australia-southeast1 --project claudegwscli-502400 `
+  --update-secrets="GMAIL_USER=GMAIL_USER:latest,GMAIL_APP_PASSWORD=GMAIL_APP_PASSWORD:latest"

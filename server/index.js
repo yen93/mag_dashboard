@@ -7,10 +7,13 @@ import { getMarketing } from './metrics/marketing.js';
 import { getOperations } from './metrics/operations.js';
 import { getLivDeals } from './metrics/liv-deals.js';
 import { getSalesTopline } from './metrics/sales-topline.js';
+import { getToplineCards, cleanDate } from './metrics/sales-topline-cards.js';
+import { getAcDealsTable } from './metrics/ac-deals-table.js';
 import { getMagBuyerSheet } from './metrics/mag-buyer-sheet.js';
 import { getInvoiceTracking } from './metrics/invoice-tracking.js';
 import { getAcContactSources } from './metrics/ac-contact-sources.js';
 import { getNewPaidLeads } from './metrics/new-paid-leads.js';
+import { getAcAdLeads } from './metrics/ac-ad-leads.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { cached } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
@@ -74,6 +77,32 @@ sales.get('/topline', async (_req, res) => {
     res.status(502).json({ error: 'Failed to load sales metrics from data source.', detail: err.message });
   }
 });
+// Sales page Top-Line Header cards — aggregates public.ac_deals_ytd for the
+// selected date range (?from=YYYY-MM-DD&to=YYYY-MM-DD, both optional, filter on
+// deal created date). Cached per range.
+sales.get('/topline-cards', async (req, res) => {
+  try {
+    const from = cleanDate(req.query.from);
+    const to = cleanDate(req.query.to);
+    const payload = await cached(`sales:topline-cards:${from || ''}:${to || ''}`,
+      () => getToplineCards({ from, to }), 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[sales:topline-cards]', err);
+    res.status(502).json({ error: 'Failed to load top-line cards from data source.', detail: err.message });
+  }
+});
+// AC Deals table reads public.ac_deals_ytd (all deals from July 1, 2024 to present).
+// Plain SELECT, cached briefly.
+sales.get('/ac-deals', async (_req, res) => {
+  try {
+    const payload = await cached('sales:ac-deals', getAcDealsTable, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[sales:ac-deals]', err);
+    res.status(502).json({ error: 'Failed to load AC deals from data source.', detail: err.message });
+  }
+});
 app.use('/api/sales', sales);
 
 // Operations sub-resources. The Buyer Sheet table reads a pre-computed Supabase
@@ -124,6 +153,18 @@ operations.get('/new-paid-leads', async (_req, res) => {
   } catch (err) {
     console.error('[operations:new-paid-leads]', err);
     res.status(502).json({ error: 'Failed to load new paid leads from data source.', detail: err.message });
+  }
+});
+// AC Ad Leads Tagging table reads a pre-computed Supabase cache
+// (public.ac_ad_leads_tagging), filled Mon–Fri by the ac-ad-leads-sync edge
+// function (AC tag 88 contacts + their deals). Plain SELECT, so a short cache is plenty.
+operations.get('/ac-ad-leads', async (_req, res) => {
+  try {
+    const payload = await cached('operations:ac-ad-leads', getAcAdLeads, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:ac-ad-leads]', err);
+    res.status(502).json({ error: 'Failed to load AC ad leads from data source.', detail: err.message });
   }
 });
 app.use('/api/operations', operations);

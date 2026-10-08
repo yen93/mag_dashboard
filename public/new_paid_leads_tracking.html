@@ -55,8 +55,9 @@
     <a class="tab" href="invoice_tracking.html">Invoices</a>
     <a class="tab" href="sales.html">Conferences</a>
     <a class="tab" href="ga4_agent.html">GA4 Agent</a>
-    <a class="tab" href="ac_contact_sources.html">Historical Paid Leads Tracking</a>
+    <a class="tab" href="ac_contact_sources.html">GA4 &amp; Ads Leads Tracking</a>
     <a class="tab active" href="new_paid_leads_tracking.html">New Paid Leads Tracking</a>
+    <a class="tab" href="ac_ad_leads_tagging.html">AC Ad Leads Tagging</a>
     <a class="tab" href="mag_sales_pulse.html">MAG Sales Pulse</a>
   </nav>
 
@@ -245,6 +246,9 @@
         onCount: function (shown, total) {
           var el = document.getElementById('acsCount');
           if (el) el.textContent = shown === total ? (total + ' bookings') : (shown + ' of ' + total + ' bookings');
+        },
+        onFilter: function (filteredList) {
+          renderKpis(filteredList);
         },
       });
     }

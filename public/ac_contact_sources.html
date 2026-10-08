@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Historical Paid Leads Tracking — MAG Metrics</title>
+  <title>GA4 &amp; Ads Leads Tracking — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
   <style>
     /* Wide table — use the full screen width (still scrolls on narrow screens). */
@@ -34,6 +34,9 @@
     #convTip a { color: var(--accent); text-decoration: none; font-weight: 700; display: inline-block; margin-top: 8px; }
     #convTip a:hover { text-decoration: underline; }
     .guide-link { font-size: 13px; text-decoration: none; color: var(--accent); font-weight: 600; }
+    /* Info ⓘ on each KPI card — native tooltip via the title attribute. */
+    .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
+    .kpi-info:hover, .kpi-info:focus { color: var(--accent); outline: none; }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -54,8 +57,9 @@
     <a class="tab" href="invoice_tracking.html">Invoices</a>
     <a class="tab" href="sales.html">Conferences</a>
     <a class="tab" href="ga4_agent.html">GA4 Agent</a>
-    <a class="tab active" href="ac_contact_sources.html">Historical Paid Leads Tracking</a>
+    <a class="tab active" href="ac_contact_sources.html">GA4 &amp; Ads Leads Tracking</a>
     <a class="tab" href="new_paid_leads_tracking.html">New Paid Leads Tracking</a>
+    <a class="tab" href="ac_ad_leads_tagging.html">AC Ad Leads Tagging</a>
     <a class="tab" href="mag_sales_pulse.html">MAG Sales Pulse</a>
   </nav>
 
@@ -66,7 +70,7 @@
     <div class="grid">
       <div class="card col-12">
         <div class="card-head">
-          <h3>Historical Paid Leads Tracking</h3>
+          <h3>GA4 &amp; Ads Leads Tracking</h3>
           <span class="chips" id="acsChips"></span>
           <a class="guide-link" href="lead_source_guide.html" style="margin-left:10px">ⓘ Channel &amp; conversion guide</a>
           <div class="spacer"></div>
@@ -87,7 +91,6 @@
             <button type="button" data-days="7">7d</button>
             <button type="button" data-days="30">30d</button>
             <button type="button" data-days="60">60d</button>
-            <button type="button" data-days="90">90d</button>
             <button type="button" data-days="0" class="active">All</button>
           </div>
           <button type="button" class="acs-reset" id="acsReset">Reset</button>
@@ -164,6 +167,29 @@
       var s = String(v), cls = s === 'calendly_form_submit' ? 'pos' : 'partial';
       return '<span class="conv-cell" data-act="' + esc(s) + '"><span class="pill ' + cls + '">' + esc(s) + '</span></span>';
     }
+    // CPC = the paid-ad cost of this contact's matched conversion (AUD, 2 decimals).
+    // Blank for contacts with no paid-ad match (older than ~60d, or non-paid channel).
+    var _aud2 = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function cpcCell(v) { return (v === null || v === undefined || v === '') ? '—' : _aud2.format(Number(v)); }
+    // Deal status from activecampaign_deals: won (green) / lost (red) / open (amber).
+    function statusPill(v) {
+      if (!v) return '—';
+      var s = String(v), cls = s === 'won' ? 'pos' : (s === 'lost' ? 'neg' : 'partial');
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+    // Deal "Inbound/ Outbound?" field (Qualification Details) → short, colored pill;
+    // full AC value kept in the title tooltip. Blank when the deal has no value set.
+    function sourceTypePill(v) {
+      if (!v) return '—';
+      var s = String(v), low = s.toLowerCase(), cls, label;
+      if (low.indexOf('inbound') === 0) { cls = 'pos'; label = 'Inbound'; }
+      else if (low.indexOf('outbound') === 0) {
+        cls = 'partial';
+        label = low.indexOf('social') >= 0 ? 'Outbound · Social'
+              : low.indexOf('cold') >= 0 ? 'Outbound · Cold' : 'Outbound';
+      } else { cls = ''; label = s; }
+      return '<span class="pill ' + cls + '" title="' + esc(s) + '">' + esc(label) + '</span>';
+    }
     // Floating, interactive tooltip for the Channel + Conversion Action columns (delegated,
     // so it survives table re-renders). Hovering a value shows a description + a guide link.
     (function () {
@@ -227,38 +253,51 @@
     }
 
     // ---- metrics widget ----
-    function kpi(label, value, sub, subClass) {
-      return '<div class="kpi"><div class="label">' + esc(label) + '</div>' +
+    // `info` renders a hoverable ⓘ with an explanation of what the card counts.
+    function kpi(label, value, sub, subClass, info) {
+      var ic = info ? ' <span class="kpi-info" tabindex="0" title="' + esc(info) + '">ⓘ</span>' : '';
+      return '<div class="kpi"><div class="label">' + esc(label) + ic + '</div>' +
         '<div class="value">' + esc(String(value)) + '</div>' +
         (sub ? '<div class="delta ' + (subClass || '') + '">' + esc(sub) + '</div>' : '') + '</div>';
     }
     function renderKpis(rows) {
       var total = rows.length;
-      var matched = rows.filter(function (r) { return r.matchMethod && r.matchMethod !== 'unmatched'; }).length;
       function bySource(ls) { return rows.filter(function (r) { return (r.channel || '') === ls; }).length; }
       var gcpc = bySource('google / cpc');
       var bcpc = bySource('bing / cpc');
       var gorg = bySource('google / organic');
       var borg = bySource('bing / organic');
-      var unmatched = rows.filter(function (r) { return !r.matchMethod || r.matchMethod === 'unmatched'; }).length;
-      var pct = total ? Math.round((matched / total) * 100) : 0;
       var host = document.getElementById('acsKpis');
       host.innerHTML =
-        kpi('Contacts', total, 'in selected range') +
-        kpi('Paid Google (google / cpc)', gcpc, 'paid search', gcpc ? 'pos' : '') +
-        kpi('Paid Bing (bing / cpc)', bcpc, 'paid search', bcpc ? 'pos' : '') +
-        kpi('Organic search (google / organic)', gorg, 'organic search', gorg ? 'pos' : '') +
-        kpi('Organic search (bing / organic)', borg, 'organic search', borg ? 'pos' : '');
+        kpi('Total inbound enquiries', total, 'in selected range', '',
+            'Every ActiveCampaign contact created in the selected date range — the total inbound enquiries for that period.') +
+        kpi('Paid Google (google / cpc)', gcpc, 'paid search', gcpc ? 'pos' : '',
+            'Contacts whose GA4 session channel was google / cpc — a paid Google Ads click. Channel is only known for contacts in the last ~60 days (GA4 data retention).') +
+        kpi('Paid Bing (bing / cpc)', bcpc, 'paid search', bcpc ? 'pos' : '',
+            'Contacts whose GA4 session channel was bing / cpc — a paid Microsoft (Bing) Ads click. Last ~60 days only (GA4 retention).') +
+        kpi('Organic search (google / organic)', gorg, 'organic search', gorg ? 'pos' : '',
+            'Contacts from google / organic — a free, unpaid Google search result (not an ad). Last ~60 days only (GA4 retention).') +
+        kpi('Organic search (bing / organic)', borg, 'organic search', borg ? 'pos' : '',
+            'Contacts from bing / organic — a free, unpaid Bing search result (not an ad). Last ~60 days only (GA4 retention).');
     }
 
     // ---- table ----
+    // The table shows only leads that have a GA4/Ads conversion action (match_method
+    // calendly_email or ga4_time). The KPI cards above still count ALL contacts in
+    // range (that's what "Total inbound enquiries" means), so they use the unfiltered set.
     function renderTable(rows) {
-      renderSortableTable('acsRows', rows, [
+      var leads = rows.filter(function (r) { return r.conversionAction; });
+      renderSortableTable('acsRows', leads, [
         { key: 'cdate', label: 'Created', unit: 'date' },
         { key: 'contactId', label: 'AC ID', render: txt },
         { key: 'email', label: 'Email', render: txt },
         { key: 'channel', label: 'Channel', render: channelPill },
         { key: 'conversionAction', label: 'Conversion Action', render: convPill },
+        { key: 'cpc', label: 'CPC (AUD)', unit: 'currency', render: cpcCell },
+        { key: 'dealTitle', label: 'Deal', render: txt },
+        { key: 'dealValue', label: 'Value', unit: 'currency' },
+        { key: 'dealStatus', label: 'Status', render: statusPill },
+        { key: 'sourceType', label: 'Source Type', render: sourceTypePill },
         { key: 'matchMethod', label: 'Match', render: methodPill },
         { key: 'confidence', label: 'Confidence', render: confPill },
         { key: 'timeDeltaSeconds', label: 'Δ (s)', unit: 'num' },
@@ -266,10 +305,13 @@
       ], {
         searchPlaceholder: 'Search contacts…',
         sortKey: 'cdate', sortDir: 'desc',
-        emptyText: 'No contacts in this date range.',
+        emptyText: 'No leads with a conversion action in this date range.',
         onCount: function (shown, total) {
           var el = document.getElementById('acsCount');
-          if (el) el.textContent = shown === total ? (total + ' contacts') : (shown + ' of ' + total + ' contacts');
+          if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
+        },
+        onFilter: function (filteredList) {
+          renderKpis(filteredList);
         },
       });
     }

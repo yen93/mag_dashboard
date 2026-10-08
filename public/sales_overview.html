@@ -5,6 +5,38 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sales — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
+  <style>
+    /* Wide layout — use the full screen width (same responsive design as ac_contact_sources tab). */
+    .content { max-width: none; overflow-anchor: none; }
+    /* Sticky filter toolbar: stays visible on top when scrolling down (like freeze row in sheets) */
+    .acs-toolbar {
+      position: sticky;
+      top: var(--topbar-h, 58px);
+      z-index: 9;
+      display: flex;
+      align-items: flex-end;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin: 0 -24px 16px -24px;
+      padding: 10px 24px 14px;
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      box-shadow: var(--shadow);
+    }
+    .acs-field { display: flex; flex-direction: column; gap: 4px; }
+    .acs-field label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .acs-field input[type="date"] {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 10px; font: inherit;
+    }
+    .acs-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+    .acs-quick button, .acs-reset {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .acs-quick button.active { background: var(--accent); color: #fff; border-color: transparent; }
+    .acs-hint { font-size: 12px; color: var(--text-muted); align-self: center; }
+  </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
 <body>
@@ -24,8 +56,9 @@
     <a class="tab" href="invoice_tracking.html">Invoices</a>
     <a class="tab" href="sales.html">Conferences</a>
     <a class="tab" href="ga4_agent.html">GA4 Agent</a>
-    <a class="tab" href="ac_contact_sources.html">Historical Paid Leads Tracking</a>
+    <a class="tab" href="ac_contact_sources.html">GA4 &amp; Ads Leads Tracking</a>
     <a class="tab" href="new_paid_leads_tracking.html">New Paid Leads Tracking</a>
+    <a class="tab" href="ac_ad_leads_tagging.html">AC Ad Leads Tagging</a>
     <a class="tab" href="mag_sales_pulse.html">MAG Sales Pulse</a>
   </nav>
 
@@ -36,13 +69,46 @@
       <span class="muted" style="font-size:13px">Sectioned per the MAG_Sales_Metrics dev_sheet · Supabase cache, refreshed weekly (Mon 6am PH)</span>
     </div>
 
+    <!-- date-range filter (narrows the month-bucketed trend charts) -->
+    <div class="acs-toolbar">
+      <div class="acs-field">
+        <label for="solFrom">From</label>
+        <input type="date" id="solFrom" />
+      </div>
+      <div class="acs-field">
+        <label for="solTo">To</label>
+        <input type="date" id="solTo" />
+      </div>
+      <div class="acs-quick" id="solQuick">
+        <button type="button" data-days="7">7d</button>
+        <button type="button" data-days="30">30d</button>
+        <button type="button" data-days="60">60d</button>
+        <button type="button" data-days="0" class="active">All</button>
+      </div>
+      <button type="button" class="acs-reset" id="solReset">Reset</button>
+      <span class="acs-hint">Top-line cards follow the selected dates (by deal created date) · trend charts filter by month</span>
+    </div>
+
     <!-- ============ 1. TOP-LINE HEADER ============ -->
     <div class="section-head">
       <span class="step">1</span><h2>Top-Line Header</h2>
-      <span class="sub">Year-to-date income &amp; this month's enquiry volume</span>
+      <span class="sub" id="kpisSub">ActiveCampaign deals created in the selected range (default: year to date)</span>
     </div>
 
     <div class="kpi-grid" id="kpis"></div>
+
+    <!-- ============ AC DEALS TABLE ============ -->
+    <div class="grid" style="margin-bottom:20px;">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>AC Deals</h3>
+          <span class="chips" id="acDealsChips"></span>
+          <div class="spacer"></div>
+          <span class="muted" id="acDealsCount" style="font-size:13px"></span>
+        </div>
+        <div id="acDealsRows"></div>
+      </div>
+    </div>
 
     <div class="grid">
       <div class="card col-7">
@@ -50,7 +116,7 @@
         <div class="chart-box" id="income-box"><canvas id="incomeCanvas"></canvas></div>
       </div>
       <div class="card col-5">
-        <div class="card-head"><h3>Direct vs Indirect income (YTD)</h3><span class="chips" id="splitChips"></span></div>
+        <div class="card-head"><h3>Direct vs Indirect income</h3><span class="chips" id="splitChips"></span></div>
         <div class="chart-box" id="split-box"><canvas id="splitCanvas"></canvas></div>
       </div>
 
@@ -60,7 +126,7 @@
       </div>
       <div class="card col-5">
         <div class="card-head"><h3>Inbound vs Outbound enquiries</h3><span class="chips" id="ioChips"></span></div>
-        <div id="io-body"></div>
+        <div class="chart-box" id="io-box"><canvas id="ioCanvas"></canvas></div>
       </div>
     </div>
 
@@ -74,19 +140,19 @@
 
     <div class="grid">
       <div class="card col-6">
-        <div class="card-head"><h3>Conference income by year</h3><span class="chips" id="confIncChips"></span></div>
-        <div class="chart-box short" id="confInc-box"></div>
+        <div class="card-head"><h3>Conference income by month</h3><span class="chips" id="confIncChips"></span></div>
+        <div class="chart-box short" id="confInc-box"><canvas id="confIncCanvas"></canvas></div>
       </div>
       <div class="card col-6">
-        <div class="card-head"><h3>MAG Experiences income by year</h3><span class="chips" id="magIncChips"></span></div>
-        <div class="chart-box short" id="magInc-box"></div>
+        <div class="card-head"><h3>MAG Experiences income by month</h3><span class="chips" id="magIncChips"></span></div>
+        <div class="chart-box short" id="magInc-box"><canvas id="magIncCanvas"></canvas></div>
       </div>
     </div>
 
     <!-- ============ 3. CONFERENCE › OVERVIEW ============ -->
     <div class="section-head">
       <span class="step">3</span><h2>Conference — Overview</h2>
-      <span class="sub">LIV pipeline (Keynotes // Workshops // Immersive), last 12 months</span>
+      <!-- <span class="sub">LIV pipeline (Keynotes // Workshops // Immersive), last 12 months</span> -->
     </div>
 
     <div class="kpi-grid" id="confKpis"></div>
@@ -132,90 +198,103 @@
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=2"></script>
   <script>
+    function syncTopbarHeight() {
+      var tb = document.querySelector('.topbar');
+      if (tb) {
+        var h = Math.round(tb.getBoundingClientRect().height);
+        document.documentElement.style.setProperty('--topbar-h', h + 'px');
+      }
+    }
+    syncTopbarHeight();
+    window.addEventListener('resize', syncTopbarHeight);
+
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
-    // Render a live bar section, or a "needs setup" body if pending/empty.
+    // Render a live bar section, or a "needs setup" body if pending.
     function barSection(boxId, canvasId, chipsId, sec, mapLabel, mapValue, opts) {
       setChips(chipsId, sec.meta);
-      if (sec.meta.status === 'pending' || !sec.data.length) { renderPendingBody(boxId, sec.meta); return; }
-      document.getElementById(boxId).innerHTML = '<canvas id="' + canvasId + '"></canvas>';
+      if (sec.meta.status === 'pending') { renderPendingBody(boxId, sec.meta); return; }
+      if (!sec.data || !sec.data.length) {
+        if (_charts[canvasId]) { _charts[canvasId].destroy(); delete _charts[canvasId]; }
+        var box = document.getElementById(boxId);
+        if (box) box.innerHTML = '<div class="muted" style="padding:40px;text-align:center">No data in this range.</div>';
+        return;
+      }
+      if (!document.getElementById(canvasId)) {
+        if (_charts[canvasId]) { _charts[canvasId].destroy(); delete _charts[canvasId]; }
+        document.getElementById(boxId).innerHTML = '<canvas id="' + canvasId + '"></canvas>';
+      }
       barChart(canvasId, sec.data.map(mapLabel), sec.data.map(mapValue), opts || {});
     }
 
-    function renderTopline(data) {
+    // ---- date-range filtering (narrows the month-bucketed trend series) ----
+    // The toolbar inputs are day-level, but the page's only filterable data is
+    // monthly trend arrays, so we compare on the 'YYYY-MM' month of each point.
+    function parseInput(id) { var el = document.getElementById(id); return el && el.value ? el.value : ''; }
+    function rangeMonths() {
+      var from = parseInput('solFrom'), to = parseInput('solTo');
+      return { fromM: from ? from.slice(0, 7) : '', toM: to ? to.slice(0, 7) : '' };
+    }
+    function monthInRange(m, fromM, toM) {
+      if (!m) return false;
+      if (fromM && m < fromM) return false;
+      if (toM && m > toM) return false;
+      return true;
+    }
+    // Return a shallow-cloned section with its data filtered to the month window
+    // (never mutates the cached payload). No window set → pass the section through.
+    function filterSection(sec, r) {
+      if (!sec || !sec.data || (!r.fromM && !r.toM)) return sec;
+      return { data: sec.data.filter(function (d) { return monthInRange(d.month, r.fromM, r.toM); }), meta: sec.meta };
+    }
+
+    function renderTopline(raw) {
+      // Apply the date-range filter to every month-bucketed trend before charting.
+      var r = rangeMonths();
+      var data = Object.assign({}, raw, {
+        incomeTrend: filterSection(raw.incomeTrend, r),
+        enquiryTrend: filterSection(raw.enquiryTrend, r),
+        sales: Object.assign({}, raw.sales, {
+          conferenceIncomeTrend: filterSection(raw.sales && raw.sales.conferenceIncomeTrend, r),
+          magExperiencesTrend: filterSection(raw.sales && raw.sales.magExperiencesTrend, r),
+        }),
+        conference: Object.assign({}, raw.conference, {
+          dealsWonTrend: filterSection(raw.conference.dealsWonTrend, r),
+          winRateTrend: filterSection(raw.conference.winRateTrend, r),
+          wonRevenueTrend: filterSection(raw.conference.wonRevenueTrend, r),
+          demosTrend: filterSection(raw.conference.demosTrend, r),
+        }),
+      });
+
       // ---- 1. Top-Line Header ----
-      renderKpis('kpis', [
-        { label: 'Total income (YTD)', metric: data.kpis.totalIncome },
-        { label: 'Bureau enquiries (this month)', metric: data.kpis.bureau },
-        { label: 'Tailor deals (this month)', metric: data.kpis.tailor },
-        { label: 'Speaking enquiries (this month)', metric: data.kpis.speakingEnquiries },
-      ]);
+      // Cards are rendered separately by loadCards() from /api/sales/topline-cards
+      // (date-range aware, backed by ac_deals_ytd).
 
       barSection('income-box', 'incomeCanvas', 'incChips', data.incomeTrend,
         function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#17a673' });
 
-      setChips('splitChips', data.splitBreakdown.meta);
-      if (data.splitBreakdown.meta.status === 'pending' || !data.splitBreakdown.data.length) {
-        renderPendingBody('split-box', data.splitBreakdown.meta);
-      } else {
-        pieChart('splitCanvas', data.splitBreakdown.data);
-      }
+      // Direct vs Indirect income is rendered by renderSplit() backed by ac_deals_ytd
+      if (_lastSplit) renderSplit(_lastSplit);
 
       setChips('enqChips', data.enquiryTrend.meta);
-      if (data.enquiryTrend.meta.status === 'pending') {
+      if (data.enquiryTrend.meta.status === 'pending' || !data.enquiryTrend.data.length) {
         renderPendingBody('enquiry-box', data.enquiryTrend.meta);
       } else {
+        document.getElementById('enquiry-box').innerHTML = '<canvas id="enquiryCanvas"></canvas>';
         lineChart('enquiryCanvas', data.enquiryTrend.data, [
           { label: 'Bureau', key: 'bureau', color: '#3b6ef0' },
           { label: 'Tailor', key: 'tailor', color: '#f0a63b' },
         ], { xKey: 'month', xLabel: monthLabel });
       }
 
-      setChips('ioChips', data.inboundOutbound.meta);
-      renderPendingBody('io-body', data.inboundOutbound.meta);
+      // Inbound vs Outbound enquiries is rendered by renderInboundOutbound() backed by ac_deals_ytd
+      if (_lastIO) renderInboundOutbound(_lastIO);
 
       // ---- 2. Total Sales / Enquiries ----
-      renderKpis('salesKpis', [
-        { label: 'Total income by year (YTD)', metric: data.sales.totalIncome },
-        { label: 'Conference income (YTD)', metric: data.sales.conferenceIncome },
-        { label: 'MAG Experiences income (YTD)', metric: data.sales.magExperiences },
-      ]);
-      setChips('confIncChips', data.sales.conferenceIncome.meta);
-      renderPendingBody('confInc-box', data.sales.conferenceIncome.meta);
-      setChips('magIncChips', data.sales.magExperiences.meta);
-      renderPendingBody('magInc-box', data.sales.magExperiences.meta);
+      renderSalesStreams(data.sales);
 
       // ---- 3. Conference › Overview ----
-      var c = data.conference;
-      renderKpis('confKpis', [
-        { label: 'Deals won (YTD)', metric: c.kpis.dealsWon },
-        { label: 'Win rate (YTD)', metric: c.kpis.winRate },
-        { label: 'Avg deal value', metric: c.kpis.avgDealValue },
-        { label: 'Demos booked (YTD)', metric: c.kpis.demosBooked },
-      ]);
-
-      barSection('won-box', 'wonCanvas', 'wonChips', c.dealsWonTrend,
-        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#3b6ef0' });
-
-      setChips('wrChips', c.winRateTrend.meta);
-      if (c.winRateTrend.meta.status === 'pending' || !c.winRateTrend.data.length) {
-        renderPendingBody('wr-box', c.winRateTrend.meta);
-      } else {
-        lineChart('winRateCanvas', c.winRateTrend.data,
-          [{ label: 'Win rate %', key: 'value', color: '#7c5cff' }],
-          { xKey: 'month', xLabel: monthLabel });
-      }
-
-      barSection('wrev-box', 'wonRevCanvas', 'wrevChips', c.wonRevenueTrend,
-        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#17a673' });
-
-      barSection('demo-box', 'demoCanvas', 'demoChips', c.demosTrend,
-        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#f0a63b' });
-
-      setChips('diShareChips', c.directIndirectShare.meta);
-      renderPendingBody('diShare-body', c.directIndirectShare.meta);
-      setChips('diLeadsChips', c.directIndirectLeads.meta);
-      renderPendingBody('diLeads-body', c.directIndirectLeads.meta);
+      renderConferenceOverview(data.conference);
     }
 
     // Static "needs setup" scaffolding for the dev_sheet's deeper Conference groups.
@@ -237,17 +316,619 @@
       }).join('');
     }
 
+    // ---- AC Deals Table ----
+    var ALL_DEALS_ROWS = [];
+
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+
+    function boolPill(v, trueLabel, falseLabel) {
+      if (v === true) return '<span class="pill pos">' + esc(trueLabel || 'Yes') + '</span>';
+      if (v === false) return '<span class="pill muted">' + esc(falseLabel || 'No') + '</span>';
+      return '—';
+    }
+
+    function statusPill(v) {
+      if (!v) return '—';
+      var s = String(v), cls = s === 'won' ? 'pos' : (s === 'lost' ? 'neg' : 'partial');
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+
+    function sourceTypePill(v) {
+      if (!v) return '—';
+      var s = String(v), low = s.toLowerCase(), cls, label;
+      if (low.indexOf('inbound') === 0) { cls = 'pos'; label = 'Inbound'; }
+      else if (low.indexOf('outbound') === 0) {
+        cls = 'partial';
+        label = low.indexOf('social') >= 0 ? 'Outbound · Social'
+              : low.indexOf('cold') >= 0 ? 'Outbound · Cold' : 'Outbound';
+      } else { cls = ''; label = s; }
+      return '<span class="pill ' + cls + '" title="' + esc(s) + '">' + esc(label) + '</span>';
+    }
+
+    function inRange(iso, from, to) {
+      if (!iso) return false;
+      var d = String(iso).slice(0, 10);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }
+
+    function filteredDealsRows() {
+      var from = parseInput('solFrom'), to = parseInput('solTo');
+      if (!from && !to) return ALL_DEALS_ROWS.slice();
+      return ALL_DEALS_ROWS.filter(function (r) { return inRange(r.cdate, from, to); });
+    }
+
+    function renderDealsTable(rows) {
+      renderSortableTable('acDealsRows', rows, [
+        { key: 'cdate', label: 'Created', unit: 'date' },
+        { key: 'acDealId', label: 'Deal ID', render: txt },
+        { key: 'title', label: 'Deal Title', render: txt },
+        { key: 'pipeline', label: 'Pipeline', render: txt },
+        { key: 'stage', label: 'Stage', render: txt },
+        { key: 'status', label: 'Status', render: statusPill },
+        { key: 'dealValue', label: 'Value', unit: 'currency' },
+        { key: 'isBureau', label: 'Bureau', render: function (v) { return boolPill(v, 'Bureau', 'No'); } },
+        { key: 'isTailor', label: 'Tailor', render: function (v) { return boolPill(v, 'Tailor', 'No'); } },
+        { key: 'isInboundInquiry', label: 'Speaking Enquiries', render: function (v) { return boolPill(v, 'Yes', 'No'); } },
+        { key: 'directOrIndirect', label: 'Deal Source', render: txt },
+        { key: 'inboundOrOutbound', label: 'Inbound / Outbound', render: sourceTypePill },
+      ], {
+        searchPlaceholder: 'Search AC deals…',
+        sortKey: 'cdate', sortDir: 'desc',
+        pageSize: 10,
+        emptyText: 'No AC deals found in this date range.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('acDealsCount');
+          if (el) el.textContent = shown === total ? (total + ' deals') : (shown + ' of ' + total + ' deals');
+        },
+      });
+    }
+
+    function splitFromDealsRows() {
+      var rows = filteredDealsRows();
+      var dVal = 0, iVal = 0;
+      rows.forEach(function (r) {
+        if (r.status === 'won') {
+          var s = (r.directOrIndirect || '').toLowerCase();
+          var val = Number(r.dealValue) || 0;
+          if (s.indexOf('direct') === 0) dVal += val;
+          else if (s.indexOf('indirect') === 0) iVal += val;
+        }
+      });
+      return {
+        directValue: dVal,
+        indirectValue: iVal,
+        meta: { source: 'ActiveCampaign → ac_deals_ytd', status: 'live' },
+      };
+    }
+
+    var _lastSplit = null;
+    function renderSplit(di) {
+      if (!di) return;
+      _lastSplit = di;
+      setChips('splitChips', di.meta || { source: 'ActiveCampaign → ac_deals_ytd', status: 'live' });
+      var box = document.getElementById('split-box');
+      if (!box) return;
+
+      if (di.meta && di.meta.status === 'pending') {
+        renderPendingBody('split-box', di.meta);
+        return;
+      }
+
+      var dVal = Number(di.directValue) || 0;
+      var iVal = Number(di.indirectValue) || 0;
+      if (dVal <= 0 && iVal <= 0) {
+        if (_charts['splitCanvas']) { _charts['splitCanvas'].destroy(); delete _charts['splitCanvas']; }
+        box.innerHTML = '<div class="muted" style="padding:40px;text-align:center">No won deals with Direct / Indirect deal source in this range.</div>';
+        return;
+      }
+
+      if (!document.getElementById('splitCanvas')) {
+        if (_charts['splitCanvas']) { _charts['splitCanvas'].destroy(); delete _charts['splitCanvas']; }
+        box.innerHTML = '<canvas id="splitCanvas"></canvas>';
+      }
+      pieChart('splitCanvas', [
+        { label: 'Direct', value: dVal },
+        { label: 'Indirect', value: iVal },
+      ]);
+    }
+
+    function ioFromDealsRows() {
+      var rows = filteredDealsRows();
+      var inbound = 0, outbound = 0;
+      rows.forEach(function (r) {
+        var s = (r.inboundOrOutbound || '').toLowerCase();
+        if (s.indexOf('inbound') === 0) inbound++;
+        else if (s.indexOf('outbound') === 0) outbound++;
+      });
+      return {
+        inbound: inbound,
+        outbound: outbound,
+        meta: { source: 'ActiveCampaign → ac_deals_ytd', status: 'live' },
+      };
+    }
+
+    var _lastIO = null;
+    function renderInboundOutbound(io) {
+      if (!io) return;
+      _lastIO = io;
+      setChips('ioChips', io.meta || { source: 'ActiveCampaign → ac_deals_ytd', status: 'live' });
+      var box = document.getElementById('io-box');
+      if (!box) return;
+
+      if (io.meta && io.meta.status === 'pending') {
+        renderPendingBody('io-box', io.meta);
+        return;
+      }
+
+      var inVal = Number(io.inbound) || 0;
+      var outVal = Number(io.outbound) || 0;
+      if (inVal <= 0 && outVal <= 0) {
+        if (_charts['ioCanvas']) { _charts['ioCanvas'].destroy(); delete _charts['ioCanvas']; }
+        box.innerHTML = '<div class="muted" style="padding:40px;text-align:center">No deals with Inbound / Outbound source in this range.</div>';
+        return;
+      }
+
+      if (!document.getElementById('ioCanvas')) {
+        if (_charts['ioCanvas']) { _charts['ioCanvas'].destroy(); delete _charts['ioCanvas']; }
+        box.innerHTML = '<canvas id="ioCanvas"></canvas>';
+      }
+      pieChart('ioCanvas', [
+        { label: 'Inbound', value: inVal },
+        { label: 'Outbound', value: outVal },
+      ]);
+    }
+
+    var CONF_PIPELINE = 'Keynotes // Workshops // Immersive (LIV)';
+    var MAG_PIPELINE = 'MAG_Team_Offsite (JAYCEL)';
+
+    function streamFromDeals(pipelineName) {
+      var rows = filteredDealsRows().filter(function (r) {
+        return (r.pipeline || '').trim().toLowerCase() === pipelineName.trim().toLowerCase();
+      });
+      var totalVal = 0;
+      var wonVal = 0;
+      var monthMap = {};
+
+      rows.forEach(function (r) {
+        var val = Number(r.dealValue) || 0;
+        totalVal += val;
+        if (r.status === 'won') wonVal += val;
+
+        var m = r.cdate ? String(r.cdate).slice(0, 7) : '';
+        if (m) {
+          if (!monthMap[m]) monthMap[m] = { month: m, value: 0, wonValue: 0, count: 0, wonCount: 0 };
+          monthMap[m].value += val;
+          if (r.status === 'won') {
+            monthMap[m].wonValue += val;
+            monthMap[m].wonCount++;
+          }
+          monthMap[m].count++;
+        }
+      });
+
+      var existingMonths = Object.keys(monthMap).sort();
+      var r = rangeMonths();
+      var months = [];
+      if (r.fromM && r.toM) {
+        var cur = r.fromM;
+        var steps = 0;
+        while (cur <= r.toM && steps++ < 120) {
+          months.push(cur);
+          var p = cur.split('-');
+          var y = +p[0], mon = +p[1] + 1;
+          if (mon > 12) { mon = 1; y++; }
+          cur = y + '-' + (mon < 10 ? '0' : '') + mon;
+        }
+      } else if (existingMonths.length) {
+        var cur = existingMonths[0];
+        var endM = new Date().toISOString().slice(0, 7);
+        if (existingMonths[existingMonths.length - 1] > endM) {
+          endM = existingMonths[existingMonths.length - 1];
+        }
+        var steps = 0;
+        while (cur <= endM && steps++ < 120) {
+          months.push(cur);
+          var p = cur.split('-');
+          var y = +p[0], mon = +p[1] + 1;
+          if (mon > 12) { mon = 1; y++; }
+          cur = y + '-' + (mon < 10 ? '0' : '') + mon;
+        }
+      }
+
+      var monthly = months.map(function (m) {
+        return monthMap[m] || { month: m, value: 0, wonValue: 0, count: 0, wonCount: 0 };
+      });
+
+      return {
+        pipeline: pipelineName,
+        totalVal: totalVal,
+        wonVal: wonVal,
+        count: rows.length,
+        monthly: monthly,
+      };
+    }
+
+    function renderStreamChart(boxId, canvasId, monthlyData, color, emptyMsg) {
+      var box = document.getElementById(boxId);
+      if (!box) return;
+
+      if (!monthlyData || !monthlyData.length || monthlyData.every(function (d) { return (d.value || 0) === 0; })) {
+        if (_charts[canvasId]) { _charts[canvasId].destroy(); delete _charts[canvasId]; }
+        box.innerHTML = '<div class="muted" style="padding:40px;text-align:center">' + esc(emptyMsg || 'No deals in this range.') + '</div>';
+        return;
+      }
+
+      if (!document.getElementById(canvasId)) {
+        if (_charts[canvasId]) { _charts[canvasId].destroy(); delete _charts[canvasId]; }
+        box.innerHTML = '<canvas id="' + canvasId + '"></canvas>';
+      }
+
+      var labels = monthlyData.map(function (d) { return d.month ? monthLabel(d.month) : (d.year || ''); });
+      var values = monthlyData.map(function (d) { return d.value || 0; });
+      barChart(canvasId, labels, values, { colors: color });
+    }
+
+    var _lastSalesData = null;
+    function renderSalesStreams(toplineSales) {
+      if (toplineSales) _lastSalesData = toplineSales;
+      var ts = _lastSalesData;
+      var meta = { source: 'ActiveCampaign → ac_deals_ytd', status: 'live' };
+      var confData = null, magData = null;
+
+      if (ALL_DEALS_ROWS && ALL_DEALS_ROWS.length) {
+        var confStream = streamFromDeals(CONF_PIPELINE);
+        var magStream = streamFromDeals(MAG_PIPELINE);
+
+        confData = {
+          kpi: {
+            value: confStream.totalVal,
+            unit: 'currency',
+            meta: meta,
+          },
+          sub: confStream.count ? (confStream.count + ' deal' + (confStream.count === 1 ? '' : 's')) : '0 deals',
+          monthly: confStream.monthly,
+          meta: meta,
+        };
+
+        magData = {
+          kpi: {
+            value: magStream.totalVal,
+            unit: 'currency',
+            meta: meta,
+          },
+          sub: magStream.count ? (magStream.count + ' deal' + (magStream.count === 1 ? '' : 's')) : '0 deals',
+          monthly: magStream.monthly,
+          meta: meta,
+        };
+      } else if (ts) {
+        var sConf = ts.conferenceIncome || {};
+        var sMag = ts.magExperiences || {};
+        var sConfTrend = (ts.conferenceIncomeTrend && ts.conferenceIncomeTrend.data) || [];
+        var sMagTrend = (ts.magExperiencesTrend && ts.magExperiencesTrend.data) || [];
+
+        confData = {
+          kpi: sConf,
+          sub: (sConf.meta && sConf.meta.status === 'live') ? 'From ac_deals_ytd' : '',
+          monthly: sConfTrend,
+          meta: sConf.meta || meta,
+        };
+
+        magData = {
+          kpi: sMag,
+          sub: (sMag.meta && sMag.meta.status === 'live') ? 'From ac_deals_ytd' : '',
+          monthly: sMagTrend,
+          meta: sMag.meta || meta,
+        };
+      }
+
+      if (!confData || !magData) return;
+
+      renderKpis('salesKpis', [
+        { label: 'Conference income', metric: confData.kpi, sub: confData.sub },
+        { label: 'MAG Experiences income', metric: magData.kpi, sub: magData.sub },
+      ]);
+
+      setChips('confIncChips', confData.meta);
+      setChips('magIncChips', magData.meta);
+
+      renderStreamChart('confInc-box', 'confIncCanvas', confData.monthly, '#3b6ef0', 'No Conference deals in this range.');
+      renderStreamChart('magInc-box', 'magIncCanvas', magData.monthly, '#f0a63b', 'No MAG Experiences deals in this range.');
+    }
+
+    function confOverviewFromDeals() {
+      var rows = filteredDealsRows().filter(function (r) {
+        return (r.pipeline || '').trim().toLowerCase() === CONF_PIPELINE.trim().toLowerCase();
+      });
+      var allDeals = rows.length;
+      var wonDeals = 0;
+      var wonValue = 0;
+      var monthMap = {};
+
+      rows.forEach(function (r) {
+        var isWon = r.status === 'won';
+        var val = Number(r.dealValue) || 0;
+        if (isWon) {
+          wonDeals++;
+          wonValue += val;
+        }
+        var m = r.cdate ? String(r.cdate).slice(0, 7) : '';
+        if (m) {
+          if (!monthMap[m]) monthMap[m] = { month: m, all: 0, won: 0, wonValue: 0 };
+          monthMap[m].all++;
+          if (isWon) {
+            monthMap[m].won++;
+            monthMap[m].wonValue += val;
+          }
+        }
+      });
+
+      var winRate = allDeals > 0 ? Math.round((wonDeals / allDeals) * 100) : null;
+      var avgDealValue = wonDeals > 0 ? Math.round(wonValue / wonDeals) : null;
+
+      var existingMonths = Object.keys(monthMap).sort();
+      var r = rangeMonths();
+      var months = [];
+      if (r.fromM && r.toM) {
+        var cur = r.fromM;
+        var steps = 0;
+        while (cur <= r.toM && steps++ < 120) {
+          months.push(cur);
+          var p = cur.split('-');
+          var y = +p[0], mon = +p[1] + 1;
+          if (mon > 12) { mon = 1; y++; }
+          cur = y + '-' + (mon < 10 ? '0' : '') + mon;
+        }
+      } else if (existingMonths.length) {
+        var cur = existingMonths[0];
+        var endM = new Date().toISOString().slice(0, 7);
+        if (existingMonths[existingMonths.length - 1] > endM) {
+          endM = existingMonths[existingMonths.length - 1];
+        }
+        var steps = 0;
+        while (cur <= endM && steps++ < 120) {
+          months.push(cur);
+          var p = cur.split('-');
+          var y = +p[0], mon = +p[1] + 1;
+          if (mon > 12) { mon = 1; y++; }
+          cur = y + '-' + (mon < 10 ? '0' : '') + mon;
+        }
+      }
+
+      var wonTrend = months.map(function (m) {
+        return { month: m, value: monthMap[m] ? monthMap[m].won : 0 };
+      });
+      var wrTrend = months.map(function (m) {
+        var item = monthMap[m];
+        return { month: m, value: (item && item.all > 0) ? Math.round((item.won / item.all) * 100) : null };
+      });
+      var wonRevTrend = months.map(function (m) {
+        return { month: m, value: monthMap[m] ? monthMap[m].wonValue : 0 };
+      });
+
+      return {
+        allDeals: allDeals,
+        wonDeals: wonDeals,
+        wonValue: wonValue,
+        winRate: winRate,
+        avgDealValue: avgDealValue,
+        wonTrend: wonTrend,
+        wrTrend: wrTrend,
+        wonRevTrend: wonRevTrend,
+      };
+    }
+
+    var _lastConference = null;
+    function renderConferenceOverview(confFromTopline) {
+      if (confFromTopline) _lastConference = confFromTopline;
+      var c = _lastConference;
+      if (!c) return;
+
+      var meta = { source: 'ActiveCampaign → ac_deals_ytd', status: 'live' };
+      var dealsWonMetric, winRateMetric, avgDealMetric;
+      var dealsWonTrend, winRateTrendData, wonRevTrend;
+      var dealsWonSub = '', winRateSub = '', avgDealSub = '';
+
+      if (ALL_DEALS_ROWS && ALL_DEALS_ROWS.length) {
+        var ov = confOverviewFromDeals();
+        dealsWonMetric = { value: ov.wonDeals, unit: 'count', meta: meta };
+        dealsWonSub = ov.allDeals ? (ov.wonDeals + ' won of ' + ov.allDeals + ' deals') : '0 deals';
+
+        winRateMetric = ov.winRate != null
+          ? { value: ov.winRate, unit: 'percent', meta: meta }
+          : { value: null, unit: 'percent', meta: meta };
+        winRateSub = ov.allDeals > 0 ? (ov.wonDeals + ' / ' + ov.allDeals + ' deals') : 'No deals';
+
+        avgDealMetric = ov.avgDealValue != null
+          ? { value: ov.avgDealValue, unit: 'currency', meta: meta }
+          : { value: null, unit: 'currency', meta: meta };
+        avgDealSub = ov.wonDeals > 0 ? ('Total won: ' + fmt(ov.wonValue, 'currency')) : 'No won deals';
+
+        dealsWonTrend = { data: ov.wonTrend, meta: meta };
+        winRateTrendData = { data: ov.wrTrend, meta: meta };
+        wonRevTrend = { data: ov.wonRevTrend, meta: meta };
+      } else {
+        dealsWonMetric = c.kpis.dealsWon;
+        winRateMetric = c.kpis.winRate;
+        avgDealMetric = c.kpis.avgDealValue;
+        dealsWonTrend = c.dealsWonTrend;
+        winRateTrendData = c.winRateTrend;
+        wonRevTrend = c.wonRevenueTrend;
+      }
+
+      // 1. Render Conference KPIs
+      renderKpis('confKpis', [
+        { label: 'Deals won', metric: dealsWonMetric, sub: dealsWonSub },
+        { label: 'Win rate', metric: winRateMetric, sub: winRateSub },
+        { label: 'Avg won deal value', metric: avgDealMetric, sub: avgDealSub },
+        { label: 'Demos booked', metric: c.kpis.demosBooked },
+      ]);
+
+      // 2. Render Graph 1: Deals won per month
+      barSection('won-box', 'wonCanvas', 'wonChips', dealsWonTrend,
+        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#3b6ef0' });
+
+      // 3. Render Graph 2: Win rate per month
+      setChips('wrChips', winRateTrendData.meta);
+      var hasWrData = winRateTrendData && winRateTrendData.data && winRateTrendData.data.some(function (d) { return d.value != null; });
+      if (winRateTrendData.meta.status === 'pending' || !hasWrData) {
+        if (winRateTrendData.meta.status === 'pending') {
+          renderPendingBody('wr-box', winRateTrendData.meta);
+        } else {
+          if (_charts['winRateCanvas']) { _charts['winRateCanvas'].destroy(); delete _charts['winRateCanvas']; }
+          var box = document.getElementById('wr-box');
+          if (box) box.innerHTML = '<div class="muted" style="padding:40px;text-align:center">No win rate data in this range.</div>';
+        }
+      } else {
+        if (!document.getElementById('winRateCanvas')) {
+          if (_charts['winRateCanvas']) { _charts['winRateCanvas'].destroy(); delete _charts['winRateCanvas']; }
+          document.getElementById('wr-box').innerHTML = '<canvas id="winRateCanvas"></canvas>';
+        }
+        lineChart('winRateCanvas', winRateTrendData.data,
+          [{ label: 'Win rate %', key: 'value', color: '#7c5cff' }],
+          { xKey: 'month', xLabel: monthLabel });
+      }
+
+      // 4. Render Graph 3: Won revenue per month
+      barSection('wrev-box', 'wonRevCanvas', 'wrevChips', wonRevTrend,
+        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#17a673' });
+
+      // 5. Demos booked per month (untouched!)
+      barSection('demo-box', 'demoCanvas', 'demoChips', c.demosTrend,
+        function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#f0a63b' });
+
+      // 6. Direct vs Indirect share/leads (untouched)
+      setChips('diShareChips', c.directIndirectShare.meta);
+      renderPendingBody('diShare-body', c.directIndirectShare.meta);
+      setChips('diLeadsChips', c.directIndirectLeads.meta);
+      renderPendingBody('diLeads-body', c.directIndirectLeads.meta);
+    }
+
+    function loadAcDeals() {
+      var host = document.getElementById('acDealsRows');
+      if (!host) return;
+      host.innerHTML = '<div class="muted" style="padding:14px">Loading AC deals…</div>';
+      fetchJSON('/api/sales/ac-deals').then(function (data) {
+        ALL_DEALS_ROWS = (data.rows && data.rows.data) || [];
+        setChips('acDealsChips', data.rows && data.rows.meta);
+        renderDealsTable(filteredDealsRows());
+        if (!_lastSplit) renderSplit(splitFromDealsRows());
+        if (!_lastIO) renderInboundOutbound(ioFromDealsRows());
+        renderSalesStreams(_lastSalesData);
+        renderConferenceOverview(_lastConference);
+      }).catch(function (err) {
+        console.error(err);
+        host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load AC deals</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
     var _last = null;
+    function apply() {
+      if (_last) renderTopline(_last);
+      loadCards();
+      renderDealsTable(filteredDealsRows());
+      if (ALL_DEALS_ROWS.length) {
+        renderSplit(splitFromDealsRows());
+        renderInboundOutbound(ioFromDealsRows());
+        renderSalesStreams(_lastSalesData);
+        renderConferenceOverview(_lastConference);
+      } else {
+        if (_lastSplit) renderSplit(_lastSplit);
+        if (_lastIO) renderInboundOutbound(_lastIO);
+        if (_lastSalesData) renderSalesStreams(_lastSalesData);
+        if (_lastConference) renderConferenceOverview(_lastConference);
+      }
+    } // re-render with the current filter
     function loadTopline() {
       fetchJSON('/api/sales/topline')
         .then(function (data) { _last = data; renderTopline(data); })
         .catch(function (err) { console.error('[sales overview]', err); });
     }
 
+    // ---- Top-Line Header cards (ac_deals_ytd, filtered server-side by date) ----
+    var _cardsKey = null, _cardsSeq = 0;
+    function renderCards(p) {
+      var c = p.cards, di = c.directIndirect || {};
+      var diSub = di.directPct != null
+        ? 'Direct ' + fmt(di.directValue, 'currency') + ' · Indirect ' + fmt(di.indirectValue, 'currency')
+        : 'No won deals with a Deal Source in range';
+      renderKpis('kpis', [
+        { label: 'Total Income (won deals)', metric: c.totalIncome },
+        { label: 'Direct vs Indirect Income', metric: di, sub: diSub },
+        { label: 'Speaking Enquiries', metric: c.speakingEnquiries },
+        { label: 'Bureau', metric: c.bureau },
+        { label: 'Tailor', metric: c.tailor },
+        { label: 'Inbound', metric: c.inbound },
+        { label: 'Outbound', metric: c.outbound },
+      ]);
+      var sub = document.getElementById('kpisSub');
+      if (sub) {
+        var r = p.range || {};
+        var txt = (r.from || r.to)
+          ? 'ActiveCampaign deals created ' + (r.from ? fmtDate(r.from) : 'start of year') + ' → ' + (r.to ? fmtDate(r.to) : 'today')
+          : 'ActiveCampaign deals created year to date';
+        if (p.syncedAt) txt += ' · synced ' + fmtDate(p.syncedAt);
+        sub.textContent = txt;
+      }
+      renderSplit(di);
+      var ioData = {
+        inbound: (c.inbound && c.inbound.value) || 0,
+        outbound: (c.outbound && c.outbound.value) || 0,
+        meta: (c.inbound && c.inbound.meta) || { source: 'ActiveCampaign → ac_deals_ytd', status: 'live' },
+      };
+      renderInboundOutbound(ioData);
+    }
+    function loadCards() {
+      var from = parseInput('solFrom'), to = parseInput('solTo');
+      var key = from + '|' + to;
+      if (key === _cardsKey) return; // range unchanged (e.g. theme toggle)
+      _cardsKey = key;
+      var seq = ++_cardsSeq;
+      var qs = [];
+      if (from) qs.push('from=' + encodeURIComponent(from));
+      if (to) qs.push('to=' + encodeURIComponent(to));
+      fetchJSON('/api/sales/topline-cards' + (qs.length ? '?' + qs.join('&') : ''))
+        .then(function (p) { if (seq === _cardsSeq) renderCards(p); }) // ignore stale responses
+        .catch(function (err) { _cardsKey = null; console.error('[sales overview cards]', err); });
+    }
+
+    // Set the From/To inputs to a trailing `days` window (0 = clear / All), then re-render.
+    function setQuick(days) {
+      var from = document.getElementById('solFrom'), to = document.getElementById('solTo');
+      if (!days) { from.value = ''; to.value = ''; }
+      else {
+        var end = new Date();
+        var start = new Date(); start.setDate(start.getDate() - days);
+        to.value = end.toISOString().slice(0, 10);
+        from.value = start.toISOString().slice(0, 10);
+      }
+      apply();
+    }
+    function clearQuickActive() {
+      document.querySelectorAll('#solQuick button').forEach(function (x) { x.classList.remove('active'); });
+    }
+    function wireToolbar() {
+      document.getElementById('solFrom').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.getElementById('solTo').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.querySelectorAll('#solQuick button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          clearQuickActive();
+          b.classList.add('active');
+          setQuick(Number(b.getAttribute('data-days')));
+        });
+      });
+      document.getElementById('solReset').addEventListener('click', function () {
+        clearQuickActive();
+        document.querySelector('#solQuick button[data-days="0"]').classList.add('active');
+        setQuick(0);
+      });
+    }
+
     initPage('sales'); // login / top-bar / theme only — this page renders its own KPIs
-    window.onThemeChange = function () { if (_last) renderTopline(_last); }; // re-colour charts
+    window.onThemeChange = apply; // re-colour charts (respecting the active filter)
     renderDeeper();
-    if (currentUser()) loadTopline();
+    if (currentUser()) { wireToolbar(); loadCards(); loadTopline(); loadAcDeals(); }
   </script>
 </body>
 </html>

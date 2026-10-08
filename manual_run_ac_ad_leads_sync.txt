@@ -1,0 +1,48 @@
+# ==============================================================================
+# MANUAL RUN: AC AD LEADS TAGGING SYNC (Supabase Edge Function)
+# ==============================================================================
+#
+# AUTOMATED SCHEDULE:
+#   Runs once a week every Monday at 6:30 AM Philippine Time (Sunday 22:30 UTC).
+#   pg_cron Job Name: ac-ad-leads-sync-weekly
+#   Cron Expression:  30 22 * * 0
+#
+# SCOPE:
+#   Fetches ActiveCampaign contacts carrying tag id 88 ("[WEBSITE] google-ads-click-through"),
+#   rolls up their deals from activecampaign_deals (counts + value totals),
+#   and updates public.ac_ad_leads_tagging in Supabase.
+# ==============================================================================
+
+
+## 1. RUN MANUALLY IN WINDOWS COMMAND PROMPT (cmd.exe):
+curl "https://aivitcomiywiysrfwqxt.supabase.co/functions/v1/ac-ad-leads-sync?sync=1"
+
+
+## 2. RUN MANUALLY IN POWERSHELL:
+curl.exe "https://aivitcomiywiysrfwqxt.supabase.co/functions/v1/ac-ad-leads-sync?sync=1"
+
+# OR via native PowerShell Invoke-RestMethod:
+Invoke-RestMethod -Uri "https://aivitcomiywiysrfwqxt.supabase.co/functions/v1/ac-ad-leads-sync?sync=1"
+
+
+# ==============================================================================
+# WHAT TO EXPECT:
+# - Takes ~8 to 12 seconds to run synchronously.
+# - Returns a JSON summary like:
+#   {
+#     "mode": "sync",
+#     "fn": "ac-ad-leads-sync",
+#     "tag_id": "88",
+#     "pages": 8,
+#     "contacts_seen": 782,
+#     "deals_seen": 344,
+#     "upserted": 782,
+#     "with_deal": 219,
+#     "won_deals": 82,
+#     "won_value_total": 592736.15,
+#     "stopped_early": false,
+#     "errors": []
+#   }
+# - The dashboard tab "AC Ad Leads Tagging" (ac_ad_leads_tagging.html) will immediately
+#   reflect the updated data.
+# ==============================================================================

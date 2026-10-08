@@ -1,0 +1,242 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AC Ad Leads Tagging — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* Wide table — use the full screen width (still scrolls on narrow screens). */
+    .content { max-width: none; }
+    .acs-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .acs-field { display: flex; flex-direction: column; gap: 4px; }
+    .acs-field label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .acs-field input[type="date"] {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 10px; font: inherit;
+    }
+    .acs-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+    .acs-quick button, .acs-reset {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .acs-quick button.active { background: var(--accent); color: #fff; border-color: transparent; }
+    .acs-spacer { flex: 1; }
+    /* Info ⓘ on each KPI card — native tooltip via the title attribute. */
+    .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
+    .kpi-info:hover, .kpi-info:focus { color: var(--accent); outline: none; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="mag_buyer_sheet.html">Buyer Sheet</a>
+    <a class="tab" href="invoice_tracking.html">Invoices</a>
+    <a class="tab" href="sales.html">Conferences</a>
+    <a class="tab" href="ga4_agent.html">GA4 Agent</a>
+    <a class="tab" href="ac_contact_sources.html">GA4 &amp; Ads Leads Tracking</a>
+    <a class="tab" href="new_paid_leads_tracking.html">New Paid Leads Tracking</a>
+    <a class="tab active" href="ac_ad_leads_tagging.html">AC Ad Leads Tagging</a>
+    <a class="tab" href="mag_sales_pulse.html">MAG Sales Pulse</a>
+  </nav>
+
+  <main class="content">
+    <!-- metrics widget -->
+    <div class="kpi-grid" id="aaltKpis"></div>
+
+    <div class="grid">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>AC Ad Leads Tagging</h3>
+          <span class="chips" id="aaltChips"></span>
+          <div class="spacer"></div>
+          <span class="muted" id="aaltCount" style="font-size:13px"></span>
+        </div>
+
+        <!-- date-range filter (filters on contact Created date) -->
+        <div class="acs-toolbar">
+          <div class="acs-field">
+            <label for="aaltFrom">From (created)</label>
+            <input type="date" id="aaltFrom" />
+          </div>
+          <div class="acs-field">
+            <label for="aaltTo">To (created)</label>
+            <input type="date" id="aaltTo" />
+          </div>
+          <div class="acs-quick" id="aaltQuick">
+            <button type="button" data-days="7">7d</button>
+            <button type="button" data-days="30">30d</button>
+            <button type="button" data-days="60">60d</button>
+            <button type="button" data-days="0" class="active">All</button>
+          </div>
+          <button type="button" class="acs-reset" id="aaltReset">Reset</button>
+        </div>
+
+        <div id="aaltRows"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js?v=2"></script>
+  <script>
+    var ALL_ROWS = [];
+
+    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+
+    // ---- formatters & cell renderers ----
+    var _aud = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    function money(v) { return _aud.format(Number(v) || 0); }
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    function nameOf(r) { return [r.firstName, r.lastName].filter(Boolean).join(' ').trim(); }
+    function valueCell(v) { return (v === null || v === undefined || v === '') ? '—' : money(v); }
+    // Deal status from activecampaign_deals: won (green) / lost (red) / open (amber).
+    function statusPill(v) {
+      if (!v) return '—';
+      var s = String(v), cls = s === 'won' ? 'pos' : (s === 'lost' ? 'neg' : 'partial');
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+
+    // ---- date-range filtering (on contact Created date) ----
+    function parseInput(id) {
+      var el = document.getElementById(id);
+      return el && el.value ? el.value : ''; // 'YYYY-MM-DD' or ''
+    }
+    function inRange(iso, from, to) {
+      if (!iso) return false;
+      var d = String(iso).slice(0, 10); // compare on YYYY-MM-DD (cdate is UTC)
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }
+    function filteredRows() {
+      var from = parseInput('aaltFrom'), to = parseInput('aaltTo');
+      if (!from && !to) return ALL_ROWS.slice();
+      return ALL_ROWS.filter(function (r) { return inRange(r.contactCdate, from, to); });
+    }
+
+    // ---- metrics widget ----
+    // `info` renders a hoverable ⓘ with an explanation of what the card counts.
+    function kpi(label, value, sub, subClass, info) {
+      var ic = info ? ' <span class="kpi-info" tabindex="0" title="' + esc(info) + '">ⓘ</span>' : '';
+      return '<div class="kpi"><div class="label">' + esc(label) + ic + '</div>' +
+        '<div class="value">' + esc(String(value)) + '</div>' +
+        (sub ? '<div class="delta ' + (subClass || '') + '">' + esc(sub) + '</div>' : '') + '</div>';
+    }
+    function sumBy(rows, key) { return rows.reduce(function (a, r) { return a + (Number(r[key]) || 0); }, 0); }
+    function renderKpis(rows) {
+      var leads = rows.length;
+      var revenue = sumBy(rows, 'wonValueTotal');
+      var wonDeals = sumBy(rows, 'wonDealsCount');
+      var openPipeline = sumBy(rows, 'openValueTotal');
+      var dealsTotal = sumBy(rows, 'dealsCount');
+      var withDeal = rows.filter(function (r) { return Number(r.dealsCount) > 0; }).length;
+      var host = document.getElementById('aaltKpis');
+      host.innerHTML =
+        kpi('Revenue', money(revenue), 'won deals', revenue ? 'pos' : '',
+            'Total value of WON deals (AUD) across all google-ads-tagged leads in the selected date range. AC deal value is CRM-contracted, not billed revenue.') +
+        kpi('Leads tagged', leads, 'tag 88 contacts', '',
+            'Contacts carrying the tag "[WEBSITE] google-ads-click-through" (AC tag id 88), created in the selected date range — a lead that landed on a MAG page from a Google Ads click.') +
+        kpi('Won deals', wonDeals, 'closed won', wonDeals ? 'pos' : '',
+            'Number of WON deals belonging to the tagged leads in range.') +
+        kpi('Open pipeline', money(openPipeline), 'open deals', '',
+            'Total value of OPEN deals (AUD) for the tagged leads in range — contracted pipeline not yet won or lost.') +
+        kpi('Deals', dealsTotal, 'all statuses', '',
+            'Total number of deals (won + open + lost) across the tagged leads in range.') +
+        kpi('With a deal', withDeal, 'of ' + leads + ' leads', '',
+            'How many of the tagged leads have at least one deal attached.');
+    }
+
+    // ---- table ----
+    function renderTable(rows) {
+      renderSortableTable('aaltRows', rows, [
+        { key: 'contactCdate', label: 'Created', unit: 'date' },
+        { key: 'contactId', label: 'AC ID', render: txt },
+        { key: 'email', label: 'Email', render: txt },
+        { key: 'name', label: 'Name', render: function (_v, r) { var n = nameOf(r); return n ? esc(n) : '—'; } },
+        { key: 'primaryDealTitle', label: 'Deal', render: txt },
+        { key: 'primaryDealValue', label: 'Value', unit: 'currency', render: valueCell },
+        { key: 'primaryDealStatus', label: 'Status', render: statusPill },
+        { key: 'dealsCount', label: 'Deals', unit: 'num' },
+        { key: 'wonValueTotal', label: 'Won value', unit: 'currency', render: valueCell },
+        { key: 'primaryDealCdate', label: 'Deal created', unit: 'date' },
+      ], {
+        searchPlaceholder: 'Search leads…',
+        sortKey: 'contactCdate', sortDir: 'desc',
+        emptyText: 'No tagged leads in this date range.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('aaltCount');
+          if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
+        },
+        onFilter: function (filteredList) {
+          renderKpis(filteredList);
+        },
+      });
+    }
+
+    function apply() {
+      var rows = filteredRows();
+      renderKpis(rows);
+      renderTable(rows);
+    }
+
+    function setQuick(days) {
+      var from = document.getElementById('aaltFrom'), to = document.getElementById('aaltTo');
+      if (!days) { from.value = ''; to.value = ''; }
+      else {
+        var end = new Date();
+        var start = new Date(); start.setDate(start.getDate() - days);
+        to.value = end.toISOString().slice(0, 10);
+        from.value = start.toISOString().slice(0, 10);
+      }
+      apply();
+    }
+
+    function clearQuickActive() {
+      document.querySelectorAll('#aaltQuick button').forEach(function (x) { x.classList.remove('active'); });
+    }
+    function wireToolbar() {
+      document.getElementById('aaltFrom').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.getElementById('aaltTo').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.querySelectorAll('#aaltQuick button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          clearQuickActive();
+          b.classList.add('active');
+          setQuick(Number(b.getAttribute('data-days')));
+        });
+      });
+      document.getElementById('aaltReset').addEventListener('click', function () {
+        clearQuickActive();
+        document.querySelector('#aaltQuick button[data-days="0"]').classList.add('active');
+        setQuick(0);
+      });
+    }
+
+    function loadAcAdLeads() {
+      var host = document.getElementById('aaltRows');
+      host.innerHTML = '<div class="muted" style="padding:14px">Loading tagged leads…</div>';
+      fetchJSON('/api/operations/ac-ad-leads').then(function (data) {
+        ALL_ROWS = (data.rows && data.rows.data) || [];
+        setChips('aaltChips', data.rows.meta);
+        apply();
+      }).catch(function (err) {
+        console.error(err);
+        host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load AC ad leads</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('operations'); // login / top-bar / theme only — this page renders its own table
+    if (currentUser()) { wireToolbar(); loadAcAdLeads(); }
+  </script>
+</body>
+</html>

@@ -80,6 +80,7 @@ var _num = new Intl.NumberFormat('en-AU');
 function fmt(value, unit) {
   if (value === null || value === undefined) return '—';
   if (unit === 'currency') return _aud.format(value);
+  if (unit === 'text') return esc(value);
   if (unit === 'percent') return value + '%';
   if (unit === 'hours') return value + 'h';
   if (unit === 'rating') return value + '★';
@@ -160,7 +161,7 @@ function renderPendingBody(elId, meta) {
 }
 
 /* ---------- KPI + table rendering helpers ---------- */
-// cards: [{ label, metric:{value,unit,delta,meta}, invert? }]
+// cards: [{ label, metric:{value,unit,delta,meta}, invert?, sub? }]  (sub = optional small text under the value)
 function renderKpis(containerId, cards) {
   var html = cards.map(function (c) {
     var m = c.metric || {};
@@ -168,9 +169,10 @@ function renderKpis(containerId, cards) {
     var deltaClass = m.delta === 0 || m.delta == null ? '' : (c.invert ? m.delta < 0 : m.delta > 0) ? 'pos' : 'neg';
     var deltaHtml = (pending || m.delta === 0 || m.delta == null) ? '' :
       '<div class="delta ' + deltaClass + '">' + fmtDelta(m.delta) + ' vs. prior</div>';
+    var subHtml = (!pending && c.sub) ? '<div class="muted" style="font-size:12px;margin-top:4px">' + esc(c.sub) + '</div>' : '';
     var note = (m.meta && m.meta.note) ? ' title="' + esc(m.meta.note) + '"' : '';
     return '<div class="kpi"' + note + '><div class="label">' + esc(c.label) + '</div>' +
-      '<div class="value">' + (pending ? '—' : fmt(m.value, m.unit)) + '</div>' +
+      '<div class="value">' + (pending ? '—' : fmt(m.value, m.unit)) + '</div>' + subHtml +
       deltaHtml + '<div class="chips" style="margin-top:8px">' + metaChips(m.meta) + '</div></div>';
   }).join('');
   document.getElementById(containerId).innerHTML = html;
@@ -205,8 +207,9 @@ function renderSortableTable(containerId, rows, columns, opts) {
   if (!host) return;
   // state.filters maps a column key -> Set of allowed plain-text values
   // (textOf projection). A column absent from the map is unfiltered.
-  var state = { key: opts.sortKey || null, dir: opts.sortDir || 'asc', q: '', filters: {} };
+  var state = { key: opts.sortKey || null, dir: opts.sortDir || 'asc', q: '', filters: {}, page: 1 };
   var filterable = opts.columnFilters !== false;
+  var pageSize = opts.pageSize || null;
   var openPanel = null; // currently-open column-filter panel (mounted on <body>)
 
   function isNum(c) { return c && c.unit && c.unit !== 'text' && c.unit !== 'date'; }
@@ -255,6 +258,13 @@ function renderSortableTable(containerId, rows, columns, opts) {
 
   function draw() {
     var list = view();
+    var totalPages = pageSize ? (Math.ceil(list.length / pageSize) || 1) : 1;
+    if (state.page > totalPages) state.page = totalPages;
+    if (state.page < 1) state.page = 1;
+
+    var startIdx = pageSize ? (state.page - 1) * pageSize : 0;
+    var displayList = pageSize ? list.slice(startIdx, startIdx + pageSize) : list;
+
     var thead = '<tr>' + columns.map(function (c) {
       var active = state.key === c.key;
       var caret = active ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '';
@@ -265,7 +275,7 @@ function renderSortableTable(containerId, rows, columns, opts) {
       return '<th class="sortable ' + (isNum(c) ? 'num ' : '') + (active ? 'active' : '') +
         '" data-key="' + esc(c.key) + '"><span class="th-label">' + esc(c.label) + caret + '</span>' + funnel + '</th>';
     }).join('') + '</tr>';
-    var tbody = list.length ? list.map(function (row) {
+    var tbody = displayList.length ? displayList.map(function (row) {
       return '<tr>' + columns.map(function (c) {
         var v = row[c.key];
         var cell = c.render ? c.render(v, row) : (v == null ? '—' : (isNum(c) ? fmt(v, c.unit) : (c.unit === 'date' ? esc(fmtDate(v)) : esc(v))));
@@ -280,6 +290,7 @@ function renderSortableTable(containerId, rows, columns, opts) {
         var k = th.getAttribute('data-key');
         if (state.key === k) state.dir = state.dir === 'asc' ? 'desc' : 'asc';
         else { state.key = k; state.dir = 'asc'; }
+        state.page = 1;
         draw();
       });
     });
@@ -293,7 +304,28 @@ function renderSortableTable(containerId, rows, columns, opts) {
         });
       });
     }
-    if (typeof opts.onCount === 'function') opts.onCount(list.length, rows.length);
+
+    if (pageSize) {
+      var rangeText = list.length ? (startIdx + 1) + '–' + Math.min(startIdx + pageSize, list.length) + ' of ' + list.length : '0';
+      pagBox.innerHTML = '<div class="table-pagination" style="display:flex;align-items:center;justify-content:space-between;margin-top:12px;padding:4px 0;">' +
+        '<button type="button" class="acs-reset pg-prev"' + (state.page <= 1 ? ' disabled style="opacity:0.4;cursor:default"' : '') + '>← Previous</button>' +
+        '<span class="muted" style="font-size:13px">Page ' + state.page + ' of ' + totalPages + ' (' + rangeText + ' rows)</span>' +
+        '<button type="button" class="acs-reset pg-next"' + (state.page >= totalPages ? ' disabled style="opacity:0.4;cursor:default"' : '') + '>Next →</button>' +
+        '</div>';
+
+      var prevBtn = pagBox.querySelector('.pg-prev');
+      var nextBtn = pagBox.querySelector('.pg-next');
+      if (prevBtn && state.page > 1) {
+        prevBtn.addEventListener('click', function () { state.page--; draw(); });
+      }
+      if (nextBtn && state.page < totalPages) {
+        nextBtn.addEventListener('click', function () { state.page++; draw(); });
+      }
+    }
+
+    if (typeof opts.onCount === 'function') opts.onCount(list.length, rows.length, list);
+    if (typeof opts.onFilter === 'function') opts.onFilter(list, rows);
+    if (typeof opts.onFiltered === 'function') opts.onFiltered(list, rows);
   }
 
   // ---- per-column value filters (Google-Sheets style) ----
@@ -423,12 +455,14 @@ function renderSortableTable(containerId, rows, columns, opts) {
     input.type = 'search';
     input.className = 'table-search';
     input.placeholder = opts.searchPlaceholder || 'Search…';
-    input.addEventListener('input', function () { state.q = input.value.trim(); draw(); });
+    input.addEventListener('input', function () { state.q = input.value.trim(); state.page = 1; draw(); });
     host.appendChild(input);
   }
   var box = document.createElement('div');
   box.className = 'table-scroll';
   host.appendChild(box);
+  var pagBox = document.createElement('div');
+  if (pageSize) host.appendChild(pagBox);
   draw();
 }
 

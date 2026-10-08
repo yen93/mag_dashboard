@@ -22,7 +22,6 @@
 //   • direct/indirect split + leads — AC "Deal Source?" field
 //   • speaking_enquiries            — AC "[SALES] Inbound Enquiry" tag
 //   • inbound / outbound            — AC "Inbound/ Outbound?" field
-//   • conference vs MAG income split, MAG Revenue, book-sale upsell (need detail)
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { live, pending, section } from '../lib/metric.js';
@@ -30,6 +29,10 @@ import { live, pending, section } from '../lib/metric.js';
 const SRC_INCOME = 'Xero → invoice_tracking (Supabase cache)';
 const SRC_AC = 'ActiveCampaign (Supabase cache)';
 const SRC_AC_TODO = 'ActiveCampaign';
+const SRC_AC_YTD = 'ActiveCampaign → ac_deals_ytd';
+
+const PIPELINE_CONF = 'Keynotes // Workshops // Immersive (LIV)';
+const PIPELINE_MAG = 'MAG_Team_Offsite (JAYCEL)';
 
 const SELECT = `
   SELECT metric,
@@ -61,22 +64,9 @@ export async function getSalesTopline() {
   const bureau = series('bureau');
   const tailor = series('tailor');
 
-  // --- Conference Overview (LIV pipeline) ---
-  const wonSeries = series('deals_won');
-  const lostSeries = series('deals_lost');
-  const wonValueSeries = series('won_value');
+  // --- Conference Demos (from sales_topline cache; kept as-is) ---
   const demoSeries = series('demos_booked');
-
-  const wonYtd = ytdOf('deals_won');
-  const lostYtd = ytdOf('deals_lost');
-  const wonValueYtd = ytdOf('won_value');
   const demosYtd = ytdOf('demos_booked');
-  const haveConf = wonSeries.length > 0;
-
-  const winRateYtd = wonYtd != null && lostYtd != null && (wonYtd + lostYtd) > 0
-    ? Math.round((wonYtd / (wonYtd + lostYtd)) * 100) : null;
-  const avgDealValue = wonYtd && wonValueYtd != null && wonYtd > 0
-    ? Math.round(wonValueYtd / wonYtd) : null;
 
   // ================= 1. TOP-LINE HEADER =================
   const kpis = {
@@ -104,37 +94,122 @@ export async function getSalesTopline() {
   const inboundOutbound = section([], { source: SRC_AC_TODO, status: 'pending', note: 'Inbound vs Outbound needs the ActiveCampaign "Inbound/ Outbound?" field, not mirrored to Supabase yet.' });
 
   // ================= 2. TOTAL SALES / ENQUIRIES =================
+  let confStreamRows = [];
+  try {
+    confStreamRows = await q(`
+      SELECT
+        pipeline_name                                                       AS pipeline,
+        to_char(deal_created_at, 'YYYY-MM')                                 AS month,
+        coalesce(sum(deal_value), 0)::float8                                AS total_val,
+        coalesce(sum(deal_value) FILTER (WHERE status = 'won'), 0)::float8 AS won_val,
+        count(*)::int                                                       AS total_count,
+        count(*) FILTER (WHERE status = 'won')::int                         AS won_deals
+      FROM public.ac_deals_ytd
+      WHERE pipeline_name IN ($1, $2)
+      GROUP BY 1, 2
+      ORDER BY 1, 2
+    `, [PIPELINE_CONF, PIPELINE_MAG]);
+  } catch (err) {
+    console.error('[sales-topline] ac_deals_ytd stream query error:', err.message);
+  }
+
+  const confRows = confStreamRows.filter((r) => r.pipeline === PIPELINE_CONF);
+  const magRows = confStreamRows.filter((r) => r.pipeline === PIPELINE_MAG);
+
+  const confTotal = confRows.reduce((acc, r) => acc + r.total_val, 0);
+  const magTotal = magRows.reduce((acc, r) => acc + r.total_val, 0);
+
+  const confMonthly = confRows.map((r) => ({ month: r.month, value: r.total_val, wonValue: r.won_val, count: r.total_count }));
+  const magMonthly = magRows.map((r) => ({ month: r.month, value: r.total_val, wonValue: r.won_val, count: r.total_count }));
+
   const sales = {
     totalIncome: kpis.totalIncome,
-    conferenceIncome: pending('currency', { source: SRC_INCOME, note: 'Conference income needs invoice_tracking rows matched to LIV pipeline deals — matching key not mirrored yet.' }),
-    magExperiences: pending('currency', { source: SRC_INCOME, note: 'MAG Experiences income — source breakdown still being defined (dev_sheet blocker: "need more details").' }),
+    conferenceIncome: live(confTotal, 'currency', {
+      source: SRC_AC_YTD,
+      note: `Deals in pipeline "${PIPELINE_CONF}" (ac_deals_ytd).`,
+    }),
+    magExperiences: live(magTotal, 'currency', {
+      source: SRC_AC_YTD,
+      note: `Deals in pipeline "${PIPELINE_MAG}" (ac_deals_ytd).`,
+    }),
+    conferenceIncomeTrend: confMonthly.length
+      ? section(fill12(confMonthly), {
+          source: SRC_AC_YTD,
+          status: 'live',
+          note: 'Conference income by month (ac_deals_ytd).',
+        })
+      : section([], { source: SRC_AC_YTD, status: 'pending', note: 'No conference deals found in ac_deals_ytd.' }),
+    magExperiencesTrend: magMonthly.length
+      ? section(fill12(magMonthly), {
+          source: SRC_AC_YTD,
+          status: 'live',
+          note: 'MAG Experiences income by month (ac_deals_ytd).',
+        })
+      : section([], { source: SRC_AC_YTD, status: 'pending', note: 'No MAG Experiences deals found in ac_deals_ytd.' }),
   };
 
   // ================= 3. CONFERENCE › OVERVIEW =================
+  let confMonthRows = [];
+  try {
+    confMonthRows = await q(`
+      SELECT
+        to_char(deal_created_at, 'YYYY-MM')                                 AS month,
+        count(*)::int                                                       AS all_deals,
+        count(*) FILTER (WHERE status = 'won')::int                         AS won_deals,
+        coalesce(sum(deal_value) FILTER (WHERE status = 'won'), 0)::float8 AS won_value
+      FROM public.ac_deals_ytd
+      WHERE pipeline_name = $1
+      GROUP BY 1
+      ORDER BY 1
+    `, [PIPELINE_CONF]);
+  } catch (err) {
+    console.error('[sales-topline] ac_deals_ytd conference overview query error:', err.message);
+  }
+
+  const confAllTotal = confMonthRows.reduce((acc, r) => acc + r.all_deals, 0);
+  const confWonTotal = confMonthRows.reduce((acc, r) => acc + r.won_deals, 0);
+  const confWonValTotal = confMonthRows.reduce((acc, r) => acc + r.won_value, 0);
+  const confWinRateTotal = confAllTotal > 0 ? Math.round((confWonTotal / confAllTotal) * 100) : null;
+  const confAvgWonDeal = confWonTotal > 0 ? Math.round(confWonValTotal / confWonTotal) : null;
+
+  const confWonSeries = confMonthRows.map((r) => ({ month: r.month, value: r.won_deals }));
+  const confWrSeries = fill12WinRate(confMonthRows);
+  const confWonValSeries = confMonthRows.map((r) => ({ month: r.month, value: r.won_value }));
+  const haveConfLive = confMonthRows.length > 0;
+
   const conference = {
     kpis: {
-      dealsWon: haveConf
-        ? live(wonYtd || 0, 'count', { source: SRC_AC, note: 'Deals won (LIV pipeline) year to date, by close month.' })
-        : pending('count', { source: SRC_AC, note: 'No won-deal data in cache yet.' }),
-      winRate: winRateYtd != null
-        ? live(winRateYtd, 'percent', { source: SRC_AC, note: 'YTD won / (won + lost) in the LIV pipeline.' })
-        : pending('percent', { source: SRC_AC, note: 'No win/loss data in cache yet.' }),
-      avgDealValue: avgDealValue != null
-        ? live(avgDealValue, 'currency', { source: SRC_AC, note: 'YTD won deal value ÷ deals won (LIV, CRM-contracted value, AUD). Billed revenue would come from Xero.' })
-        : pending('currency', { source: SRC_AC, note: 'No won-value data in cache yet.' }),
+      dealsWon: haveConfLive
+        ? live(confWonTotal, 'count', {
+            source: SRC_AC_YTD,
+            note: `Won deals in "${PIPELINE_CONF}" (${confWonTotal} won of ${confAllTotal} total deals in ac_deals_ytd).`,
+          })
+        : pending('count', { source: SRC_AC_YTD, note: 'No conference deals found in ac_deals_ytd.' }),
+      winRate: confWinRateTotal != null
+        ? live(confWinRateTotal, 'percent', {
+            source: SRC_AC_YTD,
+            note: `Won deals ÷ all deals in "${PIPELINE_CONF}" (${confWonTotal} / ${confAllTotal}).`,
+          })
+        : pending('percent', { source: SRC_AC_YTD, note: 'No conference deals found in ac_deals_ytd.' }),
+      avgDealValue: confAvgWonDeal != null
+        ? live(confAvgWonDeal, 'currency', {
+            source: SRC_AC_YTD,
+            note: `Total won deal value ÷ won deals in "${PIPELINE_CONF}" (${confWonValTotal} / ${confWonTotal}, AUD).`,
+          })
+        : pending('currency', { source: SRC_AC_YTD, note: 'No won conference deals found in ac_deals_ytd.' }),
       demosBooked: demosYtd != null
         ? live(demosYtd || 0, 'count', { source: SRC_AC, note: 'LIV deals with a "Demo date?" set, year to date.' })
         : pending('count', { source: SRC_AC, note: 'No demo data in cache yet.' }),
     },
-    dealsWonTrend: haveConf
-      ? section(fill12(wonSeries), { source: SRC_AC, status: 'live', note: 'Deals won per month (LIV pipeline, by close month).' })
-      : section([], { source: SRC_AC, status: 'pending', note: 'No won-deal data in cache yet.' }),
-    winRateTrend: (wonSeries.length || lostSeries.length)
-      ? section(winRateTrend(wonSeries, lostSeries), { source: SRC_AC, status: 'live', note: 'Monthly win rate — won / (won + lost), LIV pipeline.' })
-      : section([], { source: SRC_AC, status: 'pending', note: 'No win/loss data in cache yet.' }),
-    wonRevenueTrend: wonValueSeries.length
-      ? section(fill12(wonValueSeries), { source: SRC_AC, status: 'live', note: 'Won deal value per month (LIV pipeline, AUD, CRM-contracted).' })
-      : section([], { source: SRC_AC, status: 'pending', note: 'No won-value data in cache yet.' }),
+    dealsWonTrend: haveConfLive
+      ? section(fill12(confWonSeries), { source: SRC_AC_YTD, status: 'live', note: 'Deals won per month in Conference pipeline (ac_deals_ytd).' })
+      : section([], { source: SRC_AC_YTD, status: 'pending', note: 'No won-deal data in cache yet.' }),
+    winRateTrend: haveConfLive
+      ? section(confWrSeries, { source: SRC_AC_YTD, status: 'live', note: 'Monthly win rate — won / all deals in Conference pipeline (ac_deals_ytd).' })
+      : section([], { source: SRC_AC_YTD, status: 'pending', note: 'No win rate data in cache yet.' }),
+    wonRevenueTrend: haveConfLive
+      ? section(fill12(confWonValSeries), { source: SRC_AC_YTD, status: 'live', note: 'Won deal value per month in Conference pipeline (ac_deals_ytd).' })
+      : section([], { source: SRC_AC_YTD, status: 'pending', note: 'No won-value data in cache yet.' }),
     demosTrend: demoSeries.length
       ? section(fill12(demoSeries), { source: SRC_AC, status: 'live', note: 'Demos booked per month (LIV deals with a "Demo date?").' })
       : section([], { source: SRC_AC, status: 'pending', note: 'No demo data in cache yet.' }),
@@ -174,6 +249,24 @@ function winRateTrend(won, lost) {
   });
 }
 
+// Left-join conference monthly counts onto a complete trailing-12-month axis.
+// Null when a month has no deals (keeps line chart from plunging to 0).
+function fill12WinRate(rows) {
+  const map = Object.fromEntries(rows.map((r) => [r.month, r]));
+  const out = [];
+  const d = new Date();
+  d.setUTCDate(1);
+  d.setUTCMonth(d.getUTCMonth() - 11);
+  for (let i = 0; i < 12; i++) {
+    const m = d.toISOString().slice(0, 7);
+    const r = map[m];
+    const val = r && r.all_deals > 0 ? Math.round((r.won_deals / r.all_deals) * 100) : null;
+    out.push({ month: m, value: val });
+    d.setUTCMonth(d.getUTCMonth() + 1);
+  }
+  return out;
+}
+
 // Left-join a monthly series onto a complete trailing-12-month axis (fills 0s so
 // trends have no gaps). Input/output: [{month:'YYYY-MM', value}].
 function fill12(s) {
@@ -208,8 +301,10 @@ function notConfigured() {
     inboundOutbound: s(SRC_AC_TODO),
     sales: {
       totalIncome: p('currency', SRC_INCOME),
-      conferenceIncome: p('currency', SRC_INCOME),
-      magExperiences: p('currency', SRC_INCOME),
+      conferenceIncome: p('currency', SRC_AC_YTD),
+      magExperiences: p('currency', SRC_AC_YTD),
+      conferenceIncomeTrend: s(SRC_AC_YTD),
+      magExperiencesTrend: s(SRC_AC_YTD),
     },
     conference: {
       kpis: {
