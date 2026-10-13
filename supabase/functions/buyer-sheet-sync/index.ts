@@ -9,8 +9,11 @@
 // Per run:
 //   1. BASE (cheap, no external calls): read won deals + their account/contact
 //      from the Supabase AC mirror; parse program + event date from the deal
-//      title; upsert base columns for ALL won deals. New/changed deals (by AC
-//      mdate) have their enrichment reset so they get re-enriched.
+//      title; pull invoice charges (engagement_fee / amount_total / invoice_json)
+//      from public.invoice_tracking, matched by deal_title = ac_deal_title and
+//      summed across a deal's invoices (deposit + final); upsert base columns for
+//      ALL won deals. New/changed deals (by AC mdate) have their enrichment reset
+//      so they get re-enriched.
 //   2. AC enrichment (bounded by ?limit + wall clock): per candidate deal, pull
 //      Event Date (#7), Audience size (#4), Deal Source (#6) from
 //      dealCustomFieldData; Job Title from accountContacts; Industry from the
@@ -78,6 +81,12 @@ interface BaseRecord {
   lost_at: string | null;  // cleared here; set by reconcile when a deal leaves "won"
   base_synced_at: string;
   updated_at: string;
+  // Invoice charges from public.invoice_tracking (matched by deal_title), summed
+  // across the deal's invoices. Deterministic — refreshed every run. null when the
+  // deal has no matched (2026+) Xero invoice.
+  engagement_fee: number | null;
+  amount_total: number | null;
+  invoice_json: string | null; // JSON array of the matched invoices' invoice_json
   // reset enrichment for new/changed deals
   enriched_at?: string | null;
   enrichment_attempts?: number;
@@ -418,10 +427,50 @@ async function run(limit: number): Promise<Summary> {
       lost_at: null,
       base_synced_at: now(),
       updated_at: now(),
+      engagement_fee: null,  // filled from invoice_tracking below
+      amount_total: null,
+      invoice_json: null,
     };
     if (changed) { rec.enriched_at = null; rec.enrichment_attempts = 0; s.reset_for_reenrich++; }
     baseRecords.push(rec);
   }
+
+  // 2a. Invoice charges from public.invoice_tracking, matched to each deal by
+  //     deal_title = ac_deal_title. A deal can have several invoices (deposit +
+  //     final), so SUM the money and keep every invoice's JSON in an array for the
+  //     "See Invoice" view. invoice_tracking holds 2026+ invoices only — deals with
+  //     no matched invoice keep null (so this never shadows older won deals).
+  const titles = Array.from(new Set(baseRecords.map((r) => r.deal_title).filter(Boolean))) as string[];
+  const invByTitle = new Map<string, { amount_total: number; engagement_fee: number; invoices: unknown[] }>();
+  const ICHUNK = 200;
+  for (let i = 0; i < titles.length; i += ICHUNK) {
+    const slice = titles.slice(i, i + ICHUNK);
+    const { data, error } = await db
+      .from("invoice_tracking")
+      .select("ac_deal_title, amount_total, engagement_fee, invoice_json")
+      .in("ac_deal_title", slice);
+    if (error) { s.errors.push(`invoice lookup: ${error.message}`); continue; }
+    for (const row of (data ?? []) as any[]) {
+      const t = String(row.ac_deal_title);
+      const agg = invByTitle.get(t) ?? { amount_total: 0, engagement_fee: 0, invoices: [] as unknown[] };
+      agg.amount_total += Number(row.amount_total) || 0;
+      agg.engagement_fee += Number(row.engagement_fee) || 0;
+      if (row.invoice_json != null) {
+        try { agg.invoices.push(JSON.parse(row.invoice_json)); }
+        catch { agg.invoices.push(row.invoice_json); }
+      }
+      invByTitle.set(t, agg);
+    }
+  }
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  for (const rec of baseRecords) {
+    const agg = rec.deal_title ? invByTitle.get(rec.deal_title) : undefined;
+    if (!agg) continue;
+    rec.amount_total = round2(agg.amount_total);
+    rec.engagement_fee = round2(agg.engagement_fee);
+    rec.invoice_json = agg.invoices.length ? JSON.stringify(agg.invoices) : null;
+  }
+
   const CHUNK = 100;
   for (let i = 0; i < baseRecords.length; i += CHUNK) {
     const slice = baseRecords.slice(i, i + CHUNK);

@@ -1,0 +1,175 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-13
+Session: Added a date-range filter to the Buyer Sheet page; explained how Xero
+access works (account MCP connector, no stored token); then extended the
+invoice-tracking-sync cloud routine to populate four new public.invoice_tracking
+columns — engagement_fee, other_fees, gst (all split by Xero account_code), and
+an enriched invoice_json carrying a computed per-line charges breakdown. All
+transform logic validated locally against real Xero data and against the live
+Supabase DB (ref aivitcomiywiysrfwqxt); routine updated in place via the
+remote-trigger API three times as the spec was refined.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Update public/mag_buyer_sheet.html to add the date filters present in other tabs
+like ac_contact_sources.html.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read both pages. ac_contact_sources.html has a client-side date toolbar (From/To
+date inputs + quick-range chips + Reset) filtering an in-memory ALL_ROWS array;
+the Buyer Sheet rendered its cached rows directly with no filter. Mirrored the
+pattern into mag_buyer_sheet.html:
+- Copied the .acs-* toolbar CSS into the page's <style> (styles aren't global).
+- Added a From/To (event date) toolbar with quick ranges adapted for event data,
+  which spans years rather than ~60 days: 12m / 24m / This year / All (default),
+  plus Reset. (The 7d/30d/60d buckets from Contact Sources wouldn't make sense.)
+- Filters on the "Date of Event" (eventDate) field — the natural date for a buyer
+  sheet.
+- Refactored the render path: rows now stored in ALL_ROWS, re-rendered through
+  filteredRows()/apply() on change; manually editing a date clears the active
+  quick chip; Reset returns to "All". No API/server changes — filtering is
+  entirely client-side on the already-cached buyer-sheet data.
+Flagged a minor copy: the empty-state text changed from the sync-job hint to
+"No buyers in this date range." and offered to restore the original if preferred.
+
+--------------------------------------------------------------------------------
+USER:
+(Q, no action) How did we get access to Xero? Using an access token? Where is it
+saved — in Supabase?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated (grep across repo + invoice-tracking.js + the invoice_tracking
+feature memory + operations/invoice_tracking/as_built.txt). Answer: there is NO
+Xero token stored by us anywhere — not Supabase, not Secret Manager, not the repo.
+Access rides on the account's Xero MCP connector (the OAuth connection at
+claude.ai/customize/connectors). The scheduled invoice-tracking-sync CLOUD
+ROUTINE (cron Mon–Fri 6am PH) is the only thing that talks to Xero (read-only:
+list/read invoices), transforms locally, and upserts into Supabase
+public.invoice_tracking. The dashboard server only SELECTs that cache — zero Xero
+calls at request time, so Cloud Run needs no Xero secret. The OAuth token lives
+inside Anthropic's connector infra for the account, refreshed by the connector,
+never exported. Noted two things: (1) a stale code comment in
+server/metrics/invoice-tracking.js:7 still calls the sync a "Supabase Edge
+Function" — it's actually the cloud routine (the edge-function + Xero Custom
+Connection path was built then abandoned 2026-10-02); (2) the dependency this
+creates — if the account's Xero connector authorization lapses, the sync fails
+until reconnected. Mentioned the Custom Connection route as the alternative if a
+self-managed credential were ever wanted.
+
+--------------------------------------------------------------------------------
+USER:
+I altered invoice_tracking and added columns engagement_fee, other_fees,
+invoice_json. Update invoice-tracking-sync to also populate the 3 new columns.
+engagement_fee = usually the biggest charge; other_fees = total of all other
+fees; invoice_json = the JSON object of the entire invoice.
+(User interrupted and re-sent this twice, each time correcting the stated column
+types: first text, then integer/integer/text, finally numeric/numeric/text, and
+fixing a typo so the third bullet correctly described invoice_json.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Established the sync is a cloud routine whose transform.mjs is embedded in the
+routine PROMPT (not the repo), id trig_013TGsR7euBvPbAz45UpS8tb. Confirmed live
+column types via information_schema: engagement_fee numeric(10,2), other_fees
+numeric(10,2), invoice_json text. Pulled a real Xero invoice page
+(get_invoices, org 2cc630e1-5f48-4cc7-b6ba-1d3cc0baf035, include_line_items) and
+found the key fact: Xero line items have **line_amount_net** (net/ex-GST), NOT a
+plain line_amount; per-line nets sum to amount_net.
+
+Built the first version of the new transform locally in the scratchpad, tested it
+against a real-invoice sample (incl. a multi-line program, an all-expense
+invoice, a discounted line, and an apostrophe for SQL-escaping), then executed
+the generated upsert against the live DB and read the columns back to confirm
+numeric/text acceptance. First semantics (per the user's wording): engagement_fee
+= biggest single line (by line_amount_net); other_fees = sum of the rest;
+invoice_json = JSON.stringify(inv). Assembled the full routine prompt in node
+(reading the tested transform.mjs verbatim so backslash-heavy regex escaping was
+handled by JSON.stringify, not by hand) and updated the routine via the
+remote-trigger API (HTTP 200), preserving the Xero + Supabase MCP connectors and
+generating a fresh event UUID. Updated the invoice-tracking feature memory.
+Flagged the semantic caveat that a "biggest line" rule mislabels expense-only
+invoices (e.g. Kurnai's flight) as an engagement fee, and offered the
+account_code alternative.
+
+--------------------------------------------------------------------------------
+USER:
+Yes please adjust engagement fee — e.g. 224/225/228 = program/keynote/immersive.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the Xero chart of accounts (get_chart_of_accounts) to find the full revenue
+set. The MAG delivery/speaking revenue accounts are a contiguous block 219–228
+(219 Virtual Keynote, 220 Virtual Immersive, 221 Virtual Workshop, 222/223 Peak
+Teams keynote/simulation, 224 Sales-MAG program, 225 Sales-Speaking, 226
+Workshops, 227 Teambuilding, 228 Immersive). Everything else — 465 Travel, 376
+delivery expenses, 229+ merchandise, 245 upsell — is a recharge/add-on.
+Reworked feeSplit to key off account_code and SUM (not pick biggest):
+engagement_fee = sum of line_amount_net for codes in ENGAGEMENT_CODES {219..228};
+other_fees = sum of the rest; eng+other still = amount_net. Included the whole
+219–228 block (not just the three named) so keynotes booked under virtual/Peak
+Teams codes aren't missed, and left the Set as the knob to narrow it. Re-tested
+locally (added a mixed keynote-225 + travel-465 invoice to prove the split),
+rebuilt the prompt, updated the routine again (HTTP 200, connectors preserved),
+and corrected the two live rows my earlier test had written with the old split
+(National Tiles → eng 29302.50/other 0; Kurnai → eng 0/other 1517.70). Updated
+memory to record the account-code rule and chart-of-accounts source.
+
+--------------------------------------------------------------------------------
+USER:
+I added column gst — update the routine so it's also populated. And invoice_json
+should also contain the charges breakdown.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed gst is unbounded numeric (accepts decimals). Added to transform.mjs:
+- gstOf(inv, items): total invoice tax, prefer Xero amount_tax, else total−net,
+  else sum of per-line line_tax_amount.
+- buildCharges(inv, items, sp): a computed charges object embedded in
+  invoice_json via Object.assign({}, inv, {charges}) — {engagement_fee,
+  other_fees, gst, net, total, lines:[{description, account_code, category
+  (engagement|other), quantity, unit_amount, net, tax, gross}]}. r2() rounds to
+  cents.
+- cols/vals gained 'gst' (money2(gst)) and invoice_json now stringifies the
+  enriched object.
+Validated locally with a brace-matching verifier that decoded each generated
+invoice_json back to JSON: charges present on every invoice, per-line net/tax/
+gross correct, gst correct via both the amount_tax path and the total−net
+fallback, and engagement+other+gst == total for all cases (apostrophe invoice
+round-tripped cleanly too). Updated the routine a third time (HTTP 200, connectors
+preserved, STEP D now reports gst counts). Regenerated and executed a corrected
+4-row upsert (excluding the synthetic test invoice, with real amount_tax values)
+so the previously-touched live rows carry gst + the charges-enriched invoice_json.
+Verified at the DB: gst populated and equal to invoice_json's charges.gst;
+engagement+other+gst = amount_total exactly on all four; invoice_json valid JSONB
+with the right line counts. Updated memory to document gst + the charges object.
+
+--------------------------------------------------------------------------------
+USER:
+(Q, no action) So amount_total will now equal engagement_fee + other_fees + gst?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Yes, by construction: engagement_fee + other_fees = amount_net (every line lands
+in one bucket), gst = amount_tax, and Xero's amount_net + amount_tax =
+amount_total. Noted engagement/other are ex-GST (net) with gst bridging to the
+gross total, and the one caveat — each of the three is independently rounded to
+2dp, so a rare odd rounding line / inclusive-tax / sub-cent artifact could leave a
+1¢ gap; safe to treat as exact for display, not for fraction-of-a-cent
+reconciliation.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — document the session (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat-history export; updated as_built.txt (invoice_tracking column
+inventory + the invoice-tracking-sync routine note); reviewed CLAUDE.md and
+.gitignore. No git commands run — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

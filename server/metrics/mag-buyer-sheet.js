@@ -19,6 +19,8 @@ const SELECT = `
     year               AS "year",
     event_date         AS "eventDate",
     company            AS "company",
+    deal_title         AS "dealTitle",
+    deal_status        AS "dealStatus",
     direct_indirect    AS "directIndirect",
     program_delivered  AS "program",
     audience_size      AS "audienceSize",
@@ -34,11 +36,13 @@ const SELECT = `
     kdm_email          AS "kdmEmail",
     kdm_job_title      AS "kdmTitle",
     kdm_seniority      AS "kdmSeniority",
+    engagement_fee     AS "engagementFee",
+    amount_total       AS "amountTotal",
+    invoice_json       AS "invoiceJson",
     enriched_at        AS "enrichedAt",
     enrichment_attempts AS "enrichmentAttempts"
   FROM public.mag_buyer_sheet
-  -- deal_status / lost_at are tracked in the table but intentionally NOT served
-  -- to the page (backend-only tracking, per request).
+  -- lost_at is tracked in the table but not served to the page (backend-only).
   ORDER BY event_date DESC NULLS LAST, company ASC`;
 
 export async function getMagBuyerSheet() {

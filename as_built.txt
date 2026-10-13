@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-10-13 (Contact-Sources deal-title fixes + event-history retention: (1) update_ga4_contact_deals() — the 07:00 PH deal_id re-linker — now ALSO denormalizes deal_title/value/status/source_type (previously it only set deal_id, leaving titles NULL whenever the 06:00 rebuild raced the deals-mirror refresh); (2) public.ga4_ac_event_matches is now an ACCUMULATING audit table — rebuild_ga4_ac_matches() section 2 UPSERTs on a new stable event_uid instead of truncate+reinsert, so event history is retained beyond the 60-day window. Both applied live to Supabase + mirrored as repo migrations. No Cloud Run redeploy needed (DB-only). Earlier context — 2026-10-09: Contact-Sources pipeline overhaul (ga4_ac_contact_source STORES every display column, page query is a flat single-table SELECT, rebuild APPENDS Google-Ads leads, 3 cron jobs → ONE orchestrator contact-sources-sync))
+Last updated: 2026-10-13 (Buyer Analysis page extended with invoice data: public.mag_buyer_sheet gained engagement_fee/amount_total/invoice_json, sourced from public.invoice_tracking by deal_title=ac_deal_title and SUMMED across a deal's 1–3 invoices (invoice_json kept as a JSON ARRAY); buyer-sheet-sync edge function redeployed v12 (verify_jwt:false) to fill them each run; mag-buyer-sheet.js SELECT + mag_buyer_sheet.html now serve/show "Engagement Fee" + "Total Charge" (hover → See Invoice modal) and "Deal Title" + "Deal Status" (status pill); nav tab renamed "Buyer Sheet" → "Buyer Analysis" across all 12 pages. Server+frontend changes pending a Cloud Run redeploy. Earlier same day — invoice-tracking-sync routine extended: public.invoice_tracking gained engagement_fee/other_fees/gst (fee split by Xero account_code — codes 219–228 = engagement, rest = other; gst = amount_tax) + an invoice_json enriched with a computed `charges` breakdown; routine prompt's embedded transform.mjs updated via remote-trigger API, connectors preserved; these 4 cols are populated but not yet surfaced on the Invoices page. Also added a client-side date-range filter (From/To event date + 12m/24m/This-year/All quick ranges) to public/mag_buyer_sheet.html. Earlier same day — Contact-Sources deal-title fixes + full history retention: update_ga4_contact_deals() (07:00 PH re-linker) now also denormalizes deal_title/value/status/source_type; BOTH rebuild tables now ACCUMULATE via UPSERT instead of truncate (ga4_ac_event_matches on event_uid, ga4_ac_contact_source on contact_id, ownership scoped by match_method). 2026-10-09: Contact-Sources pipeline overhaul (flat single-table SELECT, rebuild APPENDS Google-Ads leads, 3 crons → ONE orchestrator contact-sources-sync))
 ================================================================================
 
 OVERVIEW
@@ -62,7 +62,8 @@ SCRIPTS / APP CODE
 - public/ — plain static frontend, served directly (NO build step):
   - login.html + the tab pages (tab bar = links, in order): sales_overview.html
     ("Sales" top-line KPIs), marketing.html, operations.html, mag_buyer_sheet.html
-    ("Buyer Sheet"), invoice_tracking.html ("Invoices"), sales.html
+    (nav tab "Buyer Analysis" — renamed 2026-10-13; in-page <h3>/<title> still say
+    "Buyer Sheet"), invoice_tracking.html ("Invoices"), sales.html
     ("Conferences" — legacy filename; it is the LIV deals table), ga4_agent.html
     ("GA4 Agent" / on-demand report), ac_contact_sources.html
     ("GA4 & Ads Leads Tracking"), new_paid_leads_tracking.html
@@ -161,8 +162,29 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
   tables. In addition, several dashboard-owned cache tables are filled on a
   schedule and only SELECTed at request time:
   - public.sales_liv_deals — LIV pipeline deal rows (Conferences page).
-  - public.mag_buyer_sheet — Buyer Sheet rows.
-  - public.invoice_tracking — Xero sales invoices (Invoices page).
+  - public.mag_buyer_sheet — Buyer Analysis rows (one per WON deal). As of
+    2026-10-13 also carries engagement_fee numeric, amount_total numeric, and
+    invoice_json text (migration 20261013010000). These come from
+    public.invoice_tracking, matched by deal_title = ac_deal_title and SUMMED across
+    a deal's invoices (deposit + final, up to 3): engagement_fee/amount_total are
+    sums; invoice_json is a JSON ARRAY of the matched invoices' invoice_json objects
+    (each with its `charges` breakdown). invoice_tracking is 2026+ only, so only ~31
+    of 491 rows match. Filled deterministically in buyer-sheet-sync step 2a each run
+    (null for deals with no 2026+ invoice). deal_title + deal_status (won/lost/open/
+    removed, reconciled each run) are also now served to the page.
+  - public.invoice_tracking — Xero sales invoices (Invoices page), keyed by
+    invoice_id. As of 2026-10-13 also carries engagement_fee numeric(10,2),
+    other_fees numeric(10,2), gst numeric, and invoice_json text. The fee split
+    is by Xero account_code: engagement_fee = sum of line_amount_net for codes
+    219–228 (MAG delivery/speaking revenue — keynote/immersive/program/workshop/
+    teambuilding + virtual & Peak Teams variants); other_fees = sum of the rest
+    (465 travel, 376 delivery expenses, merchandise, upsells). gst = invoice
+    total tax (amount_tax). invoice_json = the whole Xero invoice object PLUS a
+    computed `charges` breakdown {engagement_fee, other_fees, gst, net, total,
+    lines:[{description, account_code, category, qty, unit_amount, net, tax,
+    gross}]}. Identity: engagement+other = amount_net; engagement+other+gst =
+    amount_total. These 4 columns are populated by the sync but NOT yet served
+    by the API route / Invoices page.
   - public.sales_topline — Sales page top-line KPIs (long format
     metric/bucket/dimension/value/unit; RLS enabled). NEW this session.
   - public.dashboard_login_codes — bcrypt-hashed login OTP codes.
@@ -180,12 +202,21 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
         +ac_deal_source_type, conversion_events_ac_matched).
       * google_ads_ac_field / deal_source_ac_field — filled by
         ga4-ac-custom-fields-sync after the rebuild.
-    The rebuild (section 4) also APPENDS the primary contact of each
-    ac_google_ads_deals deal whose email isn't already present (GA4/match columns
-    left NULL; deal_*/source_type/google_ads_ac_field from the AC deal data; cdate
-    from activecampaign_contacts). This is now a permanent, automatic part of every
-    rebuild (not a one-off backfill); it reads the prior run's ac_google_ads_deals
-    snapshot (~1-day lag for brand-new Google-Ads leads).
+    The rebuild (section 4) also appends/UPSERTS the primary contact of each
+    ac_google_ads_deals deal (GA4/match columns left NULL; deal_*/source_type/
+    google_ads_ac_field from the AC deal data — deal_value already AUD; cdate from
+    activecampaign_contacts). It reads the prior run's ac_google_ads_deals snapshot
+    (~1-day lag for brand-new Google-Ads leads).
+    As of 2026-10-13 this table ACCUMULATES (was truncate+rebuilt each run): the
+    rebuild UPSERTs on contact_id and never truncates, so contacts older than the
+    60-day match window are RETAINED on the page (forward-looking — rows truncated
+    away before 2026-10-13 are gone). Ownership split to avoid the AUD/cents bug now
+    that gads rows persist: MATCHED rows (match_method NOT NULL) are owned by
+    sections 1/1b/3 (deal_value = activecampaign_deals.value/100); GOOGLE-ADS rows
+    (match_method NULL, deal_value AUD) are owned solely by section 4's upsert, and
+    sections 1b/3 are scoped to match_method IS NOT NULL so they never touch them.
+    Deal fields on matched rows refresh every run (so edits to the AC deal flow
+    through); gads rows refresh from ac_google_ads_deals every run.
   - public.ac_google_ads_deals — all AC deals whose "Google Ads?" custom field =
     "Yes", with deal/contact/account metadata. PK = deal_id. Filled by the
     ac-google-ads-deals-sync edge function.
@@ -199,9 +230,7 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     it's a revisable measure). Rows that age out of the staging window are NO LONGER
     deleted, so event history is retained beyond 60 days (forward-looking only —
     history truncated away before 2026-10-13 is gone). event_uid is NOT NULL + unique;
-    inserted_at = first-seen, last_rebuilt_at = last re-derivation. NOTE: by contrast
-    public.ga4_ac_contact_source is STILL truncate+rebuilt each run (it's a
-    current-state one-row-per-contact view, not an event log).
+    inserted_at = first-seen, last_rebuilt_at = last re-derivation.
 - Login is passwordless email OTP (codes stored in dashboard_login_codes); the
   old seeded-user array is no longer the auth path.
 
@@ -227,7 +256,22 @@ AUTOMATIONS / ROUTINES
   documented in routines/sales-topline-sync.md. NEW this session.
 - The sales_liv_deals / mag_buyer_sheet cache tables are refreshed Mon–Fri 6am PH
   by Supabase Edge Functions (sales-deals-sync, buyer-sheet-sync); invoice_tracking
-  is refreshed by a separate scheduled Claude routine from Xero.
+  is refreshed by a separate scheduled Claude routine from Xero. buyer-sheet-sync
+  (pg_cron jobid 6, '0 22 * * 0-4', deployed verify_jwt:false) was redeployed to
+  VERSION 12 on 2026-10-13: a new base step 2a looks up public.invoice_tracking by
+  ac_deal_title and writes the aggregated engagement_fee/amount_total/invoice_json
+  onto each row every run (see the mag_buyer_sheet DATA STORES entry).
+- invoice-tracking-sync (Claude cloud routine, trig_013TGsR7euBvPbAz45UpS8tb) —
+  cron `0 22 * * 0-4` (Mon–Fri 6am PH), model sonnet, via the Xero + Supabase MCP
+  connectors (Xero read-only). Its deterministic transform.mjs is embedded in the
+  routine PROMPT (edit it there, not in the repo): pages through 2026+ ACCREC
+  invoices, upserts public.invoice_tracking keyed on invoice_id (never truncates),
+  then matches each invoice to the best AC deal (ac_deal_title). As of 2026-10-13
+  it also fills engagement_fee/other_fees/gst (split by Xero account_code; see the
+  invoice_tracking DATA STORES entry) and an invoice_json enriched with a computed
+  `charges` breakdown. Xero access is the ACCOUNT'S Xero MCP connector — no Xero
+  token stored anywhere (not Supabase/Secret Manager/repo); if that connector's
+  auth lapses the run fails until reconnected.
 - GA4 & Ads Leads Tracking daily chain — as of 2026-10-09 driven by ONE cron job
   and ONE orchestrator edge function (was 3 staggered jobs). pg_cron job
   `contact-sources-sync-daily` ('0 22 * * *' = 06:00 PH daily) POSTs the

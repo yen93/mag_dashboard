@@ -1,0 +1,117 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-13
+Session: Extended the Buyer Analysis page (formerly "Buyer Sheet") with invoice
+data sourced from public.invoice_tracking — added engagement_fee / amount_total /
+invoice_json columns to the mag_buyer_sheet cache table, taught the
+buyer-sheet-sync edge function to populate them (summed across a deal's multiple
+invoices, invoice_json kept as a JSON array), surfaced them on the page as
+"Engagement Fee" and "Total Charge" (with a hover "See Invoice" button opening a
+charges/line-items modal), backfilled the 31 matching rows, renamed the nav tab
+from "Buyer Sheet" to "Buyer Analysis" across all 12 pages, and added "Deal Title"
+and "Deal Status" columns (the latter a coloured status pill). All server/frontend
+changes still pending a Cloud Run redeploy. Supabase project ref aivitcomiywiysrfwqxt.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Update the mag_buyer_sheet DB table: add columns engagement_fee, amount_total,
+invoice_json. Update the buyer-sheet-sync edge function so the new columns are
+populated moving forward — source should be the invoice_tracking table (same
+column names). Update the mag_buyer_sheet.html tab: "Engagement Fee" →
+engagement_fee; "Total Charge" → amount_total (and on hover there should be an
+option/button to "See Invoice" that shows invoice_json).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected both tables first. public.invoice_tracking carries ac_deal_title (not a
+deal_id) and per-invoice engagement_fee / amount_total / invoice_json (the latter
+holding a computed `charges` breakdown + line items, added in the prior session).
+public.mag_buyer_sheet has a deal_title column — so the join is
+invoice_tracking.ac_deal_title = mag_buyer_sheet.deal_title. A single deal can have
+1–3 invoices (deposit + final; 14 of 31 matched deals have more than one), so the
+design SUMs amount_total and engagement_fee and keeps invoice_json as a JSON ARRAY
+of the matched invoices' objects. invoice_tracking is 2026+ only, so only 31 of 491
+buyer rows match.
+
+Work done:
+- DB: added engagement_fee numeric, amount_total numeric, invoice_json text to
+  public.mag_buyer_sheet — applied live and captured as repo migration
+  supabase/migrations/20261013010000_mag_buyer_sheet_invoice_columns.sql.
+- Edge function (supabase/functions/buyer-sheet-sync/index.ts): added the three
+  fields to BaseRecord and a new base step "2a" that queries invoice_tracking by
+  ac_deal_title in the current batch's titles, aggregates per title (sum of
+  engagement_fee/amount_total, jsonb array of non-null invoice_json), and writes
+  them onto each row deterministically every run. Deployed as VERSION 12 with
+  verify_jwt:false preserved (cron jobid 6, schedule 0 22 * * 0-4, POSTs with no
+  Authorization header — must stay false or the edge gateway 401s before the body
+  runs while cron still reports "succeeded").
+- Server (server/metrics/mag-buyer-sheet.js): added engagement_fee AS
+  "engagementFee", amount_total AS "amountTotal", invoice_json AS "invoiceJson" to
+  the SELECT.
+- Frontend (public/mag_buyer_sheet.html): added two columns after "AC Value (AUD)"
+  — "Engagement Fee" (currency) and "Total Charge" (currency, custom render). The
+  Total Charge cell reveals a "See Invoice" button on hover that opens a modal
+  (#invBackdrop / #invTitle / #invBody) rendering each matched invoice's charges
+  breakdown and line items. Added supporting CSS, a money2 formatter, an INVOICES
+  map keyed by dealId, parseInvoices (filters to objects), renderInvoiceCard, and a
+  delegated click handler with Escape/backdrop close. Currency columns with a custom
+  render still sort numerically on the raw value.
+- Backfill: ran an UPDATE aggregating invoice_tracking into the 31 matching
+  mag_buyer_sheet rows (null-filtered jsonb_agg). Verified multi-invoice sums —
+  Challenge The Wild (3 invoices) = $37,690; DB Technologies (2) = $41,690.
+Updated the mag-buyer-sheet-feature memory with the new columns. Flagged that a
+Cloud Run redeploy (NO secret flags) is needed for the server + page changes to go
+live.
+
+--------------------------------------------------------------------------------
+USER:
+Update the "Buyer Sheet" tab name to "Buyer Analysis".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+The <nav class="tabbar"> block is duplicated in every page, so renamed the nav label
+across all 12 pages (mag_buyer_sheet.html, ac_contact_sources.html,
+new_paid_leads_tracking.html, ac_ad_leads_tagging.html, sales_overview.html,
+lead_source_guide.html, mag_sales_pulse.html, ga4_agent.html, invoice_tracking.html,
+marketing.html, operations.html, sales.html) by replacing >Buyer Sheet< with
+>Buyer Analysis<. Verified none remained. Left the in-page <h3>MAG Buyer Sheet</h3>
+heading and the <title> tag unchanged, and offered to change those too if wanted.
+
+--------------------------------------------------------------------------------
+USER:
+Add columns to mag_buyer_sheet.html: "Deal Title" and "Deal Status" — both are in
+the cache table.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Both fields already exist on public.mag_buyer_sheet (deal_title text, deal_status
+enum). deal_status had been deliberately excluded from the server SELECT before.
+- Server (server/metrics/mag-buyer-sheet.js): added deal_title AS "dealTitle" and
+  deal_status AS "dealStatus" after company; replaced the old "deal_status
+  intentionally NOT served" comment with a note that only lost_at stays backend-only.
+- Frontend (public/mag_buyer_sheet.html): added a statusPill renderer (won → green,
+  lost → red, open → amber, removed/other → plain) and two columns after Company —
+  "Deal Title" (text) and "Deal Status" (statusPill).
+Verified against the DB: all 491 rows are currently deal_status = won with
+deal_title populated (the table holds the won set; lost/open/removed get retagged
+by the sync's reconcile step if a deal later leaves the won set).
+Reminded that all of this session's server + frontend changes (invoice columns, tab
+rename, Deal Title/Status) go live together with the one pending Cloud Run redeploy
+(NO secret flags).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation skill (no git). Saved this chat transcript; updated
+as_built.txt (mag_buyer_sheet invoice + deal columns, buyer-sheet-sync v12, nav tab
+renamed to "Buyer Analysis"); reviewed CLAUDE.md and .gitignore. Security scan of
+the full transcript found no secrets to redact — only Secret Manager names and a
+Supabase project ref, no credential values. Did NOT commit or push (the user does
+that).
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -10,6 +10,56 @@
        width instead of the default 1200px cap, so the table grows as the window
        grows (it still scrolls horizontally on narrow screens). */
     .content { max-width: none; }
+    /* Date-range filter toolbar (mirrors ac_contact_sources.html). */
+    .acs-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .acs-field { display: flex; flex-direction: column; gap: 4px; }
+    .acs-field label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .acs-field input[type="date"] {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 10px; font: inherit;
+    }
+    .acs-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+    .acs-quick button, .acs-reset {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .acs-quick button.active { background: var(--accent); color: #fff; border-color: transparent; }
+    .acs-spacer { flex: 1; }
+
+    /* "Total Charge" cell — amount with a hover-revealed "See Invoice" button. */
+    .charge-cell { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+    .see-inv {
+      background: var(--surface); color: var(--accent); border: 1px solid var(--border);
+      border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 700; cursor: pointer;
+      opacity: 0; transition: opacity .12s; white-space: nowrap;
+    }
+    tr:hover .see-inv, .see-inv:focus { opacity: 1; outline: none; }
+    .see-inv:focus { box-shadow: 0 0 0 2px var(--accent); }
+
+    /* Invoice modal */
+    .inv-backdrop {
+      position: fixed; inset: 0; z-index: 9998; display: none;
+      background: rgba(0,0,0,.45); align-items: flex-start; justify-content: center;
+      padding: 48px 16px; overflow: auto;
+    }
+    .inv-backdrop.open { display: flex; }
+    .inv-modal {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 14px; max-width: 760px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,.4);
+    }
+    .inv-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .inv-head h3 { margin: 0; font-size: 16px; }
+    .inv-close { margin-left: auto; background: none; border: none; color: var(--text-muted); font-size: 22px; line-height: 1; cursor: pointer; }
+    .inv-body { padding: 10px 18px 18px; }
+    .inv-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+    .inv-card-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 8px; }
+    .inv-card-head .num { font-weight: 700; font-size: 15px; }
+    .inv-meta { color: var(--text-muted); font-size: 12px; }
+    .inv-lines { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+    .inv-lines th, .inv-lines td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+    .inv-lines td.n, .inv-lines th.n { text-align: right; font-variant-numeric: tabular-nums; }
+    .inv-tot { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 13px; }
+    .inv-tot b { font-variant-numeric: tabular-nums; }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -26,7 +76,7 @@
     <a class="tab" href="sales_overview.html">Sales</a>
     <a class="tab" href="marketing.html">Marketing</a>
     <a class="tab" href="operations.html">Operations</a>
-    <a class="tab active" href="mag_buyer_sheet.html">Buyer Sheet</a>
+    <a class="tab active" href="mag_buyer_sheet.html">Buyer Analysis</a>
     <a class="tab" href="invoice_tracking.html">Invoices</a>
     <a class="tab" href="sales.html">Conferences</a>
     <a class="tab" href="ga4_agent.html">GA4 Agent</a>
@@ -45,13 +95,47 @@
           <div class="spacer"></div>
           <span class="muted" id="buyerCount" style="font-size:13px"></span>
         </div>
+
+        <!-- date-range filter (filters on Date of Event) -->
+        <div class="acs-toolbar">
+          <div class="acs-field">
+            <label for="buyerFrom">From (event date)</label>
+            <input type="date" id="buyerFrom" />
+          </div>
+          <div class="acs-field">
+            <label for="buyerTo">To (event date)</label>
+            <input type="date" id="buyerTo" />
+          </div>
+          <div class="acs-quick" id="buyerQuick">
+            <button type="button" data-days="365">12m</button>
+            <button type="button" data-days="730">24m</button>
+            <button type="button" data-ytd="1">This year</button>
+            <button type="button" data-days="0" class="active">All</button>
+          </div>
+          <button type="button" class="acs-reset" id="buyerReset">Reset</button>
+          <div class="acs-spacer"></div>
+        </div>
+
         <div id="buyerRows"></div>
       </div>
     </div>
   </main>
 
+  <!-- Invoice viewer (filled on demand by the "See Invoice" buttons) -->
+  <div class="inv-backdrop" id="invBackdrop">
+    <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="invTitle">
+      <div class="inv-head">
+        <h3 id="invTitle">Invoice</h3>
+        <button type="button" class="inv-close" id="invClose" aria-label="Close">×</button>
+      </div>
+      <div class="inv-body" id="invBody"></div>
+    </div>
+  </div>
+
   <script src="app.js?v=2"></script>
   <script>
+    var ALL_ROWS = [];
+
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
     // ---- cell renderers ----
@@ -62,39 +146,202 @@
       var s = String(v), cls = s.toLowerCase() === 'indirect' ? 'partial' : '';
       return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
     }
+    // Deal status from the cache table: won (green) / lost (red) / open (amber) /
+    // removed or other (plain).
+    function statusPill(v) {
+      if (!v) return '—';
+      var s = String(v), low = s.toLowerCase();
+      var cls = low === 'won' ? 'pos' : (low === 'lost' ? 'neg' : (low === 'open' ? 'partial' : ''));
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+
+    // ---- invoice (Total Charge / See Invoice) ----
+    var _aud2 = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function money2(v) { return _aud2.format(Number(v) || 0); }
+    // Parsed invoice arrays keyed by deal_id, so the "See Invoice" buttons stay
+    // lightweight (no big JSON in the DOM) and survive table re-renders.
+    var INVOICES = {};
+    function parseInvoices(raw) {
+      if (!raw) return [];
+      try {
+        var v = typeof raw === 'string' ? JSON.parse(raw) : raw;
+        return (Array.isArray(v) ? v : [v]).filter(function (x) { return x && typeof x === 'object'; });
+      } catch (e) { return []; }
+    }
+    // "Total Charge" cell: the summed amount + a hover-revealed See Invoice button
+    // (only when the deal has matched invoice JSON).
+    function totalChargeCell(v, row) {
+      var amt = (v === null || v === undefined) ? '—' : money2(v);
+      var invs = INVOICES[row.dealId] || [];
+      if (!invs.length) return '<span class="charge-cell">' + amt + '</span>';
+      return '<span class="charge-cell">' + amt +
+        '<button type="button" class="see-inv" data-deal="' + esc(row.dealId) +
+        '">See Invoice' + (invs.length > 1 ? ' (' + invs.length + ')' : '') + '</button></span>';
+    }
+
+    function invStr(o, k) { return (o && o[k] != null && o[k] !== '') ? esc(String(o[k])) : '—'; }
+    function renderInvoiceCard(inv) {
+      var charges = inv && inv.charges;
+      var lines = (charges && Array.isArray(charges.lines)) ? charges.lines : [];
+      var rows = lines.map(function (l) {
+        return '<tr><td>' + invStr(l, 'description') + '</td>' +
+          '<td>' + invStr(l, 'account_code') + '</td>' +
+          '<td>' + (l && l.category ? esc(l.category) : '—') + '</td>' +
+          '<td class="n">' + money2(l && l.net) + '</td>' +
+          '<td class="n">' + money2(l && l.tax) + '</td>' +
+          '<td class="n">' + money2(l && l.gross) + '</td></tr>';
+      }).join('');
+      var linesTbl = lines.length
+        ? '<table class="inv-lines"><thead><tr><th>Description</th><th>Acct</th><th>Type</th>' +
+          '<th class="n">Net</th><th class="n">GST</th><th class="n">Gross</th></tr></thead><tbody>' +
+          rows + '</tbody></table>'
+        : '';
+      var tot = charges
+        ? '<div class="inv-tot"><span>Engagement: <b>' + money2(charges.engagement_fee) + '</b></span>' +
+          '<span>Other: <b>' + money2(charges.other_fees) + '</b></span>' +
+          '<span>GST: <b>' + money2(charges.gst) + '</b></span>' +
+          '<span>Total: <b>' + money2(charges.total != null ? charges.total : inv.amount_total) + '</b></span></div>'
+        : '';
+      var status = inv && (inv.status || inv.xero_status);
+      return '<div class="inv-card">' +
+        '<div class="inv-card-head"><span class="num">' + invStr(inv, 'invoice_number') + '</span>' +
+        (status ? '<span class="pill">' + esc(String(status)) + '</span>' : '') +
+        '<span class="inv-meta">' +
+          (inv && inv.invoice_date ? 'Issued ' + esc(inv.invoice_date) : '') +
+          (inv && inv.reference ? ' · ' + esc(inv.reference) : '') +
+        '</span></div>' + linesTbl + tot + '</div>';
+    }
+
+    function openInvoice(dealId, company) {
+      var invs = INVOICES[dealId] || [];
+      if (!invs.length) return;
+      document.getElementById('invTitle').textContent =
+        (company ? company + ' — ' : '') + 'Invoice' + (invs.length > 1 ? 's (' + invs.length + ')' : '');
+      document.getElementById('invBody').innerHTML = invs.map(renderInvoiceCard).join('');
+      document.getElementById('invBackdrop').classList.add('open');
+    }
+    function closeInvoice() { document.getElementById('invBackdrop').classList.remove('open'); }
+    (function wireModal() {
+      document.getElementById('invClose').addEventListener('click', closeInvoice);
+      document.getElementById('invBackdrop').addEventListener('click', function (e) {
+        if (e.target === this) closeInvoice(); // click outside the card
+      });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeInvoice(); });
+      // Delegated: survives table re-renders (sort/search/filter).
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('.see-inv');
+        if (!btn) return;
+        var dealId = btn.getAttribute('data-deal');
+        var row = ALL_ROWS.filter(function (r) { return String(r.dealId) === String(dealId); })[0];
+        openInvoice(dealId, row && row.company);
+      });
+    })();
+
+    // ---- date-range filtering (on Date of Event) ----
+    function parseInput(id) {
+      var el = document.getElementById(id);
+      return el && el.value ? el.value : ''; // 'YYYY-MM-DD' or ''
+    }
+    function inRange(iso, from, to) {
+      if (!iso) return false;
+      var d = String(iso).slice(0, 10); // compare on YYYY-MM-DD
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }
+    function filteredRows() {
+      var from = parseInput('buyerFrom'), to = parseInput('buyerTo');
+      if (!from && !to) return ALL_ROWS;
+      return ALL_ROWS.filter(function (r) { return inRange(r.eventDate, from, to); });
+    }
+
+    function renderTable(rows) {
+      renderSortableTable('buyerRows', rows, [
+        { key: 'year', label: 'Year', render: yr },
+        { key: 'eventDate', label: 'Date of Event', unit: 'date' },
+        { key: 'company', label: 'Company', render: txt },
+        { key: 'dealTitle', label: 'Deal Title', render: txt },
+        { key: 'dealStatus', label: 'Deal Status', render: statusPill },
+        { key: 'directIndirect', label: 'Direct/Indirect', render: pill },
+        { key: 'program', label: 'Program Delivered', render: txt },
+        { key: 'audienceSize', label: 'Audience Size', render: txt },
+        { key: 'valueAud', label: 'AC Value (AUD)', unit: 'currency' },
+        { key: 'engagementFee', label: 'Engagement Fee', unit: 'currency' },
+        { key: 'amountTotal', label: 'Total Charge', unit: 'currency', render: totalChargeCell },
+        { key: 'industry', label: 'Industry', render: txt },
+        { key: 'businessSize', label: 'Business Size', render: txt },
+        { key: 'ipocName', label: 'Initial Point of Contact', render: txt },
+        { key: 'ipocEmail', label: 'Email', render: txt },
+        { key: 'ipocTitle', label: 'Job Title', render: txt },
+        { key: 'ipocSeniority', label: 'Seniority', render: txt },
+        { key: 'kdmName', label: 'Key Decision Maker', render: txt },
+        { key: 'kdmEmail', label: 'KDM Email', render: txt },
+        { key: 'kdmTitle', label: 'KDM Job Title', render: txt },
+        { key: 'kdmSeniority', label: 'KDM Seniority', render: txt },
+      ], {
+        searchPlaceholder: 'Search buyers…',
+        sortKey: 'eventDate', sortDir: 'desc',
+        emptyText: 'No buyers in this date range.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('buyerCount');
+          if (el) el.textContent = shown === total ? (total + ' buyers') : (shown + ' of ' + total + ' buyers');
+        },
+      });
+    }
+
+    function apply() { renderTable(filteredRows()); }
+
+    function setQuick(opts) {
+      var from = document.getElementById('buyerFrom'), to = document.getElementById('buyerTo');
+      if (opts && opts.ytd) {
+        var now = new Date();
+        from.value = now.getFullYear() + '-01-01';
+        to.value = now.toISOString().slice(0, 10);
+      } else if (opts && opts.days) {
+        var end = new Date();
+        var start = new Date(); start.setDate(start.getDate() - opts.days);
+        to.value = end.toISOString().slice(0, 10);
+        from.value = start.toISOString().slice(0, 10);
+      } else { // All
+        from.value = ''; to.value = '';
+      }
+      apply();
+    }
+
+    function clearQuickActive() {
+      document.querySelectorAll('#buyerQuick button').forEach(function (x) { x.classList.remove('active'); });
+    }
+
+    function wireToolbar() {
+      document.getElementById('buyerFrom').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.getElementById('buyerTo').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.querySelectorAll('#buyerQuick button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          clearQuickActive();
+          b.classList.add('active');
+          setQuick({ days: Number(b.getAttribute('data-days')) || 0, ytd: b.getAttribute('data-ytd') === '1' });
+        });
+      });
+      document.getElementById('buyerReset').addEventListener('click', function () {
+        clearQuickActive();
+        document.querySelector('#buyerQuick button[data-days="0"]').classList.add('active');
+        setQuick({});
+      });
+    }
 
     function loadBuyerSheet() {
       var host = document.getElementById('buyerRows');
       host.innerHTML = '<div class="muted" style="padding:14px">Loading buyer sheet…</div>';
       fetchJSON('/api/operations/buyer-sheet').then(function (data) {
         setChips('buyerChips', data.rows.meta);
-        renderSortableTable('buyerRows', data.rows.data || [], [
-          { key: 'year', label: 'Year', render: yr },
-          { key: 'eventDate', label: 'Date of Event', unit: 'date' },
-          { key: 'company', label: 'Company', render: txt },
-          { key: 'directIndirect', label: 'Direct/Indirect', render: pill },
-          { key: 'program', label: 'Program Delivered', render: txt },
-          { key: 'audienceSize', label: 'Audience Size', render: txt },
-          { key: 'valueAud', label: 'Value (AUD)', unit: 'currency' },
-          { key: 'industry', label: 'Industry', render: txt },
-          { key: 'businessSize', label: 'Business Size', render: txt },
-          { key: 'ipocName', label: 'Initial Point of Contact', render: txt },
-          { key: 'ipocEmail', label: 'Email', render: txt },
-          { key: 'ipocTitle', label: 'Job Title', render: txt },
-          { key: 'ipocSeniority', label: 'Seniority', render: txt },
-          { key: 'kdmName', label: 'Key Decision Maker', render: txt },
-          { key: 'kdmEmail', label: 'KDM Email', render: txt },
-          { key: 'kdmTitle', label: 'KDM Job Title', render: txt },
-          { key: 'kdmSeniority', label: 'KDM Seniority', render: txt },
-        ], {
-          searchPlaceholder: 'Search buyers…',
-          sortKey: 'eventDate', sortDir: 'desc',
-          emptyText: 'No buyers yet — the daily buyer-sheet-sync job will populate this table.',
-          onCount: function (shown, total) {
-            var el = document.getElementById('buyerCount');
-            if (el) el.textContent = shown === total ? (total + ' buyers') : (shown + ' of ' + total + ' buyers');
-          },
+        ALL_ROWS = data.rows.data || [];
+        // Pre-parse invoice JSON once, keyed by deal_id, for the See Invoice buttons.
+        INVOICES = {};
+        ALL_ROWS.forEach(function (r) {
+          var invs = parseInvoices(r.invoiceJson);
+          if (invs.length) INVOICES[r.dealId] = invs;
         });
+        apply();
       }).catch(function (err) {
         console.error(err);
         host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load buyer sheet</strong><span>' + esc(err.message) + '</span></div>';
@@ -102,7 +349,7 @@
     }
 
     initPage('operations'); // login / top-bar / theme only — this page renders its own table
-    if (currentUser()) loadBuyerSheet();
+    if (currentUser()) { wireToolbar(); loadBuyerSheet(); }
   </script>
 </body>
 </html>

@@ -16,7 +16,8 @@ Cloud Run.
   fallback — each page is a real file.
 - **Frontend = static files in `public/`, no build.** One HTML file per screen
   Tab bar (in order): `sales_overview.html` ("Sales"), `marketing.html`,
-  `operations.html`, `mag_buyer_sheet.html` ("Buyer Sheet"),
+  `operations.html`, `mag_buyer_sheet.html` (nav tab "Buyer Analysis" as of
+  2026-10-13 — the in-page `<h3>`/`<title>` still read "Buyer Sheet"),
   `invoice_tracking.html` ("Invoices"), `sales.html` ("Conferences"); plus
   `login.html`. **Naming gotcha:** the "Sales" tab is `sales_overview.html`;
   `sales.html` is the **Conferences** page (legacy name). The `<nav class="tabbar">`
@@ -75,13 +76,22 @@ Cloud Run.
     races the 06:00 rebuild at the same slot). As of 2026-10-13 it ALSO denormalizes
     the display columns; **never add/leave a linker that sets `deal_id` without also
     denormalizing** or org-matched non-primary contacts get `deal_id` but a blank title.
-  - **`ga4_ac_event_matches` is ACCUMULATE, not truncate (as of 2026-10-13).** The
-    rebuild's section 2 UPSERTs on a stable `event_uid` (md5 of event dimensions +
-    occurrence; **`event_count` is deliberately excluded** — it's a revisable measure)
-    so rows aging out of the staging window are retained (history >60d, forward-only).
-    `inserted_at`=first-seen, `last_rebuilt_at`=last re-derivation. **Don't re-introduce
-    a `truncate` there.** (`ga4_ac_contact_source` IS still truncate+rebuilt — it's a
-    current-state view, so manual row edits there are wiped each rebuild.)
+  - **Both rebuild tables now ACCUMULATE, not truncate (as of 2026-10-13) — don't
+    re-introduce a `truncate` in `rebuild_ga4_ac_matches()`.**
+    - `ga4_ac_event_matches`: section 2 UPSERTs on a stable `event_uid` (md5 of event
+      dimensions + occurrence; **`event_count` is deliberately excluded** — it's a
+      revisable measure). `inserted_at`=first-seen, `last_rebuilt_at`=last re-derivation.
+    - `ga4_ac_contact_source`: section 1 (matched) and section 4 (gads) UPSERT on
+      `contact_id`, so contacts older than the 60-day window are retained on the page.
+      **Ownership split (do not break):** MATCHED rows (`match_method` NOT NULL) are
+      owned by sections 1/1b/3 — `deal_value = activecampaign_deals.value/100` (cents);
+      GOOGLE-ADS rows (`match_method` NULL, `deal_value` already **AUD**) are owned
+      solely by section 4's upsert. Sections 1b/3 are **scoped to `match_method IS NOT
+      NULL`** precisely so they never `/100`-corrupt the AUD gads rows, and section 4's
+      `DO UPDATE` is guarded with `WHERE match_method IS NULL` so it never clobbers a
+      matched row. (Both tables are append-only now, so a manual row edit survives
+      unless the next rebuild upserts that same key — a matched row is overwritten each
+      run; an out-of-window row is left alone.)
 - **Auth = passwordless email code (OTP).** No passwords, no user table.
   `login.html` is a two-step form (email → code). `POST /api/request-code`
   accepts any `@myadventuregroup.com.au` email, generates a 6-digit code, stores
