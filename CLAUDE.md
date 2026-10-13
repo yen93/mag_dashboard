@@ -57,6 +57,31 @@ Cloud Run.
     `routines/sales-topline-sync.md`. Live: total_income, bureau, tailor;
     "needs setup" until their AC fields/tags are mirrored: direct/indirect split,
     speaking_enquiries, inbound/outbound.
+  - **Contact Sources** (`ac_contact_sources.html` = "GA4 & Ads Leads Tracking",
+    `/api/operations/contact-sources`, `server/metrics/ac-contact-sources.js`) is
+    also a plain single-table read: as of 2026-10-09 **every display column is stored
+    on `public.ga4_ac_contact_source`** (the old LATERAL joins are gone — don't
+    re-add them). `rebuild_ga4_ac_matches()` denormalizes those columns each rebuild
+    (section 3: conversion_action/link, deal_title/value/status, source_type, cpc)
+    and **appends** the primary contact of each `ac_google_ads_deals` deal whose
+    email isn't already present (section 4; GA4/match cols left NULL). The three
+    former sync cron jobs are now one orchestrator edge function
+    `contact-sources-sync` (daily 06:00 PH; see AUTOMATIONS in `as_built.txt`). NB:
+    `ac_google_ads_deals.value` is already AUD (unlike `activecampaign_deals.value`,
+    which is cents). **Two deal-linkers, both must denormalize:** besides the
+    rebuild (step 1b links `deal_id`, step 3b fills `deal_title`/value/status),
+    a second cron `update-deals-daily-7am-pht` → `public.update_ga4_contact_deals()`
+    re-links `deal_id` at 07:00 PH (after the deals mirror settles — `sales-deals-sync`
+    races the 06:00 rebuild at the same slot). As of 2026-10-13 it ALSO denormalizes
+    the display columns; **never add/leave a linker that sets `deal_id` without also
+    denormalizing** or org-matched non-primary contacts get `deal_id` but a blank title.
+  - **`ga4_ac_event_matches` is ACCUMULATE, not truncate (as of 2026-10-13).** The
+    rebuild's section 2 UPSERTs on a stable `event_uid` (md5 of event dimensions +
+    occurrence; **`event_count` is deliberately excluded** — it's a revisable measure)
+    so rows aging out of the staging window are retained (history >60d, forward-only).
+    `inserted_at`=first-seen, `last_rebuilt_at`=last re-derivation. **Don't re-introduce
+    a `truncate` there.** (`ga4_ac_contact_source` IS still truncate+rebuilt — it's a
+    current-state view, so manual row edits there are wiped each rebuild.)
 - **Auth = passwordless email code (OTP).** No passwords, no user table.
   `login.html` is a two-step form (email → code). `POST /api/request-code`
   accepts any `@myadventuregroup.com.au` email, generates a 6-digit code, stores
@@ -137,6 +162,20 @@ before changing them).
   old `npm run dev` can lock folders on Windows; kill the process tree if a
   delete/rename fails with "resource busy".
 - Dockerfile uses `npm install` (not `npm ci`); no lockfile-strict install.
+- **Supabase Edge Functions must be deployed `--no-verify-jwt`.** The pg_cron +
+  pg_net job(s) and the `contact-sources-sync` orchestrator that drive them (the
+  GA4/Ads leads chain: `ga4-ads-leads-sync`, `ga4-ac-custom-fields-sync`,
+  `ac-google-ads-deals-sync`, which fill `ga4_ac_contact_source` /
+  `ac_google_ads_deals`) POST with **no Authorization header** (the orchestrator
+  calls its children the same way). If a function is deployed with `verify_jwt=true` (the default, and
+  what `supabase functions deploy` / the Supabase MCP `deploy_edge_function` do
+  unless told otherwise), the edge gateway returns `401
+  UNAUTHORIZED_NO_AUTH_HEADER` *before the function body runs* — the sync silently
+  never executes, yet `cron.job_run_details` still shows **"succeeded"** (pg_net
+  only queued the POST). Diagnose by reading `net._http_response` (status_code /
+  content), not the cron status. Project ref: `aivitcomiywiysrfwqxt`
+  (MAGTestProject). Manually backfill with `curl -X POST
+  ".../functions/v1/<fn>?sync=1"` once verify_jwt is off.
 
 ## Signing in
 No demo passwords anymore — any `@myadventuregroup.com.au` email can sign in by

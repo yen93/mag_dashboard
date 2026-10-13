@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-10-02 (added the "Sales" top-line KPI page + sales_topline cache + weekly sales-topline-sync routine; reordered the tab bar)
+Last updated: 2026-10-13 (Contact-Sources deal-title fixes + event-history retention: (1) update_ga4_contact_deals() — the 07:00 PH deal_id re-linker — now ALSO denormalizes deal_title/value/status/source_type (previously it only set deal_id, leaving titles NULL whenever the 06:00 rebuild raced the deals-mirror refresh); (2) public.ga4_ac_event_matches is now an ACCUMULATING audit table — rebuild_ga4_ac_matches() section 2 UPSERTs on a new stable event_uid instead of truncate+reinsert, so event history is retained beyond the 60-day window. Both applied live to Supabase + mirrored as repo migrations. No Cloud Run redeploy needed (DB-only). Earlier context — 2026-10-09: Contact-Sources pipeline overhaul (ga4_ac_contact_source STORES every display column, page query is a flat single-table SELECT, rebuild APPENDS Google-Ads leads, 3 cron jobs → ONE orchestrator contact-sources-sync))
 ================================================================================
 
 OVERVIEW
@@ -63,8 +63,29 @@ SCRIPTS / APP CODE
   - login.html + the tab pages (tab bar = links, in order): sales_overview.html
     ("Sales" top-line KPIs), marketing.html, operations.html, mag_buyer_sheet.html
     ("Buyer Sheet"), invoice_tracking.html ("Invoices"), sales.html
-    ("Conferences" — legacy filename; it is the LIV deals table). ga4_agent.html
-    ("GA4 On-Demand Report") also present.
+    ("Conferences" — legacy filename; it is the LIV deals table), ga4_agent.html
+    ("GA4 Agent" / on-demand report), ac_contact_sources.html
+    ("GA4 & Ads Leads Tracking"), new_paid_leads_tracking.html
+    ("New Paid Leads Tracking"), ac_ad_leads_tagging.html ("AC Ad Leads
+    Tagging"), mag_sales_pulse.html ("MAG Sales Pulse").
+  - ac_contact_sources.html is a wide, self-rendering table (reads
+    /api/operations/contact-sources; does not use the generic chart helpers). As of
+    2026-10-09 its data layer (server/metrics/ac-contact-sources.js) is a flat
+    single-table SELECT from public.ga4_ac_contact_source — every displayed value is
+    now stored on that table, so the old LATERAL joins to ga4_ac_event_matches /
+    activecampaign_deals / ac_deal_source_type / conversion_events_ac_matched are
+    gone. (Server change — needs a Cloud Run redeploy to ship.) Its
+    inline isExcludedRow() applies DISPLAY-ONLY filters (data stays in the DB):
+    free_gifts_opt_ins, referral/MS-Teams/AC-email channels, a list of non-lead
+    conversion links, and (added 2026-10-09) rows where Google Ads (AC) = "No"
+    with no Conversion Action, plus rows where both those fields are empty. The
+    same isExcludedRow() also lives in server/metrics/ac-contact-sources.js
+    (server side); the two 2026-10-09 rules are currently frontend-only.
+    Column display (all display-only; the API/DB still return every field):
+    the "Deal Source" (Direct/Indirect) and "Source Type" (Inbound/Outbound)
+    columns are hidden (commented out of the renderTable columns array). The
+    Δ (s), Matched At and CPC columns are pinned to the far right and gated by
+    a toolbar toggle (#acsMetaToggle → SHOW_META_COLS, default hidden).
   - app.css — shared styling incl. chip/"needs setup" placeholder styles
   - app.js — shared logic: auth/token, fetchMetrics, formatting, theme,
     Chart.js helpers (lineChart/barChart/pieChart/renderKpis/renderTable),
@@ -145,6 +166,42 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
   - public.sales_topline — Sales page top-line KPIs (long format
     metric/bucket/dimension/value/unit; RLS enabled). NEW this session.
   - public.dashboard_login_codes — bcrypt-hashed login OTP codes.
+  - public.ga4_ac_contact_source — per-contact inferred acquisition source for
+    the GA4 & Ads Leads Tracking page (/api/operations/contact-sources). PK =
+    contact_id. As of 2026-10-09 it stores EVERY column the page shows, so the page
+    reads it with no joins. Columns:
+      * GA4/Calendly match columns (channel, source, medium, campaign, match_method,
+        confidence, candidate_count, matched_at, time_delta_seconds) — filled by the
+        rebuild (section 1).
+      * deal_id — linked by the rebuild (section 1b).
+      * conversion_action, conversion_link, deal_title, deal_value, deal_status,
+        source_type, cpc — DENORMALIZED each rebuild (section 3), mirroring the
+        joins the page query used to do (ga4_ac_event_matches, activecampaign_deals
+        +ac_deal_source_type, conversion_events_ac_matched).
+      * google_ads_ac_field / deal_source_ac_field — filled by
+        ga4-ac-custom-fields-sync after the rebuild.
+    The rebuild (section 4) also APPENDS the primary contact of each
+    ac_google_ads_deals deal whose email isn't already present (GA4/match columns
+    left NULL; deal_*/source_type/google_ads_ac_field from the AC deal data; cdate
+    from activecampaign_contacts). This is now a permanent, automatic part of every
+    rebuild (not a one-off backfill); it reads the prior run's ac_google_ads_deals
+    snapshot (~1-day lag for brand-new Google-Ads leads).
+  - public.ac_google_ads_deals — all AC deals whose "Google Ads?" custom field =
+    "Yes", with deal/contact/account metadata. PK = deal_id. Filled by the
+    ac-google-ads-deals-sync edge function.
+  - public.ga4_ac_event_matches — per-event audit log (one row per GA4 form event
+    / Calendly booking, with its best-matched contact) backing the rebuild's
+    conversion_action/conversion_link denormalization. As of 2026-10-13 this is an
+    ACCUMULATING table (was truncate+rebuilt): rebuild_ga4_ac_matches() section 2
+    UPSERTs on event_uid (a deterministic md5 of the event DIMENSIONS — event_kind,
+    event_time rendered in UTC, event_name, source, medium, campaign,
+    conversion_link — plus an occurrence tiebreaker; event_count is EXCLUDED since
+    it's a revisable measure). Rows that age out of the staging window are NO LONGER
+    deleted, so event history is retained beyond 60 days (forward-looking only —
+    history truncated away before 2026-10-13 is gone). event_uid is NOT NULL + unique;
+    inserted_at = first-seen, last_rebuilt_at = last re-derivation. NOTE: by contrast
+    public.ga4_ac_contact_source is STILL truncate+rebuilt each run (it's a
+    current-state one-row-per-contact view, not an event log).
 - Login is passwordless email OTP (codes stored in dashboard_login_codes); the
   old seeded-user array is no longer the auth path.
 
@@ -171,6 +228,37 @@ AUTOMATIONS / ROUTINES
 - The sales_liv_deals / mag_buyer_sheet cache tables are refreshed Mon–Fri 6am PH
   by Supabase Edge Functions (sales-deals-sync, buyer-sheet-sync); invoice_tracking
   is refreshed by a separate scheduled Claude routine from Xero.
+- GA4 & Ads Leads Tracking daily chain — as of 2026-10-09 driven by ONE cron job
+  and ONE orchestrator edge function (was 3 staggered jobs). pg_cron job
+  `contact-sources-sync-daily` ('0 22 * * *' = 06:00 PH daily) POSTs the
+  contact-sources-sync edge function (bare → 202 + background). That orchestrator:
+  (a) FIRES ac-google-ads-deals-sync async (fire-and-forget, ~138s, runs in its own
+  worker — it's independent: the rebuild doesn't read ac_google_ads_deals and the
+  page doesn't join it); then (b) AWAITS, in order, ga4-ads-leads-sync?sync=1 (the
+  rebuild_ga4_ac_matches RPC: rebuild ga4_ac_contact_source + ga4_ac_event_matches,
+  link deal_id, denormalize display columns, append Google-Ads leads) then
+  ga4-ac-custom-fields-sync?sync=1 (fills google_ads_ac_field/deal_source_ac_field
+  on the rebuilt rows). Awaiting just the ordered pair is ~52s — awaiting all three
+  blew the ~150s edge worker limit (HTTP 546), which is why step 1 is fire-and-forget.
+  The 3 original edge functions are KEPT and still individually callable (?sync=1);
+  only their individual cron jobs were removed — the superseded schedule files in
+  supabase/ are marked SUPERSEDED. GOTCHA (still applies): every edge function here
+  MUST be deployed --no-verify-jwt — the crons/orchestrator send no Authorization
+  header, so with verify_jwt=true the gateway 401s before the body runs while pg_cron
+  still shows "succeeded". New schedule SQL:
+  supabase/migrations/20261009000100_schedule_contact_sources_sync.sql.
+- update-deals-daily-7am-pht (pg_cron, '0 23 * * *' = 07:00 PH daily) — runs
+  public.update_ga4_contact_deals(), a lightweight SECOND deal-linker that runs an
+  hour after the 06:00 rebuild (by then the activecampaign_deals mirror, refreshed
+  by sales-deals-sync at the same 06:00 slot, is settled). It re-links deal_id on
+  ga4_ac_contact_source rows with the same primary/org-match logic as rebuild step
+  1b. As of 2026-10-13 it ALSO denormalizes deal_title/deal_value/deal_status/
+  source_type (mirrors rebuild step 3b, scoped to match_method IS NOT NULL so the
+  Google-Ads-appended rows — deal_value already in AUD — aren't clobbered). This
+  closed the bug where org-matched non-primary contacts had deal_id but a blank
+  deal_title. Migrations this session:
+  supabase/migrations/20261013000000_denormalize_deal_cols_in_update_ga4_contact_deals.sql
+  and 20261013000100_ga4_ac_event_matches_accumulate_no_truncate.sql.
 - MAG's own lead-gen/outreach automations (LinkedIn scraping, cold-lead
   sequencing, proposal routing) write into the Supabase tables this dashboard
   reads; they are external to this repo.

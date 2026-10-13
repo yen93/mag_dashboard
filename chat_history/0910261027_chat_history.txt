@@ -1,0 +1,235 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-09
+Session: .gitignore hardening + removing committed secrets from git history
+(GitHub push protection); a display-only row filter on the GA4 & Ads Leads page;
+then a larger backend change — denormalizing every display column onto
+public.ga4_ac_contact_source, collapsing the 3 Contact-Sources sync cron jobs
+into ONE orchestrator edge function (contact-sources-sync), switching the page's
+query to a single-table read, and appending Google-Ads deal leads into the table
+during the rebuild. Most changes applied live to Supabase (ref aivitcomiywiysrfwqxt).
+================================================================================
+
+NOTE ON REDACTIONS: This session exposed two live credentials, which have been
+replaced with placeholders below. When the file scripts/populate_google_ads_deals.js
+was read, it contained a hard-coded Supabase service-role key
+([REDACTED_SUPABASE_SERVICE_ROLE_KEY]) and an ActiveCampaign API token
+([REDACTED_AC_API_TOKEN]) as env-var fallbacks. GitHub's push protection had
+flagged the Supabase key. Both were scrubbed from the file and from git history
+during the session; neither real value is written here.
+
+--------------------------------------------------------------------------------
+USER:
+pls update gitignore make sure to list all sensitive or private files
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the existing .gitignore and inventoried tracked + untracked files. Scanned
+tracked files for real secret values (postgres creds, JWTs, Google API keys,
+app passwords) — found none committed; existing patterns were holding. Rewrote
+.gitignore into a grouped, comprehensive file: dependencies, env & secrets
+(incl. *.env, *credentials*, *_secret*, *connection_string*, *password*,
+*apikey*), keys/certs (*.pem/*.key/*.p12/id_rsa*), cloud credential JSONs
+(service-account*.json, client_secret*.json, gcp-*.json), supabase/.temp/,
+scratch/tmp, logs, OS/editor cruft, plus an !.env.example allow-rule. Verified
+no already-tracked file would be newly ignored, and that secret-shaped filenames
+are caught. Flagged that supabase/.temp/linked-project.json + cli-latest are
+already tracked (so the new rule won't exclude them until untracked) and offered
+to `git rm --cached` them; left gpc_proj_id.txt (just the GCP project id) alone.
+
+--------------------------------------------------------------------------------
+USER:
+(pasted a failing `git push` output) GitHub push protection blocked the push —
+"Supabase Secret Key" found at scripts/populate_google_ads_deals.js:2 in commit
+aa8568a.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the file: lines 2 and 4 held hard-coded secrets as env fallbacks — a
+Supabase service-role key (line 2, the one GitHub flagged) and an ActiveCampaign
+API token (line 4, not flagged but equally sensitive). Traced history: both
+secrets lived ONLY in commit aa8568a, and nothing had reached the remote
+(origin/main was still at e13c93e, the parent) — push protection had rejected
+the whole push, so the keys never landed on GitHub.
+
+No git-filter-repo available, so used `git filter-branch --tree-filter` with a
+sed script (in the scratchpad) over the range e13c93e..HEAD to strip the two
+` || '<secret>'` fallbacks, leaving env-only reads. Then deleted the
+refs/original backup, expired the reflog, and ran `git gc --prune=now`. Verified
+the secrets are gone from every reachable commit (new SHAs c26fec6, 570cda9),
+working tree clean. Advised: push is now a fast-forward (no --force needed), and
+recommended rotating both keys anyway as precaution even though they never hit
+GitHub. Noted the script itself is legitimate tracked code so .gitignore can't
+guard it — the real fix is the env-only change.
+
+--------------------------------------------------------------------------------
+USER:
+also hide rows where both Google Ads (AC) and Conversion Action are null. dont
+delete these data in db.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Found the page (public/ac_contact_sources.html) and its existing display-only
+isExcludedRow() function. Added a rule reusing the existing hasConv check: hide
+rows where BOTH googleAdsAcField and conversionAction are null/empty (treating
+null, undefined, and whitespace as empty). Frontend-only; DB untouched. Sits
+beside the related existing rule that hides Google Ads (AC)="No" rows with no
+conversion action.
+
+--------------------------------------------------------------------------------
+USER:
+(question, no action) Why did ga4_ac_contact_source revert to the data before I
+inserted leads from ac_google_ads_deals? Is there an edge function that resets
+this table / performs this sync?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Traced the mechanism. ga4_ac_contact_source is a derived cache, fully rebuilt by
+the Postgres function rebuild_ga4_ac_matches() which does TRUNCATE + INSERT …
+SELECT from source tables (activecampaign_contacts, calendly/ga4 staging). That
+RPC is called by the ga4-ads-leads-sync edge function, scheduled Mon–Fri 06:00 PH
+by pg_cron. So any manually-inserted rows get wiped on the next run because the
+rebuild only re-derives matched contacts — it has no knowledge of hand-inserted
+rows. Not a backup-restore; a deterministic rebuild from source.
+
+--------------------------------------------------------------------------------
+USER:
+(question, no action) Is there another edge function for ac_google_ads_deals? Is
+ga4_ac_event_matches synced fine daily? What other tables join into the
+ac_contact_sources page query?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Answered via exploration: (1) ac-google-ads-deals-sync edge function UPSERTs
+ac_google_ads_deals daily ~05:30 PH (upsert, not truncate). (2) Yes —
+ga4_ac_event_matches is truncated+rebuilt by the same rebuild_ga4_ac_matches()
+(section 2), via ga4-ads-leads-sync Mon–Fri 06:00 PH. (3) The page query
+(server/metrics/ac-contact-sources.js) joined ga4_ac_contact_source (base) +
+ga4_ac_event_matches + activecampaign_deals + ac_deal_source_type +
+conversion_events_ac_matched. Noted ac_google_ads_deals is NOT joined by the
+page — manual leads only showed because they sat inside ga4_ac_contact_source
+itself (the table the rebuild truncates).
+
+--------------------------------------------------------------------------------
+USER:
+update the columns of ga4_ac_contact_source so they contain all columns in
+ac_contact_sources.html … add the missing ones (don't drop any). Can you merge
+the edge functions that sync these tables into one orchestrator that calls the
+existing ones in order — delete their scheduled jobs, keep the functions, and
+schedule only the one new orchestrator?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Entered plan mode. Ran 3 parallel Explore agents to map: (a) the page's columns
+and which are stored vs computed-at-query-time, (b) the real schema of
+ga4_ac_contact_source + the rebuild function, (c) all edge functions, their cron
+schedules, invocation shapes, and ordering dependencies. Findings: 6 displayed
+columns weren't stored (conversionAction, link, dealTitle, dealValue, dealStatus,
+cpc) plus commented-out sourceType; no in-repo CREATE TABLE (external); the
+Contact-Sources chain is ac-google-ads-deals-sync (05:30) → ga4-ads-leads-sync
+(06:00, rebuild) → ga4-ac-custom-fields-sync (07:10, fills google_ads_ac_field/
+deal_source_ac_field after the rebuild).
+
+Asked 3 clarifying questions; answers: populate the new columns via the sync;
+merge Contact-Sources 3 only; single job daily 06:00 PH. Wrote the plan and got
+approval. Implemented:
+ - Migration 20261009000000_contact_source_denormalized_columns.sql: ALTER TABLE
+   ADD COLUMN (conversion_action, conversion_link, deal_title, deal_value,
+   deal_status, source_type, cpc) + extended rebuild_ga4_ac_matches() with a
+   section 3 that denormalizes those columns by mirroring the page's LATERAL joins.
+ - New edge function supabase/functions/contact-sources-sync/index.ts.
+ - Migration 20261009000100_schedule_contact_sources_sync.sql: unschedule the 3
+   old jobs, schedule contact-sources-sync-daily at '0 22 * * *' (06:00 PH daily).
+ - Marked the 3 superseded schedule files.
+
+Applied live via Supabase MCP (confirmed project ref aivitcomiywiysrfwqxt):
+applied the schema/function migration (verified all 7 columns present); deployed
+contact-sources-sync with verify_jwt=false. First test (inline ?sync=1) hit the
+edge worker limit (HTTP 546 WORKER_RESOURCE_LIMIT at ~151s) because awaiting all
+three heavy children in one invocation exceeds ~150s (ac-google-ads-deals-sync
+alone ~130s). Redesigned the orchestrator: FIRE-AND-FORGET ac-google-ads-deals-sync
+(independent — the rebuild doesn't read its table and the page doesn't join it)
+and AWAIT only the ordered pair ga4-ads-leads-sync → ga4-ac-custom-fields-sync
+(~52s). Redeployed (v2); inline test returned {ok:true} HTTP 200 in 53s, all
+steps succeeded. Verified data: 73 rows rebuilt, denormalized columns populated,
+google_ads_ac_field/deal_source_ac_field filled (9 non-null of 15 deals).
+Applied the schedule migration; verified cron.job shows only
+contact-sources-sync-daily (0 22 * * *) with the 3 old jobs gone and
+new-paid-leads/ac-ad-leads untouched. Saved a project memory about the design
+and the edge-worker-limit gotcha.
+
+--------------------------------------------------------------------------------
+USER:
+update ac_contact_sources.html so it fetches directly from this one table
+ga4_ac_contact_source and not from multiple joins.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Replaced the 3-LATERAL-join SELECT in server/metrics/ac-contact-sources.js (the
+data layer behind the page) with a flat single-table SELECT from
+public.ga4_ac_contact_source reading the now-denormalized columns. Same JSON
+keys, so ac_contact_sources.html and the isExcludedRow filter need no changes.
+Fixed two stale comments that referenced the old map_ga4_ac.py mechanism.
+Verified the flat query runs against the live table and returns the right shape.
+Flagged: it's a server change (needs a Cloud Run redeploy to go live), and
+values are now a per-rebuild snapshot (deal fields refresh daily, not per
+request). Updated the memory note.
+
+--------------------------------------------------------------------------------
+USER:
+(question) I didn't include the step that inserts rows from ac_google_ads_deals
+where email isn't yet in ga4_ac_contact_source. Should that be a new edge
+function called as a new step in the orchestrator?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Recommended NOT a new edge function: the data is already in Supabase
+(ac_google_ads_deals has contact_email, deal_id, title, value, status,
+source_type, google_ads_field, deal_source_field), so the insert is pure SQL and
+belongs inside rebuild_ga4_ac_matches() (atomic with the truncate, so the rows
+survive and flow through the denorm + custom-fields steps). An edge function is
+only warranted for external-API calls. Flagged the freshness caveat:
+ac-google-ads-deals-sync is fire-and-forget, so the rebuild would read the prior
+run's snapshot (~1-day lag), which is acceptable vs. reworking timing.
+
+--------------------------------------------------------------------------------
+USER:
+update ga4_ac_contact_source: insert leads from ac_google_ads_deals where email
+not yet present. Just the primary contact. Use activecampaign_contacts /
+activecampaign_deals data as needed. Leave GA4 columns null. Update the
+orchestrator as needed.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Verified ac_google_ads_deals.value is already AUD (not cents) and status is
+already 'won'/'lost'/'open'. Measured ac-google-ads-deals-sync at ~138s →
+confirmed it can't be awaited before the rebuild, so fire-and-forget stays and
+the append uses the prior-run snapshot (~1-day lag for brand-new leads). Added
+section 4 to rebuild_ga4_ac_matches(): INSERT … SELECT DISTINCT ON
+(lower(contact_email)) from ac_google_ads_deals (primary contact, latest deal
+wins) where the email isn't already in the table; sets contact_id, email, cdate
+(from activecampaign_contacts, else deal_cdate), deal_id, deal_title, deal_value,
+deal_status, source_type, google_ads_ac_field, deal_source_ac_field; leaves all
+GA4/match columns NULL. Added a v_gads_rows counter returned as
+google_ads_appended_rows. Re-applied the full function to live via Supabase MCP.
+Tested via ga4-ads-leads-sync?sync=1: 73 matched + 94 appended = 167 total.
+Verified all 94 appended rows have GA4 columns null, deal_id/deal_title/
+deal_value/google_ads_ac_field populated, no GA4 conversion data; spot-checked
+sane values (deal_value in AUD, status won/lost/open, cdate from the contact).
+Orchestrator needed no logic change (append runs inside the rebuild it already
+triggers) — updated its header comment to document the behavior + lag, and
+updated the memory.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation skill: wrote this chat-history file (with the two live
+credentials redacted), updated as_built.txt and CLAUDE.md to reflect the new
+orchestrator + denormalized/single-table Contact-Sources pipeline + the
+Google-Ads append, and reviewed .gitignore. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

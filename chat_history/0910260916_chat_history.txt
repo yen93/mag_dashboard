@@ -1,0 +1,86 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-09
+Session: Two display-only column tweaks on the GA4 & Ads Leads Tracking page
+(public/ac_contact_sources.html). (1) Hid the "Deal Source" (Direct/Indirect)
+and "Source Type" (Inbound/Outbound) table columns. (2) Moved the Δ (s),
+Matched At and CPC columns to the far right and added a toolbar toggle to
+show/hide them (default hidden). Frontend-only; no DB data touched, no deploy.
+================================================================================
+
+NOTE ON REDACTIONS: No live secrets, tokens, connection strings, or credentials
+were pasted or printed during this session. Nothing redacted.
+
+--------------------------------------------------------------------------------
+USER:
+hide columns: direct, inbound. dont delete them in db.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Grepped the repo for "direct"/"inbound". No table column is literally named
+"Direct" or "Inbound", so the target was ambiguous across pages. Candidates
+found: sales_overview.html (KPI cards, pie charts, and deals-table columns),
+ac_contact_sources.html (the currently-uncommitted file — a "Channel" column
+that can show direct, a "Source Type" column showing Inbound/Outbound), and
+mag_buyer_sheet.html ("Direct/Indirect" column).
+
+Asked the user (AskUserQuestion) which page and which element type. Answer:
+GA4 & Ads Leads page (ac_contact_sources.html), table columns.
+
+Read server/metrics/ac-contact-sources.js to map the columns to real data:
+- "Deal Source" column = cs.deal_source_ac_field (AC "Deal Source?" field →
+  Direct/Indirect) — the "direct" column.
+- "Source Type" column = dl.source_type, from ac_deal_source_type (AC
+  "Inbound/ Outbound?" field) — the "inbound" column.
+
+Edited public/ac_contact_sources.html: commented out the two column definitions
+in the renderSortableTable columns array (dealSourceAcField / sourceType), with
+a note that it's display-only and data remains in the DB. Renderer functions
+(dealSourcePill, sourceTypePill) and the underlying Supabase columns left
+untouched. Noted this is frontend-only and would need a Cloud Run redeploy to
+ship.
+
+--------------------------------------------------------------------------------
+USER:
+move these columns to the very end right side and create a toggle to hide the
+columns: delta sec, matched at, cpc
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Interpreted "these columns" as the colon-listed set: Δ (s) (timeDeltaSeconds),
+Matched At (matchedAt), CPC (cpc). Goal: move those three to the far right of
+the table and add a toggle to show/hide them.
+
+Read renderSortableTable in public/app.js to confirm it takes a columns array
+and rebuilds the <table> on each render (no per-column CSS hooks), so the
+simplest clean toggle is to conditionally build the columns array and re-render.
+
+Edits to public/ac_contact_sources.html:
+- Added `var SHOW_META_COLS = false;` (default hidden) near ALL_ROWS.
+- Rewrote renderTable to build a `cols` array of the always-on columns, then
+  push the three meta columns in the order Δ (s), Matched At, CPC only when
+  SHOW_META_COLS is true. CPC (previously mid-table after "Link") now lives at
+  the far right with the other two.
+- Added a toolbar button #acsMetaToggle (with an .acs-spacer to push it right),
+  label "Show/Hide Δ (s) · Matched At · CPC", aria-pressed reflecting state.
+- Wired it in wireToolbar: click flips SHOW_META_COLS, updates label +
+  aria-pressed + .active class, and calls apply() to re-render.
+
+Flagged the one trade-off: because the helper rebuilds the table from scratch,
+toggling resets the current sort/search/filter state. Noted nothing was removed
+from the DB/API — the toggle is display-only — and that it's frontend-only
+(redeploy to Cloud Run to go live).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat, update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file; reviewed as_built.txt and
+CLAUDE.md for whether this session changed the project's built state or
+conventions; checked .gitignore coverage. (See the dcp report for the outcome
+of each.)
+
+================================================================================
+END OF EXPORT
+================================================================================

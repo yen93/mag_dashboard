@@ -1,0 +1,94 @@
+================================================================================
+UPDATE DOCUMENTATION: DEAL ID & ACTIVE CAMPAIGN GOOGLE ADS SYNC
+Timestamp: 09/10/26 09:30 (PHT)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. DEAL ATTRIBUTION & SECONDARY CONTACT MATCHING
+--------------------------------------------------------------------------------
+* Problem:
+  ActiveCampaign deals in Supabase previously only linked via the single primary contact 
+  column (activecampaign_deals.contact). Secondary/non-primary contacts associated with 
+  deals through company/organization accounts (e.g. j.shin@thesolomons.com.au for deal 4335) 
+  were showing '-' / null deals in the dashboard.
+
+* Changes:
+  - Added `deal_id text` column to public.ga4_ac_contact_source.
+  - Updated `rebuild_ga4_ac_matches()` in supabase/migrations/20261008000000_ga4_conversion_link.sql:
+    * Priority 1: Direct primary contact match (ad.contact = ac.id).
+    * Priority 2: Secondary contact match via organization/company (ac.orgid = ad.organization).
+    * Tie-breaker: Newest deal by creation date (ad.cdate DESC NULLS LAST).
+  - Updated server/metrics/ac-contact-sources.js:
+    * Lateral join on activecampaign_deals now checks `cs.deal_id` with fallback to `d.contact = cs.contact_id`.
+    * Selected dealTitle, dealValue, dealStatus, sourceType, and dealId.
+
+
+2. ACTIVE CAMPAIGN QUALIFICATION CUSTOM FIELDS
+--------------------------------------------------------------------------------
+* Problem:
+  ActiveCampaign qualification custom fields ("Google Ads?" and "Deal Source?") needed 
+  to be synced into Supabase and surfaced in the AC Contact Sources dashboard.
+
+* Changes:
+  - Added columns to public.ga4_ac_contact_source:
+    * `google_ads_ac_field text`
+    * `deal_source_ac_field text`
+  - Created Edge Function: `supabase/functions/ga4-ac-custom-fields-sync/index.ts`
+    * Dynamically resolves field IDs from dealCustomFieldMeta ("Google Ads?" = ID 18, "Deal Source?" = ID 6).
+    * Groups contacts by deal_id to deduplicate ActiveCampaign API calls.
+    * Fetches dealCustomFieldData and updates public.ga4_ac_contact_source.
+  - Created Cron Schedule (`supabase/schedule_ga4_ac_custom_fields_sync.txt`):
+    * Runs daily at 07:10 AM PHT (23:10 UTC) via pg_cron + pg_net.
+  - Updated Dashboard UI & Backend:
+    * Selected fields in server/metrics/ac-contact-sources.js.
+    * Added "Google Ads (AC)" and "Deal Source" columns with status pills in public/ac_contact_sources.html.
+
+
+3. NEW TABLE: public.ac_google_ads_deals
+--------------------------------------------------------------------------------
+* Purpose:
+  Dedicated Supabase storage for all ActiveCampaign deals where "Google Ads?" custom field is "Yes".
+
+* Details:
+  - Created table `public.ac_google_ads_deals` with columns:
+    deal_id (PK), title, value, value_cents, currency, status, status_raw, stage, 
+    deal_group, contact_id, contact_name, contact_email, contact_phone, account_id, 
+    account_name, deal_cdate, deal_mdate, google_ads_field, deal_source_field, 
+    source_type, owner_id, created_at, updated_at.
+  - Initial sync populated all 98 historical and active Google Ads deals ($282,945 AUD total won revenue across 30 won deals).
+  - Created Edge Function: `supabase/functions/ac-google-ads-deals-sync/index.ts`
+    * Scans AC dealCustomFieldData for "Google Ads? = Yes", fetches full metadata, and UPSERTs into public.ac_google_ads_deals.
+  - Created Cron Schedule (`supabase/schedule_ac_google_ads_deals_sync.txt`):
+    * Runs daily at 05:30 AM PHT (21:30 UTC).
+
+
+4. BACKFILLED LEADS INTO public.ga4_ac_contact_source
+--------------------------------------------------------------------------------
+* Changes:
+  - Dropped NOT NULL constraints on `match_method` and `confidence` in public.ga4_ac_contact_source.
+  - Inserted 94 missing primary contacts from ac_google_ads_deals whose emails were not in ga4_ac_contact_source.
+  - Populated contact details, deal_id, google_ads_ac_field = 'Yes', and deal_source_ac_field, while leaving GA4 tracking columns (channel, source, medium, campaign, match_method) as NULL.
+  - Total records in ga4_ac_contact_source is now 165 (96 of which are Google Ads = Yes).
+
+
+5. DASHBOARD FILTERING & VISIBILITY FIXES
+--------------------------------------------------------------------------------
+* Changes:
+  - In public/ac_contact_sources.html, updated table filter in `renderTable` from 
+    `rows.filter(r => r.conversionAction && r.link && !isExcludedRow(r))` to 
+    `rows.filter(r => !isExcludedRow(r))`.
+  - Enables direct ActiveCampaign Google Ads leads (which do not have GA4 website conversion URLs) to display in the table alongside GA4-matched leads.
+  - Preserved all URL exclusions (/careers-seasonal/, /executive-x/, /free-gift-opt-in/, etc.), internal referral exclusions, MS Teams exclusions, and AC email campaign exclusions.
+
+
+6. DAILY AUTOMATION TIMELINE (PHILIPPINE TIME / UTC+8)
+--------------------------------------------------------------------------------
+* 05:30 AM PHT (21:30 UTC): `ac-google-ads-deals-sync` (Edge Function)
+  -> Scans AC & updates public.ac_google_ads_deals.
+* 06:00 AM PHT (22:00 UTC): `ga4-ads-leads-sync` (Edge Function)
+  -> Pulls GA4 & Calendly events and runs rebuild_ga4_ac_matches().
+* 07:00 AM PHT (23:00 UTC): `update_ga4_contact_deals` (Postgres Function)
+  -> Links primary & secondary deal_id on ga4_ac_contact_source.
+* 07:10 AM PHT (23:10 UTC): `ga4-ac-custom-fields-sync` (Edge Function)
+  -> Populates "Google Ads?" and "Deal Source?" on ga4_ac_contact_source.
+================================================================================

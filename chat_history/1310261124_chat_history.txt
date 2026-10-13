@@ -1,0 +1,178 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-13
+Session: Diagnosing why a non-primary contact (j.shin@thesolomons.com.au) showed
+no deal_title on the Contact Sources tab; found + fixed TWO root causes (an
+incomplete second deal-linker, and a nightly scheduling race); then redesigned
+public.ga4_ac_event_matches from truncate-and-rebuild into an accumulating
+(upsert, no-truncate) audit table so event history is retained beyond the 60-day
+window. All DB changes applied live to Supabase (ref aivitcomiywiysrfwqxt) and
+mirrored as repo migration files.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+(Q, no action) Which edge function syncs the ga4_ac_contact_source table daily?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Answered from CLAUDE.md + edge-fn source: the daily sync is the `contact-sources-sync`
+orchestrator edge function (pg_cron, 06:00 PH / 22:00 UTC). It fires the step-1
+child `ga4-ads-leads-sync` and awaits the follow-on children
+(`ga4-ac-custom-fields-sync`, `ac-google-ads-deals-sync` is fire-and-forget) that
+fill ga4_ac_contact_source / ac_google_ads_deals. Flagged the --no-verify-jwt
+gotcha (orchestrator POSTs children with no Authorization header).
+
+--------------------------------------------------------------------------------
+USER:
+(Q, no action) Why is there no deal_title for j.shin@thesolomons.com.au? I already
+fixed this — I wanted non-primary contacts to have their linked deal populate it.
+Which edge function was supposed to populate this?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the pipeline. The column is populated by the Postgres function
+`rebuild_ga4_ac_matches()` (called by the `ga4-ads-leads-sync` edge fn inside the
+`contact-sources-sync` orchestrator): step 1b links deal_id (primary-contact OR
+org match — the user's non-primary fix), step 3b denormalizes deal_title/value/
+status from activecampaign_deals.
+
+Queried Supabase and found: j.shin (contact 19607, orgid 2865) HAD deal_id=4335
+linked via the org match (deal 4335 = "Solomons Wealth Management // Immersive //
+28 October 2026", primary contact 19604), but deal_title/value/status were NULL.
+Established it was systemic (0 of 94 titled rows were org-matched non-primary),
+yet running step-3b's lateral join manually returned the correct title — so the
+deployed function and logic were correct, the stored row was just stale. Confirmed
+the fix migrations (20261009...) were applied and the live function matched the
+repo. Concluded (initially) it was a data-freshness lag.
+
+--------------------------------------------------------------------------------
+USER:
+Do the immediate fix and then do the permanent fix.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+IMMEDIATE FIX: ran `select public.rebuild_ga4_ac_matches();` — backfilled the
+stale rows; verified j.shin now shows the deal title, $7,000, open; health check
+showed 0 matched rows with a linked deal_id but no title.
+
+While doing it, found the TRUE root cause via the cron list + timestamps:
+- There are TWO deal-linkers. `rebuild_ga4_ac_matches()` (06:00 PH) links deal_id
+  AND denormalizes the title. But a SECOND cron, `update-deals-daily-7am-pht` →
+  `public.update_ga4_contact_deals()` (07:00 PH / 23:00 UTC), re-links deal_id
+  with the SAME org-match logic but never denormalized the display columns.
+- `sales-deals-sync` (which refreshes activecampaign_deals) and
+  `contact-sources-sync` both fire at the same `0 22 * * *` slot. Deal 4335's
+  mirror row landed at 22:00:49 — ~18s AFTER the rebuild read the deals at
+  22:00:31 — so the 06:00 rebuild missed it, and the 07:00 re-linker then set
+  deal_id while leaving the title NULL (explaining deal_id present + title NULL +
+  updated_at stuck at the rebuild time, since update_ga4_contact_deals only
+  touches deal_id).
+
+PERMANENT FIX: extended `update_ga4_contact_deals()` to ALSO denormalize
+deal_title/deal_value/deal_status/source_type after linking deal_id, mirroring
+rebuild step 3b, scoped to match_method IS NOT NULL so the Google-Ads-appended
+rows (deal_value already in AUD, not cents) are never clobbered. Applied via MCP
+migration `denormalize_deal_cols_in_update_ga4_contact_deals` and wrote repo file
+supabase/migrations/20261013000000_denormalize_deal_cols_in_update_ga4_contact_deals.sql.
+Ran the patched function; health check stayed at 0 matched-linked-without-title.
+Deliberately left the cron schedules untouched (the function fix makes the race
+harmless; rescheduling would be fragile).
+
+--------------------------------------------------------------------------------
+USER:
+(Q, no action) Is there any involved table that is truncated and rebuilt by an
+edge function or function?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Yes — two, both inside `rebuild_ga4_ac_matches()`: public.ga4_ac_contact_source
+(section 1) and public.ga4_ac_event_matches (section 2) are each truncated then
+re-inserted. Noted update_ga4_contact_deals and the AC/GAds edge fns only
+update/upsert in place. Flagged that because ga4_ac_contact_source is fully
+truncated nightly, manual row edits get wiped — which is why the permanent fix
+lived in the functions, not hand-edited rows.
+
+--------------------------------------------------------------------------------
+USER:
+(Q, no action) Is it better for ga4_ac_event_matches to be upserted instead of
+truncated?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Reasoned it through specific to that table: truncate-and-rebuild is the better fit
+AS LONG AS you don't need history — it's a pure derived projection with no clean
+natural key, global recompute semantics (truncate handles removals for free), and
+it's tiny/daily. The single transaction means readers never see it empty. Listed
+the conditions under which upsert would win (stable id referenced elsewhere;
+expensive full rebuild; need to retain rows beyond the window).
+
+--------------------------------------------------------------------------------
+USER:
+(Q, no action) But I need to keep the data we already saved so we retain more than
+60 days moving forward.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Said that flips the recommendation — truncate now discards the history they want.
+Laid out the prerequisite (a deterministic per-event key, since there's no natural
+one) and two shapes: Option A (single accumulating table: stop truncating, upsert
+the window, leave old rows; add first_seen/last_rebuilt) vs Option B (keep the
+truncate-rebuilt working table + an append-only archive, union view). Noted
+caveats (no retroactive re-matching past the window, staging retention stops
+mattering, id churn goes away). Offered to sketch a migration.
+
+--------------------------------------------------------------------------------
+USER:
+Implement Option A.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented and verified Option A.
+
+Discovery first: inspected ga4_ac_event_matches + staging schemas. Table has
+id (GENERATED ALWAYS AS IDENTITY) and inserted_at (default now()); neither
+staging source (ga4_events_staging, calendly_bookings_staging) has a stable
+event id, so a key had to be synthesized. Checked for duplicate natural-dim
+groups — found 0 everywhere, both with and without event_count. Confirmed
+activecampaign_contacts.id is text (UNION type-compat for matched_contact_id).
+
+Design: event_uid = md5 of event DIMENSIONS (event_kind, event_time rendered as
+UTC via to_char(... at time zone 'UTC', 'YYYY-MM-DD HH24:MI:SS.US') so it's
+timezone-independent, event_name, source, medium, campaign, conversion_link) +
+an occurrence tiebreaker (row_number over those dims). event_count is EXCLUDED
+from the key (it's a measure that GA4 can revise; including it would duplicate
+instead of update). Added columns event_uid (NOT NULL, unique index) and
+last_rebuilt_at; inserted_at now serves as first-seen.
+
+Rebuild change: section 2 of rebuild_ga4_ac_matches() no longer truncates — it
+builds GA4 + Calendly rows in CTEs, computes event_uid, and does
+INSERT ... ON CONFLICT (event_uid) DO UPDATE (refreshing mutable fields +
+last_rebuilt_at). Rows that age out of staging simply stay, so history accrues.
+Return JSON now reports event_audit_upserted + event_audit_retained_total.
+
+Applied via MCP migration `ga4_ac_event_matches_accumulate_no_truncate`; mirrored
+to repo file
+supabase/migrations/20261013000100_ga4_ac_event_matches_accumulate_no_truncate.sql.
+
+Verified: backfill produced 792 rows, 0 null / 0 duplicate event_uid; ran the
+rebuild live → event_audit_upserted=792, event_audit_retained_total=792 (every
+current event matched its key and updated in place — zero duplication, zero loss,
+no errors); events already span back to 2026-08-13. Noted two honest points:
+retention is forward-looking (history already truncated away in past runs can't be
+recovered), and ga4_ac_contact_source was intentionally left on truncate-rebuild
+(it's a current-state working view, not an event log).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation skill: wrote this chat-history file, updated
+as_built.txt and CLAUDE.md to reflect the accumulating event table + the completed
+update_ga4_contact_deals denormalization, and reviewed .gitignore (already
+comprehensive). No git commands run — user handles commit/push.
+
+================================================================================
+END OF EXPORT
+================================================================================

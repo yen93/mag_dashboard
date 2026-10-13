@@ -1,0 +1,168 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-09
+Session: Fixed the blank "Google Ads (AC)" and "Deal Source" columns on the
+GA4 & Ads Leads Tracking page (ac_contact_sources.html). Root cause was two
+newly-deployed Supabase edge functions (ga4-ac-custom-fields-sync,
+ac-google-ads-deals-sync) having verify_jwt=true, so their cron POSTs 401'd
+before running and never populated the two AC-deal columns on
+public.ga4_ac_contact_source. User toggled Verify JWT off in the dashboard;
+backfilled the columns; then backfilled 94 Google-Ads lead rows into
+ga4_ac_contact_source from ac_google_ads_deals; then added a display-only
+filter to hide "No" + no-conversion rows. No DB data deleted.
+================================================================================
+
+NOTE ON REDACTIONS: No live secrets, tokens, connection strings, or credentials
+were pasted or printed during this session. All credentials were referenced only
+by Secret Manager / edge-function-secret name (SUPABASE_DB_URL, AC_API_URL,
+AC_API_TOKEN, SUPABASE_SERVICE_ROLE_KEY, etc.). Supabase was queried via the
+Supabase MCP tools, which never return credential values. Nothing redacted.
+
+--------------------------------------------------------------------------------
+USER:
+Fix issue in ac_contact_sources.html: the columns "Google Ads (AC)" and
+"Deal Source" are showing no values. Suspected something wrong with the source
+DB table of the edge function that upserts the source table(s).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read public/ac_contact_sources.html and server/metrics/ac-contact-sources.js.
+The two columns map to cs.google_ads_ac_field ("Google Ads (AC)") and
+cs.deal_source_ac_field ("Deal Source") on public.ga4_ac_contact_source. Those
+are populated only by the edge function ga4-ac-custom-fields-sync (NOT
+ac-google-ads-deals-sync, which writes a different table, ac_google_ads_deals).
+
+Read both new edge functions:
+- supabase/functions/ga4-ac-custom-fields-sync/index.ts — resolves AC deal
+  custom-field IDs ("Google Ads?"=18, "Deal Source?"=6), fetches per-deal custom
+  fields, and UPDATEs ga4_ac_contact_source by deal_id.
+- supabase/functions/ac-google-ads-deals-sync/index.ts — scans AC for deals with
+  "Google Ads?"=Yes and upserts ac_google_ads_deals.
+
+A background agent found the Supabase project ref (aivitcomiywiysrfwqxt,
+MAGTestProject) and the cron schedules: ga4-ads-leads-sync rebuilds the table at
+06:00 PHT (22:00 UTC); update_ga4_contact_deals links deal_id at 07:00 PHT;
+ga4-ac-custom-fields-sync runs at 07:10 PHT (23:10 UTC).
+
+Investigated the live DB via Supabase MCP:
+- ga4_ac_contact_source: 71 rows, 15 with deal_id, but 0 with google_ads_ac_field
+  / deal_source_ac_field. max(updated_at) was 22:00 UTC (the table rebuild), i.e.
+  the 23:10 custom-fields-sync had not touched a single row.
+- list_edge_functions showed ga4-ac-custom-fields-sync AND ac-google-ads-deals-sync
+  both had verify_jwt=true, unlike every sibling function (ga4-ads-leads-sync,
+  calendly-source-sync, new-paid-leads-sync are all verify_jwt=false).
+- cron.job_run_details: ga4-ac-custom-fields-sync-daily had never run (null
+  status); the others "succeeded" — but that only means pg_net queued the POST.
+- Read supabase/schedule_ga4_ac_custom_fields_sync.sql: the cron sends only
+  Content-Type, no Authorization header.
+- net._http_response id 50 (the 21:30 deals-sync run) returned
+  401 {"code":"UNAUTHORIZED_NO_AUTH_HEADER","message":"Missing authorization
+  header"} — proving the edge gateway rejects the no-auth cron POST before the
+  function body runs.
+
+ROOT CAUSE: both functions deployed with verify_jwt=true (default), while their
+crons post with no Authorization header → 401 → sync never executes → the two
+columns stay NULL → blank in the UI. Nothing wrong with the SQL, schema, or
+function logic. Each function's own header comment even says deploy
+--no-verify-jwt; it wasn't.
+
+Attempted the fix via Supabase MCP deploy_edge_function (verify_jwt=false) but it
+was denied by the auto-mode classifier as a Production Deploy. Stopped and
+explained the diagnosis, then asked (AskUserQuestion) how to apply it. User chose
+"Approve MCP redeploy."
+
+--------------------------------------------------------------------------------
+USER:
+Already toggled off Verify JWT (with legacy secret) on my end. What's next?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Verified via get_edge_function that both ga4-ac-custom-fields-sync and
+ac-google-ads-deals-sync are now verify_jwt=false. Triggered the backfill with
+a plain POST (no auth needed now):
+  curl -X POST ".../functions/v1/ga4-ac-custom-fields-sync?sync=1"
+Result: 15/15 deals processed, 15 contacts updated, 0 errors, fields resolved
+googleAdsId=18/dealSourceId=6.
+
+Re-checked ga4_ac_contact_source: 9 of the 15 deal-linked rows now have both
+fields (the other 6 deals legitimately have those AC fields blank). Spot-checked
+values — sensible ("Google Ads? = Yes/No", "Deal Source = Direct").
+
+Summarized the fix and flagged two optional follow-ups: (1) ac-google-ads-deals-
+sync had the identical 401 bug (now fixed but not yet backfilled this cycle);
+(2) the dashboard Verify-JWT toggle is not captured in the repo, so a future
+`supabase functions deploy` without --no-verify-jwt would reintroduce the bug.
+
+--------------------------------------------------------------------------------
+USER:
+Update ga4_ac_contact_source: insert leads from ac_google_ads_deals where email
+is not yet in ga4_ac_contact_source. Just insert the primary contact. Can use
+data from activecampaign_contacts or activecampaign_deals. Leave the GA4-related
+columns null.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected schemas of ga4_ac_contact_source (PK = contact_id) and
+ac_google_ads_deals (PK = deal_id; carries contact_id, contact_email, deal_cdate,
+google_ads_field, deal_source_field). ac_google_ads_deals had 98 deals / 96
+distinct contacts (1 null contact_id, 1 null email).
+
+Built a candidate set: DISTINCT ON (contact_id) from ac_google_ads_deals (one
+primary row per contact, most recent deal by deal_cdate), excluding any
+contact_id or lower(email) already in ga4_ac_contact_source, joined to
+activecampaign_contacts for cdate. Preview: 94 candidates, all with a contact
+cdate. Spot-checked — all google_ads_field=Yes (expected, since that table only
+holds Google-Ads deals).
+
+Ran the INSERT ... SELECT (ON CONFLICT (contact_id) DO NOTHING) setting
+contact_id, email, cdate (from activecampaign_contacts), deal_id,
+google_ads_ac_field, deal_source_ac_field, updated_at=now(); all GA4 columns
+(source, medium, campaign, channel, match_method, confidence, candidate_count,
+matched_at, time_delta_seconds) left NULL.
+
+Verified after: 71 -> 165 rows (+94); with_deal_id 15 -> 109; with_google_ads
+9 -> 103; exactly 94 new rows have channel AND match_method NULL. Flagged a
+caveat: the daily ga4-ads-leads-sync rebuild may overwrite these rows depending
+on whether it upserts or truncates (not yet confirmed).
+
+--------------------------------------------------------------------------------
+USER:
+Hide rows in ac_contact_sources.html where Google Ads (AC) is "No" AND
+Conversion Action is null. Don't delete the data in the DB.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added a display-only filter to isExcludedRow() in public/ac_contact_sources.html
+(frontend only — the server still returns the rows; data untouched in DB):
+
+  var ga = String(r.googleAdsAcField || '').trim().toLowerCase();
+  var hasConv = r.conversionAction !== null && r.conversionAction !== undefined
+                && String(r.conversionAction).trim() !== '';
+  if (ga === 'no' && !hasConv) return true;
+
+Explained that it only hides rows where BOTH conditions hold, and that because
+the page routes all rows through isExcludedRow, the rows drop from both the table
+and the KPI counts (consistent with the existing referral/teams/email exclusions).
+Takes effect on page refresh (no build step). Offered to mirror the rule
+server-side in server/metrics/ac-contact-sources.js.
+
+(After this, the user further edited the file on disk — adding a second block
+right after the above that hides rows where BOTH Google Ads (AC) and Conversion
+Action are null/empty:
+  var hasGa = r.googleAdsAcField !== null && r.googleAdsAcField !== undefined
+              && String(r.googleAdsAcField).trim() !== '';
+  if (!hasGa && !hasConv) return true;
+)
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history and update docs (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file, updated as_built.txt (edge
+functions + the two new ga4_ac_contact_source columns + display filter), reviewed
+CLAUDE.md and .gitignore. Did not run any git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================

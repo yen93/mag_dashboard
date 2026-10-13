@@ -96,6 +96,9 @@
             <button type="button" data-days="0" class="active">All</button>
           </div>
           <button type="button" class="acs-reset" id="acsReset">Reset</button>
+          <div class="acs-spacer"></div>
+          <button type="button" class="acs-reset" id="acsMetaToggle" aria-pressed="false"
+                  title="Show/hide the Δ (s), Matched At and CPC columns">Show Δ (s) · Matched At · CPC</button>
         </div>
 
         <div id="acsRows"></div>
@@ -106,6 +109,9 @@
   <script src="app.js?v=2"></script>
   <script>
     var ALL_ROWS = [];
+    // Toggle for the meta columns pinned to the far right (Δ (s), Matched At, CPC).
+    // Default hidden; the toolbar button flips it. Data stays in the DB regardless.
+    var SHOW_META_COLS = false;
 
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
@@ -303,6 +309,17 @@
       var act = (r.conversionAction || '').trim().toLowerCase();
       if (act === 'free_gifts_opt_ins') return true;
 
+      // Hide Google Ads (AC) = "No" rows that have no conversion action
+      // (display only — the data stays in the DB).
+      var ga = String(r.googleAdsAcField || '').trim().toLowerCase();
+      var hasConv = r.conversionAction !== null && r.conversionAction !== undefined && String(r.conversionAction).trim() !== '';
+      if (ga === 'no' && !hasConv) return true;
+
+      // Hide rows where BOTH Google Ads (AC) and Conversion Action are null/empty
+      // (display only — the data stays in the DB).
+      var hasGa = r.googleAdsAcField !== null && r.googleAdsAcField !== undefined && String(r.googleAdsAcField).trim() !== '';
+      if (!hasGa && !hasConv) return true;
+
       var ch = String(r.channel || '').trim().toLowerCase();
       var med = String(r.medium || '').trim().toLowerCase();
       var src = String(r.source || '').trim().toLowerCase();
@@ -389,25 +406,33 @@
     // range (that's what "Total inbound enquiries" means), so they use the unfiltered set.
     function renderTable(rows) {
       var leads = rows.filter(function (r) { return !isExcludedRow(r); });
-      renderSortableTable('acsRows', leads, [
+      var cols = [
         { key: 'cdate', label: 'Created', unit: 'date' },
         { key: 'contactId', label: 'AC ID', render: txt },
         { key: 'email', label: 'Email', render: txt },
         { key: 'channel', label: 'Channel', render: channelPill },
         { key: 'conversionAction', label: 'Conversion Action', render: convPill },
         { key: 'link', label: 'Link', render: linkCell },
-        { key: 'cpc', label: 'CPC (AUD)', unit: 'currency', render: cpcCell },
         { key: 'googleAdsAcField', label: 'Google Ads (AC)', render: googleAdsPill },
-        { key: 'dealSourceAcField', label: 'Deal Source', render: dealSourcePill },
+        // Hidden columns (display only — data remains in the DB):
+        // 'Deal Source' (Direct/Indirect) and 'Source Type' (Inbound/Outbound).
+        // { key: 'dealSourceAcField', label: 'Deal Source', render: dealSourcePill },
         { key: 'dealTitle', label: 'Deal', render: txt },
         { key: 'dealValue', label: 'Value', unit: 'currency' },
         { key: 'dealStatus', label: 'Status', render: statusPill },
-        { key: 'sourceType', label: 'Source Type', render: sourceTypePill },
+        // { key: 'sourceType', label: 'Source Type', render: sourceTypePill },
         { key: 'matchMethod', label: 'Match', render: methodPill },
         { key: 'confidence', label: 'Confidence', render: confPill },
-        { key: 'timeDeltaSeconds', label: 'Δ (s)', unit: 'num' },
-        { key: 'matchedAt', label: 'Matched At', unit: 'date' },
-      ], {
+      ];
+      // Meta columns pinned to the far right, shown/hidden by the toolbar toggle.
+      if (SHOW_META_COLS) {
+        cols.push(
+          { key: 'timeDeltaSeconds', label: 'Δ (s)', unit: 'num' },
+          { key: 'matchedAt', label: 'Matched At', unit: 'date' },
+          { key: 'cpc', label: 'CPC (AUD)', unit: 'currency', render: cpcCell }
+        );
+      }
+      renderSortableTable('acsRows', leads, cols, {
         searchPlaceholder: 'Search contacts…',
         sortKey: 'cdate', sortDir: 'desc',
         emptyText: 'No leads in this date range.',
@@ -453,6 +478,14 @@
         document.querySelectorAll('#acsQuick button').forEach(function (x) { x.classList.remove('active'); });
         document.querySelector('#acsQuick button[data-days="0"]').classList.add('active');
         setQuick(0);
+      });
+      var metaBtn = document.getElementById('acsMetaToggle');
+      if (metaBtn) metaBtn.addEventListener('click', function () {
+        SHOW_META_COLS = !SHOW_META_COLS;
+        metaBtn.classList.toggle('active', SHOW_META_COLS);
+        metaBtn.setAttribute('aria-pressed', String(SHOW_META_COLS));
+        metaBtn.textContent = (SHOW_META_COLS ? 'Hide' : 'Show') + ' Δ (s) · Matched At · CPC';
+        apply();
       });
     }
     function clearQuickActive() {

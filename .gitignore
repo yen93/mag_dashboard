@@ -53,6 +53,58 @@ supabase/.temp/
 supabase/.branches/
 supabase/.env
 supabase/.env.*
+# Per-edge-function local env files (any function subfolder)
+supabase/functions/**/.env
+supabase/functions/**/.env.*
+
+# ── Sensitive files inside ANY subfolder (explicit recursive coverage) ──
+# (most patterns above already recurse, since git applies slash-less patterns at
+#  every depth; these make subfolder coverage explicit and close hyphen/underscore
+#  and extension gaps.)
+**/.env
+**/.env.*
+!**/.env.example
+**/*.env
+**/*secret*
+**/*credential*
+**/*credentials*
+**/*password*
+**/*passwd*
+**/*connection_string*
+**/*apikey*
+**/*api_key*
+**/*api-key*
+**/*.token
+**/*_token
+**/*-token.*
+# Keys & certificates
+**/*.pem
+**/*.key
+**/*.keyfile
+**/*.p12
+**/*.pfx
+**/*.pkcs12
+**/*.crt
+**/*.cer
+**/*.cert
+**/*.asc
+**/*.gpg
+**/id_rsa*
+**/id_ed25519*
+# Service-account / OAuth credential JSONs (both hyphen AND underscore variants)
+**/service-account*.json
+**/*service-account*.json
+**/service_account*.json
+**/*service_account*.json
+**/client_secret*.json
+**/google-credentials*.json
+**/google_credentials*.json
+**/gcp-*.json
+**/credentials.json
+# Package/registry auth files that carry tokens
+**/.npmrc
+**/.netrc
+**/.pgpass
 
 # ── Scratch / throwaway files ───────────────────────────────
 scratch_*
