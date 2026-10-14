@@ -36,6 +36,9 @@
     }
     .acs-quick button.active { background: var(--accent); color: #fff; border-color: transparent; }
     .acs-hint { font-size: 12px; color: var(--text-muted); align-self: center; }
+    /* Info ⓘ carrying the toolbar hint as a native tooltip. */
+    .acs-info { cursor: help; color: var(--text-muted); font-size: 15px; align-self: center; }
+    .acs-info:hover, .acs-info:focus { color: var(--accent); outline: none; }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -86,7 +89,8 @@
         <button type="button" data-days="0" class="active">All</button>
       </div>
       <button type="button" class="acs-reset" id="solReset">Reset</button>
-      <span class="acs-hint">Top-line cards follow the selected dates (by deal created date) · trend charts filter by month</span>
+      <button type="button" class="acs-reset" id="acDealsToggle" aria-expanded="false">See ACS Deals Table</button>
+      <span class="acs-info" tabindex="0" title="Top-line cards follow the selected dates (by deal created date) · trend charts filter by month">ⓘ</span>
     </div>
 
     <!-- ============ 1. TOP-LINE HEADER ============ -->
@@ -97,8 +101,8 @@
 
     <div class="kpi-grid" id="kpis"></div>
 
-    <!-- ============ AC DEALS TABLE ============ -->
-    <div class="grid" style="margin-bottom:20px;">
+    <!-- ============ AC DEALS TABLE (hidden by default; toggled from the toolbar) ============ -->
+    <div class="grid" id="acDealsSection" style="margin-bottom:20px; display:none;">
       <div class="card col-12">
         <div class="card-head">
           <h3>AC Deals</h3>
@@ -922,6 +926,15 @@
         clearQuickActive();
         document.querySelector('#solQuick button[data-days="0"]').classList.add('active');
         setQuick(0);
+      });
+      var dealsToggle = document.getElementById('acDealsToggle');
+      if (dealsToggle) dealsToggle.addEventListener('click', function () {
+        var section = document.getElementById('acDealsSection');
+        if (!section) return;
+        var show = section.style.display === 'none';
+        section.style.display = show ? '' : 'none';
+        dealsToggle.setAttribute('aria-expanded', show ? 'true' : 'false');
+        dealsToggle.textContent = show ? 'Hide ACS Deals Table' : 'See ACS Deals Table';
       });
     }
 
