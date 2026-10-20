@@ -15,6 +15,7 @@ import { getAcContactSources } from './metrics/ac-contact-sources.js';
 import { getNewPaidLeads } from './metrics/new-paid-leads.js';
 import { getAcAdLeads } from './metrics/ac-ad-leads.js';
 import { getPaidGoogleEnquiries } from './metrics/paid-google-enquiries.js';
+import { getRoas } from './metrics/roas.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { cached } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
@@ -179,6 +180,19 @@ operations.get('/paid-google-enquiries', async (_req, res) => {
   } catch (err) {
     console.error('[operations:paid-google-enquiries]', err);
     res.status(502).json({ error: 'Failed to load paid Google enquiries from data source.', detail: err.message });
+  }
+});
+// ROAS (Return on Ad Spend) table + charts read a pre-computed Supabase cache
+// (public.roas_year_on_year): one row per calendar year, mirrored from the
+// "Year on Year" tab of the MAG Marketing ROAS Report Google Sheet by the
+// roas-year-on-year-sync Claude routine. Plain SELECT, so a short cache is plenty.
+operations.get('/roas', async (_req, res) => {
+  try {
+    const payload = await cached('operations:roas', getRoas, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:roas]', err);
+    res.status(502).json({ error: 'Failed to load ROAS data from data source.', detail: err.message });
   }
 });
 app.use('/api/operations', operations);

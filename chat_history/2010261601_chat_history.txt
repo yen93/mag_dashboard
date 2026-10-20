@@ -1,0 +1,122 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Built a new "ROAS" tab for the dashboard (Google Ads ROAS by calendar
+year) — a 12-column table plus 3 charts (Won Revenue vs Ad Spend grouped bar,
+ROAS-vs-2.00x-target line, Leads-by-outcome stacked bar) reproducing three
+reference PNGs. Data comes from a manually-maintained Google Sheet (not the live
+DB), so wired it the dashboard way: a new Supabase cache table seeded from the
+sheet, a metric + API route, the page on all nav bars, and a weekly Claude cloud
+routine to keep the cache fresh.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. The Google Sheet was exported as XLSX (a base64 blob
+returned by the Drive connector into a session scratchpad file OUTSIDE the repo)
+and parsed locally; only non-secret aggregate numbers were used. The project
+.env was inspected for KEY NAMES only (SUPABASE_ACCESS_TOKEN, GA4_PROPERTY_ID) —
+no values read or written anywhere.
+
+--------------------------------------------------------------------------------
+USER:
+(pasted a spec) to_dos: (1) create a new "ROAS" tab, structure similar to
+ac_contact_sources.html; (2) a table with columns: year (Cal Yr., Jan–Dec),
+Won $, Lost $, Open $, Won Leads, Win rate, Ad Spend, Won Revenue, ROI ($),
+ROI %, ROAS, Per-Lead Value; (3) add three graphs above the table, given as PNG
+files g1.png / g2.png / g3.png in Downloads.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the three PNGs: g1 = "Won Revenue vs Ad Spend by Year" (grouped bar,
+cyan/red), g2 = "Google Ads ROAS by Year (target 2.00x)" (line with per-point
+labels + dashed target line), g3 = "Google Ads Leads by Outcome (count) by Year"
+(stacked bar Won/Lost/Open). Studied ac_contact_sources.html + its metric +
+app.js chart/table helpers + server/index.js routing + the sales-topline cache
+pattern.
+
+Tried to reproduce the chart numbers from Supabase (mag_gads_direct_inbound_lead_
+source, google_ads_campaign_monthly) — they did NOT match: the DB only has deals
+from mid-2024 and ad spend for 2024–2026, but the charts span 2022–2026. Searched
+Drive and found the real source: Google Sheet "MAG Marketing ROAS Report – YTD -
+FY24-27 deal" (id 1nf80glgW7EeIIPtTKQBtQlUoZ16h8BqLJDkbihPR1Sc), tab "Year on
+Year" (CALENDAR YEAR). It blends 2022–2024 (previous manager's lead log), 2025+
+(CRM rebuild, ex-GST, Buyer Analysis values) and typed-in ad spend — not
+reproducible from the live DB.
+
+Exported the workbook as XLSX via the Drive connector (the natural-language read
+only showed merged/blank cells) and parsed it with python/openpyxl in the
+scratchpad. Extracted the exact "Year on Year" numbers; they match the PNGs
+exactly (ROAS 10.40 / 2.82 / 3.54 / 2.17 / 1.42; Won Revenue 131900/95400/108000/
+72700/38000; Ad Spend 12687/33776/30478/33521/26673; Won/Lost/Open lead counts;
+Lost $/Open $ from the sheet's "Deal value by outcome" block). Noted Won $ ==
+Won Revenue for every year so far (distinct columns that may diverge).
+
+ASKED the user (one question) how the tab should get its data, since the numbers
+live in a hand-maintained sheet. User chose "Supabase cache + sync routine".
+
+Implemented, following the sales-topline model:
+- Migration supabase/migrations/20261020080000_roas_year_on_year.sql — new cache
+  table public.roas_year_on_year (one row per calendar year; RLS enabled, server
+  connects as owner and bypasses it), seeded 2022–2026 with an UPSERT on cal_yr.
+  Applied live via Supabase MCP to project aivitcomiywiysrfwqxt and verified the
+  rows (ROAS 10.40/2.82/3.54/2.17/1.42, win rates, ROI% etc.).
+- server/metrics/roas.js — plain SELECT of the cache; casts numerics; derives the
+  "All years" total (sum amounts/counts, recompute ratios) rather than storing it.
+  Returns { asOf, target, total, rows: section(...) }. Falls back to pending when
+  Supabase isn't configured.
+- server/index.js — new route GET /api/operations/roas (cached 10 min), import
+  added.
+- public/roas.html — self-rendering page (like ac_contact_sources.html): KPI row
+  (All-years ROAS vs target, latest-year ROAS, total Won Revenue, Ad Spend, ROI),
+  three Chart.js charts built directly with new Chart() (grouped bar; line with a
+  small inline afterDatasetsDraw plugin that draws the "x.xx×" point labels + a
+  dashed target dataset; stacked bar), and the 12-column table with a highlighted
+  "All years" total row and a green/red ROAS-vs-target pill. Charts re-draw on
+  theme toggle via window.onThemeChange. Colours matched to the PNGs
+  (cyan #17a6c9 / red #c0392b / green #8bc34a).
+- Added the "ROAS" nav tab (after "GA4 Leads Tracker") to all 14 pages (the
+  tabbar is duplicated): roas.html itself + 13 edits across the other pages.
+
+Verification: node --check on roas.js + index.js (OK); parsed roas.html inline JS
+with new Function() (OK); booted the server on :8099 → /api/health 200,
+/roas.html 200 (served), /api/operations/roas 401 without a token (route
+registered + auth-guarded); ran roas.js's totalRow() offline against the real
+per-year numbers → All-years total matches the sheet exactly (446000 won /
+137135 spend / 308865 ROI / 134 leads / 42 won / 0.3134 win rate / 3.2523 ROAS /
+3328 per-lead). Could not render live locally because SUPABASE_DB_URL isn't in
+the local .env (Secret-Manager-only) — the only unverified piece is the live
+chart pixels, which appear on redeploy.
+
+Sync routine:
+- routines/roas-year-on-year-sync.md — documents reading the sheet's "Year on
+  Year" tab (main block rows 5+, cols A–O; "Deal value by outcome" block rows
+  15+, cols A–D joined on cal_yr; skip the "All years" row) and UPSERTing into
+  public.roas_year_on_year.
+- Created the cloud routine via the /schedule skill (RemoteTrigger create):
+  name roas-year-on-year-sync, id trig_011wFrti6fguprMJa9nqujTo, cron
+  "0 22 * * 0" UTC (= Monday 06:00 Asia/Manila), model claude-sonnet-5-5,
+  connectors Google-Drive + Supabase, repo github.com/yen93/mag_dashboard. Next
+  run 2026-10-25T22:02Z. Prompt is self-contained (embeds the cell mapping +
+  UPSERT SQL).
+
+Saved a project memory (roas-tab-feature.md) + MEMORY.md index line. Reminded the
+user that a MANUAL Cloud Run redeploy is needed to ship the page/route (Claude
+never deploys), and that new calendar years in the sheet flow through
+automatically with no code change.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history, update as_built.txt + CLAUDE.md + .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file; updated as_built.txt (new ROAS
+tab, cache table, metric/route, and the roas-year-on-year-sync routine; bumped
+Last updated); updated CLAUDE.md (added the ROAS tab to the cached sub-resources
+list + a short feature note); checked .gitignore — already covers node_modules,
+.env/*.env, secrets/keys/service-account/scratch patterns, and nothing newly
+sensitive was introduced this session, so left it unchanged. Did NOT run any git
+command — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

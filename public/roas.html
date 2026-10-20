@@ -1,0 +1,334 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROAS — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* Wide table — use the full screen width (still scrolls on narrow screens). */
+    .content { max-width: none; }
+    .roas-intro { color: var(--text-muted); font-size: 13px; margin: -4px 0 18px; line-height: 1.5; max-width: 900px; }
+    .roas-intro strong { color: var(--text); }
+    /* ROAS table: compact, right-aligned numbers, highlighted total row. */
+    table.roas-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.roas-table th, table.roas-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    table.roas-table thead th { text-align: right; color: var(--text-muted); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+    table.roas-table thead th:first-child, table.roas-table td:first-child { text-align: left; }
+    table.roas-table td.num, table.roas-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    table.roas-table tbody tr:hover { background: var(--surface-2); }
+    table.roas-table tfoot td, table.roas-table tr.total td { border-top: 2px solid var(--border); font-weight: 700; background: var(--surface-2); }
+    .yr-cell { font-weight: 600; cursor: help; }
+    .yr-cell small { display: block; font-weight: 400; color: var(--text-muted); font-size: 11px; }
+    .pill.roas-pass { background: rgba(23,166,115,.16); color: #17a673; }
+    .pill.roas-fail { background: rgba(226,72,61,.16); color: #e2483d; }
+    .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
+    .kpi-info:hover, .kpi-info:focus { color: var(--accent); outline: none; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="mag_buyer_sheet.html">Buyer Analysis</a>
+    <a class="tab" href="invoice_tracking.html">Invoices</a>
+    <a class="tab" href="sales.html">Conferences</a>
+    <a class="tab" href="ga4_agent.html">GA4 Agent</a>
+    <a class="tab" href="ac_contact_sources.html">GA4 Leads Tracker</a>
+    <a class="tab active" href="roas.html">ROAS</a>
+    <a class="tab" href="new_paid_leads_tracking.html">Calendly-AC Sync</a>
+    <a class="tab" href="historical_paid_leads.html">Historical Paid Leads</a>
+  </nav>
+
+  <main class="content">
+    <p class="roas-intro">
+      <strong>James's test:</strong> every $1 we spend on Google Ads should bring back at least
+      <strong>$2</strong> in won revenue (target <strong>2.00×</strong>). Google Ads leads → deals →
+      revenue, by calendar year. 2022–2024 come from the previous manager's lead log;
+      2025 onwards is rebuilt from ActiveCampaign (strict Google rule + Buyer Analysis values,
+      ex-GST) and checked by sales &amp; ops. Revenue is won deals only, counted in the year the
+      enquiry came in.
+    </p>
+
+    <!-- KPI cards -->
+    <div class="kpi-grid" id="roasKpis"></div>
+
+    <!-- Charts -->
+    <div class="grid">
+      <div class="card col-4">
+        <div class="card-head"><h3>Won Revenue vs Ad Spend by Year</h3></div>
+        <div class="chart-box"><canvas id="chartRevSpend"></canvas></div>
+      </div>
+      <div class="card col-4">
+        <div class="card-head"><h3>Google Ads ROAS by Year (target 2.00×)</h3></div>
+        <div class="chart-box"><canvas id="chartRoas"></canvas></div>
+      </div>
+      <div class="card col-4">
+        <div class="card-head"><h3>Google Ads Leads by Outcome by Year</h3></div>
+        <div class="chart-box"><canvas id="chartLeads"></canvas></div>
+      </div>
+    </div>
+
+    <!-- Table -->
+    <div class="grid" style="margin-top:16px">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>ROAS by Calendar Year</h3>
+          <span class="chips" id="roasChips"></span>
+          <div class="spacer"></div>
+          <span class="muted" id="roasAsOf" style="font-size:13px"></span>
+        </div>
+        <div class="table-scroll">
+          <div id="roasTable"><div class="muted" style="padding:14px">Loading ROAS…</div></div>
+        </div>
+      </div>
+    </div>
+  </main>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js?v=3"></script>
+  <script>
+    // ROAS-specific colours, matched to the source report's charts.
+    var C_CYAN = '#17a6c9';   // Won Revenue / Won / ROAS line
+    var C_RED  = '#c0392b';   // Ad Spend / Lost / Target line
+    var C_GREEN = '#8bc34a';  // Open
+
+    var _audWhole = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    function money(v) { return (v === null || v === undefined) ? '—' : _audWhole.format(Number(v) || 0); }
+    function moneyShort(v) {
+      v = Number(v) || 0;
+      if (Math.abs(v) >= 1000) return '$' + Math.round(v / 1000) + 'k';
+      return '$' + Math.round(v);
+    }
+    function pct(ratio) { return (ratio === null || ratio === undefined) ? '—' : (Number(ratio) * 100).toFixed(1) + '%'; }
+    function roasFmt(v) { return (v === null || v === undefined) ? '—' : Number(v).toFixed(2) + '×'; }
+
+    var ROAS_DATA = null;      // cached payload for theme re-render
+    var _roasCharts = {};      // canvasId -> Chart instance
+
+    function kpi(label, value, sub, subClass, info) {
+      var ic = info ? ' <span class="kpi-info" tabindex="0" title="' + esc(info) + '">ⓘ</span>' : '';
+      return '<div class="kpi"><div class="label">' + esc(label) + ic + '</div>' +
+        '<div class="value">' + esc(String(value)) + '</div>' +
+        (sub ? '<div class="delta ' + (subClass || '') + '">' + esc(sub) + '</div>' : '') + '</div>';
+    }
+
+    function renderKpis(rows, total, target) {
+      var latest = rows[rows.length - 1];
+      var host = document.getElementById('roasKpis');
+      var allPass = total.roas >= target;
+      host.innerHTML =
+        kpi('All-years ROAS', roasFmt(total.roas),
+            (allPass ? 'clears' : 'below') + ' ' + roasFmt(target) + ' target', allPass ? 'pos' : 'neg',
+            'Total won revenue ÷ total Google Ads spend across every year on record. Target is ' + roasFmt(target) + ' ($' + target.toFixed(0) + ' won per $1 spent).') +
+        kpi(latest.year + ' ROAS', roasFmt(latest.roas),
+            latest.periodLabel, latest.roas >= target ? 'pos' : 'neg',
+            'ROAS for ' + latest.periodLabel + '. Recent enquiries are still open (deals take ~3 months to close), so the latest year typically rises.') +
+        kpi('Won Revenue (all years)', money(total.wonRevenue), total.wonLeads + ' won deals', 'pos',
+            'Won deal value credited to Google Ads, ex-GST, summed across all years.') +
+        kpi('Ad Spend (all years)', money(total.adSpend), 'Google Ads only', '',
+            'Google Ads spend across all years. Excludes the Simple Digital agency fee (see the FY report for ROAS including the fee).') +
+        kpi('ROI (all years)', money(total.roiDollars), pct(total.roiPct) + ' return', total.roiDollars >= 0 ? 'pos' : 'neg',
+            'Won revenue − ad spend across all years. ROI % = that ÷ ad spend.');
+    }
+
+    // ---- table ----
+    function renderTable(rows, total) {
+      var cols = [
+        { label: 'Year', num: false, cell: function (r) {
+            if (r._total) return '<span class="yr-cell">All years</span>';
+            return '<span class="yr-cell" title="' + esc(r.countedMethod || '') + '">' + esc(r.year) +
+              '<small>' + esc(r.periodLabel || '') + '</small></span>';
+          } },
+        { label: 'Won $',        num: true, cell: function (r) { return money(r.wonAmount); } },
+        { label: 'Lost $',       num: true, cell: function (r) { return money(r.lostAmount); } },
+        { label: 'Open $',       num: true, cell: function (r) { return money(r.openAmount); } },
+        { label: 'Won Leads',    num: true, cell: function (r) { return r.wonLeads == null ? '—' : r.wonLeads + ' / ' + r.leads; } },
+        { label: 'Win rate',     num: true, cell: function (r) { return pct(r.winRate); } },
+        { label: 'Ad Spend',     num: true, cell: function (r) { return money(r.adSpend); } },
+        { label: 'Won Revenue',  num: true, cell: function (r) { return money(r.wonRevenue); } },
+        { label: 'ROI ($)',      num: true, cell: function (r) { return money(r.roiDollars); } },
+        { label: 'ROI %',        num: true, cell: function (r) { return pct(r.roiPct); } },
+        { label: 'ROAS',         num: true, cell: function (r) {
+            var pass = r.roas >= (r.targetRoas || total.targetRoas || 2);
+            return '<span class="pill ' + (pass ? 'roas-pass' : 'roas-fail') + '">' + roasFmt(r.roas) + '</span>';
+          } },
+        { label: 'Per-Lead Value', num: true, cell: function (r) { return money(r.perLeadValue); } },
+      ];
+
+      function rowHtml(r, cls) {
+        return '<tr' + (cls ? ' class="' + cls + '"' : '') + '>' + cols.map(function (c) {
+          return '<td class="' + (c.num ? 'num' : '') + '">' + c.cell(r) + '</td>';
+        }).join('') + '</tr>';
+      }
+
+      var thead = '<tr>' + cols.map(function (c) {
+        return '<th class="' + (c.num ? 'num' : '') + '">' + esc(c.label) + '</th>';
+      }).join('') + '</tr>';
+      var body = rows.map(function (r) { return rowHtml(r, ''); }).join('');
+      var totalRow = rowHtml(Object.assign({ _total: true }, total), 'total');
+
+      document.getElementById('roasTable').innerHTML =
+        '<table class="data roas-table"><thead>' + thead + '</thead><tbody>' + body + totalRow + '</tbody></table>';
+    }
+
+    // ---- charts ----
+    function makeChart(id, cfg) {
+      if (_roasCharts[id]) _roasCharts[id].destroy();
+      var el = document.getElementById(id);
+      if (!el) return;
+      _roasCharts[id] = new Chart(el.getContext('2d'), cfg);
+    }
+
+    // Inline plugin: draw the "x.xx×" label above each ROAS point.
+    function roasLabelPlugin(tc) {
+      return {
+        id: 'roasLabels',
+        afterDatasetsDraw: function (chart) {
+          var ds = chart.data.datasets[0];
+          var meta = chart.getDatasetMeta(0);
+          if (!meta || meta.hidden) return;
+          var ctx = chart.ctx;
+          ctx.save();
+          ctx.font = '600 11px system-ui, sans-serif';
+          ctx.fillStyle = tc.text;
+          ctx.textAlign = 'center';
+          meta.data.forEach(function (pt, i) {
+            var v = ds.data[i];
+            if (v === null || v === undefined) return;
+            ctx.fillText(Number(v).toFixed(2) + '×', pt.x, pt.y - 8);
+          });
+          ctx.restore();
+        },
+      };
+    }
+
+    function buildCharts(rows, target) {
+      var tc = themeColors();
+      var years = rows.map(function (r) { return String(r.year); });
+
+      // g1 — Won Revenue vs Ad Spend (grouped bar)
+      makeChart('chartRevSpend', {
+        type: 'bar',
+        data: {
+          labels: years,
+          datasets: [
+            { label: 'Won Revenue', data: rows.map(function (r) { return r.wonRevenue; }), backgroundColor: C_CYAN, borderRadius: 4, maxBarThickness: 34 },
+            { label: 'Ad Spend',    data: rows.map(function (r) { return r.adSpend; }),    backgroundColor: C_RED,  borderRadius: 4, maxBarThickness: 34 },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: tc.text, usePointStyle: true, boxWidth: 8 } },
+            tooltip: { backgroundColor: tc.surface, titleColor: tc.text, bodyColor: tc.text, borderColor: tc.border, borderWidth: 1,
+              callbacks: { label: function (c) { return c.dataset.label + ': ' + money(c.parsed.y); } } },
+          },
+          scales: {
+            x: { ticks: { color: tc.muted }, grid: { display: false } },
+            y: { ticks: { color: tc.muted, callback: function (v) { return moneyShort(v); } }, grid: { color: tc.grid }, beginAtZero: true },
+          },
+        },
+      });
+
+      // g2 — ROAS by year + target line
+      makeChart('chartRoas', {
+        type: 'line',
+        data: {
+          labels: years,
+          datasets: [
+            { label: 'ROAS', data: rows.map(function (r) { return r.roas; }), borderColor: C_CYAN, backgroundColor: C_CYAN,
+              tension: 0.25, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, pointBackgroundColor: C_CYAN },
+            { label: 'Target ROAS', data: years.map(function () { return target; }), borderColor: C_RED, backgroundColor: C_RED,
+              borderWidth: 2, borderDash: [6, 6], pointRadius: 0, tension: 0 },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          layout: { padding: { top: 18 } },
+          plugins: {
+            legend: { labels: { color: tc.text, usePointStyle: true, boxWidth: 8 } },
+            tooltip: { backgroundColor: tc.surface, titleColor: tc.text, bodyColor: tc.text, borderColor: tc.border, borderWidth: 1,
+              callbacks: { label: function (c) { return c.dataset.label + ': ' + Number(c.parsed.y).toFixed(2) + '×'; } } },
+          },
+          scales: {
+            x: { ticks: { color: tc.muted }, grid: { display: false } },
+            y: { ticks: { color: tc.muted, callback: function (v) { return Number(v).toFixed(1) + '×'; } }, grid: { color: tc.grid }, beginAtZero: true },
+          },
+        },
+        plugins: [roasLabelPlugin(tc)],
+      });
+
+      // g3 — Leads by outcome (stacked bar)
+      makeChart('chartLeads', {
+        type: 'bar',
+        data: {
+          labels: years,
+          datasets: [
+            { label: 'Won',  data: rows.map(function (r) { return r.wonLeads; }),  backgroundColor: C_CYAN, maxBarThickness: 44 },
+            { label: 'Lost', data: rows.map(function (r) { return r.lostLeads; }), backgroundColor: C_RED,  maxBarThickness: 44 },
+            { label: 'Open', data: rows.map(function (r) { return r.openLeads; }), backgroundColor: C_GREEN, maxBarThickness: 44 },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { labels: { color: tc.text, usePointStyle: true, boxWidth: 8 } },
+            tooltip: { backgroundColor: tc.surface, titleColor: tc.text, bodyColor: tc.text, borderColor: tc.border, borderWidth: 1 },
+          },
+          scales: {
+            x: { stacked: true, ticks: { color: tc.muted }, grid: { display: false } },
+            y: { stacked: true, ticks: { color: tc.muted, precision: 0 }, grid: { color: tc.grid }, beginAtZero: true },
+          },
+        },
+      });
+    }
+
+    function renderAll(data) {
+      var rows = (data.rows && data.rows.data) || [];
+      var total = data.total;
+      var target = data.target || 2;
+      document.getElementById('roasChips').innerHTML = metaChips(data.rows && data.rows.meta);
+      var asOf = document.getElementById('roasAsOf');
+      if (asOf && data.asOf) asOf.textContent = 'as of ' + fmtDate(data.asOf);
+
+      if (!rows.length || !total) {
+        document.getElementById('roasTable').innerHTML =
+          '<div class="needs-setup"><strong>Needs setup</strong><span>' +
+          esc((data.rows && data.rows.meta && data.rows.meta.note) || 'ROAS cache is empty.') + '</span></div>';
+        document.getElementById('roasKpis').innerHTML = '';
+        return;
+      }
+      renderKpis(rows, total, target);
+      renderTable(rows, total);
+      buildCharts(rows, target);
+    }
+
+    function loadRoas() {
+      fetchJSON('/api/operations/roas').then(function (data) {
+        ROAS_DATA = data;
+        renderAll(data);
+      }).catch(function (err) {
+        console.error(err);
+        document.getElementById('roasTable').innerHTML =
+          '<div class="needs-setup"><strong>Couldn’t load ROAS</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('operations'); // login / top-bar / theme only — this page renders its own content
+    // Re-draw charts (with cached data) when the theme toggles.
+    window.onThemeChange = function () { if (ROAS_DATA) renderAll(ROAS_DATA); };
+    if (currentUser()) loadRoas();
+  </script>
+</body>
+</html>

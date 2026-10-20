@@ -52,12 +52,25 @@ Cloud Run.
     caches each `(area, range)` response briefly via `server/lib/cache.js`.
   - **Cached sub-resources** (plain SELECT of a pre-filled Supabase cache, no
     source calls at request time): `server/metrics/{liv-deals,mag-buyer-sheet,
-    invoice-tracking,sales-topline}.js`. `sales-topline.js` (`/api/sales/topline`)
+    invoice-tracking,sales-topline,roas}.js`. `sales-topline.js` (`/api/sales/topline`)
     backs the **Sales** page from `public.sales_topline`, refreshed **weekly**
     (Mon 6am PH) by the `sales-topline-sync` Claude routine — see
     `routines/sales-topline-sync.md`. Live: total_income, bureau, tailor;
     "needs setup" until their AC fields/tags are mirrored: direct/indirect split,
     speaking_enquiries, inbound/outbound.
+  - **ROAS** (`roas.html` = nav tab "ROAS", `/api/operations/roas`,
+    `server/metrics/roas.js`) is a self-rendering page: Google Ads ROAS by
+    **calendar year** — a 12-col table (Won $/Lost $/Open $, Won Leads, Win rate,
+    Ad Spend, Won Revenue, ROI $/%, ROAS, Per-Lead Value) + 3 inline Chart.js charts
+    (grouped bar, ROAS-vs-2.00×-target line, Leads-by-outcome stacked bar). Plain
+    SELECT of `public.roas_year_on_year` (one row per year; the "All years" total is
+    DERIVED in `roas.js`, not stored). **Source is a hand-maintained Google Sheet,
+    NOT the live DB** — the sheet "MAG Marketing ROAS Report – YTD - FY24-27 deal",
+    tab "Year on Year" (2022–2024 = previous manager's lead log; 2025+ = CRM rebuild,
+    ex-GST). Refreshed **weekly** (Mon 6am PH) by the `roas-year-on-year-sync` Claude
+    routine (`routines/roas-year-on-year-sync.md`, upsert on `cal_yr`; new calendar
+    years flow through with no code change). `won_amount` == `won_revenue` every year
+    so far (distinct cols, may diverge).
   - **Contact Sources** (`ac_contact_sources.html` = "GA4 & Ads Leads Tracking",
     `/api/operations/contact-sources`, `server/metrics/ac-contact-sources.js`) is
     also a plain single-table read: as of 2026-10-09 **every display column is stored
