@@ -101,7 +101,7 @@
           <button type="button" class="acs-reset" id="acsXeroToggle" aria-pressed="false"
                   title="Show/hide the Xero fee breakdown (Engagement Fee, Other Fees, GST, Amount Total)">Show Xero $</button>
           <button type="button" class="acs-reset" id="acsMetaToggle" aria-pressed="false"
-                  title="Show/hide the Match, Confidence, Δ (s), Matched At and CPC columns">Show Match · Confidence · Δ (s) · Matched At · CPC</button>
+                  title="Show/hide the extra columns: Created, AC ID, Link, Match, Confidence, Δ (s), Matched At and CPC">Show extra columns</button>
         </div>
 
         <div id="acsRows"></div>
@@ -112,9 +112,9 @@
   <script src="app.js?v=2"></script>
   <script>
     var ALL_ROWS = [];
-    // Toggle for the meta columns pinned to the far right (Match, Confidence,
-    // Δ (s), Matched At, CPC). Default hidden; the toolbar button flips it.
-    // Data stays in the DB regardless.
+    // Toggle for the extra/detail columns: Created, AC ID and Link (shown in
+    // place) plus Match, Confidence, Δ (s), Matched At, CPC (pinned far right).
+    // Default hidden; the toolbar button flips it. Data stays in the DB regardless.
     var SHOW_META_COLS = false;
     // Toggle for the "JC's Manual Tag" column (mag_gads jc_final_attr). Default hidden.
     var SHOW_JC_COL = false;
@@ -426,14 +426,17 @@
     function renderTable(rows) {
       var leads = rows.filter(function (r) { return !isExcludedRow(r); });
       var cols = [
-        { key: 'cdate', label: 'Created', unit: 'date' },
+        // Created, AC ID and Link are hidden by default and folded into the
+        // meta-columns toggle (SHOW_META_COLS). They stay in the column list
+        // (as hidden) so the default 'cdate' sort keeps working while off.
+        { key: 'cdate', label: 'Created', unit: 'date', hidden: !SHOW_META_COLS },
         { key: 'fy', label: 'FY', render: txt },
         { key: 'calYr', label: 'Cal. Yr.', render: txt },
-        { key: 'contactId', label: 'AC ID', render: txt },
+        { key: 'contactId', label: 'AC ID', render: txt, hidden: !SHOW_META_COLS },
         { key: 'email', label: 'Email', render: txt },
         { key: 'channel', label: 'Channel', render: channelPill },
         { key: 'conversionAction', label: 'Conversion Action', render: convPill },
-        { key: 'link', label: 'Link', render: linkCell },
+        { key: 'link', label: 'Link', render: linkCell, hidden: !SHOW_META_COLS },
         { key: 'googleAdsAcField', label: 'Google Ads (AC)', render: googleAdsPill },
         // Hidden columns (display only — data remains in the DB):
         // 'Deal Source' (Direct/Indirect) and 'Source Type' (Inbound/Outbound).
@@ -539,7 +542,7 @@
         SHOW_META_COLS = !SHOW_META_COLS;
         metaBtn.classList.toggle('active', SHOW_META_COLS);
         metaBtn.setAttribute('aria-pressed', String(SHOW_META_COLS));
-        metaBtn.textContent = (SHOW_META_COLS ? 'Hide' : 'Show') + ' Match · Confidence · Δ (s) · Matched At · CPC';
+        metaBtn.textContent = (SHOW_META_COLS ? 'Hide' : 'Show') + ' extra columns';
         apply();
       });
     }

@@ -265,7 +265,12 @@ function renderSortableTable(containerId, rows, columns, opts) {
     var startIdx = pageSize ? (state.page - 1) * pageSize : 0;
     var displayList = pageSize ? list.slice(startIdx, startIdx + pageSize) : list;
 
-    var thead = '<tr>' + columns.map(function (c) {
+    // Columns flagged { hidden: true } are not rendered (header or cells), but
+    // stay in `columns` so sorting/filtering/search by their key still works
+    // (e.g. a default sort on a column that is toggled off).
+    var visibleColumns = columns.filter(function (c) { return !c.hidden; });
+
+    var thead = '<tr>' + visibleColumns.map(function (c) {
       var active = state.key === c.key;
       var caret = active ? (state.dir === 'asc' ? ' ▲' : ' ▼') : '';
       var funnel = filterable
@@ -276,12 +281,12 @@ function renderSortableTable(containerId, rows, columns, opts) {
         '" data-key="' + esc(c.key) + '"><span class="th-label">' + esc(c.label) + caret + '</span>' + funnel + '</th>';
     }).join('') + '</tr>';
     var tbody = displayList.length ? displayList.map(function (row) {
-      return '<tr>' + columns.map(function (c) {
+      return '<tr>' + visibleColumns.map(function (c) {
         var v = row[c.key];
         var cell = c.render ? c.render(v, row) : (v == null ? '—' : (isNum(c) ? fmt(v, c.unit) : (c.unit === 'date' ? esc(fmtDate(v)) : esc(v))));
         return '<td class="' + (isNum(c) ? 'num' : '') + '">' + cell + '</td>';
       }).join('') + '</tr>';
-    }).join('') : '<tr><td class="muted" colspan="' + columns.length + '">' + esc(opts.emptyText || 'No rows.') + '</td></tr>';
+    }).join('') : '<tr><td class="muted" colspan="' + visibleColumns.length + '">' + esc(opts.emptyText || 'No rows.') + '</td></tr>';
 
     box.innerHTML = '<table class="data sortable-table"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
     box.querySelectorAll('th.sortable').forEach(function (th) {

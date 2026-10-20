@@ -1,0 +1,101 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Hid three more GA4 Leads Tracker columns (Created, AC ID, Link) by
+default in public/ac_contact_sources.html, folding them into the SAME meta-columns
+toggle that already governs Match · Confidence · Δ (s) · Matched At · CPC, and
+renamed that long toolbar button to "Show extra columns". To keep the default
+cdate-desc sort working while the Created column is hidden, added a general
+`hidden` column flag to renderSortableTable in public/app.js. Frontend/display-only
+change — no DB, no sync fn, no API change. Manual Cloud Run redeploy pending; no git
+(a commit line was composed on request but not run).
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. Pure static-HTML/JS edit; no credentials involved.
+
+--------------------------------------------------------------------------------
+USER:
+Pasted a to-do block against ac_contact_sources.html. btn_grp referenced the
+existing toggle "Show Match · Confidence · Δ (s) · Matched At · CPC". Two tasks:
+  1. Hide cols — make Created, AC ID and Link toggle-hidden by default, grouped
+     under the same btn_grp.
+  2. Rename btn — shorten the btn_grp label.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the column/toggle machinery:
+  - #acsMetaToggle drives `SHOW_META_COLS` (default false). Inside renderTable(),
+    the base `cols` array always included cdate "Created", contactId "AC ID" and
+    link "Link"; the far-right meta columns (Match, Confidence, Δ (s), Matched At,
+    CPC) are pushed only when SHOW_META_COLS.
+  - The table is drawn by the shared renderSortableTable() in public/app.js, with
+    default sort { sortKey: 'cdate', sortDir: 'desc' }.
+
+Key risk found: renderSortableTable sorts by looking up the sort column in the
+`columns` list (`columns.filter(c => c.key === state.key)[0]`) and then reads
+`col.unit`. If I simply removed the Created column when the toggle was off, that
+lookup would return undefined and the default cdate sort would throw. Also checked
+the server metric (server/metrics/ac-contact-sources.js) — rows already arrive
+`ORDER BY cs.cdate DESC NULLS LAST`.
+
+Chosen approach (clean + robust): add a general `hidden` column flag to
+renderSortableTable rather than removing columns. Hidden columns are dropped from
+the rendered header/body/colspan but stay in the `columns` list, so sorting,
+filtering and search by their key keep working — letting a default sort target a
+toggled-off column.
+
+Edits made:
+  public/app.js (renderSortableTable draw()):
+    - Added `var visibleColumns = columns.filter(c => !c.hidden);` with an
+      explanatory comment.
+    - thead map now iterates visibleColumns.
+    - tbody cell map now iterates visibleColumns; empty-state colspan now uses
+      visibleColumns.length.
+    - Left view()'s search/sort/filter using the full `columns` (backward-compatible;
+      no existing column sets `hidden`).
+
+  public/ac_contact_sources.html:
+    - cols array: added `hidden: !SHOW_META_COLS` to the cdate (Created), contactId
+      (AC ID) and link (Link) column defs, with a comment explaining why they stay
+      in the list (default cdate sort).
+    - Updated the SHOW_META_COLS declaration comment to say it now also covers
+      Created, AC ID and Link (in place) plus the far-right columns.
+    - Toolbar button #acsMetaToggle: label changed from
+      "Show Match · Confidence · Δ (s) · Matched At · CPC" to "Show extra columns";
+      full column list moved into the hover title tooltip.
+    - Toggle handler label-flip text changed to "Hide/Show extra columns".
+
+Verified apply() re-runs renderTable (so the hidden flags recompute on toggle) and
+grepped public/ to confirm no stray "Match · Confidence" label references remain.
+
+Net effect: one "Show extra columns" button now shows/hides all 8 extra columns
+(Created, AC ID, Link, Match, Confidence, Δ (s), Matched At, CPC); all hidden by
+default. Noted a manual Cloud Run redeploy is required for the static files to go
+live (user deploys manually).
+
+--------------------------------------------------------------------------------
+USER:
+/cm — compose a one-line git commit command for the current changes.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran git status / diff --stat: two modified files (public/ac_contact_sources.html,
+public/app.js), nothing staged. Output a single Conventional Commits line:
+  feat(ga4-leads-tracker): hide Created, AC ID and Link columns by default, folded
+  into the extra-columns toggle (renamed from the long label); add hidden-column
+  support to renderSortableTable so the default cdate sort still works
+(Did not run the commit — just provided the command.)
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save chat history, update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat history file. Reviewed as_built.txt and CLAUDE.md for accuracy
+against this session's display-only change (see report at end of session). Checked
+.gitignore. Ran no git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================
