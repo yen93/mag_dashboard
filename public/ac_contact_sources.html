@@ -10,7 +10,7 @@
     .content { max-width: none; }
     .acs-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
     .acs-field { display: flex; flex-direction: column; gap: 4px; }
-    .acs-field label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .acs-field label, .acs-daterange > label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
     .acs-field input[type="date"] {
       background: var(--surface); color: var(--text); border: 1px solid var(--border);
       border-radius: 10px; padding: 7px 10px; font: inherit;
@@ -22,6 +22,24 @@
     }
     .acs-quick button.active, .acs-reset.active { background: var(--accent); color: #fff; border-color: transparent; }
     .acs-spacer { flex: 1; }
+    /* Date-range popover: a single trigger button opens a panel holding the
+       From/To calendar inputs + the quick-range buttons (declutters the toolbar). */
+    .acs-daterange { position: relative; display: flex; flex-direction: column; gap: 4px; }
+    .acs-datebtn {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 12px; font: inherit; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    }
+    .acs-datebtn::after { content: '▾'; font-size: 11px; color: var(--text-muted); }
+    .acs-datebtn.active { border-color: var(--accent); color: var(--accent); }
+    .acs-popup {
+      position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28); padding: 14px; min-width: 240px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .acs-popup[hidden] { display: none; }
+    .acs-popup .acs-quick { margin-top: 2px; }
     /* Conversion Action tooltip */
     .conv-cell, .chan-cell, .conf-cell { cursor: help; }
     .conv-cell .pill, .chan-cell .pill, .conf-cell .pill { border-bottom: 1px dotted currentColor; }
@@ -78,23 +96,32 @@
           <span class="muted" id="acsCount" style="font-size:13px"></span>
         </div>
 
-        <!-- date-range filter (filters on contact Created date) -->
+        <!-- date-range filter (filters on contact Created date). The From/To
+             calendar inputs + quick-range buttons live inside a popover opened
+             from the single "Date range" trigger below. -->
         <div class="acs-toolbar">
-          <div class="acs-field">
-            <label for="acsFrom">From (created)</label>
-            <input type="date" id="acsFrom" />
+          <div class="acs-daterange">
+            <label>Date range (created)</label>
+            <button type="button" class="acs-datebtn" id="acsDateBtn"
+                    aria-haspopup="true" aria-expanded="false">All dates</button>
+            <div class="acs-popup" id="acsDatePopup" hidden>
+              <div class="acs-field">
+                <label for="acsFrom">From (created)</label>
+                <input type="date" id="acsFrom" />
+              </div>
+              <div class="acs-field">
+                <label for="acsTo">To (created)</label>
+                <input type="date" id="acsTo" />
+              </div>
+              <div class="acs-quick" id="acsQuick">
+                <button type="button" data-days="7">7d</button>
+                <button type="button" data-days="30">30d</button>
+                <button type="button" data-days="60">60d</button>
+                <button type="button" data-days="0" class="active">All</button>
+              </div>
+              <button type="button" class="acs-reset" id="acsReset">Reset</button>
+            </div>
           </div>
-          <div class="acs-field">
-            <label for="acsTo">To (created)</label>
-            <input type="date" id="acsTo" />
-          </div>
-          <div class="acs-quick" id="acsQuick">
-            <button type="button" data-days="7">7d</button>
-            <button type="button" data-days="30">30d</button>
-            <button type="button" data-days="60">60d</button>
-            <button type="button" data-days="0" class="active">All</button>
-          </div>
-          <button type="button" class="acs-reset" id="acsReset">Reset</button>
           <div class="acs-spacer"></div>
           <button type="button" class="acs-reset" id="acsJcToggle" aria-pressed="false"
                   title="Show/hide JC's Manual Tag column">Show JC's Manual Tag</button>
@@ -497,6 +524,26 @@
       var rows = filteredRows();
       renderKpis(rows);
       renderTable(rows);
+      updateDateLabel();
+    }
+
+    // Reflect the active date range on the popover trigger button (and flag it
+    // "active" when any range is set) so the filter stays visible while collapsed.
+    function updateDateLabel() {
+      var btn = document.getElementById('acsDateBtn');
+      if (!btn) return;
+      var from = document.getElementById('acsFrom').value;
+      var to = document.getElementById('acsTo').value;
+      var quick = document.querySelector('#acsQuick button.active');
+      var days = quick ? quick.getAttribute('data-days') : null;
+      var label, active = true;
+      if (days && days !== '0') label = 'Last ' + quick.textContent;
+      else if (from && to) label = fmtDate(from) + ' – ' + fmtDate(to);
+      else if (from) label = 'From ' + fmtDate(from);
+      else if (to) label = 'Until ' + fmtDate(to);
+      else { label = 'All dates'; active = false; }
+      btn.textContent = label;
+      btn.classList.toggle('active', active);
     }
 
     function setQuick(days) {
@@ -512,6 +559,30 @@
     }
 
     function wireToolbar() {
+      // Date-range popover: open/close the panel that now holds From/To + quick ranges.
+      var dateBtn = document.getElementById('acsDateBtn');
+      var datePopup = document.getElementById('acsDatePopup');
+      if (dateBtn && datePopup) {
+        dateBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var willOpen = datePopup.hidden;
+          datePopup.hidden = !willOpen;
+          dateBtn.setAttribute('aria-expanded', String(willOpen));
+        });
+        datePopup.addEventListener('click', function (e) { e.stopPropagation(); });
+        document.addEventListener('click', function (e) {
+          if (!datePopup.hidden && e.target !== dateBtn) {
+            datePopup.hidden = true;
+            dateBtn.setAttribute('aria-expanded', 'false');
+          }
+        });
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && !datePopup.hidden) {
+            datePopup.hidden = true;
+            dateBtn.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
       document.getElementById('acsFrom').addEventListener('change', function () { clearQuickActive(); apply(); });
       document.getElementById('acsTo').addEventListener('change', function () { clearQuickActive(); apply(); });
       document.querySelectorAll('#acsQuick button').forEach(function (b) {

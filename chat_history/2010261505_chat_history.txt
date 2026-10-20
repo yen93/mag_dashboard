@@ -1,0 +1,112 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Two GA4 Leads Tracker (public/ac_contact_sources.html) changes. (1)
+Shortened the FY column label from "FY2026-27" to "FY26" via a DB migration that
+replaces the mag_fy_label() helper and recomputes the generated fy column. (2)
+Moved the From/To calendar inputs and the 5 quick date-filter buttons (7d/30d/60d/
+All + Reset) off the inline toolbar into a single "Date range" popover. Two /dcp
+documentation passes and one /cm commit-line in between.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. Work was a Supabase SQL migration (applied via the Supabase
+MCP tool) plus static HTML/CSS/JS edits; no credential values appeared.
+
+--------------------------------------------------------------------------------
+USER:
+"update FY column row values. from 'FY2026-27' to 'FY26'" (ac_contact_sources.html
+open in the IDE).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Traced the FY value: fy is a GENERATED STORED column on public.ga4_ac_contact_source
+driven by IMMUTABLE helper public.mag_fy_label(cdate), which emitted
+'FY' || fy_start || '-' || right(fy_start+1, 2) → "FY2026-27". Server
+(server/metrics/ac-contact-sources.js) just SELECTs cs.fy; the page renders it as
+plain text ({key:'fy', render: txt}) — no format parsing anywhere, so a DB change
+suffices.
+
+Key subtlety: a GENERATED STORED column is only recomputed on INSERT/UPDATE;
+CREATE OR REPLACE FUNCTION alone would NOT rewrite already-stored rows. So wrote
+supabase/migrations/20261020080000_contact_source_fy_short_label.sql that (1) drops
+the generated fy column, (2) replaces mag_fy_label() → 'FY' || right(fy_start,2)
+("FY26"), (3) re-adds the generated column (re-adding recomputes all rows incl. the
+static roas-* audit rows). Applied live via Supabase MCP to project aivitcomiywiysrfwqxt.
+Verified: select fy,count(*) group by fy → FY21:11, FY22:8, FY23:15, FY24:42,
+FY25:27, FY26:70 — all short form. Updated the two stale "FY2026-27" comments in
+server/metrics/ac-contact-sources.js and CLAUDE.md. Reported no Cloud Run redeploy
+needed (value is a runtime read of the cache; page passes it through as text). Noted
+the label uses the START year of the AU FY (Jul 2026–Jun 2027 → FY26).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — document (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp: wrote chat_history/2010261439_chat_history.txt; UPDATED as_built.txt
+(bumped Last-updated with the FY change, fixed the two "FY2026-27" refs → "FY26",
+added the new migration filename); left CLAUDE.md as-is (fy bullet already updated
+during the task); left .gitignore as-is (comprehensive, nothing new sensitive).
+Reminded user nothing was committed/pushed.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — compose a one-line git commit for the current changes.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected git status/diff (modified: CLAUDE.md, as_built.txt,
+server/metrics/ac-contact-sources.js; untracked: the new chat-history file + the
+migration). Output one line:
+feat(ga4-leads-tracker): shorten FY column label from FY2026-27 to FY26 via new
+generated-column migration (drop+recreate to recompute stored rows); docs
+
+--------------------------------------------------------------------------------
+USER:
+"move 5 quick date filter btns to the calendar date range filter pop up (both from
+and to)".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected the date toolbar in public/ac_contact_sources.html: inline From input
+(#acsFrom) + To input (#acsTo) + four quick buttons #acsQuick (7d/30d/60d/All) +
+#acsReset — the "5 quick date filter btns" = the 4 quick + Reset. JS wiring:
+setQuick(days) sets the inputs; wireToolbar() binds change/click; filteredRows reads
+the inputs. Decision: consolidate the whole date control into one popover, keeping
+all existing element IDs so the filter logic is untouched.
+
+Edits (all in public/ac_contact_sources.html — frontend/display only):
+  * CSS — added .acs-daterange (relative wrapper), .acs-datebtn (trigger button with
+    a ▾ ::after caret, accent border when .active), .acs-popup (absolute panel,
+    z-index 50, [hidden] → display:none). Extended the label rule to style the new
+    outer label.
+  * HTML — wrapped the From/To fields, #acsQuick and #acsReset inside
+    <div class="acs-popup" id="acsDatePopup" hidden>, opened by a new trigger button
+    #acsDateBtn ("All dates", aria-haspopup/expanded). IDs acsFrom/acsTo/acsQuick/
+    acsReset unchanged.
+  * JS — wireToolbar() now toggles the popover (click open/close; stopPropagation on
+    the panel so inner clicks don't close it; close on outside click or Escape).
+    Added updateDateLabel(), called from apply(), which sets the trigger text to the
+    active range ("All dates" / "Last 30d" / "12 Feb 2026 – 20 Oct 2026") and flags
+    the button .active when any range is set. Reused app.js fmtDate() (no app.js
+    change, so no cache-buster bump).
+
+Verified wireToolbar() is still called at init (line ~644) and fmtDate() safely
+handles '' and date-only strings. Reported: no DB/API/server change; needs a manual
+Cloud Run redeploy to go live; offered to write the commit line.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — document (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp again: wrote this chat-history file; reviewed as_built.txt + CLAUDE.md for
+the popover change and updated/left-alone as appropriate; checked .gitignore. (See
+the dcp report in the session for each file's create/update/left-alone outcome.)
+Did NOT commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================
