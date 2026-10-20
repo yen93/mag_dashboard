@@ -20,7 +20,7 @@
       background: var(--surface); color: var(--text); border: 1px solid var(--border);
       border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
     }
-    .acs-quick button.active { background: var(--accent); color: #fff; border-color: transparent; }
+    .acs-quick button.active, .acs-reset.active { background: var(--accent); color: #fff; border-color: transparent; }
     .acs-spacer { flex: 1; }
     /* Conversion Action tooltip */
     .conv-cell, .chan-cell, .conf-cell { cursor: help; }
@@ -96,6 +96,8 @@
           </div>
           <button type="button" class="acs-reset" id="acsReset">Reset</button>
           <div class="acs-spacer"></div>
+          <button type="button" class="acs-reset" id="acsJcToggle" aria-pressed="false"
+                  title="Show/hide JC's Manual Tag column">Show JC's Manual Tag</button>
           <button type="button" class="acs-reset" id="acsMetaToggle" aria-pressed="false"
                   title="Show/hide the Δ (s), Matched At and CPC columns">Show Δ (s) · Matched At · CPC</button>
         </div>
@@ -111,6 +113,8 @@
     // Toggle for the meta columns pinned to the far right (Δ (s), Matched At, CPC).
     // Default hidden; the toolbar button flips it. Data stays in the DB regardless.
     var SHOW_META_COLS = false;
+    // Toggle for the "JC's Manual Tag" column (mag_gads jc_final_attr). Default hidden.
+    var SHOW_JC_COL = false;
 
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
@@ -205,6 +209,13 @@
       if (!v) return '—';
       var s = String(v), cls = s === 'won' ? 'pos' : (s === 'lost' ? 'neg' : 'partial');
       return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+    // "JC's Manual Tag" = mag_gads_direct_inbound_lead_source.jc_final_attr, joined by
+    // deal_id (e.g. "Could be SEO or Paid Ad"). Blank for rows with no manual tag.
+    function jcTagPill(v) {
+      if (v === null || v === undefined || v === '') return '—';
+      var s = String(v);
+      return '<span class="pill partial" title="' + esc(s) + '">' + esc(s) + '</span>';
     }
     // "Google Ads?" custom field from AC deal (Qualification Details)
     function googleAdsPill(v) {
@@ -305,6 +316,9 @@
     // - conversion_link in ("/careers-seasonal/", "/executive-x/", "/careersph-based/", "/free-gift-opt-in/")
     function isExcludedRow(r) {
       if (!r) return false;
+      // JC-tagged rows (mag_gads jc_final_attr, e.g. "Could be SEO or Paid Ad") are part
+      // of the manual ROAS audit and must ALWAYS be shown — exempt from every exclusion.
+      if (r.jcManualTag) return false;
       var act = (r.conversionAction || '').trim().toLowerCase();
       if (act === 'free_gifts_opt_ins') return true;
 
@@ -407,6 +421,8 @@
       var leads = rows.filter(function (r) { return !isExcludedRow(r); });
       var cols = [
         { key: 'cdate', label: 'Created', unit: 'date' },
+        { key: 'fy', label: 'FY', render: txt },
+        { key: 'calYr', label: 'Cal. Yr.', render: txt },
         { key: 'contactId', label: 'AC ID', render: txt },
         { key: 'email', label: 'Email', render: txt },
         { key: 'channel', label: 'Channel', render: channelPill },
@@ -417,12 +433,16 @@
         // 'Deal Source' (Direct/Indirect) and 'Source Type' (Inbound/Outbound).
         // { key: 'dealSourceAcField', label: 'Deal Source', render: dealSourcePill },
         { key: 'dealTitle', label: 'Deal', render: txt },
-        { key: 'dealValue', label: 'Value', unit: 'currency' },
+        { key: 'dealValue', label: 'AC Value', unit: 'currency' },
         { key: 'dealStatus', label: 'Status', render: statusPill },
         // { key: 'sourceType', label: 'Source Type', render: sourceTypePill },
         { key: 'matchMethod', label: 'Match', render: methodPill },
         { key: 'confidence', label: 'Confidence', render: confPill },
       ];
+      // "JC's Manual Tag" column, shown/hidden by its toolbar toggle (hidden by default).
+      if (SHOW_JC_COL) {
+        cols.push({ key: 'jcManualTag', label: "JC's Manual Tag", render: jcTagPill });
+      }
       // Meta columns pinned to the far right, shown/hidden by the toolbar toggle.
       if (SHOW_META_COLS) {
         cols.push(
@@ -477,6 +497,14 @@
         document.querySelectorAll('#acsQuick button').forEach(function (x) { x.classList.remove('active'); });
         document.querySelector('#acsQuick button[data-days="0"]').classList.add('active');
         setQuick(0);
+      });
+      var jcBtn = document.getElementById('acsJcToggle');
+      if (jcBtn) jcBtn.addEventListener('click', function () {
+        SHOW_JC_COL = !SHOW_JC_COL;
+        jcBtn.classList.toggle('active', SHOW_JC_COL);
+        jcBtn.setAttribute('aria-pressed', String(SHOW_JC_COL));
+        jcBtn.textContent = (SHOW_JC_COL ? 'Hide' : 'Show') + " JC's Manual Tag";
+        apply();
       });
       var metaBtn = document.getElementById('acsMetaToggle');
       if (metaBtn) metaBtn.addEventListener('click', function () {

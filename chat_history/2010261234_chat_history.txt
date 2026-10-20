@@ -1,0 +1,118 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Added three columns to the GA4 Leads Tracker (public.ga4_ac_contact_source
+cache table + ac_contact_sources.html): FY and Cal. Yr. (generated from cdate) and
+JC's Manual Tag (mirrors mag_gads_direct_inbound_lead_source.jc_final_attr by
+deal_id, behind a show/hide toggle). Decided JC-tagged rows must always be visible
+(exempt from the page's exclusion filter). Then added a CLAUDE.md rule that Claude
+never auto-deploys the dashboard to Cloud Run. Supabase MAG project ref
+aivitcomiywiysrfwqxt. Migration applied to the DB; no code deploy; no git.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. Credentials (SUPABASE_*, GMAIL_*, AC_*) were only referred to by name;
+the Supabase project ref (aivitcomiywiysrfwqxt) is an identifier, not a secret.
+
+--------------------------------------------------------------------------------
+USER:
+(Pasted spec) columns_to_add: FY (Fiscal Year, starts Jul 1 each yr); Cal. Yr.
+(actual yr); JC's Manual Tag (all rows in mag_gads_direct_inbound_lead_source
+where jc_final_attr = 'Could be SEO or Paid Ad'; should be in a toggle hide/show
+column). Objective: add these to both the ac_contact_sources.html tab table and
+the DB cache table; update the sync function if needed.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the current structure before touching anything:
+  - Read server/metrics/ac-contact-sources.js (plain single-table SELECT of
+    public.ga4_ac_contact_source, denormalized; an isExcludedRow() filter drops
+    referrals/teams/email/free-gift/google_ads=No-without-conversion rows) and
+    public/ac_contact_sources.html (inline JS renders the table; an existing
+    "Show Δ (s) · Matched At · CPC" meta-column toggle via SHOW_META_COLS).
+  - Queried Supabase (ref aivitcomiywiysrfwqxt):
+      * ga4_ac_contact_source columns — no fy/cal_yr/jc yet.
+      * mag_gads_direct_inbound_lead_source ALREADY has cal_yr (int), fy (text,
+        format "FY2026-27"), and jc_final_attr — so I mirrored those exact formats.
+      * jc_final_attr distribution: 19 rows = 'Could be SEO or Paid Ad', 208 null.
+      * All 19 tagged deals already exist in ga4_ac_contact_source: 12 as
+        roas-<deal_id> rows + 7 as real-contact-id rows (14753, 16529, 17448,
+        16151, 17883, 18224, 19121) — all match_method NULL. So jc_manual_tag
+        joins cleanly by deal_id.
+  - Read both pipeline functions: rebuild_ga4_ac_matches(window_days, tol_seconds)
+    and update_ga4_contact_deals() — confirmed the ownership split (matched rows vs
+    gads rows vs static roas rows) and the "every linker must denormalize" rule.
+
+Asked ONE clarifying question (genuine data-semantics fork): which date drives
+FY/Cal Yr? → User chose "Contact Created (cdate)".
+
+Design + implementation:
+  - fy/cal_yr: pure function of cdate (never changes per row) → implemented as
+    GENERATED STORED columns via two IMMUTABLE helpers, public.mag_cal_yr(ts) and
+    public.mag_fy_label(ts) (UTC, matching the page's existing cdate handling; FY
+    starts Jul 1, labelled "FY2026-27"). Zero sync maintenance; correct even for
+    the static roas rows.
+  - jc_manual_tag: mirrors mag_gads.jc_final_attr by deal_id, kept current by a
+    BEFORE INSERT/UPDATE OF deal_id trigger (trg_ga4cs_jc_manual_tag →
+    ga4cs_set_jc_manual_tag()). Because it rides deal_id, NEITHER big function
+    needed editing — any future linker inherits the tag. Plus a one-time backfill.
+  - Wrote migration supabase/migrations/20261020060000_contact_source_fy_calyr_jc_
+    columns.sql and applied it via the Supabase MCP (apply_migration; first attempt
+    hit "Invalid or expired requestState", retried → success).
+  - Verified: all 173 rows have fy/cal_yr; all 19 tagged rows show jc_manual_tag;
+    FY boundaries correct (e.g. 2025-07-29 → FY2025-26, 2025-06-23 → FY2024-25).
+  - API: added fy/calYr/jcManualTag to the SELECT aliases + a doc comment.
+  - Page: added FY and Cal. Yr. columns (after Created, always visible), a
+    jcTagPill renderer, a conditional JC column, a new "Show JC's Manual Tag"
+    toolbar toggle (SHOW_JC_COL, wired in wireToolbar), and a .acs-reset.active
+    CSS rule (the existing meta toggle had lacked an active style too).
+  - node --check passed on the server module and the extracted inline script.
+
+Flagged a discovered problem before finishing: the existing isExcludedRow() filter
+hides rows with google_ads=No/blank AND no conversion action — that hid 9 of the 19
+tagged rows, so the JC column would be blank/absent for half the audited deals.
+Asked how to handle it.
+
+--------------------------------------------------------------------------------
+USER:
+"all rows added from mag_gads_direct_inbound_lead_source where jc_final_attr =
+'Could be SEO or Paid Ad' should never be hidden"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Made JC-tagged rows always visible (not toggle-dependent — the toggle controls only
+the column). Short-circuited isExcludedRow() with `if (r.jcManualTag) return false;`
+in BOTH copies (server/metrics/ac-contact-sources.js and the page's inline JS), so
+every consumer (server filter, ALL_ROWS load, filteredRows, renderTable) respects
+it. Re-ran node --check (both OK). Confirmed via SQL: 19 tagged total, 9 previously
+hidden → all 19 now surface. Documented the new columns, the trigger, and the
+always-show rule in CLAUDE.md (next to the roas-row notes), including that neither
+rebuild function was edited and the migration filename.
+
+Reported that the DB migration is live but the dashboard isn't redeployed and
+nothing was committed.
+
+--------------------------------------------------------------------------------
+USER:
+"update claude.md so claude never auto deploys dashboard updates to cloud run.
+that task will always be manually done. never ask."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added a bold rule at the top of the "Deploy (Cloud Run)" section of CLAUDE.md:
+Claude NEVER deploys the dashboard to Cloud Run — always manual, done by the user;
+don't run gcloud run deploy, don't offer to, don't ask. After changes, just state
+that a manual redeploy is needed. Confirmed I'll follow it going forward.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation steps (no git): saved this chat-history file, updated
+as_built.txt (GA4 Leads Tracker columns + new helpers/trigger/migration), updated
+CLAUDE.md (already done during the session), and reviewed .gitignore.
+
+================================================================================
+END OF EXPORT
+================================================================================

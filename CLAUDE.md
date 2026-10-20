@@ -138,6 +138,24 @@ Cloud Run.
       collision. They're **static** (won't auto-refresh from AC) and immune to the daily
       jobs — don't "clean up" non-numeric contact_ids or add a linker that assumes
       contact_id ∈ `activecampaign_contacts`.
+    - **`fy` / `cal_yr` / `jc_manual_tag` columns (as of 2026-10-20):** `ga4_ac_contact_source`
+      carries three extra columns the GA4 Leads Tracker shows. `cal_yr` (int) and `fy`
+      (text, `"FY2026-27"`, AU FY starting Jul 1, labelled like `mag_gads…fy`) are
+      **GENERATED STORED** from `cdate` via IMMUTABLE helpers `public.mag_cal_yr()` /
+      `public.mag_fy_label()` (UTC, matching the page's existing cdate date handling) — so
+      they need **no sync maintenance** and are correct even for the static roas rows.
+      `jc_manual_tag` mirrors `mag_gads_direct_inbound_lead_source.jc_final_attr` (only value
+      so far: `"Could be SEO or Paid Ad"`) joined by `deal_id`, kept current by a
+      **BEFORE INSERT/UPDATE OF deal_id trigger** (`trg_ga4cs_jc_manual_tag` →
+      `ga4cs_set_jc_manual_tag()`) — so it follows `deal_id` regardless of which linker sets
+      it, and **neither `rebuild_ga4_ac_matches()` nor `update_ga4_contact_deals()` was
+      edited**. Any new deal-linker inherits the tag for free; the static roas rows keep the
+      one-time backfill value. **JC-tagged rows are ALWAYS shown** — `isExcludedRow()` (both
+      `server/metrics/ac-contact-sources.js` and the page) short-circuits `return false` when
+      `jcManualTag` is set, so the ~9 ROAS rows that would otherwise be dropped (google_ads
+      `No`/blank + no conversion action) stay visible. The page's "Show JC's Manual Tag"
+      toolbar toggle controls only the **column**, not row visibility. Migration:
+      `supabase/migrations/20261020060000_contact_source_fy_calyr_jc_columns.sql`.
   - **Calendly rows are decoupled from the GA4 `calendly_form_submit` event (as of
     2026-10-14).** That website GA4/GTM event **stopped firing after 2026-10-08** (an
     upstream site issue, not in this repo), so `ga4_calendly_events_staging` has no rows
@@ -190,6 +208,10 @@ Cloud Run.
 - No `npm run build` and no client install step.
 
 ## Deploy (Cloud Run)
+> **Claude NEVER deploys the dashboard to Cloud Run.** This is ALWAYS done manually by
+> the user — do not run `gcloud run deploy`, do not offer to, and do not ask whether to.
+> After code/DB changes, just state that a manual redeploy is needed; the commands below
+> are reference for the user, not an action for Claude.
 ```
 gcloud run deploy dashboard --source . --region australia-southeast1 \
   --set-secrets SUPABASE_DB_URL=SUPABASE_DB_URL:latest
