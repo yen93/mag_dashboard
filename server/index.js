@@ -14,6 +14,7 @@ import { getInvoiceTracking } from './metrics/invoice-tracking.js';
 import { getAcContactSources } from './metrics/ac-contact-sources.js';
 import { getNewPaidLeads } from './metrics/new-paid-leads.js';
 import { getAcAdLeads } from './metrics/ac-ad-leads.js';
+import { getPaidGoogleEnquiries } from './metrics/paid-google-enquiries.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { cached } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
@@ -165,6 +166,19 @@ operations.get('/ac-ad-leads', async (_req, res) => {
   } catch (err) {
     console.error('[operations:ac-ad-leads]', err);
     res.status(502).json({ error: 'Failed to load AC ad leads from data source.', detail: err.message });
+  }
+});
+// Historical Paid Leads table reads a pre-computed Supabase cache
+// (public.mag_paid_google_enquiries): the 39 reconciled "Paid – Google" enquiries,
+// anchored to a fixed set of AC deal_ids and refreshed daily from the AC mirror by
+// the paid-google-enquiries-sync edge function. Plain SELECT, so a short cache is plenty.
+operations.get('/paid-google-enquiries', async (_req, res) => {
+  try {
+    const payload = await cached('operations:paid-google-enquiries', getPaidGoogleEnquiries, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:paid-google-enquiries]', err);
+    res.status(502).json({ error: 'Failed to load paid Google enquiries from data source.', detail: err.message });
   }
 });
 app.use('/api/operations', operations);

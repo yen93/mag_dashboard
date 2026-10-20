@@ -1,0 +1,277 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-14
+Session: Sales-overview toolbar tweaks (hide AC Deals table behind a toggle; move
+the hint into an info ⓘ); manually ran the Contact Sources sync chain; created a
+global "/q" read-only question skill; fixed blank Calendly conversion_link on the
+GA4 & Ads Leads Tracking page via a dashboard-side fallback, then fully decoupled
+Calendly attribution (conversion_link + channel) from the website GA4
+calendly_form_submit event that stopped firing after 2026-10-08. Supabase project
+ref aivitcomiywiysrfwqxt.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+(1) The "AC DEALS TABLE" on sales_overview.html should be hidden by default, with a
+toggle button in the toolbar to "See ACS Deals Table". (2) Don't show the acs-hint
+text in the toolbar — put it behind an info tool/icon instead.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Located both in public/sales_overview.html (CLAUDE.md's "cs-toolbar" is actually the
+`acs-toolbar` class). Reused the existing kpi-info ⓘ tooltip idiom from
+ac_contact_sources.html. Changes:
+- Added `.acs-info` CSS (hoverable/focusable ⓘ, cursor:help).
+- Replaced the inline `<span class="acs-hint">…</span>` with a toggle button
+  (#acDealsToggle, "See ACS Deals Table") plus an ⓘ whose title carries the old hint
+  text ("Top-line cards follow the selected dates (by deal created date) · trend
+  charts filter by month").
+- Gave the AC Deals grid id #acDealsSection and default display:none.
+- Wired the toggle in wireToolbar(): flips display, updates aria-expanded, and
+  swaps the label to "Hide ACS Deals Table". Table still renders in the background
+  so the deals rows keep feeding the Direct/Indirect + Inbound/Outbound charts.
+Offered to redeploy; user reviewing locally.
+
+--------------------------------------------------------------------------------
+USER:
+(question) Which edge function(s) sync the cache table of this page?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Answered for the then-open ac_contact_sources.html (cache = public.ga4_ac_contact_source):
+contact-sources-sync orchestrator (daily 06:00 PH) firing ga4-ads-leads-sync /
+ga4-ac-custom-fields-sync / ac-google-ads-deals-sync, plus update-deals-daily-7am-pht
+(07:00 PH) → update_ga4_contact_deals(). Also clarified that sales_overview.html is
+NOT edge-function synced — sales_topline is a weekly Claude routine (sales-topline-sync)
+and its AC deals come from sales_liv_deals (sales-deals-sync edge fn).
+
+--------------------------------------------------------------------------------
+USER:
+Manually invoke contact-sources-sync.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed the function exists (v2, verify_jwt:false) and got the project URL, then
+POSTed .../functions/v1/contact-sources-sync?sync=1 (curl). HTTP 200, ok:true,
+~117s: ga4-ads-leads-sync (awaited) rebuilt 62 contact-source rows (156 retained),
+94 google-ads deals, denormalized_columns:true; ga4-ac-custom-fields-sync (awaited)
+updated 105 contacts; ac-google-ads-deals-sync fired async (202).
+
+--------------------------------------------------------------------------------
+USER:
+Run update-deals-daily-7am-pht.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read cron.job: it runs `SELECT public.update_ga4_contact_deals();` (0 23 * * * UTC =
+07:00 PH). Ran it (returns void). Verified ga4_ac_contact_source: 156 rows, 105 with
+deal_id, all 105 with a populated deal_title, 0 deal_id-with-blank-title — the exact
+failure mode CLAUDE.md warns about, confirmed clean.
+
+--------------------------------------------------------------------------------
+USER:
+(question) Why is juliennemaeanito.de@gmail.com in ga4_ac_event_matches but not in
+ga4_ac_contact_source?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Her Calendly booking event was in the audit table with matched_contact_id NULL /
+match_method NULL — unmatched. Root cause: the email didn't exist in
+activecampaign_contacts yet (booking was that morning, 08:54 PH), so section 1
+(matched-only) never produced a contact_source row. Explained the two-table roles:
+event_matches logs every event; contact_source only gets matched rows.
+
+--------------------------------------------------------------------------------
+USER:
+(question) Which edge function syncs ga4_ac_event_matches?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+ga4-ads-leads-sync — it fetches GA4 form/Calendly events then calls
+rebuild_ga4_ac_matches(), whose section 2 UPSERTs each event onto event_uid into
+ga4_ac_event_matches. Backed by the earlier run's rebuild summary and the matching
+inserted_at/last_rebuilt_at timestamps.
+
+--------------------------------------------------------------------------------
+USER:
+I just manually synced the AC contacts — fire contact-sources-sync again.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Re-POSTed the sync (HTTP 200, ok:true). contact_source_upserted went 62→63, retained
+156→157 — one new matched row. Verified it was Julienne: contact_id 19816,
+match_method calendly_email, confidence high, source "Organic search"/"booking";
+deal columns still NULL (no deal linked yet, expected).
+
+--------------------------------------------------------------------------------
+USER:
+Fire update-deals-daily-7am-pht.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran update_ga4_contact_deals(). Contact 19816 still has null deal columns (no AC deal
+linked to the contact — correct, not a bug). Table-wide integrity: 0 rows with a
+deal_id but blank title.
+
+--------------------------------------------------------------------------------
+USER:
+Create a global skill for the "question/no action needed" queries called "/q".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Created C:\Users\Cloverly\.claude\skills\q\SKILL.md (global). It triggers on /q, a
+"q:"/"question/no action needed" prefix, or plain how/why/which questions; allows
+read-only investigation (Read/Grep/Glob/Explore, read-only shell + git log,
+SELECT-only Supabase, list_/get_ MCP reads) and forbids all mutations (edits, git,
+deploys, firing edge functions/cron, INSERT/UPDATE/DELETE/DDL, apply_migration,
+create_/update_/deploy_/send_ tools). If a good answer needs a mutating action it
+stops and asks.
+
+--------------------------------------------------------------------------------
+USER:
+/q why is there no conversion link for juliennemaeanito.de@gmail.com in
+ga4_ac_event_matches?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+For Calendly rows, section 2 of rebuild_ga4_ac_matches() derives conversion_link as
+the page_path of the nearest GA4 calendly_form_submit event (±300s of the booking).
+Her row has none within window. Aggregate: ga4_form rows 775/775 have a link; calendly
+only 10/23 — the ones with a link carry "/thank-you-2/" and source "(calendly)"; hers
+is "Organic search / booking" with no matching GA4 calendly pageview, hence NULL.
+
+--------------------------------------------------------------------------------
+USER:
+/q which function syncs ga4_calendly_events_staging? why no rows older than Oct 8
+event_time_utc?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Function: ga4-ads-leads-sync (GA4 runReport filtered to calendly_form_submit;
+truncate-reloads the staging table each run via clear_ga4_staging). Clarified the gap
+is at the NEWEST end (max = Oct 8 23:53), not the oldest. Smoking gun from the three
+staging tables: ga4_events_staging (form) fresh to Oct 13, calendly_bookings_staging
+fresh to Oct 14, but ga4_calendly_events_staging stops Oct 8 — so GA4 and Calendly
+are both healthy; only the website's GA4 calendly_form_submit event stopped firing
+after Oct 8 (a GTM/site-side issue, outside this repo). This is exactly why Julienne's
+Oct 14 booking has no conversion_link.
+
+--------------------------------------------------------------------------------
+USER:
+Please fix it. [Plan mode]
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Entered plan mode. One Explore agent confirmed: no GTM/GA4 tracking tags live in this
+repo (purely website-side; repo only reads GA4 via the Data API); rebuild_ga4_ac_matches()
+IS version-controlled under supabase/migrations/ (latest 20261013000200); and the page
+renders conversion_link in a "Link" cell (blank → em-dash). Flagged that the true fix
+is upstream and out of reach from here, and asked how to proceed. User chose the
+dashboard-side fallback. Wrote the plan and exited plan mode (approved).
+
+--------------------------------------------------------------------------------
+ASSISTANT (implementation):
+Created supabase/migrations/20261014000000_calendly_conversion_link_fallback.sql — a
+verbatim CREATE OR REPLACE of rebuild_ga4_ac_matches() with only section 3 (denormalize)
+changed: for match_method='calendly_email' rows, conversion_action='calendly_form_submit'
+always and conversion_link = real GA4 page_path if matched else the constant
+'/thank-you-2/'. Deliberately did NOT touch section 2 (its conversion_link feeds the
+event_uid md5 on an accumulate table — editing there would mint duplicate audit rows);
+the audit stays honest. Applied via apply_migration and backfilled with
+rebuild_ga4_ac_matches(). Verified: Julienne's row now /thank-you-2/ +
+calendly_form_submit; all 7 calendly rows filled (0 blank); audit table unchanged
+(Julienne's event still NULL link, event_audit_retained_total steady at 798); 56
+ga4_time rows unaffected. No Cloud Run redeploy needed. Saved a project memory
+(calendly-conversion-link-gap) and noted the uncommitted migration + the upstream GTM
+follow-up.
+
+--------------------------------------------------------------------------------
+USER:
+/q ga4_calendly_events_staging still has no rows after Oct 8.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Expected — nothing in this project feeds that table except ga4-ads-leads-sync's GA4
+runReport (truncate-reload), and GA4 has no calendly_form_submit events after Oct 8,
+so each run reloads the same 27 rows (max Oct 8). The fallback fix is downstream and
+deliberately doesn't write to this staging table; the empty table no longer affects
+the page. It only refills if the website tag starts firing again.
+
+--------------------------------------------------------------------------------
+USER:
+Then let's not rely on calendly_form_submit. Check if there's any other tag tracking
+Calendly bookings.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked the synced GA4 data: events still firing after Oct 8 are free_gifts_opt_ins,
+form_submit, Contact_Form_Submit_Alt, form_submissions — none Calendly-specific, and
+/thank-you-2/ appears in no form event. A cluster of booking/consult/thank-you
+conversion events (Form_submission_thankyou_1 on /thank-you/, form_submit on
+/free-consult/, calendly_form_submit) all went quiet in early October — suggests a
+GTM/site change knocked out booking-page conversion tags. Caveat: can't enumerate the
+full GA4 property from this session (no GA4 tool). Key reframe: booking tracking never
+depended on calendly_form_submit — the Calendly API (calendly_bookings_staging, fresh
+to Oct 14) is authoritative; calendly_form_submit only decorated rows with
+conversion_link + channel. Asked which direction; user chose "Decouple from GA4
+(Calendly API)".
+
+--------------------------------------------------------------------------------
+ASSISTANT (implementation):
+Identified the remaining GA4 dependency for Calendly rows = the `channel` column
+(section 1), NULL for the two rows without a GA4 event (incl. Julienne); source/medium
+already come from the Calendly booking. Created
+supabase/migrations/20261014000100_calendly_channel_from_booking.sql — verbatim copy
+of the deployed function except section-1 channel for calendly rows is now
+coalesce(GA4 session source/medium, booking utm_source/utm_medium). Chose the
+graceful coalesce (not pure booking-utm) so historical GA4 channels (bing/cpc,
+linkedin.com/referral) are preserved while recent/future rows no longer go blank.
+Applied + backfilled. Verified: Julienne NULL→"Organic search / booking",
+contact 19599 NULL→"(calendly) / booking", and all GA4-attributed rows preserved; no
+blank channels remain; totals steady (798 / 157). Updated the
+calendly-conversion-link-gap memory to cover both migrations. Flagged the two
+uncommitted migrations + the sales_overview edits, and offered the pure-booking-utm
+variant.
+
+--------------------------------------------------------------------------------
+USER:
+/q so why still no new rows in ga4_calendly_events_staging?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Reiterated: nothing I changed feeds that table — it's upstream of the fix, fed only by
+ga4-ads-leads-sync's truncate-reload of GA4 calendly_form_submit events, which GA4
+still lacks after Oct 8. My migrations changed the consumer (channel → booking utm
+fallback; conversion_link → /thank-you-2/), so the empty table no longer matters. It
+refills only if the website tag fires again (or is renamed and CALENDLY_EVENT updated).
+
+--------------------------------------------------------------------------------
+USER:
+/q why is bryce.walter@sydney.edu.au not in the GA4 tab?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+His AC contact (id 19031) was created 2026-07-06 — outside the rebuild's 60-day window
+(contacts_scope filters cdate >= now()-60d). His Oct 8 Calendly booking IS in
+ga4_ac_event_matches (section 2 matches bookings to any contact by email, no window),
+but section 1 (the page table) only rolls up in-window contacts, so no contact_source
+row. Different failure mode from Julienne: Bryce is a returning/older contact who
+booked again after his contact aged out of the window and had no booking while in-window.
+Offered to change the Calendly match to key off booking date (or the contact's booking)
+rather than only recent contact cdate, so returning contacts appear.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation skill (no git). Saved this transcript; updated as_built.txt
+(two new rebuild_ga4_ac_matches migrations + Calendly decoupling behaviour) and
+CLAUDE.md (Calendly conversion_link/channel fallback + the known upstream GA4 tag gap);
+reviewed .gitignore (already covers secrets). Security scan of the full transcript
+found no secrets to redact — only a Supabase project ref, Secret Manager names, and
+business contact emails, no credential values. Did NOT commit or push (user does that).
+
+================================================================================
+END OF EXPORT
+================================================================================

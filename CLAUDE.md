@@ -92,6 +92,24 @@ Cloud Run.
       matched row. (Both tables are append-only now, so a manual row edit survives
       unless the next rebuild upserts that same key — a matched row is overwritten each
       run; an out-of-window row is left alone.)
+  - **Calendly rows are decoupled from the GA4 `calendly_form_submit` event (as of
+    2026-10-14).** That website GA4/GTM event **stopped firing after 2026-10-08** (an
+    upstream site issue, not in this repo), so `ga4_calendly_events_staging` has no rows
+    past Oct 8 (it's truncate-reloaded purely from GA4 — re-running the sync won't fill
+    it). Calendly rows no longer depend on it: `conversion_link` for
+    `match_method='calendly_email'` falls back to the **constant `'/thank-you-2/'`**
+    (and `conversion_action` is always `'calendly_form_submit'`) — so don't be surprised
+    the link is always `/thank-you-2/`; `channel` = `coalesce(GA4 session src/medium,
+    the Calendly booking's own utm)`. `source`/`medium` always come from the Calendly
+    API booking (`calendly_bookings_staging`), the authoritative tracker. **Section 2
+    (the audit table) was intentionally left reading GA4** — its `conversion_link` feeds
+    the `event_uid` md5, so changing it would mint duplicate rows; a NULL link there is
+    honest. The migrations are the two latest `supabase/migrations/20261014*` files.
+  - **60-day window gotcha:** sections 1/1b/3 only roll up contacts whose
+    `activecampaign_contacts.cdate` is within `window_days` (60). A returning/older
+    contact who books again after aging out lands in `ga4_ac_event_matches` (section 2
+    matches bookings to any contact by email, no window) but **not** on the page. Fixing
+    that means keying the Calendly match off booking date, not contact `cdate`.
 - **Auth = passwordless email code (OTP).** No passwords, no user table.
   `login.html` is a two-step form (email → code). `POST /api/request-code`
   accepts any `@myadventuregroup.com.au` email, generates a 6-digit code, stores

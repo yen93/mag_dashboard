@@ -1,0 +1,285 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Historical Paid Leads — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* Wide table — use the full screen width (still scrolls on narrow screens). */
+    .content { max-width: none; }
+    .acs-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .acs-field { display: flex; flex-direction: column; gap: 4px; }
+    .acs-field label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .acs-field input[type="date"] {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 10px; font: inherit;
+    }
+    .acs-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+    .acs-quick button, .acs-reset {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .acs-quick button.active { background: var(--accent); color: #fff; border-color: transparent; }
+    .acs-spacer { flex: 1; }
+    .conf-cell { cursor: help; }
+    .conf-cell .pill { border-bottom: 1px dotted currentColor; }
+    /* Info ⓘ on each KPI card — native tooltip via the title attribute. */
+    .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
+    .kpi-info:hover, .kpi-info:focus { color: var(--accent); outline: none; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="mag_buyer_sheet.html">Buyer Analysis</a>
+    <a class="tab" href="invoice_tracking.html">Invoices</a>
+    <a class="tab" href="sales.html">Conferences</a>
+    <a class="tab" href="ga4_agent.html">GA4 Agent</a>
+    <a class="tab" href="ac_contact_sources.html">GA4 Leads Tracker</a>
+    <a class="tab" href="new_paid_leads_tracking.html">Calendly-AC Sync</a>
+    <a class="tab active" href="historical_paid_leads.html">Historical Paid Leads</a>
+  </nav>
+
+  <main class="content">
+    <div class="kpi-grid" id="pgKpis"></div>
+
+    <div class="grid">
+      <div class="card col-12">
+        <div class="card-head">
+          <h3>Historical Paid Leads — Paid · Google enquiries</h3>
+          <span class="chips" id="pgChips"></span>
+          <div class="spacer"></div>
+          <span class="muted" id="pgCount" style="font-size:13px"></span>
+        </div>
+
+        <p class="muted" style="margin:2px 0 12px; font-size:13px; line-height:1.5">
+          The 39 inbound enquiries reconciled as <strong>Paid&nbsp;–&nbsp;Google</strong> in the
+          MAG Enquiry &amp; Deal Reconciliation (Jul&nbsp;2024&nbsp;–&nbsp;Oct&nbsp;2026). This is a fixed
+          historical set of ActiveCampaign deals; the deal value, outcome, contact and
+          organisation refresh daily from ActiveCampaign.
+        </p>
+
+        <!-- date-range filter (filters on Contact created date) -->
+        <div class="acs-toolbar">
+          <div class="acs-field">
+            <label for="pgFrom">From (contact created)</label>
+            <input type="date" id="pgFrom" />
+          </div>
+          <div class="acs-field">
+            <label for="pgTo">To (contact created)</label>
+            <input type="date" id="pgTo" />
+          </div>
+          <div class="acs-quick" id="pgQuick">
+            <button type="button" data-days="7">7d</button>
+            <button type="button" data-days="30">30d</button>
+            <button type="button" data-days="60">60d</button>
+            <button type="button" data-days="0" class="active">All</button>
+          </div>
+          <button type="button" class="acs-reset" id="pgReset">Reset</button>
+          <div class="acs-spacer"></div>
+          <button type="button" class="acs-reset" id="pgMetaToggle" aria-pressed="false"
+                  title="Show/hide the Evidence, Source tags, Email domain and Lead Source columns">Show Evidence · Tags · Lead Source</button>
+        </div>
+
+        <div id="pgRows"></div>
+      </div>
+    </div>
+  </main>
+
+  <script src="app.js?v=2"></script>
+  <script>
+    var ALL_ROWS = [];
+    // Toggle for the reconciliation/detail columns pinned to the far right.
+    var SHOW_META_COLS = false;
+
+    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+
+    var _aud = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
+    function money(v) { return _aud.format(Number(v) || 0); }
+
+    // ---- cell renderers ----
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    // Outcome won (green) / lost (red) / open (amber).
+    function statusPill(v) {
+      if (!v) return '—';
+      var s = String(v).toLowerCase(), cls = s === 'won' ? 'pos' : (s === 'lost' ? 'neg' : 'partial');
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+    // "Google Ads?" custom field from the AC deal (Yes/No).
+    function googleAdsPill(v) {
+      if (!v) return '—';
+      var s = String(v).trim(), low = s.toLowerCase();
+      var cls = low === 'yes' ? 'pos' : (low === 'no' ? 'neg' : 'partial');
+      return '<span class="pill ' + cls + '">' + esc(s) + '</span>';
+    }
+    // Reconciliation confidence — colour by strength; full value kept in a tooltip.
+    function confidencePill(v) {
+      if (!v) return '—';
+      var s = String(v), low = s.toLowerCase(), cls;
+      if (low.indexOf('high') === 0) cls = 'pos';
+      else if (low.indexOf('medium') === 0) cls = 'partial';
+      else if (low.indexOf('low') === 0) cls = 'neg';
+      else cls = '';
+      return '<span class="conf-cell" title="' + esc(s) + '"><span class="pill ' + cls + '">' + esc(s) + '</span></span>';
+    }
+
+    // ---- date-range filtering (on Contact created) ----
+    function parseInput(id) { var el = document.getElementById(id); return el && el.value ? el.value : ''; }
+    function inRange(iso, from, to) {
+      if (!iso) return false;
+      var d = String(iso).slice(0, 10);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }
+    function filteredRows() {
+      var from = parseInput('pgFrom'), to = parseInput('pgTo');
+      if (!from && !to) return ALL_ROWS.slice();
+      return ALL_ROWS.filter(function (r) { return inRange(r.contactCreated, from, to); });
+    }
+
+    // ---- metrics widget ----
+    function kpi(label, value, sub, subClass, info) {
+      var ic = info ? ' <span class="kpi-info" tabindex="0" title="' + esc(info) + '">ⓘ</span>' : '';
+      return '<div class="kpi"><div class="label">' + esc(label) + ic + '</div>' +
+        '<div class="value">' + esc(String(value)) + '</div>' +
+        (sub ? '<div class="delta ' + (subClass || '') + '">' + esc(sub) + '</div>' : '') + '</div>';
+    }
+    function renderKpis(rows) {
+      var total = rows.length;
+      var won = rows.filter(function (r) { return r.outcome === 'won'; });
+      var lost = rows.filter(function (r) { return r.outcome === 'lost'; });
+      var open = rows.filter(function (r) { return r.outcome === 'open'; });
+      var wonRev = won.reduce(function (a, r) { return a + (Number(r.wonValue) || 0); }, 0);
+      var openPipe = open.reduce(function (a, r) { return a + (Number(r.dealValue) || 0); }, 0);
+      var closed = won.length + lost.length;
+      var winRate = closed ? Math.round((won.length / closed) * 100) : 0;
+      var host = document.getElementById('pgKpis');
+      host.innerHTML =
+        kpi('Won Revenue', money(wonRev), won.length + (won.length === 1 ? ' won deal' : ' won deals'), wonRev ? 'pos' : '',
+            'Total AUD value of won Paid – Google deals in the current view. AC deal value is CRM-contracted, not billed revenue.') +
+        kpi('Open Pipeline', money(openPipe), open.length + (open.length === 1 ? ' open deal' : ' open deals'), openPipe ? 'partial' : '',
+            'Total AUD value of still-open Paid – Google deals in the current view.') +
+        kpi('Total Enquiries', total, 'Paid – Google', '',
+            'Inbound enquiries reconciled as Paid – Google (contact created in the selected range).') +
+        kpi('Won', won.length, 'closed-won', won.length ? 'pos' : '', 'Paid – Google deals marked won.') +
+        kpi('Lost', lost.length, 'closed-lost', lost.length ? 'neg' : '', 'Paid – Google deals marked lost.') +
+        kpi('Win Rate', winRate + '%', 'of closed deals', '', 'Won ÷ (Won + Lost) for Paid – Google deals in the current view.');
+    }
+
+    // ---- table ----
+    function renderTable(rows) {
+      var cols = [
+        { key: 'contactCreated', label: 'Contact Created', unit: 'date' },
+        { key: 'enquiryDate', label: 'Enquiry Date', unit: 'date' },
+        { key: 'dealId', label: 'Deal ID', render: txt },
+        { key: 'organisation', label: 'Organisation', render: txt },
+        { key: 'contact', label: 'Contact', render: txt },
+        { key: 'dealTitle', label: 'Deal', render: txt },
+        { key: 'typeOfEngagement', label: 'Engagement', render: txt },
+        { key: 'confidence', label: 'Confidence', render: confidencePill },
+        { key: 'outcome', label: 'Outcome', render: statusPill },
+        { key: 'dealValue', label: 'Value', unit: 'currency' },
+        { key: 'wonValue', label: 'Won Value', unit: 'currency' },
+        { key: 'stage', label: 'Stage', render: txt },
+        { key: 'wonDate', label: 'Won Date', unit: 'date' },
+        { key: 'pipeline', label: 'Pipeline', render: txt },
+        { key: 'googleAdsField', label: 'Google Ads (AC)', render: googleAdsPill },
+        { key: 'dealSourceField', label: 'Deal Source', render: txt },
+      ];
+      if (SHOW_META_COLS) {
+        cols.push(
+          { key: 'evidence', label: 'Evidence', render: txt },
+          { key: 'sourceTagsRaw', label: 'Source Tags (raw)', render: txt },
+          { key: 'checkWithSales', label: 'Check w/ Sales', render: txt },
+          { key: 'emailDomain', label: 'Email Domain', render: txt },
+          { key: 'acLeadSourceField', label: 'AC Lead Source', render: txt }
+        );
+      }
+      renderSortableTable('pgRows', rows, cols, {
+        searchPlaceholder: 'Search enquiries…',
+        sortKey: 'contactCreated', sortDir: 'desc',
+        emptyText: 'No Paid – Google enquiries in this date range.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('pgCount');
+          if (el) el.textContent = shown === total ? (total + ' enquiries') : (shown + ' of ' + total + ' enquiries');
+        },
+        onFilter: function (filteredList) { renderKpis(filteredList); },
+      });
+    }
+
+    function apply() {
+      var rows = filteredRows();
+      renderKpis(rows);
+      renderTable(rows);
+    }
+
+    function setQuick(days) {
+      var from = document.getElementById('pgFrom'), to = document.getElementById('pgTo');
+      if (!days) { from.value = ''; to.value = ''; }
+      else {
+        var end = new Date();
+        var start = new Date(); start.setDate(start.getDate() - days);
+        to.value = end.toISOString().slice(0, 10);
+        from.value = start.toISOString().slice(0, 10);
+      }
+      apply();
+    }
+    function clearQuickActive() {
+      document.querySelectorAll('#pgQuick button').forEach(function (x) { x.classList.remove('active'); });
+    }
+    function wireToolbar() {
+      document.getElementById('pgFrom').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.getElementById('pgTo').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.querySelectorAll('#pgQuick button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          clearQuickActive();
+          b.classList.add('active');
+          setQuick(Number(b.getAttribute('data-days')));
+        });
+      });
+      document.getElementById('pgReset').addEventListener('click', function () {
+        clearQuickActive();
+        document.querySelector('#pgQuick button[data-days="0"]').classList.add('active');
+        setQuick(0);
+      });
+      var metaBtn = document.getElementById('pgMetaToggle');
+      if (metaBtn) metaBtn.addEventListener('click', function () {
+        SHOW_META_COLS = !SHOW_META_COLS;
+        metaBtn.classList.toggle('active', SHOW_META_COLS);
+        metaBtn.setAttribute('aria-pressed', String(SHOW_META_COLS));
+        metaBtn.textContent = (SHOW_META_COLS ? 'Hide' : 'Show') + ' Evidence · Tags · Lead Source';
+        apply();
+      });
+    }
+
+    function loadPaidGoogle() {
+      var host = document.getElementById('pgRows');
+      host.innerHTML = '<div class="muted" style="padding:14px">Loading paid Google enquiries…</div>';
+      fetchJSON('/api/operations/paid-google-enquiries').then(function (data) {
+        ALL_ROWS = (data.rows && data.rows.data) || [];
+        setChips('pgChips', data.rows && data.rows.meta);
+        apply();
+      }).catch(function (err) {
+        console.error(err);
+        host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load paid Google enquiries</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('operations'); // login / top-bar / theme only — this page renders its own table
+    if (currentUser()) { wireToolbar(); loadPaidGoogle(); }
+  </script>
+</body>
+</html>

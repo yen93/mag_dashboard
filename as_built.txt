@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-10-13 (Buyer Analysis page extended with invoice data: public.mag_buyer_sheet gained engagement_fee/amount_total/invoice_json, sourced from public.invoice_tracking by deal_title=ac_deal_title and SUMMED across a deal's 1–3 invoices (invoice_json kept as a JSON ARRAY); buyer-sheet-sync edge function redeployed v12 (verify_jwt:false) to fill them each run; mag-buyer-sheet.js SELECT + mag_buyer_sheet.html now serve/show "Engagement Fee" + "Total Charge" (hover → See Invoice modal) and "Deal Title" + "Deal Status" (status pill); nav tab renamed "Buyer Sheet" → "Buyer Analysis" across all 12 pages. Server+frontend changes pending a Cloud Run redeploy. Earlier same day — invoice-tracking-sync routine extended: public.invoice_tracking gained engagement_fee/other_fees/gst (fee split by Xero account_code — codes 219–228 = engagement, rest = other; gst = amount_tax) + an invoice_json enriched with a computed `charges` breakdown; routine prompt's embedded transform.mjs updated via remote-trigger API, connectors preserved; these 4 cols are populated but not yet surfaced on the Invoices page. Also added a client-side date-range filter (From/To event date + 12m/24m/This-year/All quick ranges) to public/mag_buyer_sheet.html. Earlier same day — Contact-Sources deal-title fixes + full history retention: update_ga4_contact_deals() (07:00 PH re-linker) now also denormalizes deal_title/value/status/source_type; BOTH rebuild tables now ACCUMULATE via UPSERT instead of truncate (ga4_ac_event_matches on event_uid, ga4_ac_contact_source on contact_id, ownership scoped by match_method). 2026-10-09: Contact-Sources pipeline overhaul (flat single-table SELECT, rebuild APPENDS Google-Ads leads, 3 crons → ONE orchestrator contact-sources-sync))
+Last updated: 2026-10-14 (Also added public.mag_gads_direct_inbound_lead_source — a one-time SNAPSHOT (not synced) of Direct Inbound enquiry deals since 2024-07-01; this session finished its three-state google_ads_field tag (Yes 41 / No 181 / null 4), added a deal_id key column, and wrote a plain-English explainer doc mag_gads_direct_inbound_lead_source_explained.txt. See DATA STORES. Earlier same day: Calendly attribution decoupled from the website GA4 calendly_form_submit event, which stopped firing after 2026-10-08 (upstream GTM gap): two new migrations recreate rebuild_ga4_ac_matches() — 20261014000000 makes calendly rows' conversion_link fall back to the constant '/thank-you-2/' (action always 'calendly_form_submit') and 20261014000100 makes calendly `channel` = coalesce(GA4 session src/medium, the Calendly booking's own utm); source/medium already come from the Calendly API. Applied + backfilled live; audit table (ga4_ac_event_matches) left untouched. Pure DB/function change — no Cloud Run redeploy. Also: public/sales_overview.html AC Deals table now hidden behind a "See ACS Deals Table" toggle in the toolbar + the hint text moved into an ⓘ info icon. Known limitation surfaced: section-1/3 only roll up contacts with cdate within the 60-day window, so returning/older contacts who book again (e.g. created >60d ago) appear in ga4_ac_event_matches but not on the page. Migrations + the sales_overview edits are uncommitted. Previously 2026-10-13 (Buyer Analysis page extended with invoice data: public.mag_buyer_sheet gained engagement_fee/amount_total/invoice_json, sourced from public.invoice_tracking by deal_title=ac_deal_title and SUMMED across a deal's 1–3 invoices (invoice_json kept as a JSON ARRAY); buyer-sheet-sync edge function redeployed v12 (verify_jwt:false) to fill them each run; mag-buyer-sheet.js SELECT + mag_buyer_sheet.html now serve/show "Engagement Fee" + "Total Charge" (hover → See Invoice modal) and "Deal Title" + "Deal Status" (status pill); nav tab renamed "Buyer Sheet" → "Buyer Analysis" across all 12 pages. Server+frontend changes pending a Cloud Run redeploy. Earlier same day — invoice-tracking-sync routine extended: public.invoice_tracking gained engagement_fee/other_fees/gst (fee split by Xero account_code — codes 219–228 = engagement, rest = other; gst = amount_tax) + an invoice_json enriched with a computed `charges` breakdown; routine prompt's embedded transform.mjs updated via remote-trigger API, connectors preserved; these 4 cols are populated but not yet surfaced on the Invoices page. Also added a client-side date-range filter (From/To event date + 12m/24m/This-year/All quick ranges) to public/mag_buyer_sheet.html. Earlier same day — Contact-Sources deal-title fixes + full history retention: update_ga4_contact_deals() (07:00 PH re-linker) now also denormalizes deal_title/value/status/source_type; BOTH rebuild tables now ACCUMULATE via UPSERT instead of truncate (ga4_ac_event_matches on event_uid, ga4_ac_contact_source on contact_id, ownership scoped by match_method). 2026-10-09: Contact-Sources pipeline overhaul (flat single-table SELECT, rebuild APPENDS Google-Ads leads, 3 crons → ONE orchestrator contact-sources-sync))
 ================================================================================
 
 OVERVIEW
@@ -217,10 +217,43 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     sections 1b/3 are scoped to match_method IS NOT NULL so they never touch them.
     Deal fields on matched rows refresh every run (so edits to the AC deal flow
     through); gads rows refresh from ac_google_ads_deals every run.
+    CALENDLY DECOUPLING (as of 2026-10-14): the website GA4 `calendly_form_submit`
+    event stopped firing after 2026-10-08, so ga4_calendly_events_staging has no
+    rows past Oct 8 (that table is truncate-reloaded purely from GA4; the gap is
+    upstream/GTM, not in this repo). Calendly rows no longer DEPEND on it:
+      * conversion_link (section 3) for match_method='calendly_email' rows =
+        real GA4 page_path when present, else the constant '/thank-you-2/';
+        conversion_action is always 'calendly_form_submit'.
+      * channel (section 1) for calendly rows = coalesce(GA4 session source/medium,
+        the Calendly booking's own utm_source/utm_medium) — GA4 channel kept when
+        present (e.g. bing/cpc), booking utm used when absent (no blanks).
+      * source/medium always come from the Calendly booking (calendly_bookings_staging,
+        Calendly API) — the authoritative booking tracker, never calendly_form_submit.
+    Section 2 (ga4_ac_event_matches audit) was intentionally left reading GA4 so its
+    event_uid/conversion_link stay honest (NULL = no real GA4 hit; editing it would
+    mint duplicate rows on the accumulate table). NOTE: section 1/section 3 only roll
+    up contacts whose activecampaign_contacts.cdate is within the 60-day window, so a
+    returning/older contact who books again after aging out (e.g. contact created
+    >60d ago) lands in ga4_ac_event_matches but NOT on the page.
   - public.ac_google_ads_deals — all AC deals whose "Google Ads?" custom field =
     "Yes", with deal/contact/account metadata. PK = deal_id. Filled by the
     ac-google-ads-deals-sync edge function.
-  - public.ga4_ac_event_matches — per-event audit log (one row per GA4 form event
+  - public.mag_gads_direct_inbound_lead_source — ONE-TIME SNAPSHOT (NOT synced; built
+    directly in the DB, no edge fn / migration). All "Direct Inbound Enquiry" deals since
+    2024-07-01: 226 rows / 215 contacts. Keep-rules (from activecampaign_deals a LEFT JOIN
+    ac_deals_ytd b LEFT JOIN ac_google_ads_deals c): b.inbound_or_outbound='Inbound Enquiry',
+    b.direct_or_indirect='Direct', b.stage_name<>'BUREAU ENQUIRY', a.cdate>='2024-07-01',
+    pipeline NOT IN (The Tailor, the TROJAN HORSE / EXECUTIVE X / LEADER X program pipelines).
+    Columns: deal_id (added 2026-10-14; text, natural-key matched back to activecampaign_deals
+    on title+contact email+cdate — 226/226 unique), status (0/1/2→open/won/lost),
+    direct_or_indirect, inbound_or_outbound, deal_created_at, pipeline_name, google_ads_field,
+    title, contact_email, account_name, lead_source, cal_yr, fy (FY starts 1 Jul), built_at.
+    google_ads_field is THREE-STATE from AC DEAL custom field id 18 "Google Ads?": Yes 41 /
+    No 181 / null 4 (null = field-18 empty-string or absent; the 4 are 3321,3503,3810,4365).
+    lead_source = AC CONTACT custom field id 20 "Lead Source" (fetched from AC; manually
+    entered by staff, not automation — written days-to-months after contact creation, ~18%
+    fill). Plain-English funnel doc: ./mag_gads_direct_inbound_lead_source_explained.txt.
+- public.ga4_ac_event_matches — per-event audit log (one row per GA4 form event
     / Calendly booking, with its best-matched contact) backing the rebuild's
     conversion_action/conversion_link denormalization. As of 2026-10-13 this is an
     ACCUMULATING table (was truncate+rebuilt): rebuild_ga4_ac_matches() section 2

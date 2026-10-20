@@ -1,0 +1,109 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-14
+Session: Finished tagging the one-time snapshot table
+public.mag_gads_direct_inbound_lead_source (Direct Inbound enquiries since
+1 Jul 2024) with a three-state "Google Ads?" column, keyed it with a new deal_id
+column, wrote a plain-English explainer txt of the filtering logic, then
+investigated (read-only) whether the AC "Lead Source" field is automation- or
+manually-populated (answer: manual). Supabase project ref aivitcomiywiysrfwqxt;
+AC account 2116665. Continuation of a compacted session.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER (earlier, pre-compaction — summarized):
+Across a long prior arc: built public.mag_gads_direct_inbound_lead_source — a
+one-time SNAPSHOT (not a synced edge function) of ALL "Direct Inbound Enquiry"
+deals since 2024-07-01, derived from activecampaign_deals + ac_deals_ytd +
+ac_google_ads_deals, with five keep-rules (created >= 2024-07-01; inbound_or_
+outbound = 'Inbound Enquiry'; direct_or_indirect = 'Direct'; stage_name <>
+'BUREAU ENQUIRY'; pipeline NOT IN The Tailor / the TROJAN HORSE / EXECUTIVE X /
+LEADER X program pipelines). Result: 226 deals, 215 contacts. Columns enriched
+with status (0/1/2 -> open/won/lost), account_name (coalesce account.name,
+contact.orgname), cal_yr + fy (FY starting 1 Jul, derived from deal_created_at),
+and lead_source (AC CONTACT custom field id 20, "Lead Source"/LEAD_SOURCEV2,
+fetched from AC). Then: "also check each deal to tag ones where google_ads_field
+is 'No' so we see exactly if it's either yes, no, or null."
+
+--------------------------------------------------------------------------------
+ASSISTANT (this session — completing Task 3):
+The "Google Ads?" DEAL custom field is AC field id 18; it is NOT mirrored in
+Supabase and the deal-custom-field endpoint can only be filtered by dealId, so I
+fetched field 18 per-deal for all 185 non-Yes deals (the 41 Yes were already
+known) via catalog_list-all-custom-fielddata-field-values. Result: every one is
+field-18 "No" EXCEPT four that are empty-string / have no field-18 row at all,
+which are therefore genuinely unknown (null): 3321, 3503, 3810, 4365.
+
+The table had no key column, so there was no safe per-deal way to write the tag.
+Fixed via SQL (Supabase execute_sql):
+  1. ALTER TABLE ... ADD COLUMN deal_id text.
+  2. Populated deal_id by matching each row back to activecampaign_deals on
+     (title, contact email via activecampaign_contacts, deal_created_at = cdate),
+     taking only unambiguous (n=1) matches. Verified: 226/226 rows matched,
+     0 unmatched, 226 distinct deal_ids.
+  3. Cross-checked that every currently-null-gads row carried a deal_id in my
+     known 185 non-Yes list (0 strays).
+  4. UPDATE ... SET google_ads_field='No' WHERE google_ads_field IS NULL AND
+     deal_id NOT IN (3321,3503,3810,4365).
+Final tally: Yes 41, No 181, null 4. Table remains a one-time snapshot (no sync).
+
+--------------------------------------------------------------------------------
+USER:
+Create a filtering logic for nontechnical people — like how did we get to this
+data. Create a txt file.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote C:/Users/Cloverly/claude_code/dashboard/mag_gads_direct_inbound_lead_source_
+explained.txt — a plain-English "funnel" doc: the big picture (every AC deal
+sieved down to 226 / 215 contacts), the 5 keep-rules in everyday language, a
+column-by-column glossary (including how fy is computed with worked examples),
+how Lead Source is sourced (contact field, blank = not recorded), the three-state
+"Google Ads?" logic (Yes 41 / No 181 / null 4, with the 4 unknown IDs and why
+blank != "No"), and caveats (snapshot won't self-update; blanks/nulls meaning).
+
+--------------------------------------------------------------------------------
+USER:
+/q can you check AC if lead source field values are filled out thru automations?
+or were they likely manually filled out?
+
+--------------------------------------------------------------------------------
+ASSISTANT (read-only /q investigation):
+Concluded: almost certainly MANUAL, not automation-populated. Evidence gathered
+from AC (contact field-value rows with cdate/udate/created_by) plus a Supabase
+join to get each filled contact's creation date:
+ (1) Timing lag — for recent contacts, all real intake/form fields are written
+     at contact-creation, but Lead Source (field 20) is a standalone write landing
+     days-to-MONTHS later (e.g. contact 15038 PAID-Google Ads set ~4.5 months
+     after signup; 14318 ORGANIC ~8 months; 16273 ~4 months). An automation/form
+     would stamp it synchronously at submit.
+ (2) Each field-20 row is a lone write with cdate==udate (set once, never revised).
+ (3) Value semantics — "James prior keynote/relationship", "Referral", "Cold Call",
+     "Sam Prior contact", "Other" require human judgement an automation can't derive
+     from form/UTM data.
+ (4) Low, sporadic fill rate (~40/226 = 18%); a form/automation mapping would fill
+     ~100% of its path.
+ (5) The bulk of ALL historical values came from a one-time import — thousands of
+     field-20 rows stamped within a ~2-minute window on 2021-08-16 (created_by null).
+Caveat flagged: did not read the internal action blocks of every automation (the
+automation list is ~130 KB and no automation is named for Lead Source), so not a
+100% "no automation anywhere" guarantee, but the write fingerprint is decisive.
+Offered to inspect the handful of intake/deal automations' blocks for certainty
+(stays read-only). Made zero modifications (/q constraint honoured).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation skill (no git). Saved this transcript; updated
+as_built.txt (new mag_gads_direct_inbound_lead_source snapshot table + its
+explainer doc) and CLAUDE.md (the snapshot table + field-18/field-20 gotchas);
+reviewed .gitignore (already covers secrets; the new .txt files are safe to
+commit). Full-transcript security scan found no secrets to redact — only a
+Supabase project ref, AC account ref, and business contact names/emails, no
+credential values. Did NOT commit or push (user does that themselves).
+
+================================================================================
+END OF EXPORT
+================================================================================
