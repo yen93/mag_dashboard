@@ -1,0 +1,121 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: A /q question first confirmed (read-only) that
+public.mag_gads_direct_inbound_lead_source is a one-time, hand-built snapshot
+with no scheduled sync. Then a follow-up task (action mode) added the 12
+"Could be SEO or Paid Ad" deals from that snapshot onto the GA4 & Ads Leads
+Tracking page (public.ga4_ac_contact_source) as manual rows engineered to be
+immune to the daily rebuild/linker jobs — keyed by a synthetic contact_id
+(roas-<deal_id>) with match_method NULL. Supabase MAG project ref
+aivitcomiywiysrfwqxt. Data-only change — no code, no deploy, no git.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. Credentials (SUPABASE_*, AC_*, GMAIL_*) were only referred to by name
+or read from existing Secret Manager / edge-function secrets.
+
+--------------------------------------------------------------------------------
+USER:
+(/q — read-only) "mag_gads_direct_inbound_lead_source is just a snapshot right?
+there is no function that syncs this on sched?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated read-only and confirmed: YES, it's a one-time snapshot with no
+scheduled sync. Evidence gathered:
+  - grep: the table name appears only in as_built.txt and chat_history/, never in
+    server/ code, no migration, no edge function.
+  - as_built.txt:241-242 states it outright: "ONE-TIME SNAPSHOT (NOT synced;
+    built directly in the DB, no edge fn / migration)."
+  - cron.job query filtered on the table name / 'direct_inbound' → zero rows.
+  - The data itself: 227 rows but only 2 distinct built_at timestamps (original
+    build 2026-10-14, plus the 2026-10-20 manual append of deal 2881) — not a
+    recurring-rebuild pattern. The ROAS-audit columns (jc_final_attr, jc_comments,
+    Xero fee split) are hand-populated.
+Concluded that if the underlying AC/deal data changes, this table won't update on
+its own — it's manual.
+
+--------------------------------------------------------------------------------
+USER:
+(Pasted objective, now action mode) query_to_process:
+  select * from mag_gads_direct_inbound_lead_source
+  where jc_final_attr = 'Could be SEO or Paid Ad'
+Objective: add the rows returned to ga4_ac_contact_source, and make sure these
+rows will NOT be removed whenever the daily sync runs.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Treated this as the follow-up that lifts the /q no-action constraint. Before
+mutating a table that backs a live page, did a thorough read-only design pass:
+
+Schemas & keys:
+  - ga4_ac_contact_source PK = contact_id (text); 23 display columns.
+  - The snapshot has NO contact_id — only deal_id + contact_email — so a key had
+    to be derived.
+
+Pulled the full rebuild_ga4_ac_matches() and update_ga4_contact_deals() function
+bodies and the page's read query (server/metrics/ac-contact-sources.js). Key
+mechanics that drove the design:
+  - The page SELECTs ALL rows (no window filter) and JS-filters only referral/
+    teams/email/free-gift/excluded-link rows — so any inserted row displays.
+  - rebuild §1 (matched) upserts contacts within a 60-day cdate window.
+  - rebuild §1b/§3 and update_ga4_contact_deals §2 (deal denormalization) are
+    scoped to match_method IS NOT NULL.
+  - rebuild §4 (Google Ads) upserts real ac_google_ads_deals.contact_id, guarded
+    WHERE match_method IS NULL.
+  - CRITICAL TRAP: update_ga4_contact_deals §1 re-links deal_id on EVERY row that
+    joins activecampaign_contacts.id = contact_id — NOT scoped to match_method —
+    so a real contact_id could have its deal_id silently repointed while §2 (title
+    refresh) skips it → inconsistent deal_id/title.
+  - Confirmed nothing in the pipeline DELETEs/TRUNCATEs ga4_ac_contact_source
+    (a function-scan "truncate" hit was a false positive from the "no truncate"
+    comment in rebuild). So "won't be removed" is guaranteed for any inserted row.
+
+Ran the query (19 rows) and a per-deal diagnostic joining snapshot → deal →
+contact. Findings: clean 1:1 deal→contact; NONE within the 60-day window (all
+contacts ≥3 months old → rebuild §1 never touches them). Overlap analysis:
+  - 9 brand-new contacts (not on page, not in gads deals): 2797, 2881, 3083,
+    3124, 3167, 3168, 3202, 3253, 4227.
+  - 3 contacts on page but under a DIFFERENT (gads) deal: 2779, 3230, 3739.
+  - 7 deals already on the page via the Google Ads section (same deal_id shown):
+    3133, 3724, 3782, 3859, 3935, 4040, 4245.
+
+Decided the keying myself (synthetic contact_id 'roas-'||deal_id + match_method
+NULL) because it is the ONLY design immune to all four jobs (synthetic id joins
+no activecampaign_contacts row, so §1b and update_ga4_contact_deals §1 can't
+repoint deal_id; match_method NULL skips §1b/§3/§2; no gads PK collision; out of
+the 60-day window). Asked ONE scope question about the 10 overlaps.
+
+USER picked: "Add 12 (skip the 7 already shown)".
+
+Executed the INSERT for the 12 deal_ids (9 brand-new + 3 different-deal),
+ON CONFLICT (contact_id) DO NOTHING, pre-filling contact_id, email, cdate (real
+contact cdate, fallback deal_created_at), deal_id, deal_title, deal_value (snapshot
+value is already AUD — matching how match_method-NULL rows are read), deal_status,
+source_type ('Inbound Enquiry'), google_ads_ac_field. All 12 returned/inserted.
+
+Verified immunity with one read-only query: roas_rows=12, with_match_method=0,
+joins_real_contact=0 (no synthetic id matches activecampaign_contacts →
+update_ga4_contact_deals §1 / rebuild §1b can't touch them), collides_gads=0
+(no PK collision with rebuild §4). Reported the rows appear as "unmatched" rows
+(same shape as the Google Ads appended rows, not counted in the "matched to a
+source" tally) and that, being synthetic-keyed, they are static snapshots of the
+deal (won't auto-update if AC changes — the trade-off for immunity; a re-run as
+an upsert would refresh them). No code/deploy/git changes needed.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history and update as_built.txt / CLAUDE.md / .gitignore
+(no git commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote this chat-history file. Updated as_built.txt's
+mag_gads_direct_inbound_lead_source entry to record the 12 manual roas-<deal_id>
+rows now seeded into ga4_ac_contact_source and why they're immune to the sync.
+Judged CLAUDE.md and .gitignore to need no changes (no new conventions/commands;
+nothing sensitive introduced). Did NOT run any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================

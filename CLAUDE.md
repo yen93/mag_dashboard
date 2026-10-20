@@ -128,6 +128,16 @@ Cloud Run.
       matched row. (Both tables are append-only now, so a manual row edit survives
       unless the next rebuild upserts that same key — a matched row is overwritten each
       run; an out-of-window row is left alone.)
+    - **Manual `roas-<deal_id>` rows (as of 2026-10-20):** `ga4_ac_contact_source.contact_id`
+      is **no longer always a real AC contact id**. 12 "Could be SEO or Paid Ad" ROAS-audit
+      deals (from `mag_gads_direct_inbound_lead_source`) were hand-seeded with a **synthetic
+      `contact_id = 'roas-'||deal_id`** and `match_method NULL`, pre-filled deal columns
+      (`deal_value` already AUD). The synthetic key is deliberate: it matches no
+      `activecampaign_contacts` row, so `update_ga4_contact_deals()` §1 and `rebuild` §1b
+      can't repoint their `deal_id`; `match_method NULL` dodges §1b/§3/§2; no gads PK
+      collision. They're **static** (won't auto-refresh from AC) and immune to the daily
+      jobs — don't "clean up" non-numeric contact_ids or add a linker that assumes
+      contact_id ∈ `activecampaign_contacts`.
   - **Calendly rows are decoupled from the GA4 `calendly_form_submit` event (as of
     2026-10-14).** That website GA4/GTM event **stopped firing after 2026-10-08** (an
     upstream site issue, not in this repo), so `ga4_calendly_events_staging` has no rows
