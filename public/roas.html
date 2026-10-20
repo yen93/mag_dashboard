@@ -53,11 +53,14 @@
   <main class="content">
     <p class="roas-intro">
       <strong>James's test:</strong> every $1 we spend on Google Ads should bring back at least
-      <strong>$2</strong> in won revenue (target <strong>2.00×</strong>). Google Ads leads → deals →
-      revenue, by calendar year. 2022–2024 come from the previous manager's lead log;
-      2025 onwards is rebuilt from ActiveCampaign (strict Google rule + Buyer Analysis values,
-      ex-GST) and checked by sales &amp; ops. Revenue is won deals only, counted in the year the
-      enquiry came in.
+      <strong>$2</strong> in won revenue (target <strong>2.00×</strong>). This is a <strong>live</strong>
+      view by calendar year — won revenue from the GA4 Leads Tracker (ga4_ac_contact_source)
+      ÷ Google Ads spend (google_ads_campaign_monthly). A “Google Ads” lead = the CRM
+      “Google Ads?” field = Yes, or a google&nbsp;/&nbsp;cpc session; won revenue uses the CRM deal
+      value, counted in the year the enquiry came in. Only years with ad-spend data appear
+      (Jul 2024 onward) — a year with fewer than 12 months of spend (e.g. 2024) reads high
+      (see the note on each year). This is a live cross-check, <strong>not</strong> the audited
+      ROAS report (which uses ex-GST Buyer Analysis values and stricter attribution).
     </p>
 
     <!-- KPI cards -->

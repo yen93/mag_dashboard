@@ -62,15 +62,30 @@ Cloud Run.
     `server/metrics/roas.js`) is a self-rendering page: Google Ads ROAS by
     **calendar year** — a 12-col table (Won $/Lost $/Open $, Won Leads, Win rate,
     Ad Spend, Won Revenue, ROI $/%, ROAS, Per-Lead Value) + 3 inline Chart.js charts
-    (grouped bar, ROAS-vs-2.00×-target line, Leads-by-outcome stacked bar). Plain
-    SELECT of `public.roas_year_on_year` (one row per year; the "All years" total is
-    DERIVED in `roas.js`, not stored). **Source is a hand-maintained Google Sheet,
-    NOT the live DB** — the sheet "MAG Marketing ROAS Report – YTD - FY24-27 deal",
-    tab "Year on Year" (2022–2024 = previous manager's lead log; 2025+ = CRM rebuild,
-    ex-GST). Refreshed **weekly** (Mon 6am PH) by the `roas-year-on-year-sync` Claude
-    routine (`routines/roas-year-on-year-sync.md`, upsert on `cal_yr`; new calendar
-    years flow through with no code change). `won_amount` == `won_revenue` every year
-    so far (distinct cols, may diverge).
+    (grouped bar, ROAS-vs-2.00×-target line, Leads-by-outcome stacked bar). **As of
+    2026-10-20 it is LIVE, computed at request time from TWO existing Supabase tables
+    — NOT a cache, NOT the Google Sheet:** numerator = `public.ga4_ac_contact_source`
+    (GA4-attributed deals; "Google Ads" = `google_ads_ac_field='Yes' OR channel='google
+    / cpc'`, won revenue = CRM `deal_value`, counted by contact `cal_yr`); denominator =
+    `sum(cost)` from `public.google_ads_campaign_monthly` by calendar year. Only years
+    **with ad spend** are shown (Jul 2024+); a `<12`-month-spend year (2024) reads high
+    and the row note says so. The "All years" total is derived in `roas.js`.
+    **This is a live GA4-attributed cross-check, NOT the audited ROAS report** (CRM
+    values + broader attribution → different numbers; 2022–2024 history dropped). The
+    old sheet-mirror design (cache table `public.roas_year_on_year` + the
+    `roas-year-on-year-sync` routine) is **retired** — the routine is DISABLED and the
+    table is unused/unread (safe to drop). Ad-spend freshness now depends on the
+    **`google-ads-campaign-monthly-sync` Supabase edge function** (deployed
+    `--no-verify-jwt`; pg_cron `google-ads-campaign-monthly-sync-weekly`, `0 22 * * 0`
+    = Mon 06:00 PH; migration `20261020090000`). It mints an OAuth token from the
+    Google Ads **service account** `insta-drive-uploader@claudegwscli-502400` (added as
+    a Read-only user directly in the Ads account `402-451-5888` — **no MCC / no
+    login-customer-id**; the claude.ai Google-Ads MCP connector can't be used because it
+    uses per-user OAuth without access), calls the Google Ads REST `searchStream`
+    (no developer token — sunset Sept 2026) and upserts on `(month, campaign_id)`.
+    **Secret `GOOGLE_ADS_SA_KEY`** (full SA JSON) is a Supabase edge secret. Bump
+    `GOOGLE_ADS_API_VERSION` (default `v26`) when Google sunsets a version. Files:
+    `supabase/functions/google-ads-campaign-monthly-sync/index.ts`.
   - **Contact Sources** (`ac_contact_sources.html` = "GA4 & Ads Leads Tracking",
     `/api/operations/contact-sources`, `server/metrics/ac-contact-sources.js`) is
     also a plain single-table read: as of 2026-10-09 **every display column is stored

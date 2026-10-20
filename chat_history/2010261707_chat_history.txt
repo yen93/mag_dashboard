@@ -1,0 +1,163 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Built the ROAS tab, then (after investigation) re-pointed it to live DB
+data and built a real ad-spend sync. Arc: (1) created the ROAS tab from a Google
+Sheet (cache + weekly routine); (2) three /q investigations established the sheet
+is the only audited source but the user wanted a live DB version; (3) re-pointed
+ROAS to compute live from ga4_ac_contact_source × google_ads_campaign_monthly,
+retiring the sheet cache/routine; (4) discovered the ad-spend table was a one-off
+backfill and built a Supabase edge function (service-account auth) + weekly cron to
+keep it fresh. Includes a /dcp and a /cm partway through.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted into or printed in this chat.
+The Google Ads service-account private key was never read (key.json left untouched
+at its external path); its value was entered by the user directly in the Supabase
+dashboard via the create_edge_function_secret flow, which never routes through the
+AI client. The edge function reads the key from an env secret, so no key material
+appears in any file. Identifiers that are NOT secrets (service-account email, Google
+Ads account/customer id, Supabase project ref, Google Sheet id) appear in the clear.
+
+--------------------------------------------------------------------------------
+USER:
+(pasted spec) Create a new "ROAS" tab like ac_contact_sources.html: a table with 12
+columns (Year/Cal Yr, Won $, Lost $, Open $, Won Leads, Win rate, Ad Spend, Won
+Revenue, ROI $, ROI %, ROAS, Per-Lead Value) and three graphs above it (g1/g2/g3 PNGs
+in Downloads).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the 3 PNGs (Won Revenue vs Ad Spend grouped bar; ROAS-vs-2.00×-target line with
+point labels; Leads-by-outcome stacked bar). Found the numbers can't come from the
+live DB (only 2024+ deals, partial ad spend) — they're from a hand-maintained Google
+Sheet "MAG Marketing ROAS Report – YTD - FY24-27 deal" (id 1nf80glgW7…), tab "Year on
+Year". Exported it as XLSX via the Drive connector, parsed with openpyxl; the numbers
+matched the PNGs exactly. Asked the user how the tab should get its data; they chose
+"Supabase cache + sync routine". Built: migration 20261020080000_roas_year_on_year.sql
+(cache table, seeded 2022–2026, applied live via Supabase MCP); server/metrics/roas.js
+(SELECT + derived All-years total); route /api/operations/roas; public/roas.html
+(KPIs + 3 inline Chart.js charts + 12-col table); added the "ROAS" nav tab to all 14
+pages. Created a weekly cloud routine roas-year-on-year-sync (trig_011wFrti…, Mon 06:00
+PH) to re-read the sheet. Verified totals matched the sheet exactly. Flagged a manual
+Cloud Run redeploy is needed.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (then) /cm
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran /dcp: wrote chat_history/2010261601_chat_history.txt, updated as_built.txt +
+CLAUDE.md with the ROAS feature, confirmed .gitignore. For /cm produced a one-line
+conventional-commit command for the ROAS tab. (User committed themselves.)
+
+--------------------------------------------------------------------------------
+USER:
+/q — "ga4_ac_contact_source should be the source of ROAS data since roas.html and
+ac_contact_sources.html should be related."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(read-only) Showed it can't: ga4_ac_contact_source has no ad spend (ROAS denominator
+— cpc is NULL for all but 2 of 173 rows), no real pre-2024 history, and its by-year
+won revenue/lead counts don't match the audited sheet (2025: $219k vs $72.7k) because
+it's a looser GA4-attribution population using CRM values. The pages can be related in
+the nav (already adjacent) without sharing data; the true common ancestor is
+mag_gads_direct_inbound_lead_source, which also lacks ad spend + pre-2024.
+
+--------------------------------------------------------------------------------
+USER:
+/q — "create a new ad-spend table from Xero, join with ga4_ac_contact_source, make
+those 2 the ROAS source. Will that work?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(read-only) Checked Xero chart of accounts: the ONLY ad account is 302 "Advertising
+and marketing" — it bundles all channels + agency fee, can't isolate Google Ads. And
+Google Ads spend is ALREADY in Supabase: google_ads_campaign_monthly (Google Ads API),
+whose 2025 total ($33,521) matches the sheet exactly. So Xero is the wrong source and a
+new table is unnecessary. Also re-flagged that ga4_ac_contact_source can't supply the
+audited numerator. Recommended: keep the sheet, or a hybrid (static pre-2024 + live
+2025+ from mag_gads + google_ads_campaign_monthly), not ga4_ac_contact_source + Xero.
+
+--------------------------------------------------------------------------------
+USER:
+/q — "use google_ads_campaign_monthly and ga4_ac_contact_source then; forget pre-2024;
+display ROAS for dates available. google_ads_campaign_monthly syncs regularly right?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(read-only) Answered the sync question: NO. All 365 rows were written on a single day
+(2026-10-07); no cron job, no edge function, no routine, no repo code refreshes it —
+a one-off manual backfill, already stale. The two-table live ROAS is buildable for
+~2025+ (ga4_ac_contact_source is only complete from ~late 2025 due to the 60-day
+window + accumulate-since-2026-10-13) but will differ from the audited report (CRM
+values, broader attribution). Prerequisites: build a recurring ad-spend sync, and
+label it GA4-attributed.
+
+--------------------------------------------------------------------------------
+USER:
+"1. create google_ads_campaign_monthly sync and 2. ROAS tab sync/cache should now
+solely come from the 2 tables google_ads_campaign_monthly and ga4_ac_contact_source."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Switched to build mode. Grounded the design: PK (month, campaign_id); "Google Ads"
+attribution = google_ads_ac_field='Yes' OR channel='google / cpc' (channel is rarely
+set; the AC field dominates). PART 2: rewrote server/metrics/roas.js to compute LIVE
+from the 2 tables (numerator = GA4-attributed won/lost/open deals + CRM deal_value by
+cal_yr; denominator = sum(cost) by year; only years with ad spend shown; All-years
+total derived). Verified live output (2024 4.97×/6mo-spend, 2025 3.96×, 2026 1.0×).
+Updated roas.html intro to "live GA4-attributed, not the audited report." DISABLED the
+sheet routine (roas-year-on-year-sync enabled:false). Updated CLAUDE.md. roas_year_on_year
+table now unused. PART 1 blocker: the claude.ai Google-Ads MCP connector rejected the
+account (402-451-5888 is a client under an MCC; needs login-customer-id;
+customers_list_accessible_customers returns empty) — couldn't auto-discover the MCC.
+Wrote the sync design doc and asked the user for the MCC id.
+
+--------------------------------------------------------------------------------
+USER:
+"see C:\\Users\\Cloverly\\claude_code\\Marketing\\google_ads_insights — this might
+solve part 1 blocker."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read that project's as_built/setup/.mcp.json/chat_history. Found the real auth: a
+SERVICE ACCOUNT (insta-drive-uploader@claudegwscli-502400) added as a Read-only user
+DIRECTLY in Google Ads (no MCC, no login-customer-id), used via a LOCAL ads_mcp server
+with key.json. So a Claude cloud routine (connector/per-user OAuth) can't do it, but an
+edge function holding the SA key can. Verified via web search that the Google Ads
+developer token was sunset Sept 2026 — a service-account OAuth token alone works for
+REST searchStream (no dev token, no MCC). Asked the user where the sync should live;
+they chose "Supabase edge fn + cron."
+
+Built PART 1: supabase/functions/google-ads-campaign-monthly-sync/index.ts — mints an
+OAuth token from GOOGLE_ADS_SA_KEY (JWT bearer grant, scope .../adwords, Web Crypto
+RS256), calls Google Ads REST searchStream (v26) for monthly campaign metrics since
+2024-07-01, upserts google_ads_campaign_monthly on (month, campaign_id). Deployed via
+Supabase MCP with verify_jwt=false. Registered secret GOOGLE_ADS_SA_KEY (user entered
+the value in the dashboard — stored). Scheduled pg_cron google-ads-campaign-monthly-sync-
+weekly (0 22 * * 0 = Mon 06:00 PH), migration 20261020090000. TESTED the function:
+ok:true, 365 rows upserted, through Oct 2026, total cost ~$76.5k; table updated_at now
+current (2026 spend ticked up to $27,638). Removed the earlier MCP-based routine doc.
+Fixed the CLAUDE.md sync sentence to describe the edge function (service account, no MCC).
+
+Final live ROAS: 2024 4.97× (6-mo spend), 2025 3.96×, 2026 1.00×. Noted these differ
+from the audited report by design, and the dashboard still needs a manual Cloud Run
+redeploy for the roas.js change to ship.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran /dcp: wrote this chat-history file; updated as_built.txt (ROAS now live-from-2-
+tables; google_ads_campaign_monthly now synced by the new edge function; sheet cache/
+routine retired); CLAUDE.md already current from this session; .gitignore unchanged
+(already covers SA-key/.env patterns, nothing new sensitive). Did NOT run any git
+command — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================
