@@ -1,0 +1,82 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Fixed a bug on the GA4 Leads Tracker page (public/ac_contact_sources.html)
+where clicking any of the three show/hide-column toolbar toggles (JC's Manual Tag,
+Xero $, extra columns) wiped out the in-table per-column filters / search / sort the
+user had selected. Root cause was that the shared renderSortableTable() in
+public/app.js builds a fresh local `state` object every call, and each toggle
+re-invokes it. Fix: let the caller own a persistent state object via a new optional
+opts.stateStore, and have ac_contact_sources.html pass one in. Frontend/display-only;
+no DB, no sync fn, no API change. Manual Cloud Run redeploy pending; no git.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. Pure static-HTML/JS edit; no credentials involved.
+
+--------------------------------------------------------------------------------
+USER:
+"whenever i click any of the hide/show col toggle btns, the filters i selected in
+the table are removed. pls fix" (referring to ac_contact_sources.html, open in the
+IDE).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Traced the toggle → render path in public/ac_contact_sources.html:
+  - The three toolbar buttons #acsJcToggle / #acsXeroToggle / #acsMetaToggle flip
+    SHOW_JC_COL / SHOW_XERO_COLS / SHOW_META_COLS and then call apply()
+    → renderTable() → renderSortableTable('acsRows', …). So every toggle rebuilds
+    the table.
+  - Opened renderSortableTable() in public/app.js and found the cause: it declares
+    `var state = { key, dir, q:'', filters:{}, page:1 }` as a BRAND-NEW object on
+    every call. state.filters (column key -> Set of allowed values), the search
+    text (state.q), sort (key/dir) and page all live only inside that closure, so
+    rebuilding the table discards them. The per-column filter UI and the search box
+    therefore reset on each toggle.
+
+Fix (minimal, backward-compatible): let the caller persist the state object across
+re-renders via a new optional opts.stateStore.
+
+Edits made:
+  public/app.js (renderSortableTable):
+    - Replaced the hardcoded `var state = {...}` with:
+        var state = opts.stateStore || {};
+        if (!state.filters) state.filters = {};
+        if (!('key' in state)) state.key = opts.sortKey || null;
+        if (!('dir' in state)) state.dir = opts.sortDir || 'asc';
+        if (!('q' in state)) state.q = '';
+        if (!('page' in state)) state.page = 1;
+      with a comment explaining that when stateStore is supplied the caller owns the
+      state so filters/search/sort survive a re-render; defaults fill any gaps.
+      Without stateStore the behavior is unchanged (fresh {} each call) — other
+      pages that call renderSortableTable are unaffected.
+    - Search input now restores its text: `input.value = state.q || '';` so the
+      search box repopulates after a re-render.
+
+  public/ac_contact_sources.html:
+    - Added a module-level `var TABLE_STATE = {};` (with a comment) to hold the
+      persistent sort/search/filter state.
+    - Passed `stateStore: TABLE_STATE` as the first option in the renderSortableTable
+      call inside renderTable().
+    - Bumped the script tag from `app.js?v=2` to `app.js?v=3` so browsers fetch the
+      updated app.js (other pages still reference ?v=2; harmless, change is additive).
+
+Noted behavior detail: a filter set on a column that then gets hidden is retained in
+state (dropped from the view while hidden because view() skips keys with no matching
+column, reapplied when the column is shown again).
+
+Reported the fix and that it's frontend-only, so a manual Cloud Run redeploy is
+needed to go live. Did NOT deploy (CLAUDE.md: Claude never deploys the dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat, update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file; reviewed as_built.txt and CLAUDE.md
+for whether this session changed documented reality; checked .gitignore coverage.
+(See the end-of-session report for exactly what was created / updated / left alone.)
+
+================================================================================
+END OF EXPORT
+================================================================================

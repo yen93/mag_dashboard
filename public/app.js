@@ -207,7 +207,15 @@ function renderSortableTable(containerId, rows, columns, opts) {
   if (!host) return;
   // state.filters maps a column key -> Set of allowed plain-text values
   // (textOf projection). A column absent from the map is unfiltered.
-  var state = { key: opts.sortKey || null, dir: opts.sortDir || 'asc', q: '', filters: {}, page: 1 };
+  // When opts.stateStore is supplied, the caller owns the state object so that
+  // column filters / search / sort survive a re-render (e.g. a show/hide-column
+  // toggle that rebuilds the table over the same data). Defaults fill any gaps.
+  var state = opts.stateStore || {};
+  if (!state.filters) state.filters = {};
+  if (!('key' in state)) state.key = opts.sortKey || null;
+  if (!('dir' in state)) state.dir = opts.sortDir || 'asc';
+  if (!('q' in state)) state.q = '';
+  if (!('page' in state)) state.page = 1;
   var filterable = opts.columnFilters !== false;
   var pageSize = opts.pageSize || null;
   var openPanel = null; // currently-open column-filter panel (mounted on <body>)
@@ -460,6 +468,7 @@ function renderSortableTable(containerId, rows, columns, opts) {
     input.type = 'search';
     input.className = 'table-search';
     input.placeholder = opts.searchPlaceholder || 'Search…';
+    input.value = state.q || ''; // restore persisted search text across re-renders
     input.addEventListener('input', function () { state.q = input.value.trim(); state.page = 1; draw(); });
     host.appendChild(input);
   }

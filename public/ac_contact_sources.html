@@ -109,9 +109,13 @@
     </div>
   </main>
 
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
   <script>
     var ALL_ROWS = [];
+    // Persistent table state (sort / search / per-column filters). Owned here and
+    // passed into renderSortableTable so a show/hide-column toggle — which rebuilds
+    // the table over the same rows — keeps the user's in-table filters/search/sort.
+    var TABLE_STATE = {};
     // Toggle for the extra/detail columns: Created, AC ID and Link (shown in
     // place) plus Match, Confidence, Δ (s), Matched At, CPC (pinned far right).
     // Default hidden; the toolbar button flips it. Data stays in the DB regardless.
@@ -475,6 +479,7 @@
         );
       }
       renderSortableTable('acsRows', leads, cols, {
+        stateStore: TABLE_STATE,
         searchPlaceholder: 'Search contacts…',
         sortKey: 'cdate', sortDir: 'desc',
         emptyText: 'No leads in this date range.',
