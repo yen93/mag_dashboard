@@ -72,10 +72,46 @@ Cloud Run.
     which is cents). **Two deal-linkers, both must denormalize:** besides the
     rebuild (step 1b links `deal_id`, step 3b fills `deal_title`/value/status),
     a second cron `update-deals-daily-7am-pht` → `public.update_ga4_contact_deals()`
-    re-links `deal_id` at 07:00 PH (after the deals mirror settles — `sales-deals-sync`
-    races the 06:00 rebuild at the same slot). As of 2026-10-13 it ALSO denormalizes
-    the display columns; **never add/leave a linker that sets `deal_id` without also
-    denormalizing** or org-matched non-primary contacts get `deal_id` but a blank title.
+    re-links `deal_id` at 07:00 PH (after the deals mirror settles — refreshed by
+    `activecampaign-deals-sync` at 05:00 PH, see next bullet). As of 2026-10-13 it ALSO
+    denormalizes the display columns; **never add/leave a linker that sets `deal_id`
+    without also denormalizing** or org-matched non-primary contacts get `deal_id` but a
+    blank title.
+  - **`public.activecampaign_deals` (the base AC deal mirror) is the denormalization
+    source** for both deal-linkers above — **if it's empty/stale, every matched row's
+    `deal_title`/value/status goes blank even though `deal_id` is still set** (the recurring
+    "deal column blank" bug). As of 2026-10-20 it's fully refreshed daily by the
+    **`activecampaign-deals-sync` edge function** (pg_cron jobid 19, `0 21 * * 0-4` =
+    05:00 AM PH, an hour before the 06:00 rebuild), replacing a flaky n8n webhook that
+    deleted-then-reloaded and left the table empty on failure. It fetches the full AC
+    snapshot FIRST, then `reload_activecampaign_deals(_deals jsonb)` does null-refs →
+    delete → insert in ONE transaction (never wipes on failure; emails `julienne@` via
+    Gmail SMTP on any error — needs `GMAIL_USER`/`GMAIL_APP_PASSWORD` edge secrets, the
+    16-char app password with NO spaces). Deploy `--no-verify-jwt`; the cron calls it
+    with **`?sync=1`** because async/background mode doesn't finish the ~40s job. The old
+    n8n trigger lives in a SEPARATE Supabase project (`n8n-production`, ref
+    `uwsncuowtzydylfabikj`, cron jobid 7) and is now **disabled**. Files:
+    `supabase/functions/activecampaign-deals-sync/`, `supabase/migrations/20261020*`.
+  - **`public.activecampaign_contacts` is synced the same way (as of 2026-10-20):**
+    the **`activecampaign-contacts-sync` edge function** (pg_cron jobid 20,
+    `30 21 * * 0-4` = 05:30 AM PH — after deals, before the 06:00 rebuild/consumer
+    batch that reads contacts) fetches the full AC `/api/3/contacts` snapshot (paginated,
+    concurrency 4; ~15.5k rows, ~95s) then calls `reload_activecampaign_contacts(_contacts
+    jsonb)` (delete-all → insert in ONE transaction; refuses empty; emails `julienne@` on
+    failure). Replaces n8n-production cron **jobid 8** (`n8n-get-all-ac-contacts`, now
+    `active=false`; sibling **jobid 9** `n8n-get-all-ac-accounts` is still on n8n — not yet
+    converted). **Full rebuild, NOT an upsert** (no `ON CONFLICT`), same as the deals sync.
+    **Two contacts-specific gotchas (it's ~4× the deals row count):** (1) the AC `links`
+    object is deliberately **NOT fetched** — it was ~1.6 kB/row (~85% of the table) and
+    nothing reads it; the rpc stores `links='{}'` (keeps the tiny `scoreValues`/
+    `accountContacts`). Sending it made the rpc payload ~38 MB and blew the ~150s edge wall
+    clock. (2) the rpc carries **`SET statement_timeout TO '120000'`** because the PostgREST
+    role `authenticator` caps at 8s — too short for a 15k-row insert. Function
+    `WALL_CLOCK_MS=140000` trips its own guard before the ~150s gateway kill (clean 500 +
+    email, not a silent 504). Deploy `--no-verify-jwt`; cron calls it with **`?sync=1`** +
+    150s pg_net timeout. Secrets reused from the deals sync. Files:
+    `supabase/functions/activecampaign-contacts-sync/`, `supabase/migrations/20261020040000*`
+    (rpc) + `20261020050000*` (schedule).
   - **Both rebuild tables now ACCUMULATE, not truncate (as of 2026-10-13) — don't
     re-introduce a `truncate` in `rebuild_ga4_ac_matches()`.**
     - `ga4_ac_event_matches`: section 2 UPSERTs on a stable `event_uid` (md5 of event

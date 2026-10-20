@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-10-14 (Also added public.mag_gads_direct_inbound_lead_source — a one-time SNAPSHOT (not synced) of Direct Inbound enquiry deals since 2024-07-01; this session finished its three-state google_ads_field tag (Yes 41 / No 181 / null 4), added a deal_id key column, and wrote a plain-English explainer doc mag_gads_direct_inbound_lead_source_explained.txt. See DATA STORES. Earlier same day: Calendly attribution decoupled from the website GA4 calendly_form_submit event, which stopped firing after 2026-10-08 (upstream GTM gap): two new migrations recreate rebuild_ga4_ac_matches() — 20261014000000 makes calendly rows' conversion_link fall back to the constant '/thank-you-2/' (action always 'calendly_form_submit') and 20261014000100 makes calendly `channel` = coalesce(GA4 session src/medium, the Calendly booking's own utm); source/medium already come from the Calendly API. Applied + backfilled live; audit table (ga4_ac_event_matches) left untouched. Pure DB/function change — no Cloud Run redeploy. Also: public/sales_overview.html AC Deals table now hidden behind a "See ACS Deals Table" toggle in the toolbar + the hint text moved into an ⓘ info icon. Known limitation surfaced: section-1/3 only roll up contacts with cdate within the 60-day window, so returning/older contacts who book again (e.g. created >60d ago) appear in ga4_ac_event_matches but not on the page. Migrations + the sales_overview edits are uncommitted. Previously 2026-10-13 (Buyer Analysis page extended with invoice data: public.mag_buyer_sheet gained engagement_fee/amount_total/invoice_json, sourced from public.invoice_tracking by deal_title=ac_deal_title and SUMMED across a deal's 1–3 invoices (invoice_json kept as a JSON ARRAY); buyer-sheet-sync edge function redeployed v12 (verify_jwt:false) to fill them each run; mag-buyer-sheet.js SELECT + mag_buyer_sheet.html now serve/show "Engagement Fee" + "Total Charge" (hover → See Invoice modal) and "Deal Title" + "Deal Status" (status pill); nav tab renamed "Buyer Sheet" → "Buyer Analysis" across all 12 pages. Server+frontend changes pending a Cloud Run redeploy. Earlier same day — invoice-tracking-sync routine extended: public.invoice_tracking gained engagement_fee/other_fees/gst (fee split by Xero account_code — codes 219–228 = engagement, rest = other; gst = amount_tax) + an invoice_json enriched with a computed `charges` breakdown; routine prompt's embedded transform.mjs updated via remote-trigger API, connectors preserved; these 4 cols are populated but not yet surfaced on the Invoices page. Also added a client-side date-range filter (From/To event date + 12m/24m/This-year/All quick ranges) to public/mag_buyer_sheet.html. Earlier same day — Contact-Sources deal-title fixes + full history retention: update_ga4_contact_deals() (07:00 PH re-linker) now also denormalizes deal_title/value/status/source_type; BOTH rebuild tables now ACCUMULATE via UPSERT instead of truncate (ga4_ac_event_matches on event_uid, ga4_ac_contact_source on contact_id, ownership scoped by match_method). 2026-10-09: Contact-Sources pipeline overhaul (flat single-table SELECT, rebuild APPENDS Google-Ads leads, 3 crons → ONE orchestrator contact-sources-sync))
+Last updated: 2026-10-20 (Converted the n8n "Get All AC Contacts" workflow (webhook 8388b39d-…) that populates public.activecampaign_contacts into a new Supabase edge function activecampaign-contacts-sync + public.reload_activecampaign_contacts(_contacts jsonb) rpc — same atomic fetch-first / transactional-reload / email-julienne@-on-failure design as the deals sync below. Two contacts-specific adaptations (it's ~15.5k rows, ~4× deals): it deliberately does NOT fetch the AC `links` object (24MB / ~85% of the table, unused by the dashboard — the rpc stores '{}'; scoreValues/accountContacts are kept), and the rpc has SET statement_timeout TO '120000' because the PostgREST role authenticator caps at 8s — both needed to fit the reload under the ~150s edge-gateway wall clock (function WALL_CLOCK_MS=140000 trips its own guard first → clean 500 + email, not a silent 504). The reload is a full rebuild (DELETE all → INSERT), not an upsert — same as the deals sync. Scheduled MAG pg_cron jobid 20 'activecampaign-contacts-sync-daily' '30 21 * * 0-4' = 05:30 AM PH (30 min after deals, 30 min before the 06:00 consumer batch); disabled n8n-production cron jobid 8 'n8n-get-all-ac-contacts' (active=false, not deleted — its sibling jobid 9 'n8n-get-all-ac-accounts' is still on n8n). Files: supabase/functions/activecampaign-contacts-sync/index.ts, supabase/migrations/20261020040000_reload_activecampaign_contacts.sql, 20261020050000_schedule_activecampaign_contacts_sync.sql (uncommitted). Earlier same day: Replaced the flaky n8n "Get All AC Deals" workflow that populates public.activecampaign_deals with a new atomic Supabase edge function activecampaign-deals-sync + public.reload_activecampaign_deals(_deals jsonb) rpc: fetches the FULL AC deal snapshot FIRST, then null-refs google_reviews -> delete -> insert in ONE transaction (rolls back on failure, so the table is never left empty), emails julienne@ via Gmail SMTP on any failure. Scheduled MAG pg_cron jobid 19 '0 21 * * 0-4' = 05:00 AM PH, a full hour before every other scheduled job; disabled n8n-production cron jobid 7 'n8n-get-all-ac-deals' (active=false). Root cause it fixes: an empty/stale activecampaign_deals (the n8n flow deleted-then-reloaded and failed mid-way) silently blanked deal_title/value/status on the GA4/Contact Sources page. Also this session: appended deal 2881 to mag_gads_direct_inbound_lead_source (now 227 rows) and filled the Xero-sourced fee columns engagement_fee/other_fees/gst/amount_total for the "Could be SEO or Paid Ad" audit rows (combining a deal's multiple invoices, with a xero_notes note); tagged those 19 audit deals' AC primary contacts with jc_final_attr_seo_or_ads (tag id 207). Added a global /cm slash command (~/.claude/commands/cm.md) that prints a one-line pasteable git commit. Previously 2026-10-14: Also added public.mag_gads_direct_inbound_lead_source — a one-time SNAPSHOT (not synced) of Direct Inbound enquiry deals since 2024-07-01; this session finished its three-state google_ads_field tag (Yes 41 / No 181 / null 4), added a deal_id key column, and wrote a plain-English explainer doc mag_gads_direct_inbound_lead_source_explained.txt. See DATA STORES. Earlier same day: Calendly attribution decoupled from the website GA4 calendly_form_submit event, which stopped firing after 2026-10-08 (upstream GTM gap): two new migrations recreate rebuild_ga4_ac_matches() — 20261014000000 makes calendly rows' conversion_link fall back to the constant '/thank-you-2/' (action always 'calendly_form_submit') and 20261014000100 makes calendly `channel` = coalesce(GA4 session src/medium, the Calendly booking's own utm); source/medium already come from the Calendly API. Applied + backfilled live; audit table (ga4_ac_event_matches) left untouched. Pure DB/function change — no Cloud Run redeploy. Also: public/sales_overview.html AC Deals table now hidden behind a "See ACS Deals Table" toggle in the toolbar + the hint text moved into an ⓘ info icon. Known limitation surfaced: section-1/3 only roll up contacts with cdate within the 60-day window, so returning/older contacts who book again (e.g. created >60d ago) appear in ga4_ac_event_matches but not on the page. Migrations + the sales_overview edits are uncommitted. Previously 2026-10-13 (Buyer Analysis page extended with invoice data: public.mag_buyer_sheet gained engagement_fee/amount_total/invoice_json, sourced from public.invoice_tracking by deal_title=ac_deal_title and SUMMED across a deal's 1–3 invoices (invoice_json kept as a JSON ARRAY); buyer-sheet-sync edge function redeployed v12 (verify_jwt:false) to fill them each run; mag-buyer-sheet.js SELECT + mag_buyer_sheet.html now serve/show "Engagement Fee" + "Total Charge" (hover → See Invoice modal) and "Deal Title" + "Deal Status" (status pill); nav tab renamed "Buyer Sheet" → "Buyer Analysis" across all 12 pages. Server+frontend changes pending a Cloud Run redeploy. Earlier same day — invoice-tracking-sync routine extended: public.invoice_tracking gained engagement_fee/other_fees/gst (fee split by Xero account_code — codes 219–228 = engagement, rest = other; gst = amount_tax) + an invoice_json enriched with a computed `charges` breakdown; routine prompt's embedded transform.mjs updated via remote-trigger API, connectors preserved; these 4 cols are populated but not yet surfaced on the Invoices page. Also added a client-side date-range filter (From/To event date + 12m/24m/This-year/All quick ranges) to public/mag_buyer_sheet.html. Earlier same day — Contact-Sources deal-title fixes + full history retention: update_ga4_contact_deals() (07:00 PH re-linker) now also denormalizes deal_title/value/status/source_type; BOTH rebuild tables now ACCUMULATE via UPSERT instead of truncate (ga4_ac_event_matches on event_uid, ga4_ac_contact_source on contact_id, ownership scoped by match_method). 2026-10-09: Contact-Sources pipeline overhaul (flat single-table SELECT, rebuild APPENDS Google-Ads leads, 3 crons → ONE orchestrator contact-sources-sync))
 ================================================================================
 
 OVERVIEW
@@ -240,7 +240,8 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     ac-google-ads-deals-sync edge function.
   - public.mag_gads_direct_inbound_lead_source — ONE-TIME SNAPSHOT (NOT synced; built
     directly in the DB, no edge fn / migration). All "Direct Inbound Enquiry" deals since
-    2024-07-01: 226 rows / 215 contacts. Keep-rules (from activecampaign_deals a LEFT JOIN
+    2024-07-01: 227 rows (226 original + deal 2881 manually appended 2026-10-20 — the one
+    exception that is NOT an Inbound Enquiry, added for the ROAS audit). Keep-rules (from activecampaign_deals a LEFT JOIN
     ac_deals_ytd b LEFT JOIN ac_google_ads_deals c): b.inbound_or_outbound='Inbound Enquiry',
     b.direct_or_indirect='Direct', b.stage_name<>'BUREAU ENQUIRY', a.cdate>='2024-07-01',
     pipeline NOT IN (The Tailor, the TROJAN HORSE / EXECUTIVE X / LEADER X program pipelines).
@@ -253,6 +254,14 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     lead_source = AC CONTACT custom field id 20 "Lead Source" (fetched from AC; manually
     entered by staff, not automation — written days-to-months after contact creation, ~18%
     fill). Plain-English funnel doc: ./mag_gads_direct_inbound_lead_source_explained.txt.
+    ROAS-audit columns (populated manually, not synced): jc_final_attr ("JAMES: Final
+    Attribution", from the Google ROAS sheet col Q — e.g. "Could be SEO or Paid Ad"),
+    jc_comments, and the Xero-sourced billed-amount split engagement_fee / other_fees /
+    gst / amount_total (+ xero_notes). As of 2026-10-20 the fee columns are filled for the
+    "Could be SEO or Paid Ad" rows by reading the actual Xero invoices (service line net =
+    engagement_fee [acct 224/225/228], expense net = other_fees [465/311], gst = invoice
+    tax, amount_total = invoice total), SUMMED across a deal's multiple invoices; a few
+    (e.g. deals 3253 Telstra, 3859 Alt Board) left null pending the right invoice.
 - public.ga4_ac_event_matches — per-event audit log (one row per GA4 form event
     / Calendly booking, with its best-matched contact) backing the rebuild's
     conversion_action/conversion_link denormalization. As of 2026-10-13 this is an
@@ -305,6 +314,52 @@ AUTOMATIONS / ROUTINES
   `charges` breakdown. Xero access is the ACCOUNT'S Xero MCP connector — no Xero
   token stored anywhere (not Supabase/Secret Manager/repo); if that connector's
   auth lapses the run fails until reconnected.
+- activecampaign-deals-sync (Supabase Edge Function, MAG project; pg_cron jobid 19
+  `activecampaign-deals-sync-daily`, '0 21 * * 0-4' = 05:00 AM PH Mon–Fri) — FULL
+  refresh of public.activecampaign_deals from the ActiveCampaign REST API
+  (GET /api/3/deals, paginated; ~3547 rows). Replaces the old n8n "Get All AC Deals"
+  webhook workflow (02b6362d-…), whose destructive-first design (DELETE then fetch
+  then insert) left the table empty whenever the fetch/insert failed — which blanked
+  the deal columns on the GA4/Contact Sources page (activecampaign_deals is the
+  denormalization source for rebuild_ga4_ac_matches() / update_ga4_contact_deals()).
+  Fix: it fetches the full snapshot FIRST, then calls public.reload_activecampaign_deals(
+  _deals jsonb) — one transaction: null google_reviews.closest_event_id refs (FK ->
+  activecampaign_deals.internal_id, NO ACTION) -> delete all (WHERE internal_id IS NOT
+  NULL, required by sql_safe_updates) -> insert from the jsonb snapshot; refuses an
+  empty payload; rolls back on any failure so the prior rows survive. On ANY failure it
+  emails ALERT_EMAIL (default julienne@) via Gmail SMTP (denomailer). GOTCHAS: deployed
+  --no-verify-jwt (cron POSTs with no auth header); the cron calls it with ?sync=1 +
+  120s pg_net timeout because async/background mode does NOT finish the ~40s job (the
+  isolate is torn down after the 202). Secrets: AC_API_URL/AC_API_TOKEN + SUPABASE_* +
+  GMAIL_USER/GMAIL_APP_PASSWORD (the app password must be the 16-char value, NO spaces,
+  or Gmail returns 534 5.7.9). The scheduler that fired the OLD n8n webhook lives in a
+  SEPARATE Supabase project (n8n-production, ref uwsncuowtzydylfabikj, cron jobid 7, now
+  disabled). Files: supabase/functions/activecampaign-deals-sync/index.ts,
+  supabase/migrations/20261020020000_reload_activecampaign_deals.sql,
+  supabase/migrations/20261020030000_schedule_activecampaign_deals_sync.sql (uncommitted).
+- activecampaign-contacts-sync (Supabase Edge Function, MAG project; pg_cron jobid 20
+  `activecampaign-contacts-sync-daily`, '30 21 * * 0-4' = 05:30 AM PH Mon–Fri) — FULL
+  refresh of public.activecampaign_contacts from the ActiveCampaign REST API
+  (GET /api/3/contacts, paginated at concurrency 4; ~15.5k rows, ~95s). Replaces the old
+  n8n "Get All AC Contacts" webhook workflow (8388b39d-…), whose destructive-first design
+  left the table empty on failure. Fetches the full snapshot FIRST, then calls
+  public.reload_activecampaign_contacts(_contacts jsonb) — one transaction: delete all
+  (WHERE id IS NOT NULL) → insert from the jsonb snapshot; refuses an empty payload; rolls
+  back on failure. Full rebuild, NOT an upsert (no ON CONFLICT). On ANY failure emails
+  ALERT_EMAIL (default julienne@) via Gmail SMTP. CONTACTS-SPECIFIC GOTCHAS (vs the deals
+  sync): (1) the AC `links` object is NOT fetched — it was ~1.6 kB/row (~85% of the table)
+  and unused; the rpc stores links='{}' (scoreValues/accountContacts kept). (2) the rpc has
+  SET statement_timeout TO '120000' — the PostgREST role authenticator caps at 8s, too short
+  for a 15k-row insert. (3) function WALL_CLOCK_MS=140000 trips its own guard before the
+  ~150s edge gateway kill (clean 500 + alert, not a silent 504). Deployed --no-verify-jwt;
+  cron calls it with ?sync=1 + 150s pg_net timeout (async/background mode does NOT finish a
+  job this long). Secrets reused from the deals sync (AC_API_URL/AC_API_TOKEN + SUPABASE_* +
+  GMAIL_USER/GMAIL_APP_PASSWORD). The OLD n8n scheduler lives in the separate n8n-production
+  project (ref uwsncuowtzydylfabikj, cron jobid 8, now disabled active=false — sibling jobid
+  9 'n8n-get-all-ac-accounts' is still on n8n, not yet converted). Files:
+  supabase/functions/activecampaign-contacts-sync/index.ts,
+  supabase/migrations/20261020040000_reload_activecampaign_contacts.sql,
+  supabase/migrations/20261020050000_schedule_activecampaign_contacts_sync.sql (uncommitted).
 - GA4 & Ads Leads Tracking daily chain — as of 2026-10-09 driven by ONE cron job
   and ONE orchestrator edge function (was 3 staggered jobs). pg_cron job
   `contact-sources-sync-daily` ('0 22 * * *' = 06:00 PH daily) POSTs the
@@ -327,7 +382,8 @@ AUTOMATIONS / ROUTINES
 - update-deals-daily-7am-pht (pg_cron, '0 23 * * *' = 07:00 PH daily) — runs
   public.update_ga4_contact_deals(), a lightweight SECOND deal-linker that runs an
   hour after the 06:00 rebuild (by then the activecampaign_deals mirror, refreshed
-  by sales-deals-sync at the same 06:00 slot, is settled). It re-links deal_id on
+  by activecampaign-deals-sync at 05:00 PH — an hour earlier as of 2026-10-20 — is
+  settled; it previously raced the rebuild). It re-links deal_id on
   ga4_ac_contact_source rows with the same primary/org-match logic as rebuild step
   1b. As of 2026-10-13 it ALSO denormalizes deal_title/deal_value/deal_status/
   source_type (mirrors rebuild step 3b, scoped to match_method IS NOT NULL so the

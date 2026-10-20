@@ -1,0 +1,137 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Converted the n8n "Get All AC Contacts" workflow into a Supabase edge
+function (activecampaign-contacts-sync) — mirroring last session's
+activecampaign-deals-sync — with an atomic reload rpc, Gmail failure-alert
+email, a daily cron, and the old n8n cron disabled. Two contacts-specific
+adaptations were needed vs deals (drop the heavy unused `links` column; lift the
+rpc statement_timeout) to fit the ~15.5k-row reload inside the edge wall clock.
+Then a /q question confirmed (read-only) the sync is a full rebuild, not upsert.
+Supabase MAG project ref aivitcomiywiysrfwqxt; n8n-production ref
+uwsncuowtzydylfabikj; AC account 2116665.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. All credentials (AC_API_URL/AC_API_TOKEN, GMAIL_USER/
+GMAIL_APP_PASSWORD, SUPABASE_*) already exist as Supabase edge-function secrets /
+Google Secret Manager entries and were only referred to by name.
+
+--------------------------------------------------------------------------------
+USER:
+(Pasted objective) Convert n8n_wf_sync_ac_contacts (export at
+C:\Users\Cloverly\Downloads\sync activecampaign_contacts.json) into an edge
+function, mirroring what was done with activecampaign-deals-sync last chat.
+Disable the current cron job (sync via the function from now on) and add
+email-notification error handling. See the ref function.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the downloaded JSON, the reference function (supabase/functions/
+activecampaign-deals-sync/index.ts), its two migrations, and last session's
+chat history. FLAGGED a discrepancy: the file named "sync activecampaign_
+contacts.json" actually contains the DEALS workflow (webhook 02b6362d-…,
+DELETE FROM activecampaign_deals) — i.e. the one already converted last session,
+not the contacts one. Rather than block, reconstructed the contacts equivalent
+from the live DB.
+
+Investigated (read-only SELECTs): public.activecampaign_contacts has 45 data
+columns + created_at (DEFAULT now()), PK = id (text), and NO foreign keys
+reference it (simpler than deals, which needed google_reviews ref-nulling).
+15,450 rows. Column non-null coverage showed it's a near-1:1 mirror of the AC
+contact object; created_at carries the sync RUN time (so the sync doesn't write
+it). Fetched AC contact 19861 via the ActiveCampaign MCP to confirm the exact
+/api/3/contacts field shape and that timestamp casts line up (AC cdate
+"…-05:00" → stored "+00"). Found the live contacts cron: n8n-production
+(uwsncuowtzydylfabikj) pg_cron jobid 8 "n8n-get-all-ac-contacts"
+('5 22 * * 0-4' = 06:05 PH, webhook 8388b39d-…), active. Confirmed the AC/Gmail/
+Supabase edge secrets are project-wide (already set from the deals function) so
+no new secrets were needed.
+
+Built three files mirroring the deals design:
+  - supabase/migrations/20261020040000_reload_activecampaign_contacts.sql:
+    reload_activecampaign_contacts(_contacts jsonb) — one transaction: delete all
+    (WHERE id IS NOT NULL, for sql_safe_updates) → insert from the jsonb snapshot;
+    refuses an empty payload; text fields stored verbatim, typed fields nullif+cast.
+  - supabase/functions/activecampaign-contacts-sync/index.ts: fetch the full AC
+    contacts snapshot FIRST, then call the rpc; transactional so a failure never
+    empties the table; emails ALERT_EMAIL (default julienne@) via Gmail SMTP on
+    any failure. Parallelized the fetch (concurrency 4, meta.total-driven offsets)
+    because ~155 sequential pages would blow the edge wall clock.
+  - supabase/migrations/20261020050000_schedule_activecampaign_contacts_sync.sql:
+    MAG pg_cron 'activecampaign-contacts-sync-daily' at 05:30 PH.
+
+Applied the rpc migration, deployed the function (--no-verify-jwt), then tested
+live with ?sync=1 via pg_net (polling net._http_response).
+
+TEST ITERATION 1 (504): the edge gateway killed the request at its ~150s
+wall-clock limit (function logs showed "POST | 504"). Table stayed safe at 15,450
+old rows (no commit).
+
+Diagnosed the cause with read-only queries: the AC `links` object is 24 MB of the
+28 MB table (~1.6 kB/row, ~85%) and nothing in the dashboard reads
+activecampaign_contacts.links/scoreValues/accountContacts — so the single rpc
+payload was ~38 MB (5× the deals profile). Fix: stop fetching `links` (rpc stores
+'{}'), keep the tiny scoreValues/accountContacts; also lowered WALL_CLOCK_MS to
+140000 so the function's own guard trips before the 150s gateway kill. Redeployed.
+
+TEST ITERATION 2 (statement timeout): fetch now succeeded (15,522 contacts, 156
+pages, ~70s) but the rpc failed with "canceling statement due to statement
+timeout", reloaded_rows 0, table rolled back safe — AND the failure-alert email
+fired (confirming the error-handling path works end-to-end). Root cause: the
+PostgREST role `authenticator` has statement_timeout = 8s (service_role null),
+too short for a 15k-row insert. Fix: ALTER FUNCTION … SET statement_timeout TO
+'120000' (function-scoped override) and updated the migration file to match.
+
+TEST ITERATION 3 (success): status 200, ok:true, 15,524 contacts fetched &
+reloaded, 156 pages, ~94s. Validated data quality: all rows freshly loaded,
+timestamps/ints parsed correctly (id 19861 cdate 2026-10-16 04:49:35+00,
+sentcnt=3), links='{}' for all, scoreValues/accountContacts arrays, max_cdate a
+brand-new contact.
+
+Then scheduled the MAG cron (migration applied → jobid 20
+'activecampaign-contacts-sync-daily', '30 21 * * 0-4' = 05:30 PH, ?sync=1 + 150s
+pg_net timeout — 30 min after deals, 30 min before the 06:00 consumer batch) and
+disabled the old n8n cron (cron.alter_job(8, active:=false) on n8n-production).
+Verified both. Saved a project memory
+(activecampaign-contacts-sync-edge-fn.md) + MEMORY.md index line. Did NOT run git
+or update CLAUDE.md/as_built (left to the user); flagged the one real "FAILED"
+alert email they'd have received during the timeout test.
+
+--------------------------------------------------------------------------------
+USER (/q, read-only):
+Can you make sure the activecampaign_contacts sync is upsert and not trunc and
+rebuild?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Answered without changing anything (/q). Confirmed against the LIVE function
+definition (pg_get_functiondef) — not just the file — that it is a full rebuild,
+NOT an upsert: `delete from public.activecampaign_contacts where id is not null`
+then `insert … select from jsonb_array_elements`, with no ON CONFLICT. It's a
+DELETE (not literal TRUNCATE) but functionally a full replace each run, inside
+one transaction with an empty-payload guard. Noted the sibling
+activecampaign-deals-sync is the same delete+insert pattern (the upsert/accumulate
+design in commit 6b84c19 applies to the GA4 rebuild tables, not the raw AC
+mirrors). Laid out the tradeoff: an upsert on id would keep contacts that were
+deleted/merged in AC lingering forever (and would preserve created_at as
+first-seen), whereas the current full-replace keeps the table an exact AC mirror.
+Offered two options if they want to switch — (1) pure upsert (ON CONFLICT (id)
+DO UPDATE, drop the delete) or (2) upsert + prune (delete ids not in the
+snapshot) — and asked which, and whether to apply the same to the deals sync.
+No change made.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the documentation routine: wrote this chat-history export, updated
+as_built.txt (added the activecampaign-contacts-sync automation + a
+activecampaign_contacts DATA STORES entry and bumped the Last-updated line),
+updated CLAUDE.md (added the contacts-sync bullet alongside the deals one), and
+checked .gitignore. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================
