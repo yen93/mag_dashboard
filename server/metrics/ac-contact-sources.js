@@ -25,6 +25,10 @@ const SRC = 'GA4 + Calendly → ActiveCampaign (Supabase cache)';
 //   deal_*            — the AC deal for the contact (value already in AUD, status mapped).
 //   source_type       — AC deal "Inbound/ Outbound?" field.
 //   cpc               — paid-ad cost per conversion (AUD), when known.
+//   engagement_fee / other_fees / gst / amount_total
+//                     — Xero invoice breakdown for the deal (AUD), from
+//                       mag_gads_direct_inbound_lead_source by deal_id (shown behind the
+//                       page's "Show Xero $" toggle). NULL until the deal is invoiced.
 const SELECT = `
   SELECT
     cs.contact_id          AS "contactId",
@@ -52,7 +56,11 @@ const SELECT = `
     cs.deal_value          AS "dealValue",
     cs.deal_status         AS "dealStatus",
     cs.source_type         AS "sourceType",
-    cs.cpc                 AS "cpc"
+    cs.cpc                 AS "cpc",
+    cs.engagement_fee      AS "engagementFee",
+    cs.other_fees          AS "otherFees",
+    cs.gst                 AS "gst",
+    cs.amount_total        AS "amountTotal"
   FROM public.ga4_ac_contact_source cs
   ORDER BY cs.cdate DESC NULLS LAST`;
 

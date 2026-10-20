@@ -156,6 +156,22 @@ Cloud Run.
       `No`/blank + no conversion action) stay visible. The page's "Show JC's Manual Tag"
       toolbar toggle controls only the **column**, not row visibility. Migration:
       `supabase/migrations/20261020060000_contact_source_fy_calyr_jc_columns.sql`.
+    - **`engagement_fee` / `other_fees` / `gst` / `amount_total` (Xero $) columns (as of
+      2026-10-20):** the Xero invoice breakdown of a deal, shown behind the page's **"Show
+      Xero $"** toolbar toggle (`#acsXeroToggle` → `SHOW_XERO_COLS`; inserted right after the
+      deal Status column, formatted as whole AUD like "AC Value"). They come from
+      `mag_gads_direct_inbound_lead_source` by `deal_id` — the **same source + key as
+      `jc_manual_tag`** — and are populated by **folding them into the SAME
+      `ga4cs_set_jc_manual_tag()` deal_id trigger** (one `mag_gads` lookup per deal_id;
+      `deal_id` is unique there so the `jc_manual_tag` pick is unchanged). So, like
+      jc_manual_tag, **neither `rebuild_ga4_ac_matches()` nor `update_ga4_contact_deals()` was
+      edited** — the figures ride `deal_id` for free, incl. the static roas rows.
+      **`deal_value` was deliberately NOT added** — `mag_gads.deal_value` is identical to the
+      `deal_value` already shown as the "AC Value" column (verified). ~21 displayed rows carry
+      figures (deals that have been invoiced); NULL until invoiced. One inherited caveat (same
+      as jc_manual_tag): if `mag_gads` fees change for a deal whose cache-row `deal_id` doesn't
+      change, the row refreshes only when a job re-sets `deal_id`. Migration:
+      `supabase/migrations/20261020070000_contact_source_xero_fee_columns.sql`.
   - **Calendly rows are decoupled from the GA4 `calendly_form_submit` event (as of
     2026-10-14).** That website GA4/GTM event **stopped firing after 2026-10-08** (an
     upstream site issue, not in this repo), so `ga4_calendly_events_staging` has no rows

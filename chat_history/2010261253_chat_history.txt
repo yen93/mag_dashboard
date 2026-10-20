@@ -1,0 +1,98 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Added the Xero fee-breakdown columns (Engagement Fee, Other Fees, GST,
+Amount Total) to the GA4 Leads Tracker (public.ga4_ac_contact_source cache table +
+ac_contact_sources.html), behind a new "Show Xero $" toolbar toggle. Sourced from
+mag_gads_direct_inbound_lead_source by deal_id — folded into the EXISTING jc_manual_tag
+deal_id trigger, so neither big sync function needed editing. Skipped deal_value (it is
+identical to the "AC Value" column already shown). Supabase MAG project ref
+aivitcomiywiysrfwqxt. Migration applied to the DB + 21 rows backfilled; no code deploy;
+no git.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. Credentials (SUPABASE_*, GMAIL_*, AC_*) were only referred to by name;
+the Supabase project ref (aivitcomiywiysrfwqxt) is an identifier, not a secret.
+
+--------------------------------------------------------------------------------
+USER:
+(Pasted spec) xero_columns_to_add: deal_value, engagement_fee, other_fees, gst,
+amount_total. to_do: add xero_columns_to_add to both the ac_contact_sources.html tab
+table and the DB cache table; update the sync function if needed.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored before touching anything:
+  - Read server/metrics/ac-contact-sources.js (plain single-table SELECT of
+    public.ga4_ac_contact_source, denormalized; isExcludedRow() filter) and
+    public/ac_contact_sources.html (inline JS renders the table; existing
+    SHOW_JC_COL + SHOW_META_COLS toggles; dealValue already shown as the "AC Value"
+    currency column).
+  - Queried Supabase (ref aivitcomiywiysrfwqxt):
+      * ga4_ac_contact_source already has deal_value (numeric); no fee columns yet.
+      * The four fee columns (engagement_fee, other_fees, gst, amount_total) live on
+        BOTH invoice_tracking (keyed by ac_deal_title) AND
+        mag_gads_direct_inbound_lead_source (keyed by deal_id). mag_gads also has its
+        own deal_value.
+      * Chose mag_gads by deal_id as the source: it is the SAME table + join key that
+        jc_manual_tag already mirrors via the trg_ga4cs_jc_manual_tag trigger, the
+        same table the static roas-<deal_id> rows came from, and deal_id is unique
+        there (227 rows / 227 distinct). 227 rows total, 68 with the fee breakdown.
+      * Verified mag_gads.deal_value == the existing ga4_ac_contact_source.deal_value
+        (the page's "AC Value") for every matched deal — so a Xero deal_value column
+        would just duplicate "AC Value".
+      * Only ~21 currently-displayed rows join to a mag_gads row that has fee data.
+  - Read pg_get_functiondef for ga4cs_set_jc_manual_tag() and the jc-columns
+    migration (20261020060000) to mirror style exactly.
+
+Asked TWO focused decisions (genuine forks):
+  1. deal_value is identical to the shown "AC Value" — how to handle? → User chose
+     "Skip it" (add only the 4 fee columns).
+  2. Table is already very wide, only ~21 rows have figures — always-visible or
+     toggle? → User chose "Behind a toolbar toggle".
+
+Design + implementation:
+  - Mirrored the jc_manual_tag mechanism exactly. Added 4 numeric columns
+    (engagement_fee, other_fees, gst, amount_total) to ga4_ac_contact_source and
+    EXTENDED the existing ga4cs_set_jc_manual_tag() BEFORE INSERT/UPDATE OF deal_id
+    trigger to also populate them from the same single mag_gads lookup. deal_id is
+    unique in mag_gads, so the jc_manual_tag result (order by jc_final_attr limit 1)
+    is unchanged. Because it rides deal_id, NEITHER rebuild_ga4_ac_matches() NOR
+    update_ga4_contact_deals() needed editing; the static roas rows keep their
+    backfilled figures.
+  - Wrote migration supabase/migrations/20261020070000_contact_source_xero_fee_
+    columns.sql (columns + extended trigger + re-created trigger + one-time backfill)
+    and applied it via the Supabase MCP (apply_migration → success).
+  - Verified the backfill: 21 rows now carry amount_total/engagement_fee/gst, values
+    matching mag_gads (e.g. Tilray 4245 → 7500 / 100 / 760 / 8360).
+  - Backend: added engagementFee/otherFees/gst/amountTotal aliases to the SELECT in
+    ac-contact-sources.js + a doc-comment note. `node --check` clean.
+  - Frontend (ac_contact_sources.html): added SHOW_XERO_COLS state, a "Show Xero $"
+    toolbar button (next to the JC / meta toggles), conditional column insertion via
+    splice right AFTER the deal Status column (not pinned far right), and the toggle
+    wiring. Columns use unit:'currency' so they format as whole AUD like "AC Value"
+    and sort numerically; blank "—" until a deal is invoiced.
+  - Confirmed renderSortableTable/fmt in app.js handle unit:'currency' (format +
+    numeric sort) and render null as "—".
+
+Noted the one inherited caveat (same as jc_manual_tag): if mag_gads fees change for a
+deal whose cache-row deal_id doesn't change, the row refreshes only when a job re-sets
+deal_id. Fine for this static invoice data.
+
+Told the user a manual Cloud Run redeploy is needed for the frontend + backend (the DB
+part is already live), and did NOT deploy (per the CLAUDE.md "Claude never deploys"
+rule). Then the user ran /dcp.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation steps (no git): saved this chat-history file, updated
+as_built.txt and CLAUDE.md to record the new Xero fee columns + extended trigger, and
+checked .gitignore.
+
+================================================================================
+END OF EXPORT
+================================================================================
