@@ -140,7 +140,7 @@ Cloud Run.
       contact_id ∈ `activecampaign_contacts`.
     - **`fy` / `cal_yr` / `jc_manual_tag` columns (as of 2026-10-20):** `ga4_ac_contact_source`
       carries three extra columns the GA4 Leads Tracker shows. `cal_yr` (int) and `fy`
-      (text, `"FY2026-27"`, AU FY starting Jul 1, labelled like `mag_gads…fy`) are
+      (text, `"FY26"` = last 2 digits of the AU FY start year, FY starting Jul 1) are
       **GENERATED STORED** from `cdate` via IMMUTABLE helpers `public.mag_cal_yr()` /
       `public.mag_fy_label()` (UTC, matching the page's existing cdate date handling) — so
       they need **no sync maintenance** and are correct even for the static roas rows.

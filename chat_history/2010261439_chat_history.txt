@@ -1,0 +1,79 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Shortened the FY column label on the GA4 Leads Tracker page
+(public/ac_contact_sources.html) from the long "FY2026-27" form to the short
+"FY26" form. The fy value is a GENERATED STORED column on
+public.ga4_ac_contact_source driven by the IMMUTABLE helper public.mag_fy_label();
+the fix was a DB migration that changes the helper's label format AND forces the
+stored column to recompute. Server/page pass fy through as plain text, so no
+frontend/API change and no Cloud Run redeploy was needed. Migration applied live.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. The work was a Supabase SQL migration (helper function + generated
+column) applied via the Supabase MCP tool; no credential values appeared.
+
+--------------------------------------------------------------------------------
+USER:
+"update FY column row values. from 'FY2026-27' to 'FY26'" (ac_contact_sources.html
+open in the IDE).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Traced where the FY value comes from:
+  - Read supabase/migrations/20261020060000_contact_source_fy_calyr_jc_columns.sql.
+    The fy column on public.ga4_ac_contact_source is GENERATED ALWAYS AS
+    (public.mag_fy_label(cdate)) STORED. mag_fy_label() emitted
+    'FY' || fy_start::text || '-' || right((fy_start+1)::text, 2) → "FY2026-27",
+    where fy_start is the AU FY start year (Jul 1 boundary, computed in UTC).
+  - Grepped the server + page: server/metrics/ac-contact-sources.js just SELECTs
+    cs.fy AS "fy"; public/ac_contact_sources.html renders it as plain text
+    ({ key:'fy', label:'FY', render: txt }). No format parsing anywhere, so a pure
+    DB change suffices.
+
+Key subtlety: a GENERATED STORED column is only recomputed on INSERT/UPDATE of a
+row. CREATE OR REPLACE FUNCTION alone would NOT rewrite already-stored values
+(static roas-* and out-of-window rows would keep "FY2026-27"). So the migration
+drops the generated column, replaces the helper, then re-adds the column — re-adding
+recomputes it for every existing row.
+
+Wrote supabase/migrations/20261020080000_contact_source_fy_short_label.sql:
+  1. alter table ... drop column if exists fy;
+  2. create or replace function public.mag_fy_label(ts) → new body:
+     'FY' || right(fy_start::text, 2)  (e.g. fy_start 2026 → "FY26").
+  3. alter table ... add column if not exists fy text
+       generated always as (public.mag_fy_label(cdate)) stored;
+
+Applied it live via Supabase MCP apply_migration to project aivitcomiywiysrfwqxt
+(name: contact_source_fy_short_label) → {"success":true}.
+
+Verified recomputation with:
+  select fy, count(*) from public.ga4_ac_contact_source group by fy order by fy;
+  → FY21:11, FY22:8, FY23:15, FY24:42, FY25:27, FY26:70. All rows now short form.
+
+Updated the two stale "FY2026-27" doc references to "FY26":
+  - server/metrics/ac-contact-sources.js (column comment).
+  - CLAUDE.md (the fy/cal_yr/jc_manual_tag bullet; reworded to
+    "FY26" = last 2 digits of the AU FY start year).
+
+Reported to user: FY now reads FY26; value flows DB → API (runtime read of the
+cache) → page as plain text, so NO dashboard redeploy is required — a hard refresh
+shows the new labels. Future daily rebuild inserts + static roas rows inherit the
+new format automatically via the replaced immutable helper. Noted the label uses
+the START year of the AU FY (so Jul 2026–Jun 2027 → FY26), matching the requested
+FY2026-27 → FY26 mapping.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat, update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file; reviewed as_built.txt and CLAUDE.md
+for whether this session changed the built state (FY label format), and the
+.gitignore. (See the dcp report in the session for the create/update/left-alone
+outcome of each.)
+
+================================================================================
+END OF EXPORT
+================================================================================

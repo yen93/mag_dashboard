@@ -16,7 +16,7 @@ const SRC = 'GA4 + Calendly → ActiveCampaign (Supabase cache)';
 // public.ga4_ac_contact_source — the rebuild_ga4_ac_matches() function denormalizes
 // them each rebuild (see migration 20261009000000_contact_source_denormalized_columns.sql),
 // so there are no joins here. The columns this page reads:
-//   fy / cal_yr       — fiscal year ("FY2026-27") and calendar year, generated from cdate.
+//   fy / cal_yr       — fiscal year ("FY26") and calendar year, generated from cdate.
 //   jc_manual_tag     — mag_gads_direct_inbound_lead_source.jc_final_attr (by deal_id).
 //   channel           — GA4 session channel ("source / medium", NULL for unmatched).
 //   conversionAction  — the matched GA4 conversion event (calendly_form_submit for
