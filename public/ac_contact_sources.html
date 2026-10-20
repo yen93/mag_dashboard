@@ -101,7 +101,7 @@
           <button type="button" class="acs-reset" id="acsXeroToggle" aria-pressed="false"
                   title="Show/hide the Xero fee breakdown (Engagement Fee, Other Fees, GST, Amount Total)">Show Xero $</button>
           <button type="button" class="acs-reset" id="acsMetaToggle" aria-pressed="false"
-                  title="Show/hide the Δ (s), Matched At and CPC columns">Show Δ (s) · Matched At · CPC</button>
+                  title="Show/hide the Match, Confidence, Δ (s), Matched At and CPC columns">Show Match · Confidence · Δ (s) · Matched At · CPC</button>
         </div>
 
         <div id="acsRows"></div>
@@ -112,8 +112,9 @@
   <script src="app.js?v=2"></script>
   <script>
     var ALL_ROWS = [];
-    // Toggle for the meta columns pinned to the far right (Δ (s), Matched At, CPC).
-    // Default hidden; the toolbar button flips it. Data stays in the DB regardless.
+    // Toggle for the meta columns pinned to the far right (Match, Confidence,
+    // Δ (s), Matched At, CPC). Default hidden; the toolbar button flips it.
+    // Data stays in the DB regardless.
     var SHOW_META_COLS = false;
     // Toggle for the "JC's Manual Tag" column (mag_gads jc_final_attr). Default hidden.
     var SHOW_JC_COL = false;
@@ -441,8 +442,8 @@
         { key: 'dealValue', label: 'AC Value', unit: 'currency' },
         { key: 'dealStatus', label: 'Status', render: statusPill },
         // { key: 'sourceType', label: 'Source Type', render: sourceTypePill },
-        { key: 'matchMethod', label: 'Match', render: methodPill },
-        { key: 'confidence', label: 'Confidence', render: confPill },
+        // 'Match' and 'Confidence' are now part of the meta-columns toggle below
+        // (hidden by default) — see the SHOW_META_COLS block.
       ];
       // Xero fee-breakdown columns (mag_gads by deal_id), shown/hidden by the toolbar
       // toggle. Grouped right after the deal Status column; blank until a deal is invoiced.
@@ -463,6 +464,8 @@
       // Meta columns pinned to the far right, shown/hidden by the toolbar toggle.
       if (SHOW_META_COLS) {
         cols.push(
+          { key: 'matchMethod', label: 'Match', render: methodPill },
+          { key: 'confidence', label: 'Confidence', render: confPill },
           { key: 'timeDeltaSeconds', label: 'Δ (s)', unit: 'num' },
           { key: 'matchedAt', label: 'Matched At', unit: 'date' },
           { key: 'cpc', label: 'CPC (AUD)', unit: 'currency', render: cpcCell }
@@ -536,7 +539,7 @@
         SHOW_META_COLS = !SHOW_META_COLS;
         metaBtn.classList.toggle('active', SHOW_META_COLS);
         metaBtn.setAttribute('aria-pressed', String(SHOW_META_COLS));
-        metaBtn.textContent = (SHOW_META_COLS ? 'Hide' : 'Show') + ' Δ (s) · Matched At · CPC';
+        metaBtn.textContent = (SHOW_META_COLS ? 'Hide' : 'Show') + ' Match · Confidence · Δ (s) · Matched At · CPC';
         apply();
       });
     }

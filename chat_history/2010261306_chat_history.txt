@@ -1,0 +1,61 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-20
+Session: Moved the "Match" and "Confidence" columns of the GA4 Leads Tracker
+(public/ac_contact_sources.html) under the existing meta-columns toggle, so they
+are hidden by default together with Δ (s) · Matched At · CPC (one "Show …" toolbar
+button now controls all five). Frontend/display-only change — no DB, no sync fn, no
+API change; data still returned in the payload. Manual Cloud Run redeploy pending;
+no git.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. No credentials were involved — this was a pure static-HTML edit.
+
+--------------------------------------------------------------------------------
+USER:
+"match" and "confidence" cols should be toggle hidden by default together with
+Δ (s) · Matched At · CPC
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the column/toggle machinery in public/ac_contact_sources.html:
+  - A toolbar button #acsMetaToggle drives a `SHOW_META_COLS` boolean (default
+    false) that, inside renderTable(), conditionally pushes the far-right meta
+    columns (timeDeltaSeconds "Δ (s)", matchedAt "Matched At", cpc "CPC (AUD)").
+  - "Match" (matchMethod → methodPill) and "Confidence" (confidence → confPill)
+    were in the ALWAYS-shown base `cols` array (right after the deal Status column),
+    so they rendered unconditionally.
+
+Made four edits so the same toggle governs all five columns:
+  1. Toolbar button (line ~103-104): relabelled to "Show Match · Confidence · Δ (s)
+     · Matched At · CPC" and updated its title tooltip to mention Match and
+     Confidence.
+  2. Comment on the `SHOW_META_COLS` declaration: noted it now also covers Match and
+     Confidence.
+  3. Removed the two always-on `{matchMethod}` / `{confidence}` column defs from the
+     base `cols` array, leaving a comment pointing to the SHOW_META_COLS block.
+  4. Added matchMethod + confidence to the front of the `if (SHOW_META_COLS)
+     { cols.push(...) }` block, before Δ (s)/Matched At/CPC.
+     Also updated the button's label-flip text in wireToolbar() to the same
+     "Hide/Show Match · Confidence · Δ (s) · Matched At · CPC" string.
+
+Net effect: Match and Confidence are hidden on load and appear/disappear with the
+other three via the one toggle. Data remains in the DB and the API response —
+display-only. Told the user a manual Cloud Run redeploy is needed for it to go live
+(per project rule, Claude never deploys).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation steps: wrote this chat-history file; assessed as_built.txt
+and CLAUDE.md (frontend-only toggle grouping — no change to built state,
+architecture, data pipeline, env vars or conventions, so both left as-is); verified
+.gitignore already covers all sensitive patterns and nothing new/sensitive is in the
+working tree. No git commands run — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================
