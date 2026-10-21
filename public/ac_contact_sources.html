@@ -272,6 +272,29 @@
       if (r.jcReviewed) return false;
       return true;
     }
+    // Numeric coercion that treats blank/NULL as "no value".
+    function numOrNull(v) { return (v === null || v === undefined || v === '') ? null : Number(v); }
+    // A "fee review" row: AC Value and Xero Engagement Fee don't balance — either the
+    // Engagement Fee is missing (not invoiced) or it differs from the AC value by ≥ $1.
+    // Only meaningful (and only applied) when the Xero $ columns are shown.
+    function isFeeMismatch(r) {
+      if (!r) return false;
+      var ac = numOrNull(r.dealValue), eng = numOrNull(r.engagementFee);
+      if (ac === null && eng === null) return false;   // no deal + no fee → nothing to balance
+      if (ac === null || eng === null) return true;    // one side present, other missing → unbalanced
+      return Math.abs(ac - eng) >= 1;                  // both present but differ (≥ $1 tolerance)
+    }
+    // Engagement Fee cell: on a mismatch, append a ⚠ + a tooltip naming both values / the
+    // gap. Plain money otherwise. (Sort stays numeric via the raw value — see app.js.)
+    function engFeeCell(v, row) {
+      var disp = (v === null || v === undefined || v === '') ? '—' : money(v);
+      if (!isFeeMismatch(row)) return disp;
+      var ac = numOrNull(row.dealValue), eng = numOrNull(row.engagementFee);
+      var msg = eng === null ? 'No Xero Engagement Fee yet — AC Value is ' + money(ac)
+              : ac === null  ? 'No AC Value — Engagement Fee is ' + money(eng)
+              : 'AC Value ' + money(ac) + ' ≠ Engagement Fee ' + money(eng) + ' (Δ ' + money(Math.abs(ac - eng)) + ')';
+      return '<span title="' + esc(msg) + '">' + disp + ' ⚠</span>';
+    }
     // JC column cell: an interactive tag control for authorized users on review-eligible
     // rows (for-review, already-tagged, or already-reviewed); a read-only pill otherwise.
     // "Not paid ad / SEO" (value __not__) posts an empty decision → reviewed, tag cleared.
@@ -510,7 +533,8 @@
         var xeroAt = cols.length;
         for (var ci = 0; ci < cols.length; ci++) { if (cols[ci].key === 'dealStatus') { xeroAt = ci + 1; break; } }
         cols.splice(xeroAt, 0,
-          { key: 'engagementFee', label: 'Engagement Fee', unit: 'currency' },
+          { key: 'engagementFee', label: 'Engagement Fee', unit: 'currency', render: engFeeCell,
+            text: function (v) { return (v === null || v === undefined || v === '') ? '' : String(money(v)); } },
           { key: 'otherFees', label: 'Other Fees', unit: 'currency' },
           { key: 'gst', label: 'GST', unit: 'currency' },
           { key: 'amountTotal', label: 'Amount Total', unit: 'currency' }
@@ -544,7 +568,12 @@
         searchPlaceholder: 'Search contacts…',
         sortKey: 'cdate', sortDir: 'desc',
         emptyText: 'No leads in this date range.',
-        rowClass: function (r) { return isForReview(r) ? 'acs-review' : ''; },
+        rowClass: function (r) {
+          var cls = [];
+          if (isForReview(r)) cls.push('acs-review');
+          if (SHOW_XERO_COLS && isFeeMismatch(r)) cls.push('acs-fee-review');
+          return cls.join(' ');
+        },
         onCount: function (shown, total) {
           var el = document.getElementById('acsCount');
           if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');

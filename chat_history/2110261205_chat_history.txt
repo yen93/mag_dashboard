@@ -1,0 +1,76 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: Follow-ups on the JC manual-review tagging feature — commit lines, and a
+fix for the JC column's per-column FILTER merging "for review" and tagged rows.
+(The feature build, ROAS wiring, and the reset action are documented in the earlier
+2110261128 / 2110261152 chat-history files; this segment is the filter fix + /cm.)
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+/cm — write a one-line git commit command for the current changes.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran git status/diff. Nothing staged at that point → described all changes (the reset
+feature: server/index.js reset branch, public/ac_contact_sources.html handler, the new
+migration 20261021100000, + CLAUDE.md/as_built.txt/chat-history). Output one line:
+feat(contact-sources): add reset action to JC tagging so '-- set tag --' on a reviewed
+row removes the override and returns it to 'for review'; log action set/reset.
+
+--------------------------------------------------------------------------------
+USER:
+"issue found: filter for JC column combined set tag and tagged rows"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Diagnosed: the per-column filter builds its option list (distinctValues) and matches
+via textOf(row, col) in public/app.js, which for a column with a `render` strips the
+HTML tags from the rendered cell. Since the JC cell's render is now an interactive
+<select> (for reviewers), stripping its tags yielded the SAME string for every
+interactive cell — all three option labels ("— set tag —", "Could be SEO or Paid Ad",
+"Not paid ad / SEO") concatenated — so for-review rows and tagged rows collapsed into
+one filter bucket (and sort/search were likewise broken for those cells).
+
+Fix (frontend-only):
+- public/app.js: textOf() now honours an optional `column.text(v, row)` accessor and
+  uses it for filter/sort/search when present, instead of stripping the render HTML.
+  Backward-compatible — no other column sets `text`, and all three consumers
+  (distinctValues, the view() filter match via set.has(textOf(...)), and text sorting)
+  already route through textOf, so one change covers them.
+- public/ac_contact_sources.html: the JC column now supplies `text` →
+  tagged → the tag value ("Could be SEO or Paid Ad"); reviewed+cleared →
+  "Not paid ad / SEO"; unset/for-review → "—". So the filter now shows three distinct,
+  separately-filterable buckets; sort/search behave sensibly.
+- Bumped the page's app.js?v=4 → ?v=5 so it reloads the updated app.js.
+Verified node --check on app.js. Display-only; no DB/server change; ships with the
+already-pending manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — one-line git commit command.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+git status showed the reset-feature changes STAGED (index.js, the migration, docs,
+chat history, and the staged part of ac_contact_sources.html) and the filter fix
+UNSTAGED (app.js, plus the JC-column `text` + v=5 in ac_contact_sources.html → shown
+as MM). Per /cm rules (describe only staged when something is staged), output the
+reset-feature commit line: feat(contact-sources): add reset action to JC tagging so
+'-- set tag --' on a reviewed row removes the override and returns it to 'for review';
+add log action set/reset. (The filter fix remains for a later, separate commit.)
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this transcript; updated as_built.txt + CLAUDE.md to record the JC-column filter
+fix and the new reusable `column.text` projection on renderSortableTable; checked
+.gitignore (no new sensitive files). Did not run any git commands — the user
+commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

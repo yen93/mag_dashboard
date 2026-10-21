@@ -1,0 +1,97 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: Add a second "for review" row highlight on the GA4 Leads Tracker page —
+flag rows where the AC Value and the Xero Engagement Fee don't balance. Planned in
+plan mode, then implemented (client-only; no DB/server change).
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"highlight rows in ac_contact_sources.html as for review where AC and Xero
+Engagement Fee values are not balanced in ga4_ac_contact_source" — mark rows where
+the AC-contracted deal value (AC Value = deal_value) and the Xero Engagement Fee
+(engagement_fee) don't reconcile.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(Plan mode.) Explored the page and the metric. Key findings:
+- public/ac_contact_sources.html already has an amber ".acs-review" row highlight
+  driven by isForReview() — but for a DIFFERENT purpose (the JC paid/SEO review:
+  "Google Ads?=Yes, blank channel, no tag, not reviewed"), with an in-cell tagging
+  <select>. So a new fee-balance highlight must be visually distinct.
+- The data is already in the API payload: server/metrics/ac-contact-sources.js
+  SELECTs deal_value AS dealValue and engagement_fee AS engagementFee; the page
+  keeps full rows in ALL_ROWS. So this is a PURE front-end change — no DB,
+  migration, or server edit.
+- renderSortableTable (public/app.js) sorts numeric columns from the raw row value
+  (app.js:278), NOT rendered text, so a custom cell render won't break numeric
+  sort; rowClass already supports space-separated classes (app.js:310-311).
+- The amber .acs-review highlight is client-only (no server twin), so the new
+  fee-review highlight is likewise client-only — no "KEEP IDENTICAL" pair.
+
+Ran a read-only Supabase query (project aivitcomiywiysrfwqxt) on the invoiced rows
+(engagement_fee NOT NULL) to confirm the comparison is meaningful: found exact
+matches (e.g. contacts 19121, 18224, 17883, 17448 — deal_value == engagement_fee)
+AND genuine discrepancies (contact 17663: 21,950 vs 30,730; 14753: 5,500 vs 6,500;
+plus several roas-* static audit rows). Note many mismatches are the synthetic
+roas-* rows, but real contacts diverge too.
+
+Asked two clarifying questions via AskUserQuestion:
+1. NULL fees handling → user chose "Also flag missing fees" (a deal with an AC
+   Value but no Engagement Fee = unbalanced too; intentionally flags every
+   not-yet-invoiced deal that has an AC value).
+2. Highlight visibility → user chose "Only with 'Show Xero $' on" (so the
+   highlight sits next to the columns that explain it).
+
+Wrote the plan to the plan file and called ExitPlanMode; user approved.
+
+--------------------------------------------------------------------------------
+USER:
+(Approved the plan.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented the three edits:
+
+public/ac_contact_sources.html (inline <script>):
+- Added numOrNull() (blank/NULL → null) and isFeeMismatch(r): returns false when
+  both dealValue and engagementFee are absent; true when exactly one is present
+  (missing side); otherwise true when |dealValue - engagementFee| >= 1 ($1
+  tolerance).
+- Added engFeeCell(v,row): plain money() normally; on a mismatch appends " ⚠" and
+  a title tooltip naming both values and the gap (Δ).
+- renderTable rowClass now builds a class list: "acs-review" (unchanged JC review)
+  plus "acs-fee-review" when SHOW_XERO_COLS && isFeeMismatch(r).
+- The Engagement Fee column in the SHOW_XERO_COLS cols.splice() got
+  render: engFeeCell plus a text: projection (clean money string) so the
+  per-column filter/search values stay clean; sort stays numeric via the raw value.
+
+public/app.css:
+- Added "table.data tr.acs-fee-review" rules (red #e0556b 12% tint background +
+  inset 3px left bar), placed AFTER the .acs-review rules so the red fee-review
+  color wins when a row matches both.
+
+Noted no server/DB change and that this needs a MANUAL Cloud Run redeploy (per
+project policy Claude never deploys) to go live; gave local verification steps
+(npm run dev → Show Xero $ → contacts 17663 & 14753 highlight red w/ ⚠ tooltip,
+exact-match rows don't; toggle off hides it; Engagement Fee sort/filter clean).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt / CLAUDE.md / .gitignore (no git
+commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file. Updated CLAUDE.md's contact-sources
+section to document the new fee-balance review highlight (acs-fee-review, gated on
+Show Xero $, distinct from the JC acs-review highlight). as_built.txt needed no
+change (no new scripts/integrations/tables/routines — purely a display rule on an
+existing page). Reviewed .gitignore — sensitive patterns already covered, no change.
+No secrets appeared in the session (only Supabase resource/contact IDs and dollar
+figures from read-only queries — none are credentials). No git commands run — the
+user commits and pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

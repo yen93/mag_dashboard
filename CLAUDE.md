@@ -236,7 +236,12 @@ Cloud Run.
       `ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id`.** `jcManualTag` shown on
       the page is thus the effective value, and a positive tag FEEDS ROAS (see the ROAS
       bullet). Client gate `canTagJc()` mirrors the server; the JC column is **default-open
-      for reviewers**; `app.js` gained `postJSON()`; page is `app.js?v=4`.
+      for reviewers**; `app.js` gained `postJSON()`; page is `app.js?v=5`. **Gotcha: the JC
+      cell's `render` is an interactive `<select>`, so its stripped HTML is identical for
+      every row — the column therefore supplies a `text(v,row)` projection (tag value /
+      "Not paid ad / SEO" / "—") that `renderSortableTable`'s `textOf` prefers for
+      filter/sort/search; without it the per-column filter merges for-review and tagged
+      rows. Keep that `text` in sync with the three review states.**
     - **Row-visibility rule — DISPLAY vs ROAS now DELIBERATELY DIVERGE (as of 2026-10-21,
       later same day):** the **page DISPLAY** rule is: a row is SHOWN iff it has a JC manual
       tag (always, bypassing the blacklist), OR it is not a `free_gifts_opt_ins` and not an
@@ -273,6 +278,20 @@ Cloud Run.
       as jc_manual_tag): if `mag_gads` fees change for a deal whose cache-row `deal_id` doesn't
       change, the row refreshes only when a job re-sets `deal_id`. Migration:
       `supabase/migrations/20261020070000_contact_source_xero_fee_columns.sql`.
+    - **Fee-balance review highlight (as of 2026-10-21):** a SECOND, visually distinct
+      row highlight — **red `.acs-fee-review`** (vs the amber `.acs-review` JC-review
+      highlight) — flags rows where **AC Value (`dealValue`) and the Xero Engagement Fee
+      (`engagementFee`) don't balance**. Client-only (like `isForReview`, NO server twin):
+      helper `isFeeMismatch(r)` in `public/ac_contact_sources.html` — unbalanced iff one
+      side is present and the other missing (incl. an AC Value with no Engagement Fee yet
+      = not invoiced — **intentionally flags un-invoiced deals**), or both present but
+      differ by **≥ $1**. Gated on **`SHOW_XERO_COLS`** so it only shows with "Show Xero
+      $" on (when `rowClass` combines both classes). The Engagement Fee column's custom
+      `engFeeCell` render appends a **⚠ + title tooltip** (names both values + the Δ) on a
+      mismatch, with a `text:` projection so the per-column filter/search stays clean
+      (sort stays numeric via the raw value). CSS: `.acs-fee-review` rules sit AFTER
+      `.acs-review` in `public/app.css` so red wins if a row matches both. No DB/server
+      change (values already in the API payload).
   - **Calendly rows are decoupled from the GA4 `calendly_form_submit` event (as of
     2026-10-14).** That website GA4/GTM event **stopped firing after 2026-10-08** (an
     upstream site issue, not in this repo), so `ga4_calendly_events_staging` has no rows

@@ -209,6 +209,9 @@ html[data-theme='dark'] .pill.partial { color: #f0a63b; }
    amber left bar + tint so James can spot the rows that still need a manual decision. */
 table.data tr.acs-review td { background: color-mix(in srgb, #f0a63b 10%, transparent); }
 table.data tr.acs-review td:first-child { box-shadow: inset 3px 0 0 #f0a63b; }
+/* Fee-balance review: AC Value ≠ Xero Engagement Fee (only when Show Xero $ is on). */
+table.data tr.acs-fee-review td { background: color-mix(in srgb, #e0556b 12%, transparent); }
+table.data tr.acs-fee-review td:first-child { box-shadow: inset 3px 0 0 #e0556b; }
 
 /* In-cell JC review tag control (James + admins). */
 .acs-jc-select {
