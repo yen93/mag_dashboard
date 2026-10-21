@@ -1,0 +1,105 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: Planned and implemented a ROAS-tab change so the Lost $ / Open $ columns,
+their counts, and the win-rate denominator reflect EVERY lost/open deal in
+public.activecampaign_deals (all pipelines) instead of just the GA4-shown rows —
+while Won $/count stay GA4-attributed, and Per-Lead Value / the "won / N" column
+keep the GA4-shown basis. Ends with this /dcp.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted into or printed in this chat.
+Only non-secret identifiers appeared (Supabase project ref aivitcomiywiysrfwqxt).
+
+--------------------------------------------------------------------------------
+USER:
+(In plan mode) All lost and open deals should be counted in the ROAS "Lost $" and
+"Open $" and in the win-rate calculation — all lost and open deals in
+activecampaign_deals should be the reference for lost/open value and count. But the
+won value and count should NOT be touched, since they already correctly reflect all
+shown rows in ac_contact_sources.html.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the ROAS implementation. Read server/metrics/roas.js (the live query:
+numerator = ga4_ac_contact_source rows filtered by CONTACT_SOURCE_SHOWN, denominator
+= google_ads_campaign_monthly ad spend, bucketed by calendar year), server/lib/sql.js
+(the shared CONTACT_SOURCE_SHOWN predicate), and public/roas.html (the self-rendering
+table + 3 charts; columns Won $/Lost $/Open $/Won Leads/Win rate/.../Per-Lead Value).
+
+Queried Supabase (project aivitcomiywiysrfwqxt) to establish the data model:
+- activecampaign_deals.status: 0=open (569), 1=won (492), 2=lost (2494); value in
+  CENTS; currency mostly aud (11 usd lost / 5 usd open, negligible). All lost/open
+  rows are isDisabled=false.
+- public.mag_cal_yr(timestamptz) = extract(year from ts at time zone 'UTC') — the same
+  IMMUTABLE helper that generates ga4_ac_contact_source.cal_yr; used it on deal cdate.
+- In the ad-spend years the currently-SHOWN lost/open are ~0 (2024: 0/0, 2025: 0/0,
+  2026: 1/4), while ALL-deal counts are large (2024: 558 lost/101 open; 2025: 482/142;
+  2026: 215/174). Won (shown) stays 3/12/4. No pipelines table is mirrored in Supabase;
+  group ids (3 dominant, plus 5,7,9,14,17,18,19,20) are AC pipeline ids.
+
+Asked the user two clarifying questions via AskUserQuestion:
+1. Deal scope → user chose "Every deal (literal)": ALL lost/open across every pipeline
+   and currency, value/100, no FX (matching how Won is handled).
+2. Derived figures → user chose "Win rate only": only the win rate uses the new larger
+   denominator; Per-Lead Value and the "Won Leads = won / N" column keep today's
+   GA4-shown basis so they stay meaningful.
+
+Wrote the plan to the plan file and called ExitPlanMode; user approved.
+
+--------------------------------------------------------------------------------
+USER:
+(Approved the plan.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented the change.
+
+server/metrics/roas.js (the functional change):
+- Trimmed the `deals` CTE (GA4-shown rows) to Won figures + `leads` (shownLeads =
+  won+lost+open shown, the basis kept for Per-Lead Value and the "won / N" column).
+- Added an `alldeals` CTE aggregating every lost (status=2) / open (status=0) deal in
+  public.activecampaign_deals, all pipelines, value/100, bucketed by
+  public.mag_cal_yr(cdate).
+- Final SELECT now LEFT JOINs alldeals so Lost $ / Open $ and their counts come from
+  all CRM deals; renamed the shown-leads output to "shownLeads"; year now = s.cal_yr.
+- shape(): winRate = wonLeads / (wonLeads + ALL lostLeads + ALL openLeads); leads
+  (= shownLeads) still drives perLeadValue and the "won / N" display; Won $/count,
+  ROAS, ROI, Won Revenue, Ad Spend untouched. Updated countedMethod text.
+- totalRow(): win rate uses the all-deal denominator; per-lead value keeps sum(leads)
+  (shownLeads). Updated the header comment block, SRC label, and section note to
+  document the asymmetry.
+
+public/roas.html (copy only): intro paragraph now explains Won = Google-Ads-attributed
+while Lost $ / Open $ / win rate = all CRM deals created that year; added a `title=`
+tooltip mechanism on column headers and set tooltips on the Win rate and Won Leads
+columns (they intentionally use different denominators).
+
+CLAUDE.md: updated the ROAS bullet to document that lost/open $ + counts + win-rate
+denominator now come from all activecampaign_deals (status 0/2, mag_cal_yr(cdate),
+value/100), while Won and Per-Lead Value / "won / N" keep their GA4-shown basis.
+
+Verification:
+- node --check server/metrics/roas.js → SYNTAX_OK.
+- Ran the full composed query against Supabase. Results matched expectations exactly:
+  Won unchanged (2024 $35,000/3; 2025 $142,250/12; 2026 $36,000/4); Lost/Open now
+  all-deal (2024 558/$1,490,448 + 101/$223,805; 2025 482/$1,529,745 + 142/$436,691;
+  2026 215/$1,557,220 + 174/$1,288,363); win rate 0.45% / 1.89% / 1.02%; shownLeads
+  3/12/9 preserved. All-years win rate ≈ 19/1691 ≈ 1.1%.
+
+Told the user a manual Cloud Run redeploy is needed (Claude never deploys), flagged the
+intentional visual tension between the "won / N" column and the Win rate %, and offered
+to refresh the outdated roas-tab-feature memory.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: saved this chat-history file, updated as_built.txt and CLAUDE.md to
+reflect the new ROAS lost/open-from-all-deals behavior, and checked .gitignore (no new
+sensitive files). No git commands run — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================
