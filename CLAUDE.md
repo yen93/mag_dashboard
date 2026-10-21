@@ -60,7 +60,7 @@ Cloud Run.
     speaking_enquiries, inbound/outbound.
   - **ROAS** (`roas.html` = nav tab "ROAS", `/api/operations/roas`,
     `server/metrics/roas.js`) is a self-rendering page: Google Ads ROAS by
-    **calendar year** — a 12-col table (Won $/Lost $/Open $, Won Leads, Win rate,
+    **calendar year** — a 12-col table (Won $, Lost #/Open # counts, Won Leads, Win rate,
     Ad Spend, Won Revenue, ROI $/%, ROAS, Per-Lead Value) + 3 inline Chart.js charts
     (grouped bar, ROAS-vs-2.00×-target line, Leads-by-outcome stacked bar). **As of
     2026-10-20 it is LIVE, computed at request time from existing Supabase tables
@@ -71,16 +71,17 @@ Cloud Run.
     OR a JC manual tag; free-gift / excluded-link rows dropped) instead of the old
     `google_ads_ac_field='Yes' OR channel='google / cpc'` filter — so `google_ads_ac_field`
     NO LONGER affects the count (a "Google Ads?"=Yes row with no channel and no JC tag is
-    excluded here and hidden on the page). **ASYMMETRY (as of 2026-10-21): the Lost $ /
-    Open $ columns, their counts, AND the win-rate denominator come from EVERY lost
+    excluded here and hidden on the page). **ASYMMETRY (as of 2026-10-21): the Lost /
+    Open COUNT columns AND the win-rate denominator come from EVERY lost
     (status=2) / open (status=0) deal in `public.activecampaign_deals` — all pipelines
-    (`group`), all currencies, `value/100` (cents, no FX), bucketed by
-    `public.mag_cal_yr(cdate)` — NOT from the GA4-shown rows** (which carry ~0 lost/open in
-    the ad-spend years). So win rate = won(shown) ÷ (won + ALL lost + ALL open). Won $/count
-    stay GA4-attributed. **Per-Lead Value and the "Won Leads = won / N" column deliberately
-    keep the GA4-shown leads basis** (`shownLeads` in `roas.js`), so they intentionally
-    disagree with the win-rate denominator (a column `title=` tooltip + the intro explain
-    it). Denominator (for ROAS) =
+    (`group`), all currencies, bucketed by `public.mag_cal_yr(cdate)` — NOT from the
+    GA4-shown rows** (which carry ~0 lost/open in the ad-spend years). So win rate =
+    won(shown) ÷ (won + ALL lost + ALL open). Won $/count stay GA4-attributed. **The Lost
+    and Open table columns now show deal COUNT, not $** (no more `$`; the `lostAmount`/
+    `openAmount` are still in the API payload but not displayed). The **"Won Leads" column
+    shows won ÷ (won + lost + open count)** — same denominator as the Win rate %; **Per-Lead
+    Value alone still uses the GA4-shown leads basis** (`shownLeads` in `roas.js`). Column
+    `title=` tooltips + the intro explain the denominators. Denominator (for ROAS) =
     `sum(cost)` from `public.google_ads_campaign_monthly` by calendar year. Only years
     **with ad spend** are shown (Jul 2024+); a `<12`-month-spend year (2024) reads high
     and the row note says so. The "All years" total is derived in `roas.js`.

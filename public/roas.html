@@ -58,9 +58,9 @@
       ÷ Google Ads spend (google_ads_campaign_monthly). A “Google Ads” lead = the CRM
       “Google Ads?” field = Yes, or a google&nbsp;/&nbsp;cpc session; won revenue uses the CRM deal
       value, counted in the year the enquiry came in. <strong>Won $ and won leads are
-      Google-Ads-attributed; Lost&nbsp;$, Open&nbsp;$ and the win rate reflect every CRM
-      lost/open deal (all pipelines) created that year</strong> — so the win rate is
-      won ÷ (won + all lost + all open). Only years with ad-spend data appear
+      Google-Ads-attributed; the Lost and Open columns show the count of every CRM
+      lost/open deal (all pipelines) created that year, and the win rate is
+      won ÷ (won + all lost + all open).</strong> Only years with ad-spend data appear
       (Jul 2024 onward) — a year with fewer than 12 months of spend (e.g. 2024) reads high
       (see the note on each year). This is a live cross-check, <strong>not</strong> the audited
       ROAS report (which uses ex-GST Buyer Analysis values and stricter attribution).
@@ -157,10 +157,10 @@
               '<small>' + esc(r.periodLabel || '') + '</small></span>';
           } },
         { label: 'Won $',        num: true, cell: function (r) { return money(r.wonAmount); } },
-        { label: 'Lost $',       num: true, cell: function (r) { return money(r.lostAmount); } },
-        { label: 'Open $',       num: true, cell: function (r) { return money(r.openAmount); } },
-        { label: 'Won Leads',    num: true, title: 'Won ÷ GA4-shown leads (Google-Ads-attributed). Kept on the shown basis — not the all-deal win-rate denominator.', cell: function (r) { return r.wonLeads == null ? '—' : r.wonLeads + ' / ' + r.leads; } },
-        { label: 'Win rate',     num: true, title: 'Won ÷ (won + ALL lost + ALL open CRM deals created that year, every pipeline). Denominator differs from the "Won Leads" column.', cell: function (r) { return pct(r.winRate); } },
+        { label: 'Lost',         num: true, title: 'Count of ALL lost CRM deals created that year (every pipeline).', cell: function (r) { return r.lostLeads == null ? '—' : r.lostLeads; } },
+        { label: 'Open',         num: true, title: 'Count of ALL open CRM deals created that year (every pipeline).', cell: function (r) { return r.openLeads == null ? '—' : r.openLeads; } },
+        { label: 'Won Leads',    num: true, title: 'Won deals ÷ (won + lost + open deal count) for the year — same denominator as Win rate. Won is Google-Ads-attributed; lost + open are ALL CRM deals (every pipeline).', cell: function (r) { return r.wonLeads == null ? '—' : r.wonLeads + ' / ' + ((r.wonLeads || 0) + (r.lostLeads || 0) + (r.openLeads || 0)); } },
+        { label: 'Win rate',     num: true, title: 'Won ÷ (won + ALL lost + ALL open CRM deals created that year, every pipeline).', cell: function (r) { return pct(r.winRate); } },
         { label: 'Ad Spend',     num: true, cell: function (r) { return money(r.adSpend); } },
         { label: 'Won Revenue',  num: true, cell: function (r) { return money(r.wonRevenue); } },
         { label: 'ROI ($)',      num: true, cell: function (r) { return money(r.roiDollars); } },

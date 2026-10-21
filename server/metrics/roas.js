@@ -12,13 +12,15 @@
 //     gift / excluded-link rows dropped). See CONTACT_SOURCE_SHOWN in ../lib/sql.js.
 //     NB: google_ads_ac_field is NOT used — a "Google Ads?"=Yes row with no channel
 //     and no JC tag is intentionally excluded here and hidden on the page.
-//   • public.activecampaign_deals — the LOST/OPEN side. As of 2026-10-21 the Lost $ /
-//     Open $ columns, their counts, AND the win-rate denominator come from EVERY lost
-//     (status=2) / open (status=0) CRM deal — all pipelines, by mag_cal_yr(cdate),
-//     value/100 — NOT the GA4-shown rows (which carry almost no lost/open in the
-//     ad-spend years). ASYMMETRY BY DESIGN: Won $/count = GA4-attributed shown rows;
-//     Lost/Open $/count + win rate = all CRM deals. Per-Lead Value and the "won / N"
-//     column deliberately keep the GA4-shown leads basis (see shownLeads).
+//   • public.activecampaign_deals — the LOST/OPEN side. As of 2026-10-21 the Lost /
+//     Open COUNT columns AND the win-rate denominator come from EVERY lost
+//     (status=2) / open (status=0) CRM deal — all pipelines, by mag_cal_yr(cdate) —
+//     NOT the GA4-shown rows (which carry almost no lost/open in the ad-spend years).
+//     ASYMMETRY BY DESIGN: Won $/count = GA4-attributed shown rows; Lost/Open counts +
+//     win rate = all CRM deals. The "Won Leads" column shows won ÷ (won + lost + open
+//     count) — same denominator as the win rate %.
+//     Per-Lead Value alone still uses the GA4-shown leads basis (see shownLeads).
+//     (lostAmount/openAmount are still computed in the payload but no longer displayed.)
 //
 // NOTE — this is a LIVE, GA4-attributed ROAS, NOT the audited "MAG Marketing ROAS
 // Report" sheet. It uses CRM deal_value (not ex-GST Buyer Analysis values) and a
@@ -123,7 +125,7 @@ function shape(r) {
     `Won revenue/leads shown on the GA4 & Ads page (organic/cpc channel or JC manual tag), ` +
     `by enquiry date, ÷ Google Ads spend (${spendMonths} mo` +
     (r.firstSpendMonth && r.lastSpendMonth ? `, ${r.firstSpendMonth}–${r.lastSpendMonth}` : '') + '). ' +
-    `Lost/Open $ + win rate = ALL lost/open CRM deals created that year (every pipeline).`;
+    `Lost/Open counts + win rate = ALL lost/open CRM deals created that year (every pipeline).`;
   return {
     year,
     periodLabel,
@@ -208,7 +210,7 @@ export async function getRoas() {
   const note =
     `${rows.length} year(s) with ad spend (${rows[0].year}–${rows[rows.length - 1].year}). ` +
     `Live GA4-attributed: all-years ROAS ${total.roas.toFixed(2)}× vs ${TARGET_ROAS.toFixed(2)}× target. ` +
-    `Won $/leads = GA4-shown rows; Lost/Open $ + counts + win-rate denominator = ALL CRM ` +
+    `Won $/leads = GA4-shown rows; Lost/Open counts + win-rate denominator = ALL CRM ` +
     `lost/open deals (every pipeline, by cdate year). ` +
     `Not the audited ROAS report (CRM deal values, broader Google Ads? population).`;
 
