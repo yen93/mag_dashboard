@@ -66,7 +66,13 @@ const SELECT = `
     cs.engagement_fee      AS "engagementFee",
     cs.other_fees          AS "otherFees",
     cs.gst                 AS "gst",
-    cs.amount_total        AS "amountTotal"
+    cs.amount_total        AS "amountTotal",
+    -- Display-only flag: is this deal also in Niki's ad-leads tracking sheet
+    -- (public.niki_ad_leads_tracking, matched by deal_id)? EXISTS avoids row
+    -- fan-out when a deal appears on multiple sheet rows. No cache/sync touched.
+    EXISTS (
+      SELECT 1 FROM public.niki_ad_leads_tracking n WHERE n.deal_id = cs.deal_id
+    )                      AS "inNikiList"
   FROM public.ga4_ac_contact_source cs
   LEFT JOIN public.ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id
   ORDER BY cs.cdate DESC NULLS LAST`;

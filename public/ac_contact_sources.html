@@ -125,7 +125,7 @@
           </div>
           <div class="acs-spacer"></div>
           <button type="button" class="acs-reset" id="acsJcToggle" aria-pressed="false"
-                  title="Show/hide JC's Manual Tag column">Show JC's Manual Tag</button>
+                  title="Show/hide Manual Tagging column">Show Manual Tagging</button>
           <button type="button" class="acs-reset" id="acsXeroToggle" aria-pressed="false"
                   title="Show/hide the Xero fee breakdown (Engagement Fee, Other Fees, GST, Amount Total)">Show Xero $</button>
           <button type="button" class="acs-reset" id="acsMetaToggle" aria-pressed="false"
@@ -302,6 +302,13 @@
     // rows (for-review, already-tagged, or already-reviewed); a read-only pill otherwise.
     // "Not paid ad / SEO" (value __not__) posts an empty decision → reviewed, tag cleared.
     function jcTagCell(v, row) {
+      // Deal also in Niki's ad-leads tracking sheet (joined by deal_id, display-only).
+      // JC's tag PREVAILS unless the row is still "for review" (awaiting a JC decision):
+      // on a for-review row that's in Niki's list, show a read-only "In Niki's List"
+      // pill instead of the amber tag <select>. A tagged/reviewed row keeps its JC tag.
+      if (row && row.inNikiList && isForReview(row)) {
+        return '<span class="pill pos" title="Deal is in Niki’s ad-leads tracking list">In Niki’s List</span>';
+      }
       var tag = (v && String(v).trim()) ? String(v) : '';
       var eligible = isForReview(row) || tag || row.jcReviewed;
       if (!canTagJc() || !eligible) return jcTagPill(v);
@@ -548,11 +555,12 @@
         // `text` gives filter/sort/search a stable projection (the render is an
         // interactive <select>, so stripping its HTML would merge every option label).
         cols.push({
-          key: 'jcManualTag', label: "JC's Manual Tag", render: jcTagCell,
+          key: 'jcManualTag', label: 'Manual Tagging', render: jcTagCell,
           text: function (v, row) {
-            if (v && String(v).trim()) return String(v);      // tagged, e.g. "Could be SEO or Paid Ad"
+            if (row && row.inNikiList && isForReview(row)) return "In Niki's List"; // for-review + in Niki's sheet
+            if (v && String(v).trim()) return String(v);      // tagged, e.g. "Could be SEO or Paid Ad" (JC prevails)
             if (row.jcReviewed) return 'Not paid ad / SEO';   // reviewed, cleared
-            return '—';                                       // unset / for review
+            return '—';                                       // unset / for review (not in Niki's list)
           },
         });
       }
@@ -669,12 +677,12 @@
         // Reflect the current column state — default-on for reviewers (see init below).
         jcBtn.classList.toggle('active', SHOW_JC_COL);
         jcBtn.setAttribute('aria-pressed', String(SHOW_JC_COL));
-        jcBtn.textContent = (SHOW_JC_COL ? 'Hide' : 'Show') + " JC's Manual Tag";
+        jcBtn.textContent = (SHOW_JC_COL ? 'Hide' : 'Show') + ' Manual Tagging';
         jcBtn.addEventListener('click', function () {
           SHOW_JC_COL = !SHOW_JC_COL;
           jcBtn.classList.toggle('active', SHOW_JC_COL);
           jcBtn.setAttribute('aria-pressed', String(SHOW_JC_COL));
-          jcBtn.textContent = (SHOW_JC_COL ? 'Hide' : 'Show') + " JC's Manual Tag";
+          jcBtn.textContent = (SHOW_JC_COL ? 'Hide' : 'Show') + ' Manual Tagging';
           apply();
         });
       }

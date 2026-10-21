@@ -242,6 +242,22 @@ Cloud Run.
       "Not paid ad / SEO" / "—") that `renderSortableTable`'s `textOf` prefers for
       filter/sort/search; without it the per-column filter merges for-review and tagged
       rows. Keep that `text` in sync with the three review states.**
+    - **"Manual Tagging" column + "In Niki's List" (as of 2026-10-21):** the JC column and
+      its toolbar toggle are **RENAMED "Manual Tagging"** (user-facing strings only;
+      internal `SHOW_JC_COL` / `#acsJcToggle` / `jcManualTag` key unchanged). When a row's
+      `deal_id` is present in **`public.niki_ad_leads_tracking`** (a NEW static, un-synced
+      table holding Niki's 2022-2025 Google Ads leads sheet; see the data stores) **AND the
+      row is still "for review"** (`isForReview()` — GAds=Yes, blank channel, no effective JC
+      tag, not reviewed), the cell shows a read-only green **"In Niki's List"** pill instead of
+      the amber tag `<select>`; the `text` projection returns `"In Niki's List"` for the same
+      rows. **JC's tag PREVAILS on every non-for-review row** (a tagged/reviewed row keeps its
+      JC value) — the Niki pill only replaces the for-review state. Driven by a
+      new `inNikiList` boolean in `ac-contact-sources.js`'s SELECT via an **`EXISTS` subquery**
+      on `niki_ad_leads_tracking` by `deal_id` (EXISTS, not a JOIN, so a deal on several sheet
+      rows doesn't fan out the page rows). **Display/API-only — the cache table, syncs and
+      ROAS predicate are untouched** (`niki_ad_leads_tracking` is a plain one-time load; its
+      `deal_id` was back-filled by contact-name match to `activecampaign_contacts` → that
+      contact's `activecampaign_deals` row).
     - **Row-visibility rule — DISPLAY vs ROAS now DELIBERATELY DIVERGE (as of 2026-10-21,
       later same day):** the **page DISPLAY** rule is: a row is SHOWN iff it has a JC manual
       tag (always, bypassing the blacklist), OR it is not a `free_gifts_opt_ins` and not an
