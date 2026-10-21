@@ -12,13 +12,13 @@
 //     gift / excluded-link rows dropped). See CONTACT_SOURCE_SHOWN in ../lib/sql.js.
 //     NB: google_ads_ac_field is NOT used — a "Google Ads?"=Yes row with no channel
 //     and no JC tag is intentionally excluded here and hidden on the page.
-//   • public.activecampaign_deals — the LOST/OPEN side. As of 2026-10-21 the Lost /
-//     Open COUNT columns AND the win-rate denominator come from EVERY lost
-//     (status=2) / open (status=0) CRM deal — all pipelines, by mag_cal_yr(cdate) —
-//     NOT the GA4-shown rows (which carry almost no lost/open in the ad-spend years).
+//   • public.ac_google_ads_deals — the LOST/OPEN side. As of 2026-10-21 the Lost /
+//     Open COUNT columns AND the win-rate denominator come from ONLY the deals flagged
+//     "Google Ads? = Yes" in AC (status_raw=2 lost / status_raw=0 open, by
+//     mag_cal_yr(deal_cdate)) — NOT every CRM deal, and NOT the GA4-shown rows.
 //     ASYMMETRY BY DESIGN: Won $/count = GA4-attributed shown rows; Lost/Open counts +
-//     win rate = all CRM deals. The "Won Leads" column shows won ÷ (won + lost + open
-//     count) — same denominator as the win rate %.
+//     win rate = Google-Ads?=Yes deals. The "Won Leads" column shows won ÷ (won + lost +
+//     open count) — same denominator as the win rate %.
 //     Per-Lead Value alone still uses the GA4-shown leads basis (see shownLeads).
 //     (lostAmount/openAmount are still computed in the payload but no longer displayed.)
 //
@@ -34,7 +34,7 @@ import { q, supabaseConfigured } from '../providers/supabase.js';
 import { section } from '../lib/metric.js';
 import { CONTACT_SOURCE_SHOWN } from '../lib/sql.js';
 
-const SRC = 'Live: ga4_ac_contact_source (won) + activecampaign_deals (lost/open) × google_ads_campaign_monthly (Supabase)';
+const SRC = 'Live: ga4_ac_contact_source (won) + ac_google_ads_deals (lost/open, Google Ads?=Yes) × google_ads_campaign_monthly (Supabase)';
 const TARGET_ROAS = 2;
 
 // Numerator population = EXACTLY the rows shown on the GA4 & Ads Leads page
@@ -58,17 +58,18 @@ const SELECT = `
     GROUP BY cs.cal_yr
   ),
   alldeals AS (
-    -- LOST/OPEN side: EVERY lost (status=2) / open (status=0) CRM deal, all pipelines,
-    -- bucketed by mag_cal_yr(cdate) to match ga4_ac_contact_source.cal_yr. value is in
-    -- cents; no FX conversion (matches how won_amount is handled).
+    -- LOST/OPEN side: ONLY deals flagged "Google Ads? = Yes" in AC
+    -- (public.ac_google_ads_deals = the full dealCustomFieldData scan). status_raw
+    -- 0=open / 2=lost, bucketed by mag_cal_yr(deal_cdate) to match
+    -- ga4_ac_contact_source.cal_yr. value is already AUD here (no /100).
     SELECT
-      public.mag_cal_yr(cdate)                                   AS cal_yr,
-      count(*) FILTER (WHERE status = 0)                         AS open_leads,
-      count(*) FILTER (WHERE status = 2)                         AS lost_leads,
-      coalesce(sum(value/100.0) FILTER (WHERE status = 0), 0)    AS open_amount,
-      coalesce(sum(value/100.0) FILTER (WHERE status = 2), 0)    AS lost_amount
-    FROM public.activecampaign_deals
-    WHERE status IN (0, 2)
+      public.mag_cal_yr(deal_cdate)                             AS cal_yr,
+      count(*) FILTER (WHERE status_raw = 0)                    AS open_leads,
+      count(*) FILTER (WHERE status_raw = 2)                    AS lost_leads,
+      coalesce(sum(value) FILTER (WHERE status_raw = 0), 0)     AS open_amount,
+      coalesce(sum(value) FILTER (WHERE status_raw = 2), 0)     AS lost_amount
+    FROM public.ac_google_ads_deals
+    WHERE status_raw IN (0, 2)
     GROUP BY 1
   ),
   spend AS (
@@ -110,13 +111,13 @@ function shape(r) {
   // column (kept on the shown basis). The win rate uses a DIFFERENT denominator below.
   const leads = num(r.shownLeads) || 0;
   const wonLeads = num(r.wonLeads) || 0;
-  const lostLeads = num(r.lostLeads) || 0;   // ALL CRM lost deals that year
-  const openLeads = num(r.openLeads) || 0;   // ALL CRM open deals that year
+  const lostLeads = num(r.lostLeads) || 0;   // Google-Ads?=Yes lost deals that year
+  const openLeads = num(r.openLeads) || 0;   // Google-Ads?=Yes open deals that year
   const wonAmount = num(r.wonAmount) || 0;
   const adSpend = num(r.adSpend) || 0;
   const spendMonths = num(r.spendMonths) || 0;
   const roiDollars = wonAmount - adSpend;
-  const winRateLeads = wonLeads + lostLeads + openLeads; // won(shown) + ALL lost + ALL open
+  const winRateLeads = wonLeads + lostLeads + openLeads; // won(shown) + Google-Ads?=Yes lost + open
   const partial = spendMonths > 0 && spendMonths < 12;
   const periodLabel = partial
     ? `${year} · ${spendMonths} mo ad spend`
@@ -125,7 +126,7 @@ function shape(r) {
     `Won revenue/leads shown on the GA4 & Ads page (organic/cpc channel or JC manual tag), ` +
     `by enquiry date, ÷ Google Ads spend (${spendMonths} mo` +
     (r.firstSpendMonth && r.lastSpendMonth ? `, ${r.firstSpendMonth}–${r.lastSpendMonth}` : '') + '). ' +
-    `Lost/Open counts + win rate = ALL lost/open CRM deals created that year (every pipeline).`;
+    `Lost/Open counts + win rate = lost/open deals flagged Google Ads?=Yes in AC (created that year).`;
   return {
     year,
     periodLabel,
@@ -155,7 +156,7 @@ function totalRow(rows) {
   const wonAmount = sum('wonAmount');
   const leads = sum('leads');                         // shownLeads total (Per-Lead Value / "won / N")
   const wonLeads = sum('wonLeads');
-  const winRateLeads = wonLeads + sum('lostLeads') + sum('openLeads'); // won + ALL lost + ALL open
+  const winRateLeads = wonLeads + sum('lostLeads') + sum('openLeads'); // won + Google-Ads?=Yes lost + open
   const adSpend = sum('adSpend');
   const roiDollars = wonAmount - adSpend;
   return {
@@ -210,8 +211,8 @@ export async function getRoas() {
   const note =
     `${rows.length} year(s) with ad spend (${rows[0].year}–${rows[rows.length - 1].year}). ` +
     `Live GA4-attributed: all-years ROAS ${total.roas.toFixed(2)}× vs ${TARGET_ROAS.toFixed(2)}× target. ` +
-    `Won $/leads = GA4-shown rows; Lost/Open counts + win-rate denominator = ALL CRM ` +
-    `lost/open deals (every pipeline, by cdate year). ` +
+    `Won $/leads = GA4-shown rows; Lost/Open counts + win-rate denominator = lost/open ` +
+    `deals flagged Google Ads?=Yes in AC (by deal cdate year). ` +
     `Not the audited ROAS report (CRM deal values, broader Google Ads? population).`;
 
   return {

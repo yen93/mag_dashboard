@@ -1,0 +1,87 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: ROAS tab — restrict Lost/Open counts (and the win-rate denominator) to
+deals flagged "Google Ads? = Yes" in ActiveCampaign.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"Lost and Open count should only be deals where GAds is yes in AC" — i.e. the
+ROAS tab's Lost and Open count columns should stop counting every CRM lost/open
+deal and instead count only deals whose ActiveCampaign "Google Ads?" custom field
+is Yes. (Started in plan mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the relevant code and data model:
+- server/metrics/roas.js: the ROAS page is computed LIVE. Its `alldeals` CTE was
+  sourcing Lost/Open counts (and, via winRateLeads, the win-rate denominator and
+  the "Won Leads" column) from EVERY lost (status=2) / open (status=0) deal in
+  public.activecampaign_deals, bucketed by mag_cal_yr(cdate). The WON side comes
+  from public.ga4_ac_contact_source (GA4-shown rows) via the shared
+  CONTACT_SOURCE_SHOWN predicate in server/lib/sql.js.
+- Established that "GAds is yes in AC" = the AC DEAL custom field "Google Ads?"
+  (resolved dynamically by the ga4-ac-custom-fields-sync / ac-google-ads-deals-sync
+  edge functions). public.activecampaign_deals has NO Google-Ads column.
+
+Queried Supabase (project aivitcomiywiysrfwqxt / MAGTestProject) to find the
+authoritative source:
+- public.ac_google_ads_deals = 98 rows, all google_ads_field='yes', built by the
+  ac-google-ads-deals-sync edge fn which scans the FULL AC dealCustomFieldData for
+  "Google Ads?=Yes" and upserts. It carries status_raw (0/1/2), deal_cdate, and
+  value already in AUD — self-sufficient, no join needed.
+- Confirmed the gads-only counts are far smaller than all-deal counts
+  (e.g. 2025: 14 lost / 6 open vs 482 / 142).
+- Noted a 14-row discrepancy vs ga4_ac_contact_source.google_ads_ac_field='Yes'
+  (99 deals), attributed to sync timing + synthetic roas-* rows; ac_google_ads_deals
+  is the correct clean deal-set source.
+
+Surfaced one decision via AskUserQuestion: since WON count comes from a different
+population (GA4-shown) than the new Lost/Open (Google Ads?=Yes), should the win-rate
+WON count also move to the Google-Ads?=Yes basis?
+  → USER CHOSE: "Keep Won on GA4-shown basis." So only Lost/Open change; Won $,
+    revenue, ROAS, and the Won COUNT stay GA4-attributed. Win rate becomes
+    won(shown) / (won + gads-lost + gads-open) — a deliberate population asymmetry.
+
+Wrote the plan to the plan file and got approval via ExitPlanMode.
+
+Implemented:
+1. server/metrics/roas.js — swapped the `alldeals` CTE to read
+   public.ac_google_ads_deals (status_raw 0/2, by mag_cal_yr(deal_cdate),
+   value in AUD, no /100). shape()/totalRow() logic unchanged (win rate + "Won
+   Leads" flow through automatically). Updated SRC string, header doc block,
+   inline comments, countedMethod, and the note string to say "Google Ads?=Yes
+   deals" instead of "ALL CRM deals / every pipeline".
+2. public/roas.html — reworded the title= tooltips on the Lost / Open / Won Leads
+   / Win rate columns and the roas-intro blurb to the new basis (no logic change).
+3. CLAUDE.md + as_built.txt — updated the ROAS ASYMMETRY passages and the
+   as_built changelog header to reflect ac_google_ads_deals as the lost/open
+   source.
+
+Verified:
+- Ran the exact roas.js SELECT against the DB: 2024 = 3 won / 18 lost / 1 open /
+  13.6% win ($15,382, 6 mo); 2025 = 12 / 14 / 6 / 37.5% ($33,521); 2026 = 4 / 12 /
+  3 / 21.1% ($27,638, 10 mo). Won $/ROAS unchanged.
+- `node --check server/metrics/roas.js` passed.
+
+No DB migration or edge-function change was needed (ac_google_ads_deals already
+exists and is synced daily). Flagged that a manual Cloud Run redeploy is required
+to ship the server/frontend changes — did NOT deploy (project rule: Claude never
+deploys to Cloud Run).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt / CLAUDE.md / .gitignore (no git
+commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file; as_built.txt was already updated
+during the session's work (changelog header + ROAS entries), confirmed accurate;
+reviewed CLAUDE.md (ROAS ASYMMETRY paragraph already updated in-session) — accurate,
+no further edit needed; checked .gitignore for coverage of any sensitive files.
+No secrets appeared in this session. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

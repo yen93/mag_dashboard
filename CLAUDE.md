@@ -60,8 +60,9 @@ Cloud Run.
     speaking_enquiries, inbound/outbound.
   - **ROAS** (`roas.html` = nav tab "ROAS", `/api/operations/roas`,
     `server/metrics/roas.js`) is a self-rendering page: Google Ads ROAS by
-    **calendar year** — a 12-col table (Won $, Lost #/Open # counts, Won Leads, Win rate,
-    Ad Spend, Won Revenue, ROI $/%, ROAS, Per-Lead Value) + 3 inline Chart.js charts
+    **calendar year** — an 11-col table (Won $, Lost #/Open # counts, Won Leads, Win rate,
+    Ad Spend, ROI $/%, ROAS, Per-Lead Value — the redundant Won Revenue column, equal to
+    Won $, is hidden; the Won Revenue KPI card stays) + 3 inline Chart.js charts
     (grouped bar, ROAS-vs-2.00×-target line, Leads-by-outcome stacked bar). **As of
     2026-10-20 it is LIVE, computed at request time from existing Supabase tables
     — NOT a cache, NOT the Google Sheet:** the WON numerator = `public.ga4_ac_contact_source`,
@@ -72,11 +73,15 @@ Cloud Run.
     `google_ads_ac_field='Yes' OR channel='google / cpc'` filter — so `google_ads_ac_field`
     NO LONGER affects the count (a "Google Ads?"=Yes row with no channel and no JC tag is
     excluded here and hidden on the page). **ASYMMETRY (as of 2026-10-21): the Lost /
-    Open COUNT columns AND the win-rate denominator come from EVERY lost
-    (status=2) / open (status=0) deal in `public.activecampaign_deals` — all pipelines
-    (`group`), all currencies, bucketed by `public.mag_cal_yr(cdate)` — NOT from the
-    GA4-shown rows** (which carry ~0 lost/open in the ad-spend years). So win rate =
-    won(shown) ÷ (won + ALL lost + ALL open). Won $/count stay GA4-attributed. **The Lost
+    Open COUNT columns AND the win-rate denominator come from ONLY the deals flagged
+    "Google Ads?"=Yes in AC — `public.ac_google_ads_deals` (the full AC
+    `dealCustomFieldData` scan; `status_raw=2` lost / `status_raw=0` open, bucketed by
+    `public.mag_cal_yr(deal_cdate)`), NOT every CRM deal and NOT the GA4-shown rows**.
+    (`activecampaign_deals` has NO Google-Ads field, so it can't be the source; the earlier
+    "every lost/open deal in `activecampaign_deals`, all pipelines" design was replaced.)
+    So win rate = won(shown) ÷ (won + Google-Ads?=Yes lost + open). Won $/count stay
+    GA4-attributed (GA4-shown), so Won and Lost/Open come from different populations by
+    design. **The Lost
     and Open table columns now show deal COUNT, not $** (no more `$`; the `lostAmount`/
     `openAmount` are still in the API payload but not displayed). The **"Won Leads" column
     shows won ÷ (won + lost + open count)** — same denominator as the Win rate %; **Per-Lead
