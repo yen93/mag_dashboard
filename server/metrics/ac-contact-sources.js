@@ -87,11 +87,12 @@ function isExcludedConversionLink(link) {
   return EXCLUDED_CONVERSION_LINKS.has(path);
 }
 
-// KEEP IDENTICAL to isExcludedRow() in public/ac_contact_sources.html and to
-// CONTACT_SOURCE_SHOWN in ../lib/sql.js (which ROAS uses to count these rows).
+// KEEP IDENTICAL to isExcludedRow() in public/ac_contact_sources.html.
 // A row is SHOWN iff: JC manual tag (always), OR not a free-gift opt-in AND not an
-// excluded conversion link AND channel looks organic/cpc. google_ads_ac_field is
-// NOT used; referral/teams/email/direct channels fall through to hidden.
+// excluded conversion link AND (channel looks organic/cpc OR google_ads_ac_field='Yes').
+// DELIBERATE DIVERGENCE from CONTACT_SOURCE_SHOWN in ../lib/sql.js: that predicate
+// (used by ROAS) intentionally OMITS the google_ads_ac_field='Yes' branch, so showing
+// these rows on the page/API does NOT change ROAS counts.
 const ORGANIC_OR_CPC = /cpc|organic/i;
 function isExcludedRow(r) {
   if (!r) return false;
@@ -104,8 +105,10 @@ function isExcludedRow(r) {
   if (act === 'free_gifts_opt_ins') return true;
   if (isExcludedConversionLink(r.link || r.conversionLink)) return true;
 
-  // Show only organic/cpc channels; hide everything else.
+  // Show organic/cpc channels, plus AC "Google Ads?"=Yes rows (even with no GA4
+  // channel — e.g. aged out of the ~60-day window); hide everything else.
   if (ORGANIC_OR_CPC.test(String(r.channel || ''))) return false;
+  if (String(r.googleAdsAcField || '').trim().toLowerCase() === 'yes') return false;
   return true;
 }
 

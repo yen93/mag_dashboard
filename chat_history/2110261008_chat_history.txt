@@ -1,0 +1,79 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: GA4 & Ads Leads page — un-hide "Google Ads? = Yes" rows that have a blank
+channel and no JC tag, while leaving ROAS counts untouched.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"rows where google ads in AC is yes but blank in both channel and JC's column were
+previously hidden. pls show them in tab table again pls. see chat history. dont
+touch roas tho" — i.e. reverse the side effect of the 2026-10-21 row-visibility
+unification so AC "Google Ads?"=Yes contacts (with no GA4 channel and no JC manual
+tag) reappear on ac_contact_sources.html, without changing ROAS numbers. (Started
+in plan mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the three "KEEP IDENTICAL" copies of the contact-source row-visibility
+rule (introduced by commit d4d0b67):
+- public/ac_contact_sources.html inline isExcludedRow() (~line 360).
+- server/metrics/ac-contact-sources.js isExcludedRow() (~line 96) — drives the API
+  rows returned + the chip-count note.
+- server/lib/sql.js CONTACT_SOURCE_SHOWN — the SQL predicate used by roas.js so ROAS
+  counts exactly the shown rows.
+Current rule: shown iff JC tag (always), OR (not free_gifts_opt_ins AND not an
+excluded conversion link AND channel ~* 'cpc|organic'). google_ads_ac_field no
+longer affected visibility, so Google-Ads?=Yes contacts aged out of the ~60-day GA4
+window (blank channel) with no JC tag fell through to hidden.
+
+Established that roas.js reads CONTACT_SOURCE_SHOWN directly against the DB, NOT the
+ac-contact-sources.js API — so the page's and server metric's isExcludedRow() are
+independent of ROAS. That means the display copies can be changed while leaving
+CONTACT_SOURCE_SHOWN alone, satisfying "don't touch ROAS."
+
+Quantified impact with read-only SELECTs (project aivitcomiywiysrfwqxt /
+MAGTestProject): 87 rows match google_ads_ac_field='yes' AND jc_manual_tag IS NULL
+AND channel not cpc/organic AND not free_gifts_opt_ins. 0 of the 87 are free-gift
+opt-ins, so keeping the safety blacklist applied to the new branch changes nothing
+for current data.
+
+Wrote the plan to the plan file and got approval via ExitPlanMode. Decided not to
+ask about bypassing the blacklist (0 current conflicts) — kept the blacklist applied
+for consistency with the channel branch.
+
+Implemented (display-only, two mirrored edits + comment updates):
+1. public/ac_contact_sources.html — added, after the channel check in isExcludedRow():
+   if (String(r.googleAdsAcField||'').trim().toLowerCase()==='yes') return false;
+2. server/metrics/ac-contact-sources.js — same added line in the mirror function.
+3. server/lib/sql.js — CONTACT_SOURCE_SHOWN logic LEFT UNCHANGED (ROAS unaffected).
+4. Rewrote all three "KEEP IDENTICAL" comment blocks to document the DELIBERATE
+   DIVERGENCE: the two display copies now also show google_ads_ac_field='Yes' rows;
+   the ROAS predicate intentionally omits that branch — with an explicit "do NOT
+   re-sync" note in sql.js.
+
+New effective display rule: shown iff jcManualTag (always) OR (not free-gift AND not
+excluded-link AND (channel cpc/organic OR googleAdsAcField=='yes')).
+
+Verified: `node --check` passed on both edited server files. Flagged the expected
+side effect that the 87 rows now also count toward the page KPIs (Total Leads /
+Total Deal Value) and the chip-count note, since they are now "shown." A manual
+Cloud Run redeploy is required to ship — did NOT deploy (project rule: Claude never
+deploys to Cloud Run).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt / CLAUDE.md / .gitignore (no git
+commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file; updated CLAUDE.md so the
+contact-sources row-visibility section reflects the intentional page/ROAS
+divergence; updated as_built.txt changelog; reviewed .gitignore (sensitive files
+already covered — no change). No secrets appeared in this session. No git commands
+run — the user commits and pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

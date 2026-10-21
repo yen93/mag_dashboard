@@ -17,16 +17,17 @@ export const SOURCE_BUCKET = `
     ELSE 'Other'
   END`;
 
-// The single "is this contact-source row SHOWN on the GA4 & Ads Leads page?" rule,
-// as a SQL boolean over an aliased `public.ga4_ac_contact_source cs` row. ROAS uses
-// this so it counts EXACTLY the rows the page displays (hidden rows are never counted).
-//
-// KEEP IDENTICAL to the JS `isExcludedRow()` in BOTH public/ac_contact_sources.html
-// and server/metrics/ac-contact-sources.js. A row is shown iff:
-//   • it has a JC manual tag (always shown, bypasses the blacklist), OR
+// The "which contact-source rows does ROAS count?" rule, as a SQL boolean over an
+// aliased `public.ga4_ac_contact_source cs` row. A row is counted iff:
+//   • it has a JC manual tag (always counted, bypasses the blacklist), OR
 //   • it is not a free-gift opt-in AND not an excluded conversion link AND its
 //     channel looks organic/cpc (contains "cpc" or "organic", case-insensitive).
-// `google_ads_ac_field` deliberately does NOT affect visibility.
+//
+// DELIBERATE DIVERGENCE from the page's JS `isExcludedRow()` in
+// public/ac_contact_sources.html and server/metrics/ac-contact-sources.js: those two
+// display copies ALSO show rows flagged `google_ads_ac_field='Yes'` (AC "Google Ads?"=Yes
+// even with no GA4 channel). This predicate intentionally OMITS that branch so ROAS counts
+// are unaffected — do NOT add a google_ads_ac_field branch here to "re-sync" the copies.
 // Assumes the table is aliased `cs`.
 export const CONTACT_SOURCE_SHOWN = `(
   cs.jc_manual_tag IS NOT NULL

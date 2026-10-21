@@ -354,8 +354,11 @@
     // (contains "cpc" or "organic"). google_ads_ac_field does NOT affect visibility.
     // Referral / teams / email / direct channels fall through to hidden automatically.
     //
-    // KEEP IDENTICAL to isExcludedRow() in server/metrics/ac-contact-sources.js and to
-    // CONTACT_SOURCE_SHOWN in server/lib/sql.js (which ROAS uses to count these rows).
+    // KEEP IDENTICAL to isExcludedRow() in server/metrics/ac-contact-sources.js.
+    // DELIBERATE DIVERGENCE from CONTACT_SOURCE_SHOWN in server/lib/sql.js: these two
+    // display copies ALSO show google_ads_ac_field='Yes' rows (AC "Google Ads?"=Yes even
+    // with no GA4 channel). That branch is intentionally NOT mirrored into
+    // CONTACT_SOURCE_SHOWN, so ROAS keeps counting only channel/JC rows and is unaffected.
     var ORGANIC_OR_CPC = /cpc|organic/i;
     function isExcludedRow(r) {
       if (!r) return false;
@@ -368,9 +371,11 @@
       if (act === 'free_gifts_opt_ins') return true;
       if (isExcludedConversionLink(r.link || r.conversionLink)) return true;
 
-      // Show only organic/cpc channels; hide everything else (null, direct, referral,
-      // teams, email, booking, …).
+      // Show organic/cpc channels, plus AC "Google Ads?"=Yes rows (even with no GA4
+      // channel — e.g. aged out of the ~60-day window); hide everything else (null,
+      // direct, referral, teams, email, booking, …).
       if (ORGANIC_OR_CPC.test(String(r.channel || ''))) return false;
+      if (String(r.googleAdsAcField || '').trim().toLowerCase() === 'yes') return false;
       return true;
     }
 

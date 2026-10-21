@@ -66,13 +66,16 @@ Cloud Run.
     (grouped bar, ROAS-vs-2.00×-target line, Leads-by-outcome stacked bar). **As of
     2026-10-20 it is LIVE, computed at request time from existing Supabase tables
     — NOT a cache, NOT the Google Sheet:** the WON numerator = `public.ga4_ac_contact_source`,
-    counting **EXACTLY the rows shown on the GA4 & Ads Leads page** — won revenue = CRM
-    `deal_value`, counted by contact `cal_yr`. As of **2026-10-21** `roas.js` imports the
-    shared `CONTACT_SOURCE_SHOWN` predicate from `server/lib/sql.js` (organic/cpc channel
-    OR a JC manual tag; free-gift / excluded-link rows dropped) instead of the old
+    counting the rows matched by the shared `CONTACT_SOURCE_SHOWN` predicate (**NOT quite
+    "exactly the rows shown on the page" anymore** — see the divergence note below) — won
+    revenue = CRM `deal_value`, counted by contact `cal_yr`. As of **2026-10-21** `roas.js`
+    imports `CONTACT_SOURCE_SHOWN` from `server/lib/sql.js` (organic/cpc channel OR a JC
+    manual tag; free-gift / excluded-link rows dropped) instead of the old
     `google_ads_ac_field='Yes' OR channel='google / cpc'` filter — so `google_ads_ac_field`
-    NO LONGER affects the count (a "Google Ads?"=Yes row with no channel and no JC tag is
-    excluded here and hidden on the page). **ASYMMETRY (as of 2026-10-21): the Lost /
+    NO LONGER affects the ROAS count (a "Google Ads?"=Yes row with no channel and no JC tag
+    is excluded **from ROAS** here — but note that as of later the same day such rows ARE now
+    SHOWN on the GA4 & Ads Leads page, which is a deliberate DISPLAY-only divergence that does
+    NOT feed ROAS; see the contact-sources "Row-visibility" note). **ASYMMETRY (as of 2026-10-21): the Lost /
     Open COUNT columns AND the win-rate denominator come from ONLY the deals flagged
     "Google Ads?"=Yes in AC — `public.ac_google_ads_deals` (the full AC
     `dealCustomFieldData` scan; `status_raw=2` lost / `status_raw=0` open, bucketed by
@@ -202,18 +205,24 @@ Cloud Run.
       short-circuits `return false` when `jcManualTag` is set, so the ROAS-audit rows
       (null channel, no match) stay visible. The page's "Show JC's Manual Tag" toolbar
       toggle controls only the **column**, not row visibility.
-    - **Row-visibility rule unified on channel + JC tag (as of 2026-10-21):** a contact-
-      source row is SHOWN iff it has a JC manual tag (always, bypassing the blacklist), OR
-      it is not a `free_gifts_opt_ins` and not an excluded conversion link and its
-      `channel` matches `/cpc|organic/i`. Everything else (null/direct/referral/teams/
-      email/booking) is hidden. `google_ads_ac_field` NO LONGER affects visibility (the old
-      google-ads/conversion-action hide rules are gone). The **identical** rule lives in
-      THREE places, kept in sync by "KEEP IDENTICAL" comments — **edit all three together:**
-      the page's inline `isExcludedRow()` (`public/ac_contact_sources.html`), the server
-      `isExcludedRow()` (`server/metrics/ac-contact-sources.js`, drives the chip count), and
-      the `CONTACT_SOURCE_SHOWN` SQL predicate (`server/lib/sql.js`, used by `roas.js` so
-      ROAS counts exactly the shown rows). Hidden rows are NOT counted in ROAS. Migration:
-      `supabase/migrations/20261020060000_contact_source_fy_calyr_jc_columns.sql`.
+    - **Row-visibility rule — DISPLAY vs ROAS now DELIBERATELY DIVERGE (as of 2026-10-21,
+      later same day):** the **page DISPLAY** rule is: a row is SHOWN iff it has a JC manual
+      tag (always, bypassing the blacklist), OR it is not a `free_gifts_opt_ins` and not an
+      excluded conversion link AND (`channel` matches `/cpc|organic/i` **OR**
+      `google_ads_ac_field` is `'yes'`). Everything else (null/direct/referral/teams/email/
+      booking with no Google-Ads flag) is hidden. The `google_ads_ac_field='Yes'` branch was
+      **RE-ADDED** (it had been dropped earlier the same day) to un-hide ~87 "Google Ads?"=Yes
+      contacts whose GA4 `channel` is blank (aged out of the ~60-day window) and that have no
+      JC tag — the user asked for these back in the table. The display rule lives in **TWO**
+      identical copies, "KEEP IDENTICAL" — **edit both together:** the page's inline
+      `isExcludedRow()` (`public/ac_contact_sources.html`) and the server `isExcludedRow()`
+      (`server/metrics/ac-contact-sources.js`, drives the chip count / API rows). **It
+      intentionally DIVERGES from the `CONTACT_SOURCE_SHOWN` SQL predicate (`server/lib/sql.js`),
+      which `roas.js` uses: that predicate OMITS the `google_ads_ac_field` branch (channel +
+      JC tag only) so ROAS counts are unaffected by showing these rows — DO NOT "re-sync" it
+      by adding a google_ads branch there.** Knock-on: the re-shown rows DO count toward the
+      page KPIs + chip-count note (they're "shown"), but NOT toward ROAS. Migration (unrelated,
+      for the FY/calYr/JC columns): `supabase/migrations/20261020060000_contact_source_fy_calyr_jc_columns.sql`.
     - **`engagement_fee` / `other_fees` / `gst` / `amount_total` (Xero $) columns (as of
       2026-10-20):** the Xero invoice breakdown of a deal, shown behind the page's **"Show
       Xero $"** toolbar toggle (`#acsXeroToggle` → `SHOW_XERO_COLS`; inserted right after the
