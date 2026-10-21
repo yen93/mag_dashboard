@@ -7,11 +7,13 @@
 //     (the ad-spend DENOMINATOR). Refreshed by the google-ads-campaign-monthly-sync
 //     routine. Coverage starts Jul 2024, so the tab shows only years with ad spend.
 //   • public.ga4_ac_contact_source — per-contact GA4/Calendly→AC attribution (the
-//     WON numerator: won deals + values only). Counted population = EXACTLY the rows
-//     shown on the GA4 & Ads Leads page: organic/cpc channel OR a JC manual tag (free-
-//     gift / excluded-link rows dropped). See CONTACT_SOURCE_SHOWN in ../lib/sql.js.
-//     NB: google_ads_ac_field is NOT used — a "Google Ads?"=Yes row with no channel
-//     and no JC tag is intentionally excluded here and hidden on the page.
+//     WON numerator: won deals + values only). Counted population = organic/cpc channel
+//     OR an EFFECTIVE JC tag (free-gift / excluded-link rows dropped). See
+//     CONTACT_SOURCE_SHOWN in ../lib/sql.js — it joins the JC manual-review override
+//     (public.ga4cs_jc_manual_review), so a row JC tags "Could be SEO or Paid Ad" (even
+//     a "Google Ads?"=Yes row with no channel) now FEEDS ROAS, and one he reviews as
+//     "Not paid ad / SEO" does not. NB: google_ads_ac_field itself is still NOT used —
+//     an UNtagged "Google Ads?"=Yes row with no channel stays excluded here.
 //   • public.ac_google_ads_deals — the LOST/OPEN side. As of 2026-10-21 the Lost /
 //     Open COUNT columns AND the win-rate denominator come from ONLY the deals flagged
 //     "Google Ads? = Yes" in AC (status_raw=2 lost / status_raw=0 open, by
@@ -52,6 +54,10 @@ const SELECT = `
       count(*) FILTER (WHERE cs.deal_status IN ('won','lost','open'))   AS leads,
       coalesce(sum(cs.deal_value) FILTER (WHERE cs.deal_status = 'won'),  0) AS won_amount
     FROM public.ga4_ac_contact_source cs
+    -- Override join required by CONTACT_SOURCE_SHOWN: a JC manual-review decision
+    -- (ga4cs_jc_manual_review) wins over cs.jc_manual_tag, so a JC-tagged
+    -- "Could be SEO or Paid Ad" row feeds ROAS (and a "Not paid ad / SEO" one doesn't).
+    LEFT JOIN public.ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id
     WHERE cs.cal_yr IS NOT NULL
       AND cs.deal_status IN ('won','lost','open')
       AND ${GADS_FILTER}

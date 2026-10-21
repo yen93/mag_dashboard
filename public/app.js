@@ -74,6 +74,24 @@ function fetchMetrics(area, range) {
   return fetchJSON('/api/metrics/' + area + '?range=' + encodeURIComponent(range));
 }
 
+// POST JSON to an authenticated endpoint (adds the Bearer token, logs out on 401).
+function postJSON(path, body) {
+  return fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: 'Bearer ' + getToken(),
+    },
+    body: JSON.stringify(body || {}),
+  }).then(function (res) {
+    if (res.status === 401) { logout(); throw new Error('Session expired'); }
+    return res.json().then(function (data) {
+      if (!res.ok) throw new Error(data.error || 'Request failed');
+      return data;
+    });
+  });
+}
+
 /* ---------- Formatting ---------- */
 var _aud = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', maximumFractionDigits: 0 });
 var _num = new Intl.NumberFormat('en-AU');
@@ -289,7 +307,8 @@ function renderSortableTable(containerId, rows, columns, opts) {
         '" data-key="' + esc(c.key) + '"><span class="th-label">' + esc(c.label) + caret + '</span>' + funnel + '</th>';
     }).join('') + '</tr>';
     var tbody = displayList.length ? displayList.map(function (row) {
-      return '<tr>' + visibleColumns.map(function (c) {
+      var rowCls = opts.rowClass ? String(opts.rowClass(row) || '') : '';
+      return '<tr' + (rowCls ? ' class="' + esc(rowCls) + '"' : '') + '>' + visibleColumns.map(function (c) {
         var v = row[c.key];
         var cell = c.render ? c.render(v, row) : (v == null ? '—' : (isNum(c) ? fmt(v, c.unit) : (c.unit === 'date' ? esc(fmtDate(v)) : esc(v))));
         return '<td class="' + (isNum(c) ? 'num' : '') + '">' + cell + '</td>';

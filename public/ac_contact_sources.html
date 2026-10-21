@@ -137,7 +137,7 @@
     </div>
   </main>
 
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
   <script>
     var ALL_ROWS = [];
     // Persistent table state (sort / search / per-column filters). Owned here and
@@ -254,6 +254,41 @@
       if (v === null || v === undefined || v === '') return '—';
       var s = String(v);
       return '<span class="pill partial" title="' + esc(s) + '">' + esc(s) + '</span>';
+    }
+    // Authorized to set the JC manual review tag (James + admins). Mirrors the server
+    // gate canReviewJc(); the server re-checks every write — this only decides whether
+    // to render the interactive control instead of a read-only pill.
+    function canTagJc() {
+      var u = currentUser();
+      return !!(u && (u.role === 'admin' || u.email === 'james@myadventuregroup.com.au'));
+    }
+    // A "for review" row: AC "Google Ads?"=Yes but no GA4 channel and no (effective) JC
+    // tag and not yet reviewed. These get the amber row highlight and a tagging control.
+    function isForReview(r) {
+      if (!r) return false;
+      if (String(r.googleAdsAcField || '').trim().toLowerCase() !== 'yes') return false;
+      if (String(r.channel || '').trim()) return false;
+      if (r.jcManualTag && String(r.jcManualTag).trim()) return false;
+      if (r.jcReviewed) return false;
+      return true;
+    }
+    // JC column cell: an interactive tag control for authorized users on review-eligible
+    // rows (for-review, already-tagged, or already-reviewed); a read-only pill otherwise.
+    // "Not paid ad / SEO" (value __not__) posts an empty decision → reviewed, tag cleared.
+    function jcTagCell(v, row) {
+      var tag = (v && String(v).trim()) ? String(v) : '';
+      var eligible = isForReview(row) || tag || row.jcReviewed;
+      if (!canTagJc() || !eligible) return jcTagPill(v);
+      var cur = tag ? tag : (row.jcReviewed ? '__not__' : '');
+      var opt = function (val, label) {
+        return '<option value="' + esc(val) + '"' + (cur === val ? ' selected' : '') + '>' + esc(label) + '</option>';
+      };
+      var title = row.jcSetBy ? ('Reviewed by ' + row.jcSetBy) : 'Set JC review tag';
+      return '<select class="acs-jc-select" data-jc-contact="' + esc(String(row.contactId)) + '" title="' + esc(title) + '">'
+        + opt('', '— set tag —')
+        + opt('Could be SEO or Paid Ad', 'Could be SEO or Paid Ad')
+        + opt('__not__', 'Not paid ad / SEO')
+        + '</select>';
     }
     // "Google Ads?" custom field from AC deal (Qualification Details)
     function googleAdsPill(v) {
@@ -483,7 +518,7 @@
       }
       // "JC's Manual Tag" column, shown/hidden by its toolbar toggle (hidden by default).
       if (SHOW_JC_COL) {
-        cols.push({ key: 'jcManualTag', label: "JC's Manual Tag", render: jcTagPill });
+        cols.push({ key: 'jcManualTag', label: "JC's Manual Tag", render: jcTagCell });
       }
       // Meta columns pinned to the far right, shown/hidden by the toolbar toggle.
       if (SHOW_META_COLS) {
@@ -500,6 +535,7 @@
         searchPlaceholder: 'Search contacts…',
         sortKey: 'cdate', sortDir: 'desc',
         emptyText: 'No leads in this date range.',
+        rowClass: function (r) { return isForReview(r) ? 'acs-review' : ''; },
         onCount: function (shown, total) {
           var el = document.getElementById('acsCount');
           if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
@@ -588,12 +624,45 @@
         setQuick(0);
       });
       var jcBtn = document.getElementById('acsJcToggle');
-      if (jcBtn) jcBtn.addEventListener('click', function () {
-        SHOW_JC_COL = !SHOW_JC_COL;
+      if (jcBtn) {
+        // Reflect the current column state — default-on for reviewers (see init below).
         jcBtn.classList.toggle('active', SHOW_JC_COL);
         jcBtn.setAttribute('aria-pressed', String(SHOW_JC_COL));
         jcBtn.textContent = (SHOW_JC_COL ? 'Hide' : 'Show') + " JC's Manual Tag";
-        apply();
+        jcBtn.addEventListener('click', function () {
+          SHOW_JC_COL = !SHOW_JC_COL;
+          jcBtn.classList.toggle('active', SHOW_JC_COL);
+          jcBtn.setAttribute('aria-pressed', String(SHOW_JC_COL));
+          jcBtn.textContent = (SHOW_JC_COL ? 'Hide' : 'Show') + " JC's Manual Tag";
+          apply();
+        });
+      }
+      // Delegated handler for the in-cell JC tag controls (the table HTML is rebuilt on
+      // every apply(), so listen on the persistent #acsRows host). Authorized server-side.
+      var jcHost = document.getElementById('acsRows');
+      if (jcHost) jcHost.addEventListener('change', function (e) {
+        var sel = (e.target && e.target.closest) ? e.target.closest('.acs-jc-select') : null;
+        if (!sel) return;
+        var contactId = sel.getAttribute('data-jc-contact');
+        var raw = sel.value;
+        if (raw === '') return; // placeholder — no-op
+        var decision = raw === '__not__' ? '' : raw;
+        sel.disabled = true;
+        postJSON('/api/operations/contact-sources/jc-tag', { contactId: contactId, decision: decision })
+          .then(function (resp) {
+            var row = ALL_ROWS.filter(function (r) { return String(r.contactId) === String(contactId); })[0];
+            if (row) {
+              row.jcManualTag = resp.jcManualTag || null;
+              row.jcReviewed = true;
+              row.jcSetBy = resp.jcSetBy;
+              row.jcSetAt = resp.jcSetAt;
+            }
+            apply(); // rebuilds the table: drops the highlight, shows the new pill
+          })
+          .catch(function (err) {
+            sel.disabled = false;
+            alert('Could not save tag: ' + err.message);
+          });
       });
       var xeroBtn = document.getElementById('acsXeroToggle');
       if (xeroBtn) xeroBtn.addEventListener('click', function () {
@@ -631,6 +700,9 @@
     }
 
     initPage('operations'); // login / top-bar / theme only — this page renders its own table
+    // Reviewers (James + admins) get the JC column open by default so the tagging
+    // controls are visible without first toggling it on.
+    if (canTagJc()) SHOW_JC_COL = true;
     if (currentUser()) { wireToolbar(); loadContactSources(); }
   </script>
 </body>

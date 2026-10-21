@@ -36,7 +36,13 @@ const SELECT = `
     cs.cdate               AS "cdate",
     cs.fy                  AS "fy",
     cs.cal_yr             AS "calYr",
-    cs.jc_manual_tag      AS "jcManualTag",
+    -- Effective JC tag: a manual review decision (ga4cs_jc_manual_review) wins over the
+    -- auto-derived cs.jc_manual_tag. jcReviewed = a manual review row exists (decision may
+    -- be NULL = reviewed-negative). jcSetBy/jcSetAt power the cell tooltip.
+    CASE WHEN r.contact_id IS NOT NULL THEN r.decision ELSE cs.jc_manual_tag END AS "jcManualTag",
+    (r.contact_id IS NOT NULL) AS "jcReviewed",
+    r.set_by               AS "jcSetBy",
+    r.updated_at           AS "jcSetAt",
     cs.channel             AS "channel",
     cs.conversion_action   AS "conversionAction",
     cs.conversion_link     AS "link",
@@ -62,6 +68,7 @@ const SELECT = `
     cs.gst                 AS "gst",
     cs.amount_total        AS "amountTotal"
   FROM public.ga4_ac_contact_source cs
+  LEFT JOIN public.ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id
   ORDER BY cs.cdate DESC NULLS LAST`;
 
 const EXCLUDED_CONVERSION_LINKS = new Set([

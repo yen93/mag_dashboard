@@ -12,6 +12,12 @@ const ADMIN_EMAILS = [
   'admin@myadventuregroup.com.au',
 ];
 
+// Beyond the admins, James (JC) may set the manual review tag on the GA4 & Ads
+// Leads page even though his role is `viewer`.
+const JC_REVIEW_EMAILS = [
+  'james@myadventuregroup.com.au',
+];
+
 function normalize(email) {
   return String(email || '').trim().toLowerCase();
 }
@@ -45,6 +51,12 @@ export function userFromEmail(email) {
     email: addr,
     role: ADMIN_EMAILS.includes(addr) ? 'admin' : 'viewer',
   };
+}
+
+/** True iff `email` may set the JC manual review tag (admins + James). */
+export function canReviewJc(email) {
+  const addr = normalize(email);
+  return ADMIN_EMAILS.includes(addr) || JC_REVIEW_EMAILS.includes(addr);
 }
 
 /** Public view of a user. */

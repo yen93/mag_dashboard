@@ -72,10 +72,17 @@ Cloud Run.
     imports `CONTACT_SOURCE_SHOWN` from `server/lib/sql.js` (organic/cpc channel OR a JC
     manual tag; free-gift / excluded-link rows dropped) instead of the old
     `google_ads_ac_field='Yes' OR channel='google / cpc'` filter — so `google_ads_ac_field`
-    NO LONGER affects the ROAS count (a "Google Ads?"=Yes row with no channel and no JC tag
-    is excluded **from ROAS** here — but note that as of later the same day such rows ARE now
-    SHOWN on the GA4 & Ads Leads page, which is a deliberate DISPLAY-only divergence that does
-    NOT feed ROAS; see the contact-sources "Row-visibility" note). **ASYMMETRY (as of 2026-10-21): the Lost /
+    NO LONGER affects the ROAS count (an UNtagged "Google Ads?"=Yes row with no channel is
+    excluded **from ROAS** here — but note that as of later the same day such rows ARE now
+    SHOWN on the GA4 & Ads Leads page, which is a deliberate DISPLAY-only divergence; see the
+    contact-sources "Row-visibility" note). **BUT (as of 2026-10-21, later) a JC manual-review
+    tag DOES feed ROAS:** `CONTACT_SOURCE_SHOWN`'s JC branch now uses the **EFFECTIVE** tag
+    (a `public.ga4cs_jc_manual_review` override wins over `cs.jc_manual_tag`), so a row JC
+    tags "Could be SEO or Paid Ad" enters the WON population (won deal → Won $; lost/open →
+    the GA4-shown `leads` denominator) and a "Not paid ad / SEO" (decision NULL) one doesn't.
+    The predicate therefore **requires consumers to `LEFT JOIN public.ga4cs_jc_manual_review r
+    ON r.contact_id = cs.contact_id`** — `roas.js`'s WON `deals` CTE adds that join. See the
+    contact-sources "JC manual-review tagging" note. **ASYMMETRY (as of 2026-10-21): the Lost /
     Open COUNT columns AND the win-rate denominator come from ONLY the deals flagged
     "Google Ads?"=Yes in AC — `public.ac_google_ads_deals` (the full AC
     `dealCustomFieldData` scan; `status_raw=2` lost / `status_raw=0` open, bucketed by
@@ -205,6 +212,26 @@ Cloud Run.
       short-circuits `return false` when `jcManualTag` is set, so the ROAS-audit rows
       (null channel, no match) stay visible. The page's "Show JC's Manual Tag" toolbar
       toggle controls only the **column**, not row visibility.
+    - **JC manual-review tagging (NEW as of 2026-10-21):** James (`james@`) + admins
+      (`canReviewJc` in `server/users.js` = `ADMIN_EMAILS` + `JC_REVIEW_EMAILS[james@]`;
+      **James is a `viewer` so gate by EMAIL, not role**) can set the JC tag from the page.
+      The "for review" rows (`google_ads_ac_field='Yes'` + blank `channel` + no effective
+      tag + not yet reviewed, ~87) get an **amber `.acs-review` row highlight** (new
+      OPTIONAL `opts.rowClass` on `renderSortableTable`) and an in-cell `<select>`
+      (`jcTagCell`) to pick **"Could be SEO or Paid Ad"** or **"Not paid ad / SEO"**
+      (= reviewed, tag cleared, shows "—"). The decision does **NOT** go into
+      `cs.jc_manual_tag` (the trigger + daily jobs would clobber it) — it is upserted into
+      a **separate durable table `public.ga4cs_jc_manual_review`** (PK contact_id) + an
+      append-only **`public.ga4cs_jc_manual_review_log`** (migration
+      `20261021090000_ga4cs_jc_manual_review.sql`), via **`POST
+      /api/operations/contact-sources/jc-tag`** (gated by `canReviewJc`; parameterized
+      upsert+log then `clearCache()`). **The read path and ROAS treat this override as the
+      EFFECTIVE tag — it WINS over `cs.jc_manual_tag` — so both the SELECT in
+      `ac-contact-sources.js` AND `CONTACT_SOURCE_SHOWN` LEFT JOIN
+      `ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id`.** `jcManualTag` shown on
+      the page is thus the effective value, and a positive tag FEEDS ROAS (see the ROAS
+      bullet). Client gate `canTagJc()` mirrors the server; the JC column is **default-open
+      for reviewers**; `app.js` gained `postJSON()`; page is `app.js?v=4`.
     - **Row-visibility rule — DISPLAY vs ROAS now DELIBERATELY DIVERGE (as of 2026-10-21,
       later same day):** the **page DISPLAY** rule is: a row is SHOWN iff it has a JC manual
       tag (always, bypassing the blacklist), OR it is not a `free_gifts_opt_ins` and not an
@@ -219,9 +246,11 @@ Cloud Run.
       (`server/metrics/ac-contact-sources.js`, drives the chip count / API rows). **It
       intentionally DIVERGES from the `CONTACT_SOURCE_SHOWN` SQL predicate (`server/lib/sql.js`),
       which `roas.js` uses: that predicate OMITS the `google_ads_ac_field` branch (channel +
-      JC tag only) so ROAS counts are unaffected by showing these rows — DO NOT "re-sync" it
-      by adding a google_ads branch there.** Knock-on: the re-shown rows DO count toward the
-      page KPIs + chip-count note (they're "shown"), but NOT toward ROAS. Migration (unrelated,
+      effective-JC-tag only) so merely SHOWING these rows doesn't affect ROAS — DO NOT
+      "re-sync" it by adding a google_ads branch there.** (But a JC manual-review tag DOES
+      feed ROAS via the effective-tag branch — see the JC manual-review tagging bullet
+      above.) Knock-on: the re-shown rows DO count toward the page KPIs + chip-count note
+      (they're "shown"), but an UNtagged one does NOT count toward ROAS. Migration (unrelated,
       for the FY/calYr/JC columns): `supabase/migrations/20261020060000_contact_source_fy_calyr_jc_columns.sql`.
     - **`engagement_fee` / `other_fees` / `gst` / `amount_total` (Xero $) columns (as of
       2026-10-20):** the Xero invoice breakdown of a deal, shown behind the page's **"Show

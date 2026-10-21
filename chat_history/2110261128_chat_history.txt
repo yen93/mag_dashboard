@@ -1,0 +1,143 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: Build the JC manual-review tagging feature on the GA4 & Ads Leads page —
+highlight "Google Ads?=Yes, no channel/tag" rows "for review", let James/admins
+tag them "Could be SEO or Paid Ad" (or not) with the decision logged in the DB,
+then make a positive tag feed ROAS.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"these rows where GAds is yes in AC but both JC and channel cols are null should
+be highlighted as 'for review' and in the JC column, there should be an option for
+JC to tag it as 'Could be SEO or Paid Ad' or not. this approval system should then
+be logged in DB. only JC (james@myadventuregroup.com.au) should have this option to
+tag these rows." (Started in plan mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran three parallel Explore agents (frontend, server, DB) to map the feature.
+
+Key findings:
+- Frontend (public/ac_contact_sources.html + app.js): page fetches
+  /api/operations/contact-sources via fetchJSON (Bearer token from localStorage
+  'mag_token'); renders via shared renderSortableTable() which emits bare <tr> with
+  NO row-class hook and column render(value,row); JC column behind a "Show JC's
+  Manual Tag" toggle (jcTagPill); currentUser() decodes the JWT client-side for
+  {id,email,name,role}; no existing row-highlight CSS.
+- Server (index.js / auth.js / users.js / providers/supabase.js / lib/cache.js):
+  requireAuth sets req.user={sub,email,name,role}; James is a 'viewer' (not in
+  ADMIN_EMAILS) so must gate by email; q(sql,params) supports parameterized writes
+  (would be the first mutating call); no POST under /api/operations yet; cache is a
+  10-min in-memory Map with only a global clearCache().
+- DB (Supabase MAGTestProject, ref aivitcomiywiysrfwqxt): ga4_ac_contact_source PK
+  = contact_id; jc_manual_tag is a plain column auto-filled by trigger
+  trg_ga4cs_jc_manual_tag -> ga4cs_set_jc_manual_tag() from
+  mag_gads_direct_inbound_lead_source.jc_final_attr by deal_id (fires on INSERT or
+  UPDATE OF deal_id). The batch jobs rewrite deal_id regularly, so anything written
+  straight into jc_manual_tag would be clobbered — a durable manual decision needs a
+  SEPARATE table. 87 rows qualify as "for review" (lower(google_ads_ac_field)='yes'
+  AND channel IS NULL AND jc_manual_tag IS NULL). No existing audit/override table.
+
+Asked the user three clarifying questions; answers:
+1. The "not" choice → mark reviewed, clear the tag (decision NULL, shows "—").
+2. Control scope → review rows + already-tagged/reviewed rows only.
+3. Who can tag → James + admins (not just James).
+
+Wrote the plan to the plan file and got approval via ExitPlanMode. Implemented:
+
+DB migration 20261021090000_ga4cs_jc_manual_review.sql (applied via MCP
+apply_migration as "ga4cs_jc_manual_review"):
+- public.ga4cs_jc_manual_review (contact_id PK, decision, set_by, updated_at) — the
+  durable override; presence = reviewed, decision NULL = reviewed-negative.
+- public.ga4cs_jc_manual_review_log (id identity, contact_id, decision, set_by,
+  created_at) — append-only audit ("logged in DB"), indexed on (contact_id,
+  created_at desc). No trigger/batch-function changes.
+
+Server read — server/metrics/ac-contact-sources.js: LEFT JOIN the override and
+replaced the tag select with an override-wins expression
+(CASE WHEN r.contact_id IS NOT NULL THEN r.decision ELSE cs.jc_manual_tag END AS
+"jcManualTag") plus "jcReviewed"/"jcSetBy"/"jcSetAt". isExcludedRow unchanged (still
+reads the now-effective jcManualTag), so the KEEP-IDENTICAL server/HTML pair and the
+shown-row/chip count were untouched.
+
+Server write — server/users.js: added JC_REVIEW_EMAILS + canReviewJc(email) =
+ADMIN_EMAILS OR James. server/index.js: new POST /api/operations/contact-sources/
+jc-tag on the operations router (already requireAuth) — 403 if !canReviewJc,
+validates contactId + decision against ALLOWED_JC_TAGS=['Could be SEO or Paid Ad']
+(''/null = reviewed-negative), does a parameterized upsert into the override + an
+append to the log, clearCache(), returns the new effective state. Imported
+clearCache and q.
+
+Frontend — public/app.js: added optional opts.rowClass(row) on the <tr> in
+renderSortableTable (backward-compatible) and a postJSON() helper mirroring
+fetchJSON. public/ac_contact_sources.html: added canTagJc(), isForReview(r),
+jcTagCell(v,row) (interactive <select> for authorized users on eligible rows, else
+read-only pill); wired rowClass:'acs-review' for the highlight; a delegated change
+handler on the persistent #acsRows host that POSTs then updates ALL_ROWS in place +
+apply() (no refetch); default-show the JC column for reviewers; bumped to app.js?v=4.
+public/app.css: .acs-review amber row highlight, .acs-jc-select, and the
+previously-missing .pill.partial amber rule.
+
+Scope decision recorded in the plan: this first phase was DISPLAY/review/logging
+only — ROAS left untouched (CONTACT_SOURCE_SHOWN read the base column), flagged as a
+possible follow-up.
+
+Verified: migration applied, 87 candidates confirmed; the join SELECT returns
+jcReviewed correctly; simulated the full write path against the real DB (positive
+tag → override wins + reviewed true; "not" → decision NULL + reviewed true; audit
+log accumulates) then cleaned up (0/0). Server boots; the new route returns 401
+without auth. Minted dev JWTs (dev-only placeholder secret from auth.js) and
+confirmed the gate: viewer → 403, James (viewer role) → passes (502 only because no
+local SUPABASE_DB_URL), admin (julienne) → passes, bad token → 401. node --check
+passed on all edited JS. Saved a memory (jc-manual-review-tagging) + MEMORY.md
+pointer. Told the user a manual Cloud Run redeploy is needed (Claude never deploys)
+and that app.css has no cache-buster so the styling needs a hard refresh.
+
+--------------------------------------------------------------------------------
+USER:
+"make it feed roas once tagged as 'Could be SEO or Paid Ad'"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read server/lib/sql.js (CONTACT_SOURCE_SHOWN) and server/metrics/roas.js. The ROAS
+WON population comes from ga4_ac_contact_source cs filtered by CONTACT_SOURCE_SHOWN,
+whose first branch was cs.jc_manual_tag IS NOT NULL — which never saw the override.
+roas.js is the only real consumer of the predicate (other grep hits were
+comments/docs/chat history).
+
+Changed the predicate's JC branch to use the EFFECTIVE tag (override wins):
+(CASE WHEN r.contact_id IS NOT NULL THEN r.decision ELSE cs.jc_manual_tag END) IS
+NOT NULL, and documented that consumers MUST LEFT JOIN public.ga4cs_jc_manual_review
+r ON r.contact_id = cs.contact_id. Added that join to roas.js's WON `deals` CTE and
+updated the header comment. This keeps display and ROAS in lockstep: a positive tag
+("Could be SEO or Paid Ad") feeds ROAS; a "Not paid ad / SEO" (decision NULL) one
+doesn't; untagged "Google Ads?=Yes" rows are still excluded (the google_ads_ac_field
+branch stays out of the predicate). Edge case noted: marking a currently base-tagged
+mag_gads row negative also drops it from ROAS (override is authoritative).
+
+A tagged `won` deal adds to Won $; a tagged `lost`/`open` deal adds only to the
+GA4-shown `leads` denominator — same as any shown row.
+
+Verified against the real DB (2026): baseline leads=9; after tagging a lost $10k
+candidate (contact 18965) positive → leads=10 (won unchanged, correctly); after
+marking it negative → back to 9; test row deleted (override table back to 0). Ran
+the full roas.js query with the new join — no SQL error. node --check passed on
+sql.js and roas.js. Updated the jc-manual-review-tagging memory + MEMORY.md pointer
+to say it now feeds ROAS. Reminded the user a manual Cloud Run redeploy is needed;
+no new migration this round (query-logic only).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt / CLAUDE.md / .gitignore (no git
+commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this transcript; updated as_built.txt (new JC manual-review tables, endpoint,
+and the ROAS-feeds change) and CLAUDE.md (contact-sources + ROAS sections); checked
+.gitignore. Did not run any git commands — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

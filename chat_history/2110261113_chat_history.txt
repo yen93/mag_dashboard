@@ -1,0 +1,90 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: Xero-data maintenance on the GA4 & Ads Leads cache — fill the 4 Xero $
+columns for one ROAS-audit deal from its invoice, then hunt for an invoice that
+turned out not to exist in Xero.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"update 4 xero columns of 'Telstra InfraCo // Uncharted Ice // 31 March 2025' its
+invoice is INV-0663" — populate engagement_fee / other_fees / gst / amount_total
+for that deal's row on the GA4 & Ads Leads page from Xero invoice INV-0663.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Located the row: ga4_ac_contact_source contact_id='roas-3253', deal_id='3253',
+deal_title 'Telstra InfraCo // Uncharted Ice // 31 March 2025', deal_value 8000.00,
+all four Xero columns NULL, match_method NULL (a static ROAS-audit row).
+
+Pulled INV-0663 from Xero (org MyAdventure Group 2cc630e1-...; Telstra Corporation
+Limited contact 32367ff3-...). Status PAID, AUD, invoice_date 2025-04-01, paid
+2025-04-07. Line items: James Castrission keynote $2000 net / $200 tax; flights
+$239.03 / $23.90; Uber Sydney $71.79 / $7.18; Uber Melbourne $43.65 / $4.37; card
+processing fee $51.80 / $0. Totals: net 2406.27, tax 235.45, total 2641.72.
+
+Confirmed the column convention by reading populated rows in
+public.mag_gads_direct_inbound_lead_source: engagement_fee + other_fees + gst =
+amount_total, all ex-GST net line amounts plus total GST (not gross). Mapped
+INV-0663 to: engagement_fee 2000.00 (keynote net), other_fees 406.27 (flights +
+2 Ubers + card fee, net), gst 235.45, amount_total 2641.72 (2000 + 406.27 + 235.45
+checks out).
+
+Found the source-of-truth row mag_gads_direct_inbound_lead_source deal_id='3253'
+exists with NULL fees (jc_final_attr 'Could be SEO or Paid Ad'). Updated BOTH tables
+in one SQL statement so they stay consistent and a future deal_id re-fire of the
+ga4cs_set_jc_manual_tag() trigger re-derives the same figures instead of wiping
+them:
+- mag_gads_direct_inbound_lead_source (deal_id 3253) — source of truth.
+- ga4_ac_contact_source (contact_id roas-3253) — denormalized, what the page shows
+  under the "Show Xero $" toggle.
+Verified both now read 2000.00 / 406.27 / 235.45 / 2641.72. No redeploy needed
+(page reads these columns live); noted the row is static so the daily jobs won't
+overwrite it.
+
+--------------------------------------------------------------------------------
+USER:
+"can you try and look for any invoice for the 'The Alternative Board' engagement
+where event date is 09 Feb 2026".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read-only lookup — made no changes. Found the CRM deal: ga4_ac_contact_source
+contact_id 16151, deal_id 3859, 'The Alternative Board // Lunch Keynote // 9 Feb
+2026', $7,500, contact louise.mooney@thealternativeboard.com.au (also present in
+activecampaign_deals).
+
+Searched Xero exhaustively and found NO matching invoice:
+- Contact search for "Alternative Board", "Alternative", "Mooney", "TAB", "Board"
+  → no contact for this client exists (Xero name search is a "contains" match, so
+  it would have caught "The Alternative Board").
+- Scanned every PAID + AUTHORISED invoice issued Nov 2025 → 21 Oct 2026 (126
+  invoices across the windows). None references The Alternative Board / Louise
+  Mooney, none is billed to them, none totals $8,250 (= $7,500 + GST) for this
+  engagement, and it wasn't invoiced via a bureau (Saxton/ICMI/Claxton/Keynote
+  Ent. invoices don't reference it).
+
+Reported the negative result with the two likely explanations: (1) not yet
+invoiced, or (2) it exists only as a Xero DRAFT — the invoices API only returns
+approved (AUTHORISED/PAID) invoices, so a draft is invisible to every search used.
+Asked the user for the invoice number or the exact Xero customer name to pin it
+down, and offered to re-check if they confirm from the Xero UI that a draft exists.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt / CLAUDE.md / .gitignore (no git
+commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file. as_built.txt / CLAUDE.md needed no
+change — this was a data-maintenance + lookup session that introduced no new
+scripts, tables, routines, or conventions, and the "Show Xero $" column mechanism is
+already documented. Reviewed .gitignore — sensitive patterns already covered, no
+change. No secrets appeared in the session (only resource IDs, an org ID, and
+contact emails — none are credentials). No git commands run — the user commits and
+pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

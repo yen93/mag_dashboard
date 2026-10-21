@@ -17,8 +17,10 @@ import { getAcAdLeads } from './metrics/ac-ad-leads.js';
 import { getPaidGoogleEnquiries } from './metrics/paid-google-enquiries.js';
 import { getRoas } from './metrics/roas.js';
 import { ga4AgentRouter } from './ga4Agent.js';
-import { cached } from './lib/cache.js';
+import { cached, clearCache } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
+import { canReviewJc } from './users.js';
+import { q } from './providers/supabase.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -143,6 +145,52 @@ operations.get('/contact-sources', async (_req, res) => {
   } catch (err) {
     console.error('[operations:contact-sources]', err);
     res.status(502).json({ error: 'Failed to load contact sources from data source.', detail: err.message });
+  }
+});
+// Set the JC manual review tag on a contact-sources row. Restricted to James + admins
+// (canReviewJc). Durable manual override in public.ga4cs_jc_manual_review (upsert) plus
+// an append-only audit row in ...._log. decision '' / null = reviewed, not paid/SEO.
+const ALLOWED_JC_TAGS = ['Could be SEO or Paid Ad'];
+operations.post('/contact-sources/jc-tag', async (req, res) => {
+  if (!canReviewJc(req.user && req.user.email)) {
+    return res.status(403).json({ error: 'Not authorised to set the JC review tag.' });
+  }
+  const contactId = String((req.body && req.body.contactId) || '').trim();
+  let decision = req.body && req.body.decision;
+  decision = decision == null ? null : String(decision).trim();
+  if (decision === '') decision = null;
+  if (!contactId) {
+    return res.status(400).json({ error: 'contactId is required.' });
+  }
+  if (decision !== null && !ALLOWED_JC_TAGS.includes(decision)) {
+    return res.status(400).json({ error: 'Invalid decision value.' });
+  }
+  try {
+    const setBy = req.user.email;
+    await q(
+      `insert into public.ga4cs_jc_manual_review (contact_id, decision, set_by, updated_at)
+       values ($1, $2, $3, now())
+       on conflict (contact_id) do update
+         set decision = excluded.decision, set_by = excluded.set_by, updated_at = now()`,
+      [contactId, decision, setBy]
+    );
+    await q(
+      `insert into public.ga4cs_jc_manual_review_log (contact_id, decision, set_by)
+       values ($1, $2, $3)`,
+      [contactId, decision, setBy]
+    );
+    // Drop the cached contact-sources payload so the next load reflects the change.
+    clearCache();
+    res.json({
+      contactId,
+      jcManualTag: decision,
+      jcReviewed: true,
+      jcSetBy: setBy,
+      jcSetAt: new Date().toISOString(),
+    });
+  } catch (err) {
+    console.error('[operations:contact-sources:jc-tag]', err);
+    res.status(502).json({ error: 'Failed to save the JC review tag.', detail: err.message });
   }
 });
 // New Paid Leads table reads a pre-computed Supabase cache (public.ac_new_leads),
