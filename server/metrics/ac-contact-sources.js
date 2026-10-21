@@ -87,31 +87,26 @@ function isExcludedConversionLink(link) {
   return EXCLUDED_CONVERSION_LINKS.has(path);
 }
 
+// KEEP IDENTICAL to isExcludedRow() in public/ac_contact_sources.html and to
+// CONTACT_SOURCE_SHOWN in ../lib/sql.js (which ROAS uses to count these rows).
+// A row is SHOWN iff: JC manual tag (always), OR not a free-gift opt-in AND not an
+// excluded conversion link AND channel looks organic/cpc. google_ads_ac_field is
+// NOT used; referral/teams/email/direct channels fall through to hidden.
+const ORGANIC_OR_CPC = /cpc|organic/i;
 function isExcludedRow(r) {
   if (!r) return false;
   // JC-tagged rows (mag_gads jc_final_attr, e.g. "Could be SEO or Paid Ad") are part of
   // the manual ROAS audit and must ALWAYS be shown — exempt from every exclusion below.
   if (r.jcManualTag) return false;
+
+  // Safety blacklist: free-gift opt-ins and non-lead conversion links.
   const act = (r.conversionAction || '').trim().toLowerCase();
   if (act === 'free_gifts_opt_ins') return true;
-
-  const ch = String(r.channel || '').trim().toLowerCase();
-  const med = String(r.medium || '').trim().toLowerCase();
-  const src = String(r.source || '').trim().toLowerCase();
-
-  // Referrals
-  if (med === 'referral' || ch.includes('referral') || src.includes('referral')) return true;
-
-  // MS Teams
-  if (ch.includes('teams') || src.includes('teams')) return true;
-
-  // AC email campaign
-  if (med === 'email' || ch.includes('email') || ch.includes('activecampaign') || src.includes('activecampaign')) return true;
-
-  // Conversion link exclusion
   if (isExcludedConversionLink(r.link || r.conversionLink)) return true;
 
-  return false;
+  // Show only organic/cpc channels; hide everything else.
+  if (ORGANIC_OR_CPC.test(String(r.channel || ''))) return false;
+  return true;
 }
 
 export async function getAcContactSources() {

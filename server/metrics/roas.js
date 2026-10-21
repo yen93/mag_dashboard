@@ -7,8 +7,11 @@
 //     (the ad-spend DENOMINATOR). Refreshed by the google-ads-campaign-monthly-sync
 //     routine. Coverage starts Jul 2024, so the tab shows only years with ad spend.
 //   • public.ga4_ac_contact_source — per-contact GA4/Calendly→AC attribution (the
-//     NUMERATOR: won/lost/open deals + values). "Google Ads" = the CRM "Google
-//     Ads?" field = Yes OR the GA4 session channel = google / cpc.
+//     NUMERATOR: won/lost/open deals + values). Counted population = EXACTLY the rows
+//     shown on the GA4 & Ads Leads page: organic/cpc channel OR a JC manual tag (free-
+//     gift / excluded-link rows dropped). See CONTACT_SOURCE_SHOWN in ../lib/sql.js.
+//     NB: google_ads_ac_field is NOT used — a "Google Ads?"=Yes row with no channel
+//     and no JC tag is intentionally excluded here and hidden on the page.
 //
 // NOTE — this is a LIVE, GA4-attributed ROAS, NOT the audited "MAG Marketing ROAS
 // Report" sheet. It uses CRM deal_value (not ex-GST Buyer Analysis values) and a
@@ -20,12 +23,15 @@
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { section } from '../lib/metric.js';
+import { CONTACT_SOURCE_SHOWN } from '../lib/sql.js';
 
 const SRC = 'Live: ga4_ac_contact_source × google_ads_campaign_monthly (Supabase)';
 const TARGET_ROAS = 2;
 
-// "Google Ads" attribution filter — kept in one place so it's easy to tune.
-const GADS_FILTER = `(cs.google_ads_ac_field = 'Yes' OR cs.channel = 'google / cpc')`;
+// Numerator population = EXACTLY the rows shown on the GA4 & Ads Leads page
+// (organic/cpc channel OR a JC manual tag; free-gift / excluded-link rows dropped).
+// See CONTACT_SOURCE_SHOWN in ../lib/sql.js — google_ads_ac_field is NOT used.
+const GADS_FILTER = CONTACT_SOURCE_SHOWN;
 
 const SELECT = `
   WITH deals AS (
@@ -88,7 +94,7 @@ function shape(r) {
     ? `${year} · ${spendMonths} mo ad spend`
     : `Jan–Dec ${year}`;
   const countedMethod =
-    `Live GA4-attributed Google Ads deals (CRM "Google Ads?"=Yes or google/cpc), ` +
+    `Leads shown on the GA4 & Ads page (organic/cpc channel or JC manual tag), ` +
     `by enquiry date, ÷ Google Ads spend (${spendMonths} mo` +
     (r.firstSpendMonth && r.lastSpendMonth ? `, ${r.firstSpendMonth}–${r.lastSpendMonth}` : '') + ').';
   return {

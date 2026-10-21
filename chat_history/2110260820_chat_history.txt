@@ -1,0 +1,111 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: Two /q investigations into a ROAS-vs-Contact-Sources discrepancy (3 won
+leads on ROAS vs 5 won deals on the page), then — on the user's instruction —
+unified the row-visibility rule across both pages onto channel + JC-manual-tag
+(dropping google_ads_ac_field as a visibility signal) and made ROAS count exactly
+the rows the page shows. Ends with this /dcp.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted into or printed in this chat.
+Only non-secret identifiers appeared (Supabase project ref aivitcomiywiysrfwqxt,
+contact emails from the ga4_ac_contact_source table shown in SELECT output).
+
+--------------------------------------------------------------------------------
+USER:
+/q — why is 2026 only showing 3 won leads on the ROAS tab, but ac_contact_sources.html
+shows 5 won deals present?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read server/metrics/roas.js and server/metrics/ac-contact-sources.js — both read the
+same table public.ga4_ac_contact_source, but ROAS adds a "Google Ads" attribution
+gate the page doesn't: GADS_FILTER = (google_ads_ac_field='Yes' OR channel='google /
+cpc'). SELECT'd the 5 won 2026 rows: 3 pass the filter (aadhya.arora/tilray,
+natalie.paul/stryker, jo.mills/southernports — all google_ads='Yes'); 2 don't —
+john.dunn/FRNSW (google_ads='No', channel 'Organic search / booking') and
+l.fairbairn/whiddon (contact_id roas-4227, a synthetic ROAS-audit row, google_ads
+='No', channel null). So ROAS counts 3; the page shows all 5. Explained it's by
+design: ROAS is a Google-Ads-attributed cross-check, and the two dropped rows are an
+organic deal and a "Could be SEO or Paid Ad" audit row — neither a confirmed Google
+Ads win. Nothing broken.
+
+--------------------------------------------------------------------------------
+USER:
+/q — why is l.fairbairn@whiddon.com.au in the list at all when its google_ads_ac_field
+is No and it has no match column value?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+SELECT'd all contact_id LIKE 'roas-%' rows: 12 hand-seeded ROAS-audit rows, all with
+jc_manual_tag='Could be SEO or Paid Ad', match_method NULL, synthetic contact_id =
+'roas-'||deal_id. l.fairbairn is roas-4227 (deal 4227, won, $8,500). Explained the two
+reasons it's in the list: (1) it's in the TABLE because it was manually inserted (not
+produced by the matcher — hence blank match columns); (2) it STAYS VISIBLE because
+isExcludedRow() short-circuits `return false` when jcManualTag is set
+(ac-contact-sources.js:94), independent of google_ads_ac_field (which only affects the
+ROAS tab, not page display). It's deliberately immune to the daily jobs.
+
+--------------------------------------------------------------------------------
+USER:
+(new rule) If both channel AND JC's Manual Tag are null — even if google_ads_ac_field
+is Yes — the row should NOT be included: hide it from view but don't delete from DB.
+If channel is organic or cpc, OR JC's tag is not null (even if not both, and even if
+google_ads_ac_field is No), the row should be shown. All shown rows in
+ac_contact_sources.html should be counted in ROAS.
+(Session was in plan mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored in plan mode. Launched an Explore agent over public/ac_contact_sources.html
+(found the real display filter is the inline isExcludedRow(), and the frontend copy
+already differed from the server copy — frontend had extra google_ads/conversion-action
+hide rules the server lacked; the "Show JC" toggle controls only the COLUMN, not row
+visibility). SELECT'd the live channel distribution (183 rows): 106 null-channel (97 of
+them google_ads='Yes', 19 JC-tagged), 45 *.ac-page.com/referral, 14 (direct)/(none),
+plus small google/bing cpc+organic buckets. Quantified the new whitelist (channel ~*
+'cpc|organic' OR jc_manual_tag NOT NULL): ~32 shown / ~151 hidden; the 97 google_ads
+='Yes' null-channel rows get hidden. Computed before/after ROAS: 2026 won 3->4, leads
+17->9; pre-2025 years shrink a lot (2024 8->3 won, 2023 3->1).
+
+Asked two clarifying questions. User answers: (1) HIDE the google_ads='Yes' rows that
+lack channel+JC (strict whitelist, as specified); (2) KEEP the safety blacklist
+(free-gift opt-ins + the excluded conversion links) hidden, and hidden rows are NOT
+counted in ROAS — so ROAS must mirror the page's full show-rule. Wrote the plan and
+exited plan mode (approved).
+
+Implemented the unified rule — a row is SHOWN iff: jc_manual_tag set (always, bypasses
+blacklist), OR (not free_gifts_opt_ins AND not an excluded conversion link AND channel
+matches /cpc|organic/i). google_ads_ac_field no longer affects visibility; referral/
+teams/email/direct channels fall through to hidden. Four files:
+  • server/lib/sql.js — new exported CONTACT_SOURCE_SHOWN SQL predicate (single source
+    of truth; replicates the free-gift + conversion-link blacklist in SQL with path
+    normalization).
+  • server/metrics/roas.js — GADS_FILTER now = CONTACT_SOURCE_SHOWN (imported); updated
+    the file header + countedMethod text that described the old rule.
+  • server/metrics/ac-contact-sources.js — isExcludedRow() rewritten to the identical
+    rule (so the chip count matches displayed rows).
+  • public/ac_contact_sources.html — inline isExcludedRow() rewritten to match; KPIs
+    update automatically since they run on the filtered set.
+Each copy carries a "KEEP IDENTICAL" comment pointing at the other two.
+
+Verified via SQL (the authoritative source): the exact predicate yields 2026 = 4 won /
+9 leads (2023 1/1, 2024 3/3, 2025 12/12); 2026 won breakdown confirmed john.dunn
+(organic) + 3 JC rows IN, natalie.paul (channel-less google_ads=Yes) OUT. node --check
+passed on all three server files. Flagged that a manual Cloud Run redeploy is needed
+(front-end HTML + server JS only) and that CLAUDE.md's ROAS attribution description is
+now stale.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran /dcp (this skill, no git): wrote this chat-history file; updated as_built.txt and
+CLAUDE.md to reflect the unified channel+JC visibility rule and ROAS = shown-rows; left
+.gitignore unchanged (already covers secrets). Did NOT commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================

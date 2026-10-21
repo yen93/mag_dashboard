@@ -348,46 +348,30 @@
       return EXCLUDED_CONVERSION_LINKS.indexOf(path) !== -1;
     }
 
-    // Exclude rows from website display (data remains intact in DB):
-    // - conversionAction = "free_gifts_opt_ins"
-    // - channels in referrals, MS teams, AC email campaign
-    // - conversion_link in ("/careers-seasonal/", "/executive-x/", "/careersph-based/", "/free-gift-opt-in/")
+    // Decide whether a row is HIDDEN from the page (data stays intact in the DB).
+    // A row is SHOWN iff: it has a JC manual tag (always shown), OR it is not a free-
+    // gift opt-in AND not an excluded conversion link AND its channel looks organic/cpc
+    // (contains "cpc" or "organic"). google_ads_ac_field does NOT affect visibility.
+    // Referral / teams / email / direct channels fall through to hidden automatically.
+    //
+    // KEEP IDENTICAL to isExcludedRow() in server/metrics/ac-contact-sources.js and to
+    // CONTACT_SOURCE_SHOWN in server/lib/sql.js (which ROAS uses to count these rows).
+    var ORGANIC_OR_CPC = /cpc|organic/i;
     function isExcludedRow(r) {
       if (!r) return false;
       // JC-tagged rows (mag_gads jc_final_attr, e.g. "Could be SEO or Paid Ad") are part
       // of the manual ROAS audit and must ALWAYS be shown — exempt from every exclusion.
       if (r.jcManualTag) return false;
+
+      // Safety blacklist: free-gift opt-ins and non-lead conversion links.
       var act = (r.conversionAction || '').trim().toLowerCase();
       if (act === 'free_gifts_opt_ins') return true;
-
-      // Hide Google Ads (AC) = "No" rows that have no conversion action
-      // (display only — the data stays in the DB).
-      var ga = String(r.googleAdsAcField || '').trim().toLowerCase();
-      var hasConv = r.conversionAction !== null && r.conversionAction !== undefined && String(r.conversionAction).trim() !== '';
-      if (ga === 'no' && !hasConv) return true;
-
-      // Hide rows where BOTH Google Ads (AC) and Conversion Action are null/empty
-      // (display only — the data stays in the DB).
-      var hasGa = r.googleAdsAcField !== null && r.googleAdsAcField !== undefined && String(r.googleAdsAcField).trim() !== '';
-      if (!hasGa && !hasConv) return true;
-
-      var ch = String(r.channel || '').trim().toLowerCase();
-      var med = String(r.medium || '').trim().toLowerCase();
-      var src = String(r.source || '').trim().toLowerCase();
-
-      // Referrals (e.g. *.ac-page.com / referral, linkedin.com / referral)
-      if (med === 'referral' || ch.indexOf('referral') !== -1 || src.indexOf('referral') !== -1) return true;
-
-      // MS Teams (e.g. teams.public.onecdn.static.microsoft / referral)
-      if (ch.indexOf('teams') !== -1 || src.indexOf('teams') !== -1) return true;
-
-      // AC email campaign (e.g. ActiveCampaign / email)
-      if (med === 'email' || ch.indexOf('email') !== -1 || ch.indexOf('activecampaign') !== -1 || src.indexOf('activecampaign') !== -1) return true;
-
-      // Excluded conversion links
       if (isExcludedConversionLink(r.link || r.conversionLink)) return true;
 
-      return false;
+      // Show only organic/cpc channels; hide everything else (null, direct, referral,
+      // teams, email, booking, …).
+      if (ORGANIC_OR_CPC.test(String(r.channel || ''))) return false;
+      return true;
     }
 
     // ---- date-range filtering ----
