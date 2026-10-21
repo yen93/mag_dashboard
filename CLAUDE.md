@@ -257,7 +257,13 @@ Cloud Run.
       rows doesn't fan out the page rows). **Display/API-only — the cache table, syncs and
       ROAS predicate are untouched** (`niki_ad_leads_tracking` is a plain one-time load; its
       `deal_id` was back-filled by contact-name match to `activecampaign_contacts` → that
-      contact's `activecampaign_deals` row).
+      contact's `activecampaign_deals` row). Its **`inbound_or_outbound`** column (also a
+      static one-time fill, 2026-10-21) came from each matched deal's AC **"Inbound/ Outbound?"**
+      deal custom field (`dealCustomFieldMetumId` **14**, under Qualification Details) — pulled
+      with **per-deal** AC reads (`list-all-custom-fielddata-field-values`, `filters[dealId]=…`),
+      because deal custom fields aren't stored in `activecampaign_deals`/`ac_google_ads_deals`
+      and the endpoint only filters by `dealId` (a meta-id filter 422s). Both columns are
+      static — re-run the matching AC lookup if the sheet/deal links change.
     - **Row-visibility rule — DISPLAY vs ROAS now DELIBERATELY DIVERGE (as of 2026-10-21,
       later same day):** the **page DISPLAY** rule is: a row is SHOWN iff it has a JC manual
       tag (always, bypassing the blacklist), OR it is not a `free_gifts_opt_ins` and not an
