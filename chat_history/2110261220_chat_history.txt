@@ -1,0 +1,117 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: Add a "for review" row highlight on the GA4 Leads Tracker page for rows
+where the AC Value and the Xero Engagement Fee don't balance — then restrict it to
+WON deals only. Planned in plan mode, implemented, refined. Client-only; no DB/
+server change.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"highlight rows in ac_contact_sources.html as for review where AC and Xero
+Engagement Fee values are not balanced in ga4_ac_contact_source" — mark rows where
+the AC-contracted deal value (AC Value = deal_value) and the Xero Engagement Fee
+(engagement_fee) don't reconcile.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(Plan mode.) Explored the page + metric. Findings:
+- public/ac_contact_sources.html already has an amber ".acs-review" row highlight
+  (isForReview()) — but for a DIFFERENT purpose (JC paid/SEO review), with an
+  in-cell tagging <select>. So a new fee-balance highlight must be visually distinct.
+- Data already in the API payload: server/metrics/ac-contact-sources.js SELECTs
+  deal_value AS dealValue and engagement_fee AS engagementFee; the page keeps full
+  rows in ALL_ROWS. PURE front-end change — no DB/migration/server edit.
+- renderSortableTable (public/app.js) sorts numeric columns from the raw row value
+  (app.js:278), not rendered text, so a custom cell render won't break sort;
+  rowClass supports space-separated classes (app.js:310-311).
+- .acs-review is client-only (no server twin), so the new highlight is client-only.
+
+Ran a read-only Supabase query (project aivitcomiywiysrfwqxt) on invoiced rows
+(engagement_fee NOT NULL): confirmed exact matches (19121, 18224, 17883, 17448) AND
+real discrepancies (contact 17663: 21,950 vs 30,730; 14753: 5,500 vs 6,500; plus
+several roas-* static audit rows).
+
+Asked two clarifying questions (AskUserQuestion):
+1. NULL fees → user chose "Also flag missing fees" (AC Value but no Engagement Fee
+   = unbalanced; intentionally flags un-invoiced deals too).
+2. Visibility → user chose "Only with 'Show Xero $' on".
+
+Wrote the plan to the plan file, called ExitPlanMode; user approved.
+
+--------------------------------------------------------------------------------
+USER:
+(Approved the plan.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented three edits:
+public/ac_contact_sources.html:
+- numOrNull() + isFeeMismatch(r): false when both dealValue/engagementFee absent;
+  true when exactly one present (missing side); else true when |diff| >= 1 ($1 tol).
+- engFeeCell(v,row): plain money() normally; on a mismatch appends " ⚠" + a title
+  tooltip naming both values + the Δ.
+- rowClass now builds a class list: "acs-review" plus "acs-fee-review" when
+  SHOW_XERO_COLS && isFeeMismatch(r).
+- Engagement Fee column got render: engFeeCell + a text: projection (clean money
+  string) so filter/search stay clean; sort stays numeric via the raw value.
+public/app.css:
+- Added "table.data tr.acs-fee-review" rules (red #e0556b tint + inset left bar),
+  placed AFTER .acs-review so red wins if a row matches both.
+Noted no server/DB change; manual Cloud Run redeploy needed to go live; gave local
+verification steps.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (first invocation) — save chat history, update as_built.txt / CLAUDE.md /
+.gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote chat_history/2110261215_chat_history.txt. Updated CLAUDE.md contact-sources
+section with a "Fee-balance review highlight" note. as_built.txt left alone (no new
+scripts/integrations/tables/routines). .gitignore left alone (patterns already
+cover everything). No git commands run.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — compose a one-line git commit command for the current changes.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected git status/diff (nothing staged; CLAUDE.md, as_built.txt,
+public/ac_contact_sources.html, public/app.css modified + 2 untracked chat_history
+files). Output a single Conventional-Commits line:
+feat(contact-sources): flag GA4 Leads rows for review when AC Value and Xero
+Engagement Fee dont balance (red acs-fee-review highlight gated on Show Xero $) + docs
+
+--------------------------------------------------------------------------------
+USER:
+"only won deals should be flagged. do not highlight open and lost deals"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added `if (r.dealStatus !== 'won') return false;` at the top of isFeeMismatch() in
+public/ac_contact_sources.html, so the highlight AND the ⚠ Engagement Fee tooltip
+(both driven by isFeeMismatch) now apply to WON deals only — open/lost are never
+flagged regardless of fee values. Updated the helper's comment and the CLAUDE.md
+note ("WON deals only; open/lost never flagged"). Still client-only; manual redeploy
+needed.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (second invocation) — save chat history, update as_built.txt / CLAUDE.md /
+.gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp: wrote this chat-history file (full session). as_built.txt left alone (still
+no built-state change — a display rule on an existing page). CLAUDE.md already
+updated this session (fee-balance highlight note, incl. the won-only refinement);
+no further edit needed. .gitignore reviewed — all sensitive patterns covered, no
+change. No secrets in the session (only Supabase resource/contact IDs + dollar
+figures from read-only queries). No git commands run — the user commits/pushes.
+
+================================================================================
+END OF EXPORT
+================================================================================
