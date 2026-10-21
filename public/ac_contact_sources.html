@@ -137,7 +137,7 @@
     </div>
   </main>
 
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
   <script>
     var ALL_ROWS = [];
     // Persistent table state (sort / search / per-column filters). Owned here and
@@ -518,7 +518,16 @@
       }
       // "JC's Manual Tag" column, shown/hidden by its toolbar toggle (hidden by default).
       if (SHOW_JC_COL) {
-        cols.push({ key: 'jcManualTag', label: "JC's Manual Tag", render: jcTagCell });
+        // `text` gives filter/sort/search a stable projection (the render is an
+        // interactive <select>, so stripping its HTML would merge every option label).
+        cols.push({
+          key: 'jcManualTag', label: "JC's Manual Tag", render: jcTagCell,
+          text: function (v, row) {
+            if (v && String(v).trim()) return String(v);      // tagged, e.g. "Could be SEO or Paid Ad"
+            if (row.jcReviewed) return 'Not paid ad / SEO';   // reviewed, cleared
+            return '—';                                       // unset / for review
+          },
+        });
       }
       // Meta columns pinned to the far right, shown/hidden by the toolbar toggle.
       if (SHOW_META_COLS) {
@@ -644,20 +653,25 @@
         var sel = (e.target && e.target.closest) ? e.target.closest('.acs-jc-select') : null;
         if (!sel) return;
         var contactId = sel.getAttribute('data-jc-contact');
+        var row = ALL_ROWS.filter(function (r) { return String(r.contactId) === String(contactId); })[0];
         var raw = sel.value;
-        if (raw === '') return; // placeholder — no-op
-        var decision = raw === '__not__' ? '' : raw;
+        // "— set tag —" (value '') RESETS an already-reviewed row — removes the override
+        // so it goes back to "for review"; on an unreviewed row it's a no-op.
+        var isReset = raw === '';
+        if (isReset && (!row || !row.jcReviewed)) return;
+        var body = isReset
+          ? { contactId: contactId, reset: true }
+          : { contactId: contactId, decision: raw === '__not__' ? '' : raw };
         sel.disabled = true;
-        postJSON('/api/operations/contact-sources/jc-tag', { contactId: contactId, decision: decision })
+        postJSON('/api/operations/contact-sources/jc-tag', body)
           .then(function (resp) {
-            var row = ALL_ROWS.filter(function (r) { return String(r.contactId) === String(contactId); })[0];
             if (row) {
               row.jcManualTag = resp.jcManualTag || null;
-              row.jcReviewed = true;
-              row.jcSetBy = resp.jcSetBy;
-              row.jcSetAt = resp.jcSetAt;
+              row.jcReviewed = !!resp.jcReviewed;
+              row.jcSetBy = resp.jcSetBy || null;
+              row.jcSetAt = resp.jcSetAt || null;
             }
-            apply(); // rebuilds the table: drops the highlight, shows the new pill
+            apply(); // rebuilds the table: reset → highlight returns; tag → pill shows
           })
           .catch(function (err) {
             sel.disabled = false;

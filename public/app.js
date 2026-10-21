@@ -242,6 +242,10 @@ function renderSortableTable(containerId, rows, columns, opts) {
   // Plain-text projection of a cell, used for search + text sorting.
   function textOf(row, c) {
     var v = row[c.key];
+    // A column may supply `text(v,row)` for a stable filter/sort/search projection,
+    // used instead of stripping tags from `render` — needed when the rendered cell is
+    // an interactive control (e.g. a <select>) whose HTML doesn't reflect the value.
+    if (c.text) { var tv = c.text(v, row); return tv == null ? '' : String(tv); }
     if (c.render) return String(c.render(v, row) == null ? '' : c.render(v, row)).replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
     if (v == null) return '';
     if (isNum(c)) return String(fmt(v, c.unit));

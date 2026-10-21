@@ -219,13 +219,18 @@ Cloud Run.
       tag + not yet reviewed, ~87) get an **amber `.acs-review` row highlight** (new
       OPTIONAL `opts.rowClass` on `renderSortableTable`) and an in-cell `<select>`
       (`jcTagCell`) to pick **"Could be SEO or Paid Ad"** or **"Not paid ad / SEO"**
-      (= reviewed, tag cleared, shows "—"). The decision does **NOT** go into
-      `cs.jc_manual_tag` (the trigger + daily jobs would clobber it) — it is upserted into
-      a **separate durable table `public.ga4cs_jc_manual_review`** (PK contact_id) + an
-      append-only **`public.ga4cs_jc_manual_review_log`** (migration
-      `20261021090000_ga4cs_jc_manual_review.sql`), via **`POST
-      /api/operations/contact-sources/jc-tag`** (gated by `canReviewJc`; parameterized
-      upsert+log then `clearCache()`). **The read path and ROAS treat this override as the
+      (= reviewed, tag cleared, shows "—"), or — on an already-reviewed row — **"— set
+      tag —" to RESET** it (removes the override → back to "for review"; this is the ONLY
+      un-review path, since "Not paid ad / SEO" stays reviewed). The decision does **NOT**
+      go into `cs.jc_manual_tag` (the trigger + daily jobs would clobber it) — it is
+      upserted into a **separate durable table `public.ga4cs_jc_manual_review`** (PK
+      contact_id) + an append-only **`public.ga4cs_jc_manual_review_log`** (migration
+      `20261021090000_ga4cs_jc_manual_review.sql`; a later migration
+      `20261021100000_jc_review_log_action.sql` adds `action` = `'set'`/`'reset'` so a
+      reset is distinguishable from a "not" — both NULL `decision`), via **`POST
+      /api/operations/contact-sources/jc-tag`** (gated by `canReviewJc`; body `{decision}`
+      to set, `{reset:true}` to delete the override; parameterized upsert/delete + log then
+      `clearCache()`). **The read path and ROAS treat this override as the
       EFFECTIVE tag — it WINS over `cs.jc_manual_tag` — so both the SELECT in
       `ac-contact-sources.js` AND `CONTACT_SOURCE_SHOWN` LEFT JOIN
       `ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id`.** `jcManualTag` shown on

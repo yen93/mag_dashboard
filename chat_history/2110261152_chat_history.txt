@@ -1,0 +1,124 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: JC manual-review tagging on the GA4 & Ads Leads page — built the feature
+(highlight "for review" rows, tag "Could be SEO or Paid Ad" / "not", logged in DB),
+made a positive tag FEED ROAS, then (this segment) answered where the tag is stored
++ whether syncs reset it, and added a "— set tag —" RESET-to-for-review action.
+(The initial feature build + ROAS wiring are documented in 2110261128_chat_history.txt;
+recapped briefly below for continuity.)
+================================================================================
+
+--------------------------------------------------------------------------------
+USER (recap — see 2110261128 for detail):
+Build the JC manual-review tagging on public/ac_contact_sources.html: highlight the
+~87 "Google Ads?=Yes, blank channel, no JC tag" rows "for review"; let James/admins
+tag them "Could be SEO or Paid Ad" or "not", logged in the DB; then "make it feed
+roas once tagged as 'Could be SEO or Paid Ad'".
+
+--------------------------------------------------------------------------------
+ASSISTANT (recap):
+Built a durable override table public.ga4cs_jc_manual_review (+ append-only
+..._log), read-coalesced as the EFFECTIVE tag (override wins over cs.jc_manual_tag,
+which the trigger/batch jobs own); new POST /api/operations/contact-sources/jc-tag
+gated by canReviewJc (admins + James, who is a 'viewer' so gated by email); amber
+.acs-review row highlight via a new opts.rowClass on renderSortableTable + an in-cell
+<select> (jcTagCell). Then made CONTACT_SOURCE_SHOWN's JC branch use the effective
+tag (requiring a LEFT JOIN of the override) so a positive tag feeds ROAS; roas.js's
+WON deals CTE joins it. Migration 20261021090000 applied via MCP; verified; needs a
+manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — write a one-line git commit command for the current changes.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran git status/diff (nothing staged → described all changes: CLAUDE.md, as_built.txt,
+the 4 server files, the 3 public files, + the new migration & chat-history files).
+Output one Conventional-Commits line: feat(contact-sources): add JC manual-review
+tagging (highlight for-review rows, logged override table + audit) and feed ROAS when
+tagged 'Could be SEO or Paid Ad'.
+
+--------------------------------------------------------------------------------
+USER:
+/q — "i tagged natalie.paul@stryker.com as seo/paid as test. which table in db did
+it update?"
+
+--------------------------------------------------------------------------------
+ASSISTANT (read-only):
+SELECTed the DB: the write landed in TWO tables, NOT ga4_ac_contact_source. (1)
+public.ga4cs_jc_manual_review — contact_id 18473, decision 'Could be SEO or Paid Ad',
+set_by julienne@ (the signed-in account; admins may tag), updated_at 03:38 UTC. (2)
+public.ga4cs_jc_manual_review_log — id 3, same values, the append-only audit. Verified
+the page's effective-tag join returns 'Could be SEO or Paid Ad' / reviewed=true even
+though base jc_manual_tag stays null, and noted the positive tag now feeds ROAS.
+Explained the design (separate table so the trigger/daily jobs can't clobber it).
+
+--------------------------------------------------------------------------------
+USER:
+/q — "will the daily syncs not reset this tagging"
+
+--------------------------------------------------------------------------------
+ASSISTANT (read-only):
+No. Proved it against the live catalog: no DB function
+(rebuild_ga4_ac_matches / update_ga4_contact_deals / ga4cs_set_jc_manual_tag)
+references ga4cs_jc_manual_review (empty pg_get_functiondef match); no trigger on the
+override table; no cron.job command touches it. The daily jobs only write
+cs.jc_manual_tag (the base column), which the read path + ROAS ignore in favour of the
+override via CASE-override-wins; for 18473 the base is null and stays null. Only
+deliberate tag-endpoint actions change it.
+
+--------------------------------------------------------------------------------
+USER:
+"i put it back to 'set tag' but it did not get highlighted again as for review.
+contact id 18473"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked the DB: the override row was still 'Could be SEO or Paid Ad' (unchanged) —
+because the "— set tag —" placeholder was a deliberate frontend no-op
+(`if (raw === '') return;`); neither it nor "Not paid ad / SEO" un-reviews a row.
+Explained the gap (no UI reset). Since it was a test, DELETEd the 18473 rows from both
+ga4cs_jc_manual_review and ..._log, and verified it is a "for review" candidate again
+(google_ads_ac_field=Yes, channel null, effective_tag null, reviewed false). Flagged
+the ~10-min server cache so the highlight may lag on screen, and offered to wire a
+proper reset.
+
+--------------------------------------------------------------------------------
+USER:
+"make selecting '— set tag —' on an already-reviewed row actually reset it"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented across three layers:
+- Migration 20261021100000_jc_review_log_action.sql (applied via MCP): added
+  `action text not null default 'set'` to ga4cs_jc_manual_review_log so a 'reset' is
+  distinguishable from a "Not paid ad / SEO" (both NULL decision).
+- server/index.js: the jc-tag endpoint now handles { reset:true } — DELETE the
+  override row + INSERT a log row with action='reset', clearCache(), returns
+  jcReviewed:false (hoisted setBy above the branch).
+- public/ac_contact_sources.html: the delegated handler looks up the row up front;
+  "— set tag —" (value '') on an already-reviewed row POSTs { reset:true } (no-op on
+  an unreviewed row); the in-place row update now reads resp.jcReviewed so a reset
+  flips it back to for-review and apply() restores the amber highlight.
+Verified: node --check OK; migration applied; simulated set→reset on throwaway contact
+18651 → override row deleted (0), audit log captured both action='set' and
+action='reset'; cleaned up. Confirmed override+log tables are empty and 18473 has no
+override (pure for-review). Updated the jc-manual-review-tagging memory. Noted a manual
+Cloud Run redeploy is needed (server + inline-script page edits; no app.js change so
+no cache-buster bump).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt / CLAUDE.md / .gitignore (no git
+commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this transcript; updated as_built.txt + CLAUDE.md for the reset action and the
+new log `action` column; checked .gitignore (no new sensitive files). Did not run any
+git commands — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

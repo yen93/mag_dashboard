@@ -156,17 +156,36 @@ operations.post('/contact-sources/jc-tag', async (req, res) => {
     return res.status(403).json({ error: 'Not authorised to set the JC review tag.' });
   }
   const contactId = String((req.body && req.body.contactId) || '').trim();
-  let decision = req.body && req.body.decision;
-  decision = decision == null ? null : String(decision).trim();
-  if (decision === '') decision = null;
   if (!contactId) {
     return res.status(400).json({ error: 'contactId is required.' });
   }
+  const setBy = req.user.email;
+
+  // Reset: selecting "— set tag —" on an already-reviewed row removes the override,
+  // so the contact goes back to "for review". Logged as an action='reset' audit row.
+  if (req.body && req.body.reset === true) {
+    try {
+      await q(`delete from public.ga4cs_jc_manual_review where contact_id = $1`, [contactId]);
+      await q(
+        `insert into public.ga4cs_jc_manual_review_log (contact_id, decision, set_by, action)
+         values ($1, null, $2, 'reset')`,
+        [contactId, setBy]
+      );
+      clearCache();
+      return res.json({ contactId, jcManualTag: null, jcReviewed: false, jcSetBy: null, jcSetAt: null });
+    } catch (err) {
+      console.error('[operations:contact-sources:jc-tag reset]', err);
+      return res.status(502).json({ error: 'Failed to reset the JC review tag.', detail: err.message });
+    }
+  }
+
+  let decision = req.body && req.body.decision;
+  decision = decision == null ? null : String(decision).trim();
+  if (decision === '') decision = null;
   if (decision !== null && !ALLOWED_JC_TAGS.includes(decision)) {
     return res.status(400).json({ error: 'Invalid decision value.' });
   }
   try {
-    const setBy = req.user.email;
     await q(
       `insert into public.ga4cs_jc_manual_review (contact_id, decision, set_by, updated_at)
        values ($1, $2, $3, now())
