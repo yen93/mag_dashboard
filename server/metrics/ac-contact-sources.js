@@ -95,6 +95,17 @@ const EXCLUDED_CONVERSION_LINKS = new Set([
   '/executive-x-payment-gateway/',
 ]);
 
+// Manual hide-list: specific AC deal_ids that must never appear on the page (curated
+// request, 2026-10-21). KEEP IDENTICAL to EXCLUDED_DEAL_IDS in
+// public/ac_contact_sources.html. Hiding is by deal_id alone (not scoped to Niki's
+// sheet). deal_id is text in the cache, so compare as strings.
+const EXCLUDED_DEAL_IDS = new Set([
+  '3165','3174','3176','3216','3217','3274','3455','3467','3471','3501','3502','3543',
+  '3546','3549','3567','3570','3609','3640','3664','3714','3722','3725','3744','3748',
+  '3776','3780','3801','3822','3823','3855','3870','3926','3932','3965','3993','4024',
+  '4038','4058','4083','4085','4094','4105','4110','4127','4207','4221','4222',
+]);
+
 function isExcludedConversionLink(link) {
   if (!link) return false;
   let s = String(link).trim().toLowerCase();
@@ -109,8 +120,9 @@ function isExcludedConversionLink(link) {
 }
 
 // KEEP IDENTICAL to isExcludedRow() in public/ac_contact_sources.html.
-// A row is HIDDEN if its deal is in Niki's sheet marked outbound (nikiOutbound) — this
-// overrides everything below. Otherwise a row is SHOWN iff: JC manual tag (always), OR
+// A row is HIDDEN if its deal_id is in the manual EXCLUDED_DEAL_IDS set, or if its deal
+// is in Niki's sheet marked outbound (nikiOutbound) — these override everything below.
+// Otherwise a row is SHOWN iff: JC manual tag (always), OR
 // not a free-gift opt-in AND not an excluded conversion link AND (channel looks
 // organic/cpc OR google_ads_ac_field='Yes').
 // DELIBERATE DIVERGENCE from CONTACT_SOURCE_SHOWN in ../lib/sql.js: that predicate
@@ -119,6 +131,9 @@ function isExcludedConversionLink(link) {
 const ORGANIC_OR_CPC = /cpc|organic/i;
 function isExcludedRow(r) {
   if (!r) return false;
+  // Manual hide-list by deal_id — ALWAYS hidden, overrides every rule below incl. the
+  // JC "always show" exemption (per request).
+  if (r.dealId != null && EXCLUDED_DEAL_IDS.has(String(r.dealId).trim())) return true;
   // Deals in Niki's sheet marked outbound (any kind) are ALWAYS hidden — this wins over
   // every rule below, including the JC "always show" exemption (per request).
   if (r.nikiOutbound) return true;

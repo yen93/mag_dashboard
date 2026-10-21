@@ -1,0 +1,104 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: GA4 & Ads Leads page (ac_contact_sources.html) display curation around
+Niki's ad-leads sheet. (1) Filled niki_ad_leads_tracking.inbound_or_outbound from AC
+deal custom field 14. (2) Hid rows whose deal is outbound in Niki's sheet. (3) Hid
+rows whose deal_id is in a user-pasted 47-ID list (by deal_id alone). Plus /dcp + /cm
+cycles and a /q about deal 3822. Supabase MAG project ref aivitcomiywiysrfwqxt. Full
+-session record; earlier same-run /dcp files 2110261452 and 2110261500 cover the
+first two features' doc cycles.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. Only non-secret identifiers appeared: the Supabase MAG project
+ref (aivitcomiywiysrfwqxt) and ordinary business data (deal ids, contact ids,
+custom-field labels/values) already in the DB/AC.
+
+--------------------------------------------------------------------------------
+USER:
+"fill out inbound_or_outbound column in niki_ad_leads_tracking table. get data from
+active campaign ... 'Inbound/ Outbound?' custom value field under Qualification
+Details. populate with actual value in AC or null if null in AC"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Found the AC field = deal custom field meta id 14 (DEAL_INBOUND_OUTBOUND). Mirrors
+don't store deal custom fields and the AC dealCustomFieldData endpoint only supports
+filters[dealId], so read field 14 per-deal for the 101 distinct deal_ids (fanned
+across 5 parallel subagents). 99 valued (56 Inbound Enquiry, 41 Outbound - COLD, 2
+Outbound - SOCIAL MEDIA SCROLLING STRATEGY), 2 null in AC (2881, 3232). One
+UPDATE ... FROM (VALUES) by deal_id (105 deal-linked rows); verbatim values. Static
+one-time fill. (Details in 2110261452_chat_history.txt.)
+
+--------------------------------------------------------------------------------
+USER:
+/dcp, /cm (x2 cycles)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Documented the fill (as_built.txt + CLAUDE.md), wrote chat-history files; /cm emitted
+docs/DB-only commit lines. No git run by me.
+
+--------------------------------------------------------------------------------
+USER:
+"all deals in niki's table where inbound_or_outbound is outbound (any kind) should not
+be shown in ac_contact_sources.html"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added a request-time `nikiOutbound` EXISTS flag (niki_ad_leads_tracking,
+inbound_or_outbound ILIKE 'outbound%') to the SELECT; both KEEP-IDENTICAL
+isExcludedRow() copies (server/metrics/ac-contact-sources.js + inline in
+public/ac_contact_sources.html) now `if (r.nikiOutbound) return true;` placed first
+(overrides JC always-show). Hid exactly 10 rows, 0 JC-tagged. ROAS untouched; node
+--check OK; needs manual Cloud Run redeploy. Then ran /dcp (wrote 2110261500) + /cm.
+
+--------------------------------------------------------------------------------
+USER:
+"all deals in niki's list where deal is in this list below should not be shown ..."
+(pasted 47 deal_ids: 3165 ... 4222)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked the 47 ids vs live data: only 4 appear in the contact-source cache — 3165,
+3467, 3744 (in Niki's list) and 3822 (NOT in Niki's list); the other 43 aren't on the
+page now. The wording ("in niki's list where ...") was ambiguous about 3822, so asked
+via AskUserQuestion: scope = "Any deal in the pasted list" vs "Only if also in Niki's
+list". User chose ANY deal in the pasted list (hide by deal_id alone). Implemented a
+shared manual hide-list EXCLUDED_DEAL_IDS (all 47 ids) in BOTH isExcludedRow copies —
+a JS Set in server/metrics/ac-contact-sources.js, an object map in the inline
+public/ac_contact_sources.html script (KEEP IDENTICAL) — checked FIRST
+(`if (r.dealId && EXCLUDED_DEAL_IDS[...]) return true;`), overriding even JC
+always-show. No SELECT change (dealId already in payload), no DB/migration, ROAS
+untouched. Updated both summary comments; node --check OK. Hides all 4 present rows
+(incl. 3822) now + any of the 43 that surface after a future rebuild. Needs a manual
+Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/q — "3822 - is that tagged by jc? or does that have a channel value? or for review?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read-only SELECT on deal 3822 (contact 17663): NOT JC-tagged (jc_manual_tag null, no
+ga4cs_jc_manual_review row → effective tag null), channel is NULL, google_ads_ac_field
+= 'Yes'. So it is a "for review" row (GAds=Yes + blank channel + no tag + unreviewed)
+— it was previously visible only via the google_ads_ac_field='Yes' branch, now hidden
+by the manual deal-id list. No action taken (/q).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp doc steps (no git): wrote this chat-history file (2110261533). Updated
+as_built.txt (lead changelog entry for the manual EXCLUDED_DEAL_IDS hide-list) and
+CLAUDE.md (added the deal-id hide-list to the GA4 Leads row-visibility rule).
+.gitignore already covers everything; no new sensitive files. Reminder: did NOT commit
+or push — the user handles git; a manual Cloud Run redeploy is needed for the GA4
+Leads page changes.
+
+================================================================================
+END OF EXPORT
+================================================================================
