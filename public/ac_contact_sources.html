@@ -276,10 +276,12 @@
     function numOrNull(v) { return (v === null || v === undefined || v === '') ? null : Number(v); }
     // A "fee review" row: a WON deal whose AC Value and Xero Engagement Fee don't balance
     // — either the Engagement Fee is missing (not invoiced) or it differs from the AC value
-    // by ≥ $1. Open/lost deals are never flagged. Only applied when the Xero $ columns show.
+    // by ≥ $1. Open/lost deals are never flagged, nor are JC rows still showing "— set tag —"
+    // (isForReview — they need a JC decision first). Only applied when the Xero $ columns show.
     function isFeeMismatch(r) {
       if (!r) return false;
       if (r.dealStatus !== 'won') return false;        // only won deals are reviewed for fee balance
+      if (isForReview(r)) return false;                // skip JC "— set tag —" rows (still need a JC decision)
       var ac = numOrNull(r.dealValue), eng = numOrNull(r.engagementFee);
       if (ac === null && eng === null) return false;   // no deal + no fee → nothing to balance
       if (ac === null || eng === null) return true;    // one side present, other missing → unbalanced

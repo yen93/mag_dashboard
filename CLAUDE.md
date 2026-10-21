@@ -283,9 +283,11 @@ Cloud Run.
       highlight) — flags rows where **AC Value (`dealValue`) and the Xero Engagement Fee
       (`engagementFee`) don't balance**. Client-only (like `isForReview`, NO server twin):
       helper `isFeeMismatch(r)` in `public/ac_contact_sources.html` — **WON deals only**
-      (open/lost are never flagged) that are unbalanced: one side present and the other
-      missing (incl. an AC Value with no Engagement Fee yet = not invoiced — **intentionally
-      flags un-invoiced won deals**), or both present but differ by **≥ $1**. Gated on **`SHOW_XERO_COLS`** so it only shows with "Show Xero
+      (open/lost are never flagged; JC for-review rows still showing "— set tag —" i.e.
+      `isForReview(r)` are also skipped until a JC decision is made) that are unbalanced:
+      one side present and the other missing (incl. an AC Value with no Engagement Fee yet
+      = not invoiced — **intentionally flags un-invoiced won deals**), or both present but
+      differ by **≥ $1**. Gated on **`SHOW_XERO_COLS`** so it only shows with "Show Xero
       $" on (when `rowClass` combines both classes). The Engagement Fee column's custom
       `engFeeCell` render appends a **⚠ + title tooltip** (names both values + the Δ) on a
       mismatch, with a `text:` projection so the per-column filter/search stays clean

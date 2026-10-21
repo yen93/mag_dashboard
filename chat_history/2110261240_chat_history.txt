@@ -1,0 +1,127 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: Add a "for review" row highlight on the GA4 Leads Tracker page for rows
+where the AC Value and the Xero Engagement Fee don't balance, then refine it twice:
+WON deals only, and skip JC rows still showing "— set tag —". Client-only; no DB/
+server change.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"highlight rows in ac_contact_sources.html as for review where AC and Xero
+Engagement Fee values are not balanced in ga4_ac_contact_source" — mark rows where
+the AC-contracted deal value (AC Value = deal_value) and the Xero Engagement Fee
+(engagement_fee) don't reconcile.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(Plan mode.) Explored the page + metric. Findings:
+- public/ac_contact_sources.html already has an amber ".acs-review" row highlight
+  (isForReview()) for a DIFFERENT purpose (JC paid/SEO review) with an in-cell
+  tagging <select>. New fee-balance highlight must be visually distinct.
+- Data already in the API payload (dealValue, engagementFee); page keeps full rows
+  in ALL_ROWS. PURE front-end change — no DB/migration/server edit.
+- renderSortableTable sorts numeric columns from the raw row value (app.js:278), so
+  a custom cell render won't break sort; rowClass supports space-separated classes.
+- .acs-review is client-only (no server twin), so the new highlight is client-only.
+
+Read-only Supabase query (project aivitcomiywiysrfwqxt) on invoiced rows confirmed
+exact matches (19121, 18224, 17883, 17448) AND real discrepancies (17663: 21,950 vs
+30,730; 14753: 5,500 vs 6,500; plus roas-* static rows).
+
+AskUserQuestion (2 Qs): (1) NULL fees → "Also flag missing fees"; (2) visibility →
+"Only with 'Show Xero $' on". Wrote the plan, ExitPlanMode; user approved.
+
+--------------------------------------------------------------------------------
+USER:
+(Approved the plan.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented:
+public/ac_contact_sources.html — numOrNull() + isFeeMismatch(r) (false if both
+dealValue/engagementFee absent; true if exactly one present; else |diff| >= 1 $1 tol);
+engFeeCell(v,row) (appends " ⚠" + title tooltip w/ both values + Δ on mismatch);
+rowClass now adds "acs-fee-review" when SHOW_XERO_COLS && isFeeMismatch(r) alongside
+"acs-review"; Engagement Fee column got render: engFeeCell + text: projection.
+public/app.css — "table.data tr.acs-fee-review" (red #e0556b tint + inset left bar),
+after .acs-review so red wins on overlap.
+Noted manual Cloud Run redeploy needed; gave local verification steps.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (1st) — save chat history + update docs (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote chat_history/2110261215_chat_history.txt; added a "Fee-balance review
+highlight" note to CLAUDE.md contact-sources section; as_built.txt + .gitignore left
+alone. No git.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — compose a one-line commit command.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected status/diff; output a feat(contact-sources) Conventional-Commits line for
+the fee-balance highlight + docs.
+
+--------------------------------------------------------------------------------
+USER:
+"only won deals should be flagged. do not highlight open and lost deals"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added `if (r.dealStatus !== 'won') return false;` at the top of isFeeMismatch(), so
+the highlight AND the ⚠ tooltip apply to WON deals only. Updated the helper comment
+and the CLAUDE.md note ("WON deals only; open/lost never flagged").
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (2nd) — save chat history + update docs (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote chat_history/2110261220_chat_history.txt; as_built.txt + CLAUDE.md + .gitignore
+left alone (CLAUDE.md already current). No git.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — compose a one-line commit command.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected status (prior changes had been committed; only the won-only refinement +
+new chat_history remained); output a feat(contact-sources) line restricting the
+fee-balance highlight to won deals.
+
+--------------------------------------------------------------------------------
+USER:
+"also, do not highlight rows where jc column is still showing 'set tag'"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+A row "still showing — set tag —" == a JC for-review row (isForReview(r) true: GAds=
+Yes, blank channel, untagged, unreviewed; already amber-highlighted). Added
+`if (isForReview(r)) return false;` to isFeeMismatch() so those rows get neither the
+red fee-review highlight nor the ⚠ tooltip until a JC decision is made; once tagged/
+reviewed, a won-deal fee mismatch can flag red normally. Updated the helper comment
+and the CLAUDE.md note. Still client-only; manual redeploy needed.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (3rd) — save chat history + update docs (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp: wrote this chat-history file (full session). as_built.txt left alone (no
+built-state change — a display rule on an existing page). CLAUDE.md already updated
+this session (fee-balance note incl. both the won-only and the set-tag refinements);
+no further edit. .gitignore reviewed — all sensitive patterns covered, no change. No
+secrets in the session (only Supabase resource/contact IDs + dollar figures from
+read-only queries). No git commands run — the user commits/pushes.
+
+================================================================================
+END OF EXPORT
+================================================================================
