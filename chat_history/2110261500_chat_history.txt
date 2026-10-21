@@ -1,0 +1,95 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-21
+Session: (1) Filled public.niki_ad_leads_tracking.inbound_or_outbound from each
+matched AC deal's "Inbound/ Outbound?" deal custom field (meta id 14). (2) Then, per
+a follow-up, HID from the GA4 & Ads Leads page (ac_contact_sources.html) every row
+whose deal is in Niki's sheet marked outbound (any kind). Plus /dcp + /cm cycles.
+Supabase MAG project ref aivitcomiywiysrfwqxt. Full-session record; earlier same-run
+/dcp wrote 2110261452_chat_history.txt covering requests up to the first doc cycle.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. Only non-secret identifiers appeared: the Supabase MAG project
+ref (aivitcomiywiysrfwqxt) and ordinary business data (deal ids, company/contact
+names, custom-field labels/values) already in the DB/AC.
+
+--------------------------------------------------------------------------------
+USER:
+"fill out inbound_or_outbound column in niki_ad_leads_tracking table. get data from
+active campaign. check each deal. get value from 'Inbound/ Outbound?' custom value
+field under Qualification Details. populate with actual value in AC or null if null
+in AC"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Table: 416 rows, inbound_or_outbound (text) present but all NULL; only 105 rows / 101
+distinct deal_ids carry a deal_id (other 311 rows unmatched → stay null). Found the AC
+field via retrieve-all-custom-deal-field-meta: "Inbound/ Outbound?" = meta id 14
+(DEAL_INBOUND_OUTBOUND), dropdown (Inbound Enquiry / Outbound - SOCIAL MEDIA SCROLLING
+STRATEGY / Outbound - COLD (INDUSTRY BASED) / Pos-Conference / Post-Executive X).
+Confirmed neither Supabase mirror (activecampaign_deals, ac_google_ads_deals) stores
+deal custom fields, and the AC dealCustomFieldData endpoint only supports
+filters[dealId] (a meta-id filter 422s; get_deal doesn't inline custom fields) — so
+the field had to be read per-deal from AC (list-all-custom-fielddata-field-values,
+filters[dealId]=X), picking dealCustomFieldMetumId==14. Verified on deal 2300 →
+"Inbound Enquiry". Fanned the 101 deals across 5 parallel general-purpose subagents
+(~20 each); each returned deal_id -> field-14 value (NULL if missing/empty). Result:
+99 valued, 2 null in AC (deals 2881, 3232). Wrote them back with one
+UPDATE ... FROM (VALUES) joined on deal_id (values verbatim, no normalization).
+Verified: 56 deals Inbound Enquiry (60 rows), 41 Outbound - COLD (INDUSTRY BASED)
+(41 rows), 2 Outbound - SOCIAL MEDIA SCROLLING STRATEGY (2 rows), 2 NULL = 101 deals
+/ 105 deal-linked rows. Noted it's a static one-time load (won't auto-refresh).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp   (then /cm, then /dcp, then /cm — doc + commit-message cycles)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+First /dcp was interrupted by /cm before writing files; /cm found a clean working tree
+(DB-only work) → nothing to commit, suggested running /dcp first. Second /dcp wrote
+chat_history/2110261452_chat_history.txt, updated as_built.txt (new lead changelog
+entry + expanded the niki_ad_leads_tracking DATA STORES entry documenting the
+inbound_or_outbound fill) and CLAUDE.md (added how the column was sourced + the gotcha
+that deal custom fields aren't in the mirrors and the endpoint only filters by dealId);
+.gitignore already comprehensive, left alone. Following /cm emitted a one-line
+`git commit -am "docs: ..."` and noted -am skips the untracked chat-history file.
+No git run by me; DB-only change so no redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+"all deals in niki's table where inbound_or_outbound is outbound (any kind of
+outbound) should not be shown in ac_contact_sources.html"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Display/API-only change. Pre-checked the live cache: 10 contact-source rows match an
+outbound Niki deal, and 0 of them are JC-tagged (so no conflict with the "JC rows
+always shown" rule). server/metrics/ac-contact-sources.js: added a `nikiOutbound` flag
+to the SELECT — EXISTS(niki_ad_leads_tracking n WHERE n.deal_id=cs.deal_id AND
+lower(btrim(n.inbound_or_outbound)) LIKE 'outbound%') (catches both outbound labels).
+Both isExcludedRow() copies (server + inline in public/ac_contact_sources.html, the
+KEEP-IDENTICAL pair) now `if (r.nikiOutbound) return true;` placed FIRST, so it
+overrides even the JC "always show" exemption (per the absolute wording). Updated the
+summary comments in both copies. Verified: all 10 outbound-Niki rows were shown before
+and are now hidden; node --check passed on the server module. ROAS untouched
+(CONTACT_SOURCE_SHOWN not changed — consistent with the existing display-vs-ROAS
+divergence). No DB migration (flag is request-time); no app.js change (no cache-buster
+bump). Needs a manual Cloud Run redeploy to ship.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp doc steps (no git): wrote this full-session chat-history file
+(2110261500). Updated as_built.txt (lead changelog entry for the outbound-Niki hide)
+and CLAUDE.md (noted the nikiOutbound exclusion in the GA4 Leads display rule).
+.gitignore already covers everything; no new sensitive files. Reminder: did NOT commit
+or push — the user handles git; a manual Cloud Run redeploy is needed for the GA4
+Leads page change (DB data fill earlier needs no redeploy).
+
+================================================================================
+END OF EXPORT
+================================================================================

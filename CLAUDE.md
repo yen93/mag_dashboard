@@ -265,7 +265,12 @@ Cloud Run.
       and the endpoint only filters by `dealId` (a meta-id filter 422s). Both columns are
       static — re-run the matching AC lookup if the sheet/deal links change.
     - **Row-visibility rule — DISPLAY vs ROAS now DELIBERATELY DIVERGE (as of 2026-10-21,
-      later same day):** the **page DISPLAY** rule is: a row is SHOWN iff it has a JC manual
+      later same day):** the **page DISPLAY** rule is: a row is first HIDDEN if its deal is in
+      Niki's sheet marked **outbound** (`nikiOutbound` — a request-time `EXISTS` on
+      `niki_ad_leads_tracking` where `inbound_or_outbound ILIKE 'outbound%'`); this
+      `if (r.nikiOutbound) return true;` is placed FIRST in `isExcludedRow()`, so it overrides
+      even the JC "always show" exemption (as of 2026-10-21, latest — hides ~10 rows, none
+      JC-tagged). Otherwise a row is SHOWN iff it has a JC manual
       tag (always, bypassing the blacklist), OR it is not a `free_gifts_opt_ins` and not an
       excluded conversion link AND (`channel` matches `/cpc|organic/i` **OR**
       `google_ads_ac_field` is `'yes'`). Everything else (null/direct/referral/teams/email/

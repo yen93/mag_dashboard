@@ -72,7 +72,15 @@ const SELECT = `
     -- fan-out when a deal appears on multiple sheet rows. No cache/sync touched.
     EXISTS (
       SELECT 1 FROM public.niki_ad_leads_tracking n WHERE n.deal_id = cs.deal_id
-    )                      AS "inNikiList"
+    )                      AS "inNikiList",
+    -- Display-only flag: is this deal in Niki's sheet AND marked outbound (any kind)?
+    -- Such rows are HIDDEN from the page (see isExcludedRow). ILIKE 'outbound%' covers
+    -- "Outbound - COLD (INDUSTRY BASED)" / "Outbound - SOCIAL MEDIA SCROLLING STRATEGY".
+    EXISTS (
+      SELECT 1 FROM public.niki_ad_leads_tracking n
+      WHERE n.deal_id = cs.deal_id
+        AND lower(btrim(n.inbound_or_outbound)) LIKE 'outbound%'
+    )                      AS "nikiOutbound"
   FROM public.ga4_ac_contact_source cs
   LEFT JOIN public.ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id
   ORDER BY cs.cdate DESC NULLS LAST`;
@@ -101,14 +109,19 @@ function isExcludedConversionLink(link) {
 }
 
 // KEEP IDENTICAL to isExcludedRow() in public/ac_contact_sources.html.
-// A row is SHOWN iff: JC manual tag (always), OR not a free-gift opt-in AND not an
-// excluded conversion link AND (channel looks organic/cpc OR google_ads_ac_field='Yes').
+// A row is HIDDEN if its deal is in Niki's sheet marked outbound (nikiOutbound) — this
+// overrides everything below. Otherwise a row is SHOWN iff: JC manual tag (always), OR
+// not a free-gift opt-in AND not an excluded conversion link AND (channel looks
+// organic/cpc OR google_ads_ac_field='Yes').
 // DELIBERATE DIVERGENCE from CONTACT_SOURCE_SHOWN in ../lib/sql.js: that predicate
 // (used by ROAS) intentionally OMITS the google_ads_ac_field='Yes' branch, so showing
 // these rows on the page/API does NOT change ROAS counts.
 const ORGANIC_OR_CPC = /cpc|organic/i;
 function isExcludedRow(r) {
   if (!r) return false;
+  // Deals in Niki's sheet marked outbound (any kind) are ALWAYS hidden — this wins over
+  // every rule below, including the JC "always show" exemption (per request).
+  if (r.nikiOutbound) return true;
   // JC-tagged rows (mag_gads jc_final_attr, e.g. "Could be SEO or Paid Ad") are part of
   // the manual ROAS audit and must ALWAYS be shown — exempt from every exclusion below.
   if (r.jcManualTag) return false;

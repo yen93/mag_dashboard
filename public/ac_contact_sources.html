@@ -417,9 +417,10 @@
     }
 
     // Decide whether a row is HIDDEN from the page (data stays intact in the DB).
-    // A row is SHOWN iff: it has a JC manual tag (always shown), OR it is not a free-
-    // gift opt-in AND not an excluded conversion link AND its channel looks organic/cpc
-    // (contains "cpc" or "organic"). google_ads_ac_field does NOT affect visibility.
+    // A row is HIDDEN if its deal is in Niki's sheet marked outbound (nikiOutbound) —
+    // this overrides everything below. Otherwise a row is SHOWN iff: it has a JC manual
+    // tag (always shown), OR it is not a free-gift opt-in AND not an excluded conversion
+    // link AND (channel looks organic/cpc OR google_ads_ac_field='Yes').
     // Referral / teams / email / direct channels fall through to hidden automatically.
     //
     // KEEP IDENTICAL to isExcludedRow() in server/metrics/ac-contact-sources.js.
@@ -430,6 +431,9 @@
     var ORGANIC_OR_CPC = /cpc|organic/i;
     function isExcludedRow(r) {
       if (!r) return false;
+      // Deals in Niki's sheet marked outbound (any kind) are ALWAYS hidden — this wins
+      // over every rule below, including the JC "always show" exemption (per request).
+      if (r.nikiOutbound) return true;
       // JC-tagged rows (mag_gads jc_final_attr, e.g. "Could be SEO or Paid Ad") are part
       // of the manual ROAS audit and must ALWAYS be shown — exempt from every exclusion.
       if (r.jcManualTag) return false;
