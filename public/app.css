@@ -99,6 +99,31 @@ body {
 .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 .toolbar .spacer { flex: 1; }
 
+/* Marketing left sidebar sub-nav (Marketing page + its sub-pages) */
+.marketing-layout { display: flex; align-items: flex-start; gap: 0; }
+.subnav {
+  flex: 0 0 210px; width: 210px; padding: 18px 12px;
+  background: var(--surface); border-right: 1px solid var(--border);
+  position: sticky; top: 49px;            /* below the sticky topbar */
+  align-self: stretch; min-height: calc(100vh - 49px);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.subnav-link {
+  padding: 10px 12px; border-radius: 8px; text-decoration: none;
+  color: var(--text-muted); font-size: 14px; font-weight: 600; white-space: nowrap;
+}
+.subnav-link:hover { background: var(--surface-2); color: var(--text); }
+.subnav-link.active { background: var(--accent-soft); color: var(--accent); }
+.marketing-layout .content { flex: 1; min-width: 0; }  /* content takes the rest */
+@media (max-width: 860px) {
+  .marketing-layout { flex-direction: column; }
+  .subnav {
+    flex-direction: row; width: auto; flex: none; min-height: 0;
+    position: static; border-right: none; border-bottom: 1px solid var(--border);
+    overflow-x: auto;
+  }
+}
+
 /* segmented toggle (date range, chart/table view) */
 .segmented { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
 .segmented button {

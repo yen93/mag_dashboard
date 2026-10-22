@@ -38,18 +38,15 @@
 
   <nav class="tabbar">
     <a class="tab" href="sales_overview.html">Sales</a>
-    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab active" href="marketing.html">Marketing</a>
     <a class="tab" href="operations.html">Operations</a>
     <a class="tab" href="mag_buyer_sheet.html">Buyer Analysis</a>
     <a class="tab" href="invoice_tracking.html">Invoices</a>
     <a class="tab" href="sales.html">Conferences</a>
-    <a class="tab" href="ga4_agent.html">GA4 Agent</a>
-    <a class="tab" href="ac_contact_sources.html">GA4 Leads Tracker</a>
-    <a class="tab active" href="roas.html">ROAS</a>
-    <a class="tab" href="new_paid_leads_tracking.html">Calendly-AC Sync</a>
-    <a class="tab" href="historical_paid_leads.html">Historical Paid Leads</a>
   </nav>
 
+  <div class="marketing-layout">
+    <aside class="subnav" id="marketingNav"></aside>
   <main class="content">
     <!-- <p class="roas-intro">
       <strong>James's test:</strong> every $1 we spend on Google Ads should bring back at least
@@ -100,9 +97,10 @@
       </div>
     </div>
   </main>
+  </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=3"></script>
+  <script src="app.js?v=4"></script>
   <script>
     // ROAS-specific colours, matched to the source report's charts.
     var C_CYAN = '#17a6c9';   // Won Revenue / Won / ROAS line
@@ -332,6 +330,7 @@
     }
 
     initPage('operations'); // login / top-bar / theme only — this page renders its own content
+    renderMarketingSidebar('roas');
     // Re-draw charts (with cached data) when the theme toggles.
     window.onThemeChange = function () { if (ROAS_DATA) renderAll(ROAS_DATA); };
     if (currentUser()) loadRoas();

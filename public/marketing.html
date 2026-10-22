@@ -23,13 +23,10 @@
     <a class="tab" href="mag_buyer_sheet.html">Buyer Analysis</a>
     <a class="tab" href="invoice_tracking.html">Invoices</a>
     <a class="tab" href="sales.html">Conferences</a>
-    <a class="tab" href="ga4_agent.html">GA4 Agent</a>
-    <a class="tab" href="ac_contact_sources.html">GA4 Leads Tracker</a>
-    <a class="tab" href="roas.html">ROAS</a>
-    <a class="tab" href="new_paid_leads_tracking.html">Calendly-AC Sync</a>
-    <a class="tab" href="historical_paid_leads.html">Historical Paid Leads</a>
   </nav>
 
+  <div class="marketing-layout">
+    <aside class="subnav" id="marketingNav"></aside>
   <main class="content">
     <div class="toolbar">
       <strong>Marketing overview</strong>
@@ -78,9 +75,10 @@
       </div>
     </div>
   </main>
+  </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=2"></script>
+  <script src="app.js?v=3"></script>
   <script>
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
@@ -121,6 +119,7 @@
     }
 
     initPage('marketing', renderMarketing);
+    renderMarketingSidebar('overview');
   </script>
 </body>
 </html>

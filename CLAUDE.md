@@ -21,7 +21,18 @@ Cloud Run.
   `invoice_tracking.html` ("Invoices"), `sales.html` ("Conferences"); plus
   `login.html`. **Naming gotcha:** the "Sales" tab is `sales_overview.html`;
   `sales.html` is the **Conferences** page (legacy name). The `<nav class="tabbar">`
-  block is duplicated in every page, so reordering/adding a tab = edit them all. Shared styling in `public/app.css` (CSS
+  block is duplicated in **all 14 pages**, so reordering/adding a top tab = edit them all.
+  **Marketing left sidebar (as of 2026-10-22):** five pages that used to be top tabs now
+  live UNDER Marketing, reached via a left sidebar (`<aside class="subnav" id="marketingNav">`)
+  shown on **6 pages** — `marketing.html` (Overview), `roas.html`, `ac_contact_sources.html`,
+  `new_paid_leads_tracking.html`, `ga4_agent.html`, `historical_paid_leads.html`. The sidebar
+  link list is built by ONE helper `renderMarketingSidebar(active)` in `app.js` (single source
+  of truth — **don't hand-duplicate it**); each of the 6 pages wraps its `<main>` in
+  `<div class="marketing-layout">` + the aside, keeps **Marketing** as the active top tab, and
+  calls `renderMarketingSidebar('<key>')` right after `initPage`. CSS `.marketing-layout`/
+  `.subnav`/`.subnav-link` lives in `app.css` (sticky on desktop, horizontal scroll under 860px).
+  So those 5 are **no longer top tabs** — to re-point one, edit the helper, not the tabbar.
+  Shared styling in `public/app.css` (CSS
   variables drive theming). Shared logic in `public/app.js`. Each page has an
   inline `<script>` that calls `initPage(area, renderFn)` and maps API data onto
   charts/tables. **Do not add a bundler** — the point is hand-editability.
@@ -58,7 +69,7 @@ Cloud Run.
     `routines/sales-topline-sync.md`. Live: total_income, bureau, tailor;
     "needs setup" until their AC fields/tags are mirrored: direct/indirect split,
     speaking_enquiries, inbound/outbound.
-  - **ROAS** (`roas.html` = nav tab "ROAS", `/api/operations/roas`,
+  - **ROAS** (`roas.html` = Marketing sidebar item "ROAS", `/api/operations/roas`,
     `server/metrics/roas.js`) is a self-rendering page: Google Ads ROAS by
     **calendar year** — an 11-col table (Won $, Lost #/Open # counts, Won Leads, Win rate,
     Ad Spend, ROI $/%, ROAS, Per-Lead Value — the redundant Won Revenue column, equal to
