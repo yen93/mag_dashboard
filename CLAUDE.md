@@ -293,6 +293,22 @@ Cloud Run.
       above.) Knock-on: the re-shown rows DO count toward the page KPIs + chip-count note
       (they're "shown"), but an UNtagged one does NOT count toward ROAS. Migration (unrelated,
       for the FY/calYr/JC columns): `supabase/migrations/20261020060000_contact_source_fy_calyr_jc_columns.sql`.
+    - **"ROAS-counted only" quick filter (as of 2026-10-22):** a toolbar toggle
+      (`#acsRoasToggle` → `ROAS_ONLY`, default off; label flips to "Show all rows") that, when
+      on, shows ONLY the rows the ROAS tab counts. Client-side/display-only, **inline in
+      `public/ac_contact_sources.html`** (no server/API/`app.js` change). Gated in
+      `filteredRows()` by a new inline predicate `isRoasCounted(r)` = NOT `isExcludedRow` AND
+      `calYr` set AND `dealStatus ∈ {won,lost,open}` AND (effective `jcManualTag` set OR — not
+      `free_gifts_opt_ins`, not `isExcludedConversionLink`, and channel `~ /cpc|organic/i`).
+      This is a **THIRD client-side mirror of `CONTACT_SOURCE_SHOWN`** (+ the `roas.js`
+      deals-CTE `dealStatus`/`calYr` gating) — **KEEP IT IN SYNC** with `server/lib/sql.js`
+      `CONTACT_SOURCE_SHOWN` and `roas.js`, NOT with the two `isExcludedRow()` copies (whose
+      `google_ads_ac_field='Yes'` branch is exactly what this filter drops). Net effect: hides
+      the ~87 GAds=Yes/blank-channel/no-tag "for review" rows. Reuses the existing
+      `ORGANIC_OR_CPC` regex + inline `isExcludedConversionLink()`; handler mirrors the
+      Xero/meta toggles (flip bool → `apply()`). Caveat: ROAS also counts JC-tagged rows that
+      are in `EXCLUDED_DEAL_IDS`/`nikiOutbound`, but those are hidden from the page entirely,
+      so the filter = "ROAS-counted rows **visible on this page**".
     - **`engagement_fee` / `other_fees` / `gst` / `amount_total` (Xero $) columns (as of
       2026-10-20):** the Xero invoice breakdown of a deal, shown behind the page's **"Show
       Xero $"** toolbar toggle (`#acsXeroToggle` → `SHOW_XERO_COLS`; inserted right after the

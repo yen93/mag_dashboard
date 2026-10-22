@@ -61,6 +61,11 @@ const SELECT = `
     WHERE cs.cal_yr IS NOT NULL
       AND cs.deal_status IN ('won','lost','open')
       AND ${GADS_FILTER}
+      -- Uniting deals are referrals, not Google Ads leads — excluded from ROAS entirely
+      -- (anchored, so the company is the first deal_title token; "ICMI // … // Uniting"
+      -- is an ICMI deal and is NOT matched). KEEP IN SYNC with the alldeals CTE below
+      -- and isExcludedRow() on the GA4 Leads page.
+      AND lower(coalesce(cs.deal_title, '')) NOT LIKE 'uniting%'
     GROUP BY cs.cal_yr
   ),
   alldeals AS (
@@ -76,6 +81,9 @@ const SELECT = `
       coalesce(sum(value) FILTER (WHERE status_raw = 2), 0)     AS lost_amount
     FROM public.ac_google_ads_deals
     WHERE status_raw IN (0, 2)
+      -- Uniting deals are referrals — excluded from the lost/open + win-rate denominator
+      -- too (see the deals CTE above). Anchored 'uniting%' on the deal title.
+      AND lower(coalesce(title, '')) NOT LIKE 'uniting%'
     GROUP BY 1
   ),
   spend AS (

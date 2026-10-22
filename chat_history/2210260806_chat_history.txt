@@ -1,0 +1,94 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-22
+Session: (1) /q investigation of a mail notification about jamesd@myadventuregroup.com.au
+(a login-code bounce, not a dashboard access grant). (2) Added a "ROAS-counted only"
+quick-filter toolbar button to the GA4 & Ads Leads page (ac_contact_sources.html) that
+shows only the rows the ROAS tab actually counts. Client-side only, one file. Then /dcp.
+================================================================================
+
+NOTE ON REDACTIONS: one 6-digit MAG Metrics sign-in OTP appeared in a Gmail search
+result (a code emailed to a non-existent address and bounced). It is a single-use,
+10-minute, already-expired login code tied to a dead mailbox — not a reusable
+credential — but it is redacted below as [REDACTED_LOGIN_CODE] out of caution. No API
+keys, tokens, passwords, or connection strings were pasted into this chat.
+
+--------------------------------------------------------------------------------
+USER (/q):
+"why did i get a notification re jamesd@myadventuregroup.com.au? my boss' email is
+james@myadventuregroup.com.au, the right address is the one given the approver access
+right?" (read-only / investigate-only mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read server/users.js: confirmed the JC reviewer ("approver") access is granted to
+james@myadventuregroup.com.au (JC_REVIEW_EMAILS[0], line 18; canReviewJc = ADMIN_EMAILS
++ JC_REVIEW_EMAILS). Grepped the whole repo — "jamesd" appears NOWHERE; everything uses
+"james@". So the access address is correct.
+
+Searched Gmail (jamesd newer_than:14d) to find the actual notification: a thread from
+2026-10-21 23:20 UTC where julienne@ sent "[REDACTED_LOGIN_CODE] is your MAG Metrics
+sign-in code" TO jamesd@myadventuregroup.com.au, immediately followed by a
+mailer-daemon@googlemail.com "Delivery Status Notification (Failure) — Address not
+found, 550 5.1.1" delivered back to julienne@. That bounce was the "notification."
+
+Explained: someone requested a dashboard sign-in code for the typo address jamesd@
+(extra "d"). The login flow (isAllowedEmail, server/users.js:26) accepts ANY
+@myadventuregroup.com.au address regardless of whether the mailbox exists, generates an
+OTP, and emails it from the Gmail SMTP sender julienne@ (GMAIL_USER). jamesd@ isn't a
+real mailbox, so it bounced to the sending account (julienne@). Nothing is
+misconfigured; James should just request his code with james@. Flagged a side note: any
+mistyped @myadventuregroup.com.au address will bounce to julienne@ the same way.
+
+--------------------------------------------------------------------------------
+USER:
+"in c_contact_sources.html, pls add a quick filter btn to only show rows counted by the
+ROAS tab" (then entered plan mode).
+
+--------------------------------------------------------------------------------
+ASSISTANT (plan mode):
+Launched 2 Explore agents in parallel:
+ - Agent A (toolbar/filter machinery of ac_contact_sources.html + app.js): found the 3
+   existing .acs-reset toggles (#acsJcToggle, #acsXeroToggle, #acsMetaToggle), their
+   boolean+handler+apply() pattern, isExcludedRow() (:446-474), filteredRows() (:488),
+   renderTable→renderSortableTable call, and that renderSortableTable has NO global
+   row-predicate hook — the idiomatic approach is pre-filtering the row list before
+   passing it in, gated by a boolean toggled via apply().
+ - Agent B (ROAS counting): CONTACT_SOURCE_SHOWN in server/lib/sql.js:39-54 (effective
+   JC tag OR cpc/organic channel, minus free_gifts_opt_ins + 7 excluded links);
+   roas.js deals-CTE adds dealStatus IN (won,lost,open) + calYr NOT NULL + NOT uniting%.
+   The page SHOWS a superset because isExcludedRow line 472 also shows
+   googleAdsAcField==='yes' rows with no channel/tag — exactly the rows ROAS omits.
+
+Asked one clarifying question (filter scope): "Exact ROAS match" vs "channel/tag
+membership only." User chose Exact ROAS match (include dealStatus/calYr gating).
+
+Wrote the plan to the plan file and called ExitPlanMode. User approved.
+
+Implementation — all in public/ac_contact_sources.html (client-side display only; no
+server/API/SQL/app.js change, no cache-bust needed):
+ 1. New toolbar button #acsRoasToggle "ROAS-counted only" (:127), sibling of the other
+    .acs-reset toggles.
+ 2. New state boolean ROAS_ONLY = false (:160).
+ 3. New predicate isRoasCounted(r) (:488): returns false if isExcludedRow or calYr null
+    or dealStatus not in {won,lost,open}; true if effective jcManualTag set; else
+    false if free_gifts_opt_ins or isExcludedConversionLink; else ORGANIC_OR_CPC test on
+    channel. Mirrors CONTACT_SOURCE_SHOWN + roas.js gating (KEEP IN SYNC comment).
+ 4. filteredRows() gated: `if (ROAS_ONLY && !isRoasCounted(r)) return false;` (:515) —
+    single choke point, so KPIs, #acsCount chip, and table all update via apply().
+ 5. Toggle handler in wireToolbar() (:779), label flips to "Show all rows" when active.
+Grep-confirmed the 3 identifiers are consistent. Noted the change is frontend-only, so
+it won't show on the live Cloud Run URL until a manual redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote this chat-history file; updated as_built.txt (ROAS-only filter on the GA4 Leads
+page) and CLAUDE.md (contact-sources section). Checked .gitignore — sensitive patterns
+already covered, no change. Did NOT run any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================

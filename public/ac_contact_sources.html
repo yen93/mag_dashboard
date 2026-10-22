@@ -124,6 +124,8 @@
             </div>
           </div>
           <div class="acs-spacer"></div>
+          <button type="button" class="acs-reset" id="acsRoasToggle" aria-pressed="false"
+                  title="Show only the rows counted by the ROAS tab (cpc/organic or JC-tagged won/lost/open deals; hides Google Ads?=Yes rows with no channel/tag)">ROAS-counted only</button>
           <button type="button" class="acs-reset" id="acsJcToggle" aria-pressed="false"
                   title="Show/hide Manual Tagging column">Show Manual Tagging</button>
           <button type="button" class="acs-reset" id="acsXeroToggle" aria-pressed="false"
@@ -153,6 +155,9 @@
     // Toggle for the Xero fee-breakdown columns (Engagement Fee, Other Fees, GST,
     // Amount Total — from mag_gads by deal_id). Default hidden; data stays in the DB.
     var SHOW_XERO_COLS = false;
+    // Quick filter: when on, show ONLY the rows counted by the ROAS tab (see
+    // isRoasCounted). Default off; the toolbar button flips it.
+    var ROAS_ONLY = false;
 
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
@@ -430,8 +435,9 @@
     }
 
     // Decide whether a row is HIDDEN from the page (data stays intact in the DB).
-    // A row is HIDDEN if its deal_id is in the manual EXCLUDED_DEAL_IDS set, or if its
-    // deal is in Niki's sheet marked outbound (nikiOutbound) — these override everything
+    // A row is HIDDEN if its deal_id is in the manual EXCLUDED_DEAL_IDS set, if its deal
+    // is in Niki's sheet marked outbound (nikiOutbound), or if its deal title starts with
+    // "Uniting" (referral) — these override everything
     // below. Otherwise a row is SHOWN iff: it has a JC manual
     // tag (always shown), OR it is not a free-gift opt-in AND not an excluded conversion
     // link AND (channel looks organic/cpc OR google_ads_ac_field='Yes').
@@ -451,6 +457,10 @@
       // Deals in Niki's sheet marked outbound (any kind) are ALWAYS hidden — this wins
       // over every rule below, including the JC "always show" exemption (per request).
       if (r.nikiOutbound) return true;
+      // Uniting deals are referrals, not Google Ads leads — ALWAYS hidden (overrides JC
+      // show). Anchored, so the company is the first deal_title token ("ICMI // … //
+      // Uniting" is NOT matched). KEEP IN SYNC with the ROAS exclusion in roas.js.
+      if (/^\s*uniting/i.test(String(r.dealTitle || ''))) return true;
       // JC-tagged rows (mag_gads jc_final_attr, e.g. "Could be SEO or Paid Ad") are part
       // of the manual ROAS audit and must ALWAYS be shown — exempt from every exclusion.
       if (r.jcManualTag) return false;
@@ -466,6 +476,24 @@
       if (ORGANIC_OR_CPC.test(String(r.channel || ''))) return false;
       if (String(r.googleAdsAcField || '').trim().toLowerCase() === 'yes') return false;
       return true;
+    }
+
+    // A row is "counted by the ROAS tab" iff it is in the ROAS leads population:
+    // CONTACT_SOURCE_SHOWN (effective JC tag OR cpc/organic, minus free-gift/excluded
+    // links) AND dealStatus in won/lost/open AND calYr set. Mirrors server/lib/sql.js
+    // CONTACT_SOURCE_SHOWN + server/metrics/roas.js deals-CTE gating. KEEP IN SYNC.
+    // (Rows here have already cleared isExcludedRow, so EXCLUDED_DEAL_IDS / nikiOutbound /
+    // uniting are gone — ROAS would still count JC-tagged ones of those, but they aren't
+    // shown on this page at all, so the filter reflects "ROAS-counted rows visible here".)
+    function isRoasCounted(r) {
+      if (!r || isExcludedRow(r)) return false;
+      if (r.calYr == null) return false;
+      if (['won', 'lost', 'open'].indexOf(r.dealStatus) === -1) return false;
+      if (r.jcManualTag && String(r.jcManualTag).trim()) return true; // effective JC tag branch
+      var act = (r.conversionAction || '').trim().toLowerCase();
+      if (act === 'free_gifts_opt_ins') return false;
+      if (isExcludedConversionLink(r.link || r.conversionLink)) return false;
+      return ORGANIC_OR_CPC.test(String(r.channel || ''));
     }
 
     // ---- date-range filtering ----
@@ -484,6 +512,7 @@
       var from = parseInput('acsFrom'), to = parseInput('acsTo');
       return ALL_ROWS.filter(function (r) {
         if (isExcludedRow(r)) return false;
+        if (ROAS_ONLY && !isRoasCounted(r)) return false;
         return inRange(r.cdate, from, to);
       });
     }
@@ -745,6 +774,14 @@
         xeroBtn.classList.toggle('active', SHOW_XERO_COLS);
         xeroBtn.setAttribute('aria-pressed', String(SHOW_XERO_COLS));
         xeroBtn.textContent = (SHOW_XERO_COLS ? 'Hide' : 'Show') + ' Xero $';
+        apply();
+      });
+      var roasBtn = document.getElementById('acsRoasToggle');
+      if (roasBtn) roasBtn.addEventListener('click', function () {
+        ROAS_ONLY = !ROAS_ONLY;
+        roasBtn.classList.toggle('active', ROAS_ONLY);
+        roasBtn.setAttribute('aria-pressed', String(ROAS_ONLY));
+        roasBtn.textContent = ROAS_ONLY ? 'Show all rows' : 'ROAS-counted only';
         apply();
       });
       var metaBtn = document.getElementById('acsMetaToggle');

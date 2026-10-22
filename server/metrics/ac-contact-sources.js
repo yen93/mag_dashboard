@@ -120,8 +120,9 @@ function isExcludedConversionLink(link) {
 }
 
 // KEEP IDENTICAL to isExcludedRow() in public/ac_contact_sources.html.
-// A row is HIDDEN if its deal_id is in the manual EXCLUDED_DEAL_IDS set, or if its deal
-// is in Niki's sheet marked outbound (nikiOutbound) — these override everything below.
+// A row is HIDDEN if its deal_id is in the manual EXCLUDED_DEAL_IDS set, if its deal is
+// in Niki's sheet marked outbound (nikiOutbound), or if its deal title starts with
+// "Uniting" (referral) — these override everything below.
 // Otherwise a row is SHOWN iff: JC manual tag (always), OR
 // not a free-gift opt-in AND not an excluded conversion link AND (channel looks
 // organic/cpc OR google_ads_ac_field='Yes').
@@ -137,6 +138,10 @@ function isExcludedRow(r) {
   // Deals in Niki's sheet marked outbound (any kind) are ALWAYS hidden — this wins over
   // every rule below, including the JC "always show" exemption (per request).
   if (r.nikiOutbound) return true;
+  // Uniting deals are referrals, not Google Ads leads — ALWAYS hidden (overrides JC show).
+  // Anchored, so the company is the first deal_title token ("ICMI // … // Uniting" is NOT
+  // matched). KEEP IN SYNC with the ROAS exclusion in roas.js.
+  if (/^\s*uniting/i.test(String(r.dealTitle || ''))) return true;
   // JC-tagged rows (mag_gads jc_final_attr, e.g. "Could be SEO or Paid Ad") are part of
   // the manual ROAS audit and must ALWAYS be shown — exempt from every exclusion below.
   if (r.jcManualTag) return false;
