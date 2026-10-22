@@ -93,50 +93,48 @@ Cloud Run.
     "needs setup" until their AC fields/tags are mirrored: direct/indirect split,
     speaking_enquiries, inbound/outbound.
   - **ROAS** (`roas.html` = Marketing sidebar item "ROAS", `/api/operations/roas`,
-    `server/metrics/roas.js`) is a self-rendering page: Google Ads ROAS by
-    **calendar year** — an 11-col table (Won $, Lost #/Open # counts, Won Leads, Win rate,
-    Ad Spend, ROI $/%, ROAS, Per-Lead Value — the redundant Won Revenue column, equal to
-    Won $, is hidden; the Won Revenue KPI card stays) + 3 inline Chart.js charts
-    (grouped bar, ROAS-vs-2.00×-target line, Leads-by-outcome stacked bar). **As of
-    2026-10-20 it is LIVE, computed at request time from existing Supabase tables
-    — NOT a cache, NOT the Google Sheet. **WON numerator — as of 2026-10-22 the WON side
-    (Won $/count) counts ONLY deals tagged `final_gads_tag='Yes'` with status Won in the ROAS
-    audit `public.clover_audited_deals`** — a `won_audit` CTE bucketed by the audit's
-    `calendar_year`, won $ = `sum(parsed deal_value_aud_crm)` (text `"$10,800"` → strip
-    `$`/commas). This REPLACED the old GA4-attributed won source (`ga4_ac_contact_source` via
-    `CONTACT_SOURCE_SHOWN`). **So Won $/count + every numerator derived from it (ROAS, ROI,
-    win-rate numerator, Per-Lead-Value numerator) count only Yes-won deals.** NB the WON numbers
-    are a **STATIC audit snapshot** (refresh only by reloading `clover_audited_deals`).
-    `public.ga4_ac_contact_source` + `CONTACT_SOURCE_SHOWN` are now used ONLY for the
-    `shownLeads` basis = the **Per-Lead-Value denominator** (won+lost+open rows shown on the GA4
-    Leads page: organic/cpc channel OR an EFFECTIVE JC tag — a `ga4cs_jc_manual_review` override
-    wins over `cs.jc_manual_tag`, so `roas.js`'s `deals` CTE still `LEFT JOIN
-    public.ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id`). `google_ads_ac_field` is
-    not used here. **ASYMMETRY (as of 2026-10-21): the Lost /
-    Open COUNT columns AND the win-rate denominator come from ONLY the deals flagged
-    "Google Ads?"=Yes in AC — `public.ac_google_ads_deals` (the full AC
-    `dealCustomFieldData` scan; `status_raw=2` lost / `status_raw=0` open, bucketed by
-    `public.mag_cal_yr(deal_cdate)`), NOT every CRM deal and NOT the GA4-shown rows**.
-    (`activecampaign_deals` has NO Google-Ads field, so it can't be the source; the earlier
-    "every lost/open deal in `activecampaign_deals`, all pipelines" design was replaced.)
-    So win rate = won(audit Yes) ÷ (won + Google-Ads?=Yes lost + open), and Per-Lead Value =
-    audit Yes-won $ ÷ GA4-shown leads — Won, Lost/Open and the leads basis come from three
-    different populations by design. **The Lost
-    and Open table columns now show deal COUNT, not $** (no more `$`; the `lostAmount`/
-    `openAmount` are still in the API payload but not displayed). The **"Won Leads" column
-    shows won ÷ (won + lost + open count)** — same denominator as the Win rate %; **Per-Lead
-    Value alone still uses the GA4-shown leads basis** (`shownLeads` in `roas.js`; note it is
-    now the only thing `ga4_ac_contact_source` feeds here — won moved to the audit). Column
-    `title=` tooltips + the intro explain the denominators. Denominator (for ROAS) =
-    `sum(cost)` from `public.google_ads_campaign_monthly` by calendar year. Only years
-    **with ad spend** are shown (Jul 2024+); a `<12`-month-spend year (2024) reads high
-    and the row note says so. The "All years" total is derived in `roas.js`.
-    **This is a live cross-check (WON = audit `final_gads_tag=Yes`; lost/open = AC
-    Google-Ads?=Yes), NOT the full audited ROAS report** (ex-GST Buyer Analysis values →
-    different numbers; 2022–2024 history dropped). The
-    old sheet-mirror design (cache table `public.roas_year_on_year` + the
-    `roas-year-on-year-sync` routine) is **retired** — the routine is DISABLED and the
-    table is unused/unread (safe to drop). Ad-spend freshness now depends on the
+    `server/metrics/roas.js`) is a self-rendering page: Google Ads ROAS by **Australian
+    FINANCIAL YEAR** (Jul–Jun, **END-year** convention: FY25 = Jul 2024–Jun 2025).
+    **Rebuilt 2026-10-22 to mirror the standalone "MAG paid search ROAS" artifact**
+    (FY filter bar + All-in/Google-only cost-basis toggle, artifact KPI tiles, a
+    "ROAS by FY" bar+target chart, a "What we spent vs what we won" stacked-cost-vs-won
+    chart, a wide "ROAS by FY" table, and a per-FY **deals table**). LIVE, computed at
+    request time from Supabase — NOT a cache, NOT the Google Sheet.
+    **FY SOURCING (matches the artifact):**
+    • **FY22–FY24** → `public.niki_ad_leads_tracking` (Niki's Google Ads lead log):
+      Google spend = `sum(cpc)` over every lead row in the FY (per-lead click cost);
+      Won/Lost/Open counts + won revenue (`deal_value`) from rows with those statuses
+      (status `Unidentified`/`N/A` excluded from counts but their cpc still counts as
+      spend). FY derived in SQL from `year`+`month` (no stored FY/day); FY22 is partial
+      (data starts May 2022). `company LIKE 'uniting%'` excluded (referrals).
+    • **FY25+** → cost from monthly tables, deals from the counted set:
+      Google = `sum(cost)` `public.google_ads_campaign_monthly`; **Bing = `sum(cost)`
+      `public.bing_ads_campaign_monthly`** (reads $0 until the `bing-ads-campaign-monthly-sync`
+      edge fn + MS Ads creds are wired); **Simple Digital = `sum(paid_search_fee)`
+      `public.simple_digital_fees_monthly`** (reads $0 until the `simple-digital-fees-sync`
+      routine runs). **COUNTED SET (per the user's rule) = `clover_audited_deals`
+      `final_gads_tag='Yes'` UNION (by `deal_id`) `ga4_ac_contact_source` rows whose
+      `channel ~* 'cpc'`** — won $ from the audit `deal_value_aud_crm` (text `"$9,500"` →
+      strip `$`/commas), falling back to GA4 `deal_value` for cpc-only deals not in the audit.
+    **END-YEAR FY is derived explicitly in SQL for every source** (`extract(year)+(month>=7?1:0)`;
+    clover's `fiscal_year` text is already END-year via `right(fiscal_year,2)+2000`). Do NOT use
+    `public.mag_fy_label` or GA4's generated `fy` — they are START-year (off by one).
+    **Two cost bases per row** (`roasGoogle` = won$÷Google, `roasAllin` = won$÷(Google+Bing+SD));
+    the frontend toggles between them client-side. ROI $/% and the "cost" KPI follow the active
+    basis. Win rate = won ÷ (won+lost+open); Per-Lead Value = won$ ÷ (won+lost+open). Only FYs
+    **with ad spend** are shown; `<12`-month-spend years (FY22 partial, FY27 current) are flagged.
+    **Deals table** = `/api/operations/roas/deals` (`server/metrics/roas-deals.js`): a flat
+    per-deal list (FY22–24 from Niki; FY25+ from clover classified `counted`=Yes OR cpc /
+    `review`=`final_gads_tag='Uncertain'` / `actag`=attributed Google Ads but not counted,
+    plus GA4 cpc deals not in the audit). The page filters it client-side by FY + status
+    (Won/Lost/Open/All) + scope + search. **Counts reconcile with `/roas`** (counted W/L/O =
+    the metric's W/L/O) because both use the same `clover Yes ∪ cpc` set.
+    **NOT the full audited ROAS report** (ex-GST Buyer Analysis values → different numbers).
+    The old calendar-year design (`won_audit` CTE by `calendar_year`; lost/open from
+    `ac_google_ads_deals`; `CONTACT_SOURCE_SHOWN` for the shown-leads basis) is **replaced**,
+    as is the even-older sheet-mirror design (cache `public.roas_year_on_year` +
+    `roas-year-on-year-sync` routine — both retired/unused, safe to drop). Google ad-spend
+    freshness (FY25+) depends on the
     **`google-ads-campaign-monthly-sync` Supabase edge function** (deployed
     `--no-verify-jwt`; pg_cron `google-ads-campaign-monthly-sync-weekly`, `0 22 * * 0`
     = Mon 06:00 PH; migration `20261020090000`). It mints an OAuth token from the
@@ -148,6 +146,24 @@ Cloud Run.
     **Secret `GOOGLE_ADS_SA_KEY`** (full SA JSON) is a Supabase edge secret. Bump
     `GOOGLE_ADS_API_VERSION` (default `v26`) when Google sunsets a version. Files:
     `supabase/functions/google-ads-campaign-monthly-sync/index.ts`.
+    **Bing + Simple Digital (the All-in basis, 2026-10-22):** two NEW empty tables feed the
+    All-in cost — `public.bing_ads_campaign_monthly` (migration `20261022090000`, mirrors the
+    Google table) and `public.simple_digital_fees_monthly` (migration `20261022091000`). Both
+    are read by `roas.js` via LEFT JOIN, so All-in = Google-only until they're filled.
+    Bing is filled by the **`bing-ads-campaign-monthly-sync` edge function (SCAFFOLD)** — token
+    mint + upsert are done; the MS Advertising Reporting-API call is a TODO, and it needs
+    `BING_ADS_*` edge secrets (client id/secret, refresh token, developer token, account/customer
+    id). Simple Digital is filled by the **`simple-digital-fees-sync` Claude routine** (Gmail MCP
+    → GoCardless "Upcoming Direct Debit … Simple Digital" notices ÷1.1, less $600 SEO from Mar
+    2026; monthly). Files: `supabase/functions/bing-ads-campaign-monthly-sync/index.ts`,
+    `routines/simple-digital-fees-sync.md`. A dashboard redeploy is needed for the roas.js/
+    roas.html rebuild + the new `/api/operations/roas/deals` route.
+    **TEMPORARY sheet load (2026-10-22):** until those live syncs run, both tables hold a
+    one-time load from the "Ad spend by month" tab of the ROAS sheet (FY25+). Simple Digital
+    is mirrored per month (the live routine upserts over it). **Bing is loaded as SENTINEL
+    rows `campaign_id=0, campaign_name='__sheet_total__'`** — `delete from
+    public.bing_ads_campaign_monthly where campaign_id=0;` BEFORE wiring the live per-campaign
+    Bing sync, or the monthly totals double-count against the real campaign rows.
   - **Contact Sources** (`ac_contact_sources.html` = "GA4 & Ads Leads Tracking",
     `/api/operations/contact-sources`, `server/metrics/ac-contact-sources.js`) is
     also a plain single-table read: as of 2026-10-09 **every display column is stored

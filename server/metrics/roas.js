@@ -1,181 +1,203 @@
-// ROAS (Return on Ad Spend) — Google Ads performance, year on year (calendar year).
+// ROAS (Return on Ad Spend) — Google Ads performance, by AUSTRALIAN FINANCIAL YEAR
+// (Jul–Jun, END-year convention: FY25 = Jul 2024–Jun 2025), mirroring the standalone
+// "MAG paid search ROAS" artifact. LIVE, computed at request time from Supabase.
 //
-// LIVE, computed at request time from Supabase tables (no cache table, no external
-// source call — all in the same DB, so a plain aggregation query is fast and fresh):
-//   • public.google_ads_campaign_monthly — monthly Google Ads cost per campaign
-//     (the ad-spend DENOMINATOR). Refreshed by the google-ads-campaign-monthly-sync
-//     routine. Coverage starts Jul 2024, so the tab shows only years with ad spend.
-//   • public.clover_audited_deals — the WON numerator (as of 2026-10-22). Won $/count
-//     count ONLY deals tagged final_gads_tag='Yes' (sheet col N "Google Ads Tagged?")
-//     with status Won, bucketed by the audit's calendar_year, valued by the audit's CRM
-//     deal_value_aud_crm. This is James' authoritative "Master Deals (audit)" classification
-//     — it includes Yes-won deals that never appear on the GA4 Leads page. NB: this is a
-//     STATIC snapshot, so won numbers refresh only when clover_audited_deals is reloaded.
-//   • public.ga4_ac_contact_source — now used ONLY for the "shown leads" basis
-//     (shownLeads = won+lost+open rows shown on the GA4 Leads page, via CONTACT_SOURCE_SHOWN),
-//     which is the Per-Lead-Value DENOMINATOR. It no longer drives Won $/count.
-//   • public.ac_google_ads_deals — the LOST/OPEN side. As of 2026-10-21 the Lost /
-//     Open COUNT columns AND the win-rate denominator come from ONLY the deals flagged
-//     "Google Ads? = Yes" in AC (status_raw=2 lost / status_raw=0 open, by
-//     mag_cal_yr(deal_cdate)) — NOT every CRM deal, and NOT the GA4-shown rows.
-//     ASYMMETRY BY DESIGN: Won $/count = audit final_gads_tag='Yes' deals; Lost/Open
-//     counts + the win-rate DENOMINATOR = Google-Ads?=Yes deals; Per-Lead Value's leads
-//     denominator = the GA4-shown basis. The "Won Leads" column shows won ÷ (won + lost +
-//     open count) — same denominator as the win rate %.
-//     (lostAmount/openAmount are still computed in the payload but no longer displayed.)
+// FY SOURCING (matches the artifact's model):
+//   • FY22–FY24  →  public.niki_ad_leads_tracking (Niki's Google Ads lead log).
+//       - Google spend = sum(cpc) over every lead row in the FY (per-lead click cost).
+//       - Won/Lost/Open counts + won revenue (deal_value) from rows with those statuses
+//         (status 'Unidentified'/'N/A' are excluded from counts but their cpc still
+//         counts as spend). FY derived from year + month (no stored FY/day); FY22 is
+//         partial (data starts May 2022).
+//   • FY25+      →  cost + deals from live tables:
+//       - Google spend = sum(cost) from public.google_ads_campaign_monthly.
+//       - Bing  spend  = sum(cost) from public.bing_ads_campaign_monthly (0 until the
+//         bing-ads-campaign-monthly-sync + MS Ads credentials are configured).
+//       - Simple Digital fee = sum(paid_search_fee) from public.simple_digital_fees_monthly
+//         (0 until the simple-digital-fees-sync routine runs).
+//       - Won/Lost/Open + won revenue = COUNTED SET = clover_audited_deals
+//         final_gads_tag='Yes'  UNION (by deal_id)  ga4_ac_contact_source rows whose
+//         channel ~* 'cpc'. Deal value from the audit's deal_value_aud_crm (text "$9,500"
+//         → numeric), falling back to GA4 deal_value for cpc-only rows not in the audit.
 //
-// NOTE — this is a LIVE ROAS cross-check, NOT the audited "MAG Marketing ROAS Report"
-// sheet's exact figures. Won revenue uses the audit's CRM deal_value (not ex-GST Buyer
-// Analysis values). Revenue is counted in the year the ENQUIRY came in (the audit's
-// calendar_year), which matches the report's timing basis. A year whose ad spend covers
-// fewer than 12 months (e.g. 2024 = Jul–Dec only) will read high — the per-row note says
-// how many months of spend it has.
+// Two cost bases are returned per row (Google-only and All-in = Google+Bing+SD); the
+// frontend toggles between them client-side. Only FYs that have ad spend are shown.
+// Revenue is credited in the FY the enquiry came in (matches the artifact's timing).
+//
+// NB: this is a LIVE cross-check, NOT the audited ROAS report sheet's exact figures.
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { section } from '../lib/metric.js';
-import { CONTACT_SOURCE_SHOWN } from '../lib/sql.js';
 
-const SRC = 'Live: clover_audited_deals (won, final_gads_tag=Yes) + ac_google_ads_deals (lost/open, Google Ads?=Yes) × google_ads_campaign_monthly; ga4_ac_contact_source for the shown-leads basis (Supabase)';
+const SRC =
+  'Live (Supabase): FY22–24 niki_ad_leads_tracking; FY25+ google_ads_campaign_monthly + ' +
+  'bing_ads_campaign_monthly + simple_digital_fees_monthly × (clover_audited_deals ' +
+  "final_gads_tag=Yes ∪ ga4_ac_contact_source channel=cpc)";
 const TARGET_ROAS = 2;
 
-// `shownLeads` population (the Per-Lead-Value DENOMINATOR only) = EXACTLY the rows shown
-// on the GA4 & Ads Leads page (organic/cpc channel OR a JC manual tag; free-gift /
-// excluded-link rows dropped). See CONTACT_SOURCE_SHOWN in ../lib/sql.js. This NO LONGER
-// drives Won $/count — those come from the clover_audited_deals final_gads_tag='Yes' set.
-const GADS_FILTER = CONTACT_SOURCE_SHOWN;
-
 const SELECT = `
-  WITH won_audit AS (
-    -- WON side (as of 2026-10-22): ONLY deals tagged final_gads_tag='Yes' (sheet col N
-    -- "Google Ads Tagged?") with status Won in James' ROAS audit (public.clover_audited_deals),
-    -- bucketed by the audit's calendar_year, valued by the audit's CRM deal_value_aud_crm.
-    -- deal_value_aud_crm is TEXT like "$10,800" — strip $/commas; blank → NULL (not summed).
-    -- deal_id is unique in the audit, so count(*) = deal count. STATIC snapshot (reload the
-    -- table to refresh). Uniting deals are referrals — excluded to match the alldeals CTE.
-    SELECT
-      calendar_year::int                                                    AS cal_yr,
-      count(*)                                                              AS won_leads,
-      coalesce(sum(
-        nullif(regexp_replace(coalesce(deal_value_aud_crm, ''), '[^0-9.]', '', 'g'), '')::numeric
-      ), 0)                                                                 AS won_amount
-    FROM public.clover_audited_deals
-    WHERE lower(btrim(final_gads_tag)) = 'yes'
-      AND lower(btrim(status))         = 'won'
-      AND calendar_year ~ '^[0-9]{4}$'
-      AND lower(coalesce(deal_crm_title, '')) NOT LIKE 'uniting%'
-    GROUP BY 1
+  WITH niki AS (
+    -- FY22–FY24: Niki's Google Ads lead log. FY derived END-year from year+month.
+    -- Google spend = sum(cpc) over ALL rows (per-lead click cost). W/L/O + won$ from
+    -- status rows only. Uniting = referrals, excluded from counts.
+    SELECT fy_end,
+      round(sum(cpc))::numeric                                            AS google_spend,
+      count(*) FILTER (WHERE st IN ('won','lost','open'))                 AS leads,
+      count(*) FILTER (WHERE st = 'won')                                  AS won,
+      count(*) FILTER (WHERE st = 'lost')                                 AS lost,
+      count(*) FILTER (WHERE st = 'open')                                 AS open,
+      coalesce(sum(deal_value) FILTER (WHERE st = 'won'), 0)::numeric     AS won_rev,
+      coalesce(sum(deal_value) FILTER (WHERE st = 'open'), 0)::numeric    AS open_val,
+      count(DISTINCT month_num)                                           AS months
+    FROM (
+      SELECT cpc, deal_value, lower(btrim(status)) AS st,
+        year + CASE WHEN extract(month FROM to_date(month, 'Month')) >= 7 THEN 1 ELSE 0 END AS fy_end,
+        extract(month FROM to_date(month, 'Month'))::int AS month_num
+      FROM public.niki_ad_leads_tracking
+      WHERE lower(coalesce(company, '')) NOT LIKE 'uniting%'
+    ) z
+    GROUP BY fy_end
   ),
-  deals AS (
-    -- SHOWN-LEADS basis ONLY (the Per-Lead-Value denominator; no longer the WON source):
-    -- EXACTLY the won+lost+open rows shown on the GA4 & Ads Leads page.
-    SELECT
-      cs.cal_yr                                                         AS cal_yr,
-      count(*) FILTER (WHERE cs.deal_status IN ('won','lost','open'))   AS leads
-    FROM public.ga4_ac_contact_source cs
-    -- Override join required by CONTACT_SOURCE_SHOWN: a JC manual-review decision
-    -- (ga4cs_jc_manual_review) wins over cs.jc_manual_tag.
-    LEFT JOIN public.ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id
-    WHERE cs.cal_yr IS NOT NULL
-      AND cs.deal_status IN ('won','lost','open')
-      AND ${GADS_FILTER}
-      -- Uniting deals are referrals, not Google Ads leads — excluded (anchored, so the
-      -- company is the first deal_title token; "ICMI // … // Uniting" is NOT matched).
-      AND lower(coalesce(cs.deal_title, '')) NOT LIKE 'uniting%'
-    GROUP BY cs.cal_yr
-  ),
-  alldeals AS (
-    -- LOST/OPEN side: ONLY deals flagged "Google Ads? = Yes" in AC
-    -- (public.ac_google_ads_deals = the full dealCustomFieldData scan). status_raw
-    -- 0=open / 2=lost, bucketed by mag_cal_yr(deal_cdate) to match
-    -- ga4_ac_contact_source.cal_yr. value is already AUD here (no /100).
-    SELECT
-      public.mag_cal_yr(deal_cdate)                             AS cal_yr,
-      count(*) FILTER (WHERE status_raw = 0)                    AS open_leads,
-      count(*) FILTER (WHERE status_raw = 2)                    AS lost_leads,
-      coalesce(sum(value) FILTER (WHERE status_raw = 0), 0)     AS open_amount,
-      coalesce(sum(value) FILTER (WHERE status_raw = 2), 0)     AS lost_amount
-    FROM public.ac_google_ads_deals
-    WHERE status_raw IN (0, 2)
-      -- Uniting deals are referrals — excluded from the lost/open + win-rate denominator
-      -- too (see the deals CTE above). Anchored 'uniting%' on the deal title.
-      AND lower(coalesce(title, '')) NOT LIKE 'uniting%'
-    GROUP BY 1
-  ),
-  spend AS (
-    SELECT
-      extract(year FROM month)::int  AS cal_yr,
-      coalesce(round(sum(cost)), 0)  AS ad_spend,
-      count(DISTINCT month)          AS spend_months,
-      to_char(min(month), 'Mon')     AS first_spend_month,
-      to_char(max(month), 'Mon YYYY') AS last_spend_month
+  gads AS (
+    -- FY25+ Google spend (live account).
+    SELECT extract(year FROM month)::int + CASE WHEN extract(month FROM month) >= 7 THEN 1 ELSE 0 END AS fy_end,
+      round(sum(cost))::numeric       AS google_spend,
+      count(DISTINCT month)           AS months,
+      to_char(min(month), 'Mon')      AS first_month,
+      to_char(max(month), 'Mon YYYY') AS last_month
     FROM public.google_ads_campaign_monthly
     GROUP BY 1
+  ),
+  bing AS (
+    SELECT extract(year FROM month)::int + CASE WHEN extract(month FROM month) >= 7 THEN 1 ELSE 0 END AS fy_end,
+      round(sum(cost))::numeric AS bing_spend
+    FROM public.bing_ads_campaign_monthly
+    GROUP BY 1
+  ),
+  sd AS (
+    SELECT extract(year FROM month)::int + CASE WHEN extract(month FROM month) >= 7 THEN 1 ELSE 0 END AS fy_end,
+      round(sum(paid_search_fee))::numeric AS sd_fee
+    FROM public.simple_digital_fees_monthly
+    GROUP BY 1
+  ),
+  clover_yes AS (
+    -- FY25+ counted set (part 1): audited deals tagged Google Ads. fiscal_year is already
+    -- END-year "FYxx". deal_value_aud_crm is text "$9,500" → strip to numeric.
+    SELECT deal_id,
+      right(fiscal_year, 2)::int + 2000 AS fy_end,
+      lower(btrim(status))              AS st,
+      nullif(regexp_replace(coalesce(deal_value_aud_crm, ''), '[^0-9.]', '', 'g'), '')::numeric AS val
+    FROM public.clover_audited_deals
+    WHERE lower(btrim(final_gads_tag)) = 'yes'
+      AND fiscal_year ~ '^FY[0-9]{2}$'
+      AND lower(coalesce(deal_crm_title, '')) NOT LIKE 'uniting%'
+  ),
+  ga4cpc AS (
+    -- FY25+ counted set (part 2): GA4-matched contacts on a cpc channel. FY derived END-year
+    -- from cdate (do NOT trust the generated START-year fy column). deal_value is AUD.
+    SELECT deal_id,
+      extract(year FROM cdate)::int + CASE WHEN extract(month FROM cdate) >= 7 THEN 1 ELSE 0 END AS fy_end,
+      lower(btrim(deal_status)) AS st,
+      deal_value                AS val
+    FROM public.ga4_ac_contact_source
+    WHERE channel ~* 'cpc'
+      AND deal_id IS NOT NULL
+      AND lower(coalesce(deal_title, '')) NOT LIKE 'uniting%'
+  ),
+  combined_deals AS (
+    SELECT deal_id, fy_end, st, val FROM clover_yes
+    UNION ALL
+    SELECT deal_id, fy_end, st, val FROM ga4cpc g
+    WHERE g.deal_id NOT IN (SELECT deal_id FROM clover_yes WHERE deal_id IS NOT NULL)
+  ),
+  clover_fy AS (
+    SELECT fy_end,
+      count(*) FILTER (WHERE st IN ('won','lost','open'))             AS leads,
+      count(*) FILTER (WHERE st = 'won')                             AS won,
+      count(*) FILTER (WHERE st = 'lost')                            AS lost,
+      count(*) FILTER (WHERE st = 'open')                            AS open,
+      coalesce(sum(val) FILTER (WHERE st = 'won'), 0)::numeric       AS won_rev,
+      coalesce(sum(val) FILTER (WHERE st = 'open'), 0)::numeric      AS open_val
+    FROM combined_deals
+    GROUP BY fy_end
+  ),
+  fy_axis AS (
+    SELECT fy_end FROM niki WHERE fy_end <= 2024 AND google_spend > 0
+    UNION
+    SELECT fy_end FROM gads WHERE fy_end >= 2025
   )
   SELECT
-    s.cal_yr                          AS "year",
-    coalesce(w.won_leads, 0)          AS "wonLeads",
-    coalesce(a.lost_leads, 0)         AS "lostLeads",
-    coalesce(a.open_leads, 0)         AS "openLeads",
-    coalesce(d.leads, 0)              AS "shownLeads",
-    coalesce(w.won_amount, 0)         AS "wonAmount",
-    coalesce(a.lost_amount, 0)        AS "lostAmount",
-    coalesce(a.open_amount, 0)        AS "openAmount",
-    s.ad_spend                        AS "adSpend",
-    s.spend_months                    AS "spendMonths",
-    s.first_spend_month               AS "firstSpendMonth",
-    s.last_spend_month                AS "lastSpendMonth"
-  FROM spend s
-  LEFT JOIN won_audit w ON w.cal_yr = s.cal_yr
-  LEFT JOIN deals d     ON d.cal_yr = s.cal_yr
-  LEFT JOIN alldeals a  ON a.cal_yr = s.cal_yr
-  WHERE s.ad_spend > 0           -- only years with ad spend (ROAS needs a denominator)
-  ORDER BY s.cal_yr`;
+    a.fy_end                                                           AS "fyEnd",
+    'FY' || right(a.fy_end::text, 2)                                   AS "fy",
+    (CASE WHEN a.fy_end <= 2024 THEN n.google_spend ELSE g.google_spend END)       AS "googleSpend",
+    (CASE WHEN a.fy_end <= 2024 THEN 0 ELSE coalesce(b.bing_spend, 0) END)         AS "bingSpend",
+    (CASE WHEN a.fy_end <= 2024 THEN 0 ELSE coalesce(s.sd_fee, 0) END)             AS "sdFee",
+    (CASE WHEN a.fy_end <= 2024 THEN coalesce(n.won, 0)  ELSE coalesce(c.won, 0)  END)  AS "won",
+    (CASE WHEN a.fy_end <= 2024 THEN coalesce(n.lost, 0) ELSE coalesce(c.lost, 0) END)  AS "lost",
+    (CASE WHEN a.fy_end <= 2024 THEN coalesce(n.open, 0) ELSE coalesce(c.open, 0) END)  AS "open",
+    (CASE WHEN a.fy_end <= 2024 THEN coalesce(n.leads, 0) ELSE coalesce(c.leads, 0) END) AS "leads",
+    (CASE WHEN a.fy_end <= 2024 THEN coalesce(n.won_rev, 0)  ELSE coalesce(c.won_rev, 0)  END) AS "wonRevenue",
+    (CASE WHEN a.fy_end <= 2024 THEN coalesce(n.open_val, 0) ELSE coalesce(c.open_val, 0) END) AS "openValue",
+    (CASE WHEN a.fy_end <= 2024 THEN n.months ELSE g.months END)       AS "spendMonths",
+    (CASE WHEN a.fy_end <= 2024 THEN NULL ELSE g.first_month END)      AS "firstSpendMonth",
+    (CASE WHEN a.fy_end <= 2024 THEN NULL ELSE g.last_month END)       AS "lastSpendMonth",
+    (CASE WHEN a.fy_end <= 2024 THEN 'niki' ELSE 'clover+ga4' END)     AS "sourceKind"
+  FROM fy_axis a
+  LEFT JOIN niki n     ON n.fy_end = a.fy_end
+  LEFT JOIN gads g     ON g.fy_end = a.fy_end
+  LEFT JOIN bing b     ON b.fy_end = a.fy_end
+  LEFT JOIN sd   s     ON s.fy_end = a.fy_end
+  LEFT JOIN clover_fy c ON c.fy_end = a.fy_end
+  ORDER BY a.fy_end`;
 
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
-// Derive the per-row ratios + labels the page shows. won_amount == won_revenue
-// here (won deal value credited to Google Ads); both columns are populated.
+// Derive the per-row figures the page shows. Both cost bases are provided; the frontend
+// picks one. ROI is basis-dependent so the frontend derives it from the active basis.
 function shape(r) {
-  const year = num(r.year);
-  // shownLeads = GA4-shown won+lost+open — drives Per-Lead Value and the "won / N"
-  // column (kept on the shown basis). The win rate uses a DIFFERENT denominator below.
-  const leads = num(r.shownLeads) || 0;
-  const wonLeads = num(r.wonLeads) || 0;      // audit final_gads_tag=Yes won deals that year
-  const lostLeads = num(r.lostLeads) || 0;   // Google-Ads?=Yes lost deals that year
-  const openLeads = num(r.openLeads) || 0;   // Google-Ads?=Yes open deals that year
-  const wonAmount = num(r.wonAmount) || 0;
-  const adSpend = num(r.adSpend) || 0;
+  const fyEnd = num(r.fyEnd);
+  const googleSpend = num(r.googleSpend) || 0;
+  const bingSpend = num(r.bingSpend) || 0;
+  const sdFee = num(r.sdFee) || 0;
+  const totalCost = googleSpend + bingSpend + sdFee;
+  const won = num(r.won) || 0;
+  const lost = num(r.lost) || 0;
+  const open = num(r.open) || 0;
+  const leads = won + lost + open;
+  const wonRevenue = num(r.wonRevenue) || 0;
+  const openValue = num(r.openValue) || 0;
   const spendMonths = num(r.spendMonths) || 0;
-  const roiDollars = wonAmount - adSpend;
-  const winRateLeads = wonLeads + lostLeads + openLeads; // won(audit) + Google-Ads?=Yes lost + open
   const partial = spendMonths > 0 && spendMonths < 12;
-  const periodLabel = partial
-    ? `${year} · ${spendMonths} mo ad spend`
-    : `Jan–Dec ${year}`;
+  const periodLabel = partial ? `${r.fy} · ${spendMonths} mo` : r.fy;
   const countedMethod =
-    `Won revenue/leads = ROAS-audit deals tagged final_gads_tag=Yes (status Won), ` +
-    `by enquiry (calendar) year, ÷ Google Ads spend (${spendMonths} mo` +
-    (r.firstSpendMonth && r.lastSpendMonth ? `, ${r.firstSpendMonth}–${r.lastSpendMonth}` : '') + '). ' +
-    `Lost/Open counts + win-rate denominator = lost/open deals flagged Google Ads?=Yes in AC (created that year).`;
+    r.sourceKind === 'niki'
+      ? `Niki's Google Ads log. Google spend = summed per-lead cost (cpc); Won/Lost/Open + ` +
+        `won revenue from logged deals. ${partial ? `Partial year (${spendMonths} mo of data). ` : ''}`
+      : `Won/Lost/Open = audited deals tagged Google Ads (final_gads_tag=Yes) plus GA4 cpc-channel ` +
+        `deals. Cost = Google Ads${bingSpend ? ' + Bing' : ''}${sdFee ? ' + Simple Digital' : ''} ` +
+        `(${spendMonths} mo${r.firstSpendMonth && r.lastSpendMonth ? `, ${r.firstSpendMonth}–${r.lastSpendMonth}` : ''}).`;
   return {
-    year,
+    fy: r.fy,
+    fyEnd,
     periodLabel,
-    wonLeads,
-    lostLeads,
-    openLeads,
+    googleSpend,
+    bingSpend,
+    sdFee,
+    totalCost,
+    won,
+    lost,
+    open,
     leads,
-    wonAmount,
-    lostAmount: num(r.lostAmount) || 0,
-    openAmount: num(r.openAmount) || 0,
-    winRate: winRateLeads ? wonLeads / winRateLeads : null,
-    adSpend,
-    wonRevenue: wonAmount,
-    roiDollars,
-    roiPct: adSpend ? roiDollars / adSpend : null,
-    roas: adSpend ? wonAmount / adSpend : null,
-    perLeadValue: leads ? wonAmount / leads : null,
+    wonRevenue,
+    openValue,
+    winRate: leads ? won / leads : null,
+    roasGoogle: googleSpend ? wonRevenue / googleSpend : null,
+    roasAllin: totalCost ? wonRevenue / totalCost : null,
+    perLeadValue: leads ? wonRevenue / leads : null,
     spendMonths,
+    partial,
     countedMethod,
+    sourceKind: r.sourceKind,
     targetRoas: TARGET_ROAS,
   };
 }
@@ -183,30 +205,33 @@ function shape(r) {
 // "All years" total — summed; ratios recomputed, not summed.
 function totalRow(rows) {
   const sum = (k) => rows.reduce((a, r) => a + (r[k] || 0), 0);
-  const wonAmount = sum('wonAmount');
-  const leads = sum('leads');                         // shownLeads total (Per-Lead Value / "won / N")
-  const wonLeads = sum('wonLeads');
-  const winRateLeads = wonLeads + sum('lostLeads') + sum('openLeads'); // won(audit) + Google-Ads?=Yes lost + open
-  const adSpend = sum('adSpend');
-  const roiDollars = wonAmount - adSpend;
+  const googleSpend = sum('googleSpend');
+  const bingSpend = sum('bingSpend');
+  const sdFee = sum('sdFee');
+  const totalCost = googleSpend + bingSpend + sdFee;
+  const won = sum('won');
+  const lost = sum('lost');
+  const open = sum('open');
+  const leads = won + lost + open;
+  const wonRevenue = sum('wonRevenue');
   return {
-    year: null,
+    fy: 'All',
+    fyEnd: null,
     periodLabel: 'All years',
-    label: 'All years',
-    wonAmount,
-    lostAmount: sum('lostAmount'),
-    openAmount: sum('openAmount'),
-    wonLeads,
-    lostLeads: sum('lostLeads'),
-    openLeads: sum('openLeads'),
+    googleSpend,
+    bingSpend,
+    sdFee,
+    totalCost,
+    won,
+    lost,
+    open,
     leads,
-    winRate: winRateLeads ? wonLeads / winRateLeads : null,
-    adSpend,
-    wonRevenue: wonAmount,
-    roiDollars,
-    roiPct: adSpend ? roiDollars / adSpend : null,
-    roas: adSpend ? wonAmount / adSpend : null,
-    perLeadValue: leads ? wonAmount / leads : null,
+    wonRevenue,
+    openValue: sum('openValue'),
+    winRate: leads ? won / leads : null,
+    roasGoogle: googleSpend ? wonRevenue / googleSpend : null,
+    roasAllin: totalCost ? wonRevenue / totalCost : null,
+    perLeadValue: leads ? wonRevenue / leads : null,
     countedMethod: '',
     targetRoas: TARGET_ROAS,
   };
@@ -232,18 +257,22 @@ export async function getRoas() {
       rows: section([], {
         source: SRC,
         status: 'pending',
-        note: 'No Google Ads spend found in public.google_ads_campaign_monthly — populate it (google-ads-campaign-monthly-sync) to show ROAS.',
+        note: 'No ad spend found — populate niki_ad_leads_tracking (FY22–24) or google_ads_campaign_monthly (FY25+).',
       }),
     };
   }
 
   const total = totalRow(rows);
+  const anyBing = rows.some((r) => r.bingSpend > 0);
+  const anySd = rows.some((r) => r.sdFee > 0);
   const note =
-    `${rows.length} year(s) with ad spend (${rows[0].year}–${rows[rows.length - 1].year}). ` +
-    `All-years ROAS ${total.roas.toFixed(2)}× vs ${TARGET_ROAS.toFixed(2)}× target. ` +
-    `Won $/leads = ROAS-audit deals tagged final_gads_tag=Yes (status Won, by calendar year); ` +
-    `Lost/Open counts + win-rate denominator = lost/open deals flagged Google Ads?=Yes in AC ` +
-    `(by deal cdate year). Won numbers are a static audit snapshot (reload clover_audited_deals to refresh).`;
+    `${rows.length} FY(s) with ad spend (${rows[0].fy}–${rows[rows.length - 1].fy}). ` +
+    `All-years ROAS: Google ${total.roasGoogle ? total.roasGoogle.toFixed(2) : '—'}× · ` +
+    `All-in ${total.roasAllin ? total.roasAllin.toFixed(2) : '—'}× vs ${TARGET_ROAS.toFixed(2)}× target. ` +
+    `FY22–24 from Niki's log; FY25+ Won/Lost/Open = audit final_gads_tag=Yes ∪ GA4 cpc. ` +
+    (anyBing ? '' : 'Bing spend not yet connected (reads $0). ') +
+    (anySd ? '' : 'Simple Digital fee not yet connected (reads $0). ') +
+    `Revenue credited in the FY the enquiry came in.`;
 
   return {
     asOf: new Date().toISOString(),

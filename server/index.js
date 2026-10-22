@@ -16,6 +16,7 @@ import { getNewPaidLeads } from './metrics/new-paid-leads.js';
 import { getAcAdLeads } from './metrics/ac-ad-leads.js';
 import { getPaidGoogleEnquiries } from './metrics/paid-google-enquiries.js';
 import { getRoas } from './metrics/roas.js';
+import { getRoasDeals } from './metrics/roas-deals.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { cached, clearCache } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
@@ -249,10 +250,11 @@ operations.get('/paid-google-enquiries', async (_req, res) => {
     res.status(502).json({ error: 'Failed to load paid Google enquiries from data source.', detail: err.message });
   }
 });
-// ROAS (Return on Ad Spend) table + charts read a pre-computed Supabase cache
-// (public.roas_year_on_year): one row per calendar year, mirrored from the
-// "Year on Year" tab of the MAG Marketing ROAS Report Google Sheet by the
-// roas-year-on-year-sync Claude routine. Plain SELECT, so a short cache is plenty.
+// ROAS (Return on Ad Spend) table + charts — LIVE by Australian financial year, computed
+// at request time from Supabase: FY22–24 from niki_ad_leads_tracking; FY25+ from
+// google_ads_campaign_monthly + bing_ads_campaign_monthly + simple_digital_fees_monthly
+// × (clover_audited_deals final_gads_tag=Yes ∪ ga4_ac_contact_source channel=cpc). See
+// server/metrics/roas.js. Cached briefly per instance.
 operations.get('/roas', async (_req, res) => {
   try {
     const payload = await cached('operations:roas', getRoas, 10 * 60 * 1000);
@@ -260,6 +262,17 @@ operations.get('/roas', async (_req, res) => {
   } catch (err) {
     console.error('[operations:roas]', err);
     res.status(502).json({ error: 'Failed to load ROAS data from data source.', detail: err.message });
+  }
+});
+// ROAS deals — the per-FY deal list behind the ROAS page's deals table (same FY sourcing
+// as /roas). See server/metrics/roas-deals.js. Plain SELECT, cached briefly.
+operations.get('/roas/deals', async (_req, res) => {
+  try {
+    const payload = await cached('operations:roas-deals', getRoasDeals, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:roas-deals]', err);
+    res.status(502).json({ error: 'Failed to load ROAS deals from data source.', detail: err.message });
   }
 });
 app.use('/api/operations', operations);

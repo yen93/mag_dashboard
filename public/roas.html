@@ -6,22 +6,33 @@
   <title>ROAS — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
   <style>
-    /* Wide table — use the full screen width (still scrolls on narrow screens). */
+    /* Wide tables — use the full screen width (still scrolls on narrow screens). */
     .content { max-width: none; }
-    .roas-intro { color: var(--text-muted); font-size: 13px; margin: -4px 0 18px; line-height: 1.5; max-width: 900px; }
-    .roas-intro strong { color: var(--text); }
+    .roas-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+    .ctl-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
+    .roas-take { font-size: 15px; line-height: 1.45; margin: 12px 0 2px; max-width: 80ch; }
+    .roas-take b { font-weight: 600; }
+    .roas-dealbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
     /* ROAS table: compact, right-aligned numbers, highlighted total row. */
     table.roas-table { width: 100%; border-collapse: collapse; font-size: 13px; }
     table.roas-table th, table.roas-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-    table.roas-table thead th { text-align: right; color: var(--text-muted); font-weight: 600; position: sticky; top: 0; background: var(--surface); }
+    table.roas-table thead th { text-align: right; color: var(--text-muted); font-weight: 600; position: sticky; top: 0; background: var(--surface); cursor: default; }
     table.roas-table thead th:first-child, table.roas-table td:first-child { text-align: left; }
     table.roas-table td.num, table.roas-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
     table.roas-table tbody tr:hover { background: var(--surface-2); }
+    table.roas-table tbody tr.rowsel { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+    table.roas-table tbody tr.clickrow { cursor: pointer; }
     table.roas-table tfoot td, table.roas-table tr.total td { border-top: 2px solid var(--border); font-weight: 700; background: var(--surface-2); }
+    table.roas-table th.sort { cursor: pointer; }
     .yr-cell { font-weight: 600; cursor: help; }
     .yr-cell small { display: block; font-weight: 400; color: var(--text-muted); font-size: 11px; }
     .pill.roas-pass { background: rgba(23,166,115,.16); color: #17a673; }
     .pill.roas-fail { background: rgba(226,72,61,.16); color: #e2483d; }
+    .st-won { color: #17a673; font-weight: 600; }
+    .st-lost { color: var(--text-muted); }
+    .st-open { color: #c99a17; }
+    button.kpi { text-align: left; font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--border); }
+    button.kpi:hover { border-color: var(--text-muted); }
     .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
     .kpi-info:hover, .kpi-info:focus { color: var(--accent); outline: none; }
   </style>
@@ -46,51 +57,73 @@
   <div class="marketing-layout">
     <aside class="subnav" id="marketingNav"></aside>
   <main class="content">
-    <!-- <p class="roas-intro">
-      <strong>James's test:</strong> every $1 we spend on Google Ads should bring back at least
-      <strong>$2</strong> in won revenue (target <strong>2.00×</strong>). This is a <strong>live</strong>
-      view by calendar year — won revenue from the GA4 Leads Tracker (ga4_ac_contact_source)
-      ÷ Google Ads spend (google_ads_campaign_monthly). A “Google Ads” lead = the CRM
-      “Google Ads?” field = Yes, or a google&nbsp;/&nbsp;cpc session; won revenue uses the CRM deal
-      value, counted in the year the enquiry came in. <strong>Won $ and won leads are
-      Google-Ads-attributed (GA4-shown); the Lost and Open columns show the count of
-      lost/open deals flagged “Google Ads?”=Yes in AC, created that year, and the win rate is
-      won ÷ (won + lost + open).</strong> Only years with ad-spend data appear
-      (Jul 2024 onward) — a year with fewer than 12 months of spend (e.g. 2024) reads high
-      (see the note on each year). This is a live cross-check, <strong>not</strong> the audited
-      ROAS report (which uses ex-GST Buyer Analysis values and stricter attribution).
-    </p> -->
+    <!-- Controls -->
+    <div class="card" style="margin-bottom:16px">
+      <div class="roas-controls">
+        <span class="ctl-label">Financial year</span>
+        <div class="segmented" id="fySeg"></div>
+        <span class="ctl-label">Cost basis</span>
+        <div class="segmented" id="basisSeg">
+          <button data-basis="allin">All-in (Google + Bing + Simple Digital)</button>
+          <button data-basis="google">Google Ads only</button>
+        </div>
+        <div class="spacer"></div>
+        <span class="muted" id="roasAsOf" style="font-size:13px"></span>
+      </div>
+      <p class="roas-take" id="takeaway">Loading ROAS…</p>
+      <span class="chips" id="roasChips"></span>
+    </div>
 
     <!-- KPI cards -->
     <div class="kpi-grid" id="roasKpis"></div>
 
     <!-- Charts -->
     <div class="grid">
-      <div class="card col-4">
-        <div class="card-head"><h3>Won Revenue vs Ad Spend by Year</h3></div>
-        <div class="chart-box"><canvas id="chartRevSpend"></canvas></div>
-      </div>
-      <div class="card col-4">
-        <div class="card-head"><h3>Google Ads ROAS by Year (target 2.00×)</h3></div>
+      <div class="card col-6">
+        <div class="card-head"><h3>ROAS by FY (target 2.00×)</h3></div>
         <div class="chart-box"><canvas id="chartRoas"></canvas></div>
       </div>
-      <div class="card col-4">
-        <div class="card-head"><h3>Google Ads Leads by Outcome by Year</h3></div>
-        <div class="chart-box"><canvas id="chartLeads"></canvas></div>
+      <div class="card col-6">
+        <div class="card-head"><h3>What we spent vs what we won</h3></div>
+        <div class="chart-box"><canvas id="chartSpend"></canvas></div>
       </div>
     </div>
 
-    <!-- Table -->
+    <!-- ROAS by FY table -->
     <div class="grid" style="margin-top:16px">
       <div class="card col-12">
         <div class="card-head">
-          <h3>ROAS by Calendar Year</h3>
-          <span class="chips" id="roasChips"></span>
+          <h3>ROAS by FY</h3>
           <div class="spacer"></div>
-          <span class="muted" id="roasAsOf" style="font-size:13px"></span>
+          <span class="muted" id="roasTableNote" style="font-size:12px"></span>
         </div>
         <div class="table-scroll">
           <div id="roasTable"><div class="muted" style="padding:14px">Loading ROAS…</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Deals table -->
+    <div class="grid" style="margin-top:16px">
+      <div class="card col-12" id="dealsCard">
+        <div class="card-head"><h3 id="dealsHead">Deals</h3></div>
+        <div class="roas-dealbar">
+          <div class="segmented" id="statusSeg">
+            <button data-st="Won">Won</button>
+            <button data-st="Lost">Lost</button>
+            <button data-st="Open">Open</button>
+            <button data-st="All">All</button>
+          </div>
+          <div class="segmented" id="scopeSeg">
+            <button data-sc="counted">Counted as Google Ads</button>
+            <button data-sc="review">Needs review</button>
+            <button data-sc="actag">Tagged, not counted</button>
+          </div>
+          <input class="table-search" id="dealSearch" type="search" placeholder="Search organisation, deal or comment" />
+        </div>
+        <p class="muted" id="dealsNote" style="font-size:12px"></p>
+        <div class="table-scroll">
+          <div id="dealsTable"><div class="muted" style="padding:14px">Loading deals…</div></div>
         </div>
       </div>
     </div>
@@ -98,137 +131,139 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=4"></script>
+  <script src="app.js?v=5"></script>
   <script>
     // ROAS-specific colours, matched to the source report's charts.
-    var C_CYAN = '#17a6c9';   // Won Revenue / Won / ROAS line
-    var C_RED  = '#c0392b';   // Ad Spend / Lost / Target line
+    var C_CYAN = '#17a6c9';   // Won revenue / ROAS
+    var C_RED  = '#c0392b';   // Target / Lost
     var C_GREEN = '#8bc34a';  // Open
+    var C_BING = '#7b61b5';   // Bing
+    var C_SD   = '#e0922f';   // Simple Digital
 
     var _audWhole = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
     function money(v) { return (v === null || v === undefined) ? '—' : _audWhole.format(Number(v) || 0); }
-    function moneyShort(v) {
-      v = Number(v) || 0;
-      if (Math.abs(v) >= 1000) return '$' + Math.round(v / 1000) + 'k';
-      return '$' + Math.round(v);
-    }
+    function moneyShort(v) { v = Number(v) || 0; if (Math.abs(v) >= 1000) return '$' + Math.round(v / 1000) + 'k'; return '$' + Math.round(v); }
     function pct(ratio) { return (ratio === null || ratio === undefined) ? '—' : (Number(ratio) * 100).toFixed(1) + '%'; }
     function roasFmt(v) { return (v === null || v === undefined) ? '—' : Number(v).toFixed(2) + '×'; }
 
-    var ROAS_DATA = null;      // cached payload for theme re-render
-    var _roasCharts = {};      // canvasId -> Chart instance
+    var ROAS_DATA = null, DEALS_DATA = null;   // cached payloads for theme re-render
+    var _roasCharts = {};
+    var SEL = { fy: null, basis: 'allin', status: 'Won', scope: 'counted' };
+    var dealSort = { key: 'value', dir: -1 }, dealQuery = '';
 
-    function kpi(label, value, sub, subClass, info) {
+    // basis-aware helpers
+    function costOf(r) { return SEL.basis === 'google' ? (r.googleSpend || 0) : (r.totalCost || 0); }
+    function roasOf(r) { return SEL.basis === 'google' ? r.roasGoogle : r.roasAllin; }
+    function costLabel() { return SEL.basis === 'google' ? 'Google Ads spend' : 'Paid search cost (all-in)'; }
+    function selRow() {
+      if (!ROAS_DATA) return null;
+      if (SEL.fy === 'All') return ROAS_DATA.total;
+      var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
+      return rows.filter(function (r) { return r.fy === SEL.fy; })[0] || ROAS_DATA.total;
+    }
+
+    // ---------- KPI tiles ----------
+    function kpi(label, value, sub, subClass, info, status) {
       var ic = info ? ' <span class="kpi-info" tabindex="0" title="' + esc(info) + '">ⓘ</span>' : '';
-      return '<div class="kpi"><div class="label">' + esc(label) + ic + '</div>' +
+      var tag = status ? 'button' : 'div';
+      var attrs = status ? ' class="kpi" data-status="' + esc(status) + '" type="button"' : ' class="kpi"';
+      return '<' + tag + attrs + '><div class="label">' + esc(label) + ic + '</div>' +
         '<div class="value">' + esc(String(value)) + '</div>' +
-        (sub ? '<div class="delta ' + (subClass || '') + '">' + esc(sub) + '</div>' : '') + '</div>';
+        (sub ? '<div class="delta ' + (subClass || '') + '">' + sub + '</div>' : '') + '</' + tag + '>';
     }
 
-    function renderKpis(rows, total, target) {
-      var latest = rows[rows.length - 1];
+    function renderKpis() {
+      var r = selRow(); if (!r) return;
+      var target = (ROAS_DATA.target) || 2;
+      var cost = costOf(r), roas = roasOf(r);
+      var pass = (roas || 0) >= target;
+      var roiDollars = (r.wonRevenue || 0) - cost;
       var host = document.getElementById('roasKpis');
-      var allPass = total.roas >= target;
       host.innerHTML =
-        kpi('All-years ROAS', roasFmt(total.roas),
-            (allPass ? 'clears' : 'below') + ' ' + roasFmt(target) + ' target', allPass ? 'pos' : 'neg',
-            'Total won revenue ÷ total Google Ads spend across every year on record. Target is ' + roasFmt(target) + ' ($' + target.toFixed(0) + ' won per $1 spent).') +
-        kpi(latest.year + ' ROAS', roasFmt(latest.roas),
-            latest.periodLabel, latest.roas >= target ? 'pos' : 'neg',
-            'ROAS for ' + latest.periodLabel + '. Recent enquiries are still open (deals take ~3 months to close), so the latest year typically rises.') +
-        kpi('Won Revenue (all years)', money(total.wonRevenue), total.wonLeads + ' won deals', 'pos',
-            'Won deal value (CRM) of deals tagged Google Ads (final_gads_tag=Yes) in the ROAS audit, summed across all years.') +
-        kpi('Ad Spend (all years)', money(total.adSpend), 'Google Ads only', '',
-            'Google Ads spend across all years. Excludes the Simple Digital agency fee (see the FY report for ROAS including the fee).') +
-        kpi('ROI (all years)', money(total.roiDollars), pct(total.roiPct) + ' return', total.roiDollars >= 0 ? 'pos' : 'neg',
-            'Won revenue − ad spend across all years. ROI % = that ÷ ad spend.');
+        kpi('ROAS', roasFmt(roas),
+            '<span class="pill ' + (pass ? 'roas-pass' : 'roas-fail') + '">' + (pass ? 'clears' : 'below') + ' ' + roasFmt(target) + '</span>',
+            '', 'Won revenue ÷ ' + costLabel().toLowerCase() + ' for ' + r.fy + '. Target ' + roasFmt(target) + ' ($' + target.toFixed(0) + ' won per $1 spent).') +
+        kpi(costLabel(), money(cost),
+            SEL.basis === 'google' ? 'Google Ads only' : ('Google ' + moneyShort(r.googleSpend) + ' · Bing ' + moneyShort(r.bingSpend) + ' · SD ' + moneyShort(r.sdFee)),
+            '', 'Paid-search cost for ' + r.fy + '. FY22–24 = Niki\'s per-lead cost; FY25+ = live Google Ads' + ((r.bingSpend || r.sdFee) ? ' + Bing + Simple Digital' : '') + '.') +
+        kpi('Won revenue from ads', money(r.wonRevenue), (r.won || 0) + ' won deals', 'pos',
+            'Won deal value credited to Google Ads in ' + r.fy + '. FY22–24 from Niki\'s log; FY25+ = audit final_gads_tag=Yes ∪ GA4 cpc.') +
+        kpi('Won', String(r.won || 0), (r.winRate == null ? 'No closed deals' : pct(r.winRate) + ' win rate'), (r.winRate >= 0.5 ? 'pos' : ''),
+            'Won deals ÷ (won + lost + open) = win rate. Click to see the deals.', 'Won') +
+        kpi('Lost', String(r.lost || 0), 'Click to see the deals', '', 'Lost Google-Ads-counted deals in ' + r.fy + '.', 'Lost') +
+        kpi('Open pipeline', money(r.openValue), (r.open || 0) + ' open deal' + ((r.open === 1) ? '' : 's') + ', not counted yet', '',
+            'Value of open (not-yet-closed) Google-Ads-counted deals in ' + r.fy + '.', 'Open');
+      // Clickable status tiles jump to the deals table.
+      host.querySelectorAll('button.kpi[data-status]').forEach(function (b) {
+        b.addEventListener('click', function () {
+          SEL.status = b.getAttribute('data-status'); SEL.scope = 'counted';
+          syncPressed(); renderDeals();
+          document.getElementById('dealsCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        });
+      });
     }
 
-    // ---- table ----
-    function renderTable(rows, total) {
-      var cols = [
-        { label: 'Year', num: false, cell: function (r) {
-            if (r._total) return '<span class="yr-cell">All years</span>';
-            return '<span class="yr-cell" title="' + esc(r.countedMethod || '') + '">' + esc(r.year) +
-              '<small>' + esc(r.periodLabel || '') + '</small></span>';
-          } },
-        { label: 'Won $',        num: true, cell: function (r) { return money(r.wonAmount); } },
-        { label: 'Lost',         num: true, title: 'Count of lost deals created that year flagged Google Ads?=Yes in AC.', cell: function (r) { return r.lostLeads == null ? '—' : r.lostLeads; } },
-        { label: 'Open',         num: true, title: 'Count of open deals created that year flagged Google Ads?=Yes in AC.', cell: function (r) { return r.openLeads == null ? '—' : r.openLeads; } },
-        { label: 'Won Leads',    num: true, title: 'Won deals ÷ (won + lost + open deal count) for the year — same denominator as Win rate. Won = ROAS-audit deals tagged final_gads_tag=Yes; lost + open are deals flagged Google Ads?=Yes in AC.', cell: function (r) { return r.wonLeads == null ? '—' : r.wonLeads + ' / ' + ((r.wonLeads || 0) + (r.lostLeads || 0) + (r.openLeads || 0)); } },
-        { label: 'Win rate',     num: true, title: 'Won ÷ (won + lost + open), where won = ROAS-audit deals tagged final_gads_tag=Yes and lost/open = deals flagged Google Ads?=Yes in AC (created that year).', cell: function (r) { return pct(r.winRate); } },
-        { label: 'Ad Spend',     num: true, cell: function (r) { return money(r.adSpend); } },
-        { label: 'ROI ($)',      num: true, cell: function (r) { return money(r.roiDollars); } },
-        { label: 'ROI %',        num: true, cell: function (r) { return pct(r.roiPct); } },
-        { label: 'ROAS',         num: true, cell: function (r) {
-            var pass = r.roas >= (r.targetRoas || total.targetRoas || 2);
-            return '<span class="pill ' + (pass ? 'roas-pass' : 'roas-fail') + '">' + roasFmt(r.roas) + '</span>';
-          } },
-        { label: 'Per-Lead Value', num: true, cell: function (r) { return money(r.perLeadValue); } },
-      ];
-
-      function rowHtml(r, cls) {
-        return '<tr' + (cls ? ' class="' + cls + '"' : '') + '>' + cols.map(function (c) {
-          return '<td class="' + (c.num ? 'num' : '') + '">' + c.cell(r) + '</td>';
-        }).join('') + '</tr>';
-      }
-
-      var thead = '<tr>' + cols.map(function (c) {
-        var t = c.title ? ' title="' + esc(c.title) + '" style="cursor:help"' : '';
-        return '<th class="' + (c.num ? 'num' : '') + '"' + t + '>' + esc(c.label) + '</th>';
-      }).join('') + '</tr>';
-      var body = rows.map(function (r) { return rowHtml(r, ''); }).join('');
-      var totalRow = rowHtml(Object.assign({ _total: true }, total), 'total');
-
-      document.getElementById('roasTable').innerHTML =
-        '<table class="data roas-table"><thead>' + thead + '</thead><tbody>' + body + totalRow + '</tbody></table>';
-    }
-
-    // ---- charts ----
+    // ---------- charts ----------
     function makeChart(id, cfg) {
       if (_roasCharts[id]) _roasCharts[id].destroy();
-      var el = document.getElementById(id);
-      if (!el) return;
+      var el = document.getElementById(id); if (!el) return;
       _roasCharts[id] = new Chart(el.getContext('2d'), cfg);
     }
-
-    // Inline plugin: draw the "x.xx×" label above each ROAS point.
-    function roasLabelPlugin(tc) {
-      return {
-        id: 'roasLabels',
-        afterDatasetsDraw: function (chart) {
-          var ds = chart.data.datasets[0];
-          var meta = chart.getDatasetMeta(0);
-          if (!meta || meta.hidden) return;
-          var ctx = chart.ctx;
-          ctx.save();
-          ctx.font = '600 11px system-ui, sans-serif';
-          ctx.fillStyle = tc.text;
-          ctx.textAlign = 'center';
-          meta.data.forEach(function (pt, i) {
-            var v = ds.data[i];
-            if (v === null || v === undefined) return;
-            ctx.fillText(Number(v).toFixed(2) + '×', pt.x, pt.y - 8);
-          });
-          ctx.restore();
-        },
-      };
+    function targetLinePlugin(tc, target) {
+      return { id: 'targetLine', afterDatasetsDraw: function (chart) {
+        var ys = chart.scales.y; if (!ys) return;
+        var y = ys.getPixelForValue(target), a = chart.chartArea, ctx = chart.ctx;
+        ctx.save(); ctx.strokeStyle = C_RED; ctx.setLineDash([6, 6]); ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(a.left, y); ctx.lineTo(a.right, y); ctx.stroke(); ctx.restore();
+      } };
+    }
+    function barLabelPlugin(tc) {
+      return { id: 'barLabels', afterDatasetsDraw: function (chart) {
+        var meta = chart.getDatasetMeta(0), ds = chart.data.datasets[0], ctx = chart.ctx;
+        ctx.save(); ctx.font = '600 11px system-ui, sans-serif'; ctx.fillStyle = tc.text; ctx.textAlign = 'center';
+        meta.data.forEach(function (bar, i) { var v = ds.data[i]; if (v == null) return; ctx.fillText(Number(v).toFixed(2) + '×', bar.x, bar.y - 6); });
+        ctx.restore();
+      } };
     }
 
-    function buildCharts(rows, target) {
+    function buildCharts() {
       var tc = themeColors();
-      var years = rows.map(function (r) { return String(r.year); });
+      var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
+      var target = ROAS_DATA.target || 2;
+      var labels = rows.map(function (r) { return r.fy; });
 
-      // g1 — Won Revenue vs Ad Spend (grouped bar)
-      makeChart('chartRevSpend', {
+      // ROAS by FY (bar + target line + value labels)
+      makeChart('chartRoas', {
         type: 'bar',
-        data: {
-          labels: years,
-          datasets: [
-            { label: 'Won Revenue', data: rows.map(function (r) { return r.wonRevenue; }), backgroundColor: C_CYAN, borderRadius: 4, maxBarThickness: 34 },
-            { label: 'Ad Spend',    data: rows.map(function (r) { return r.adSpend; }),    backgroundColor: C_RED,  borderRadius: 4, maxBarThickness: 34 },
-          ],
+        data: { labels: labels, datasets: [{
+          label: 'ROAS', data: rows.map(roasOf), borderRadius: 4, maxBarThickness: 40,
+          backgroundColor: rows.map(function (r) { return (roasOf(r) || 0) >= target ? C_CYAN : C_RED; }),
+        }] },
+        options: {
+          responsive: true, maintainAspectRatio: false, layout: { padding: { top: 18 } },
+          plugins: {
+            legend: { display: false },
+            tooltip: { backgroundColor: tc.surface, titleColor: tc.text, bodyColor: tc.text, borderColor: tc.border, borderWidth: 1,
+              callbacks: { label: function (c) { return (SEL.basis === 'google' ? 'Google: ' : 'All-in: ') + Number(c.parsed.y).toFixed(2) + '×'; } } },
+          },
+          onClick: function (e, els) { if (els && els.length) setFy(rows[els[0].index].fy); },
+          scales: {
+            x: { ticks: { color: tc.muted }, grid: { display: false } },
+            y: { ticks: { color: tc.muted, callback: function (v) { return Number(v).toFixed(1) + '×'; } }, grid: { color: tc.grid }, beginAtZero: true },
+          },
         },
+        plugins: [targetLinePlugin(tc, target), barLabelPlugin(tc)],
+      });
+
+      // What we spent vs what we won (stacked cost by channel beside won revenue)
+      makeChart('chartSpend', {
+        type: 'bar',
+        data: { labels: labels, datasets: [
+          { label: 'Google Ads', stack: 'cost', data: rows.map(function (r) { return r.googleSpend; }), backgroundColor: C_RED, maxBarThickness: 26 },
+          { label: 'Bing Ads', stack: 'cost', data: rows.map(function (r) { return r.bingSpend; }), backgroundColor: C_BING, maxBarThickness: 26 },
+          { label: 'Simple Digital', stack: 'cost', data: rows.map(function (r) { return r.sdFee; }), backgroundColor: C_SD, maxBarThickness: 26 },
+          { label: 'Won revenue', stack: 'rev', data: rows.map(function (r) { return r.wonRevenue; }), backgroundColor: C_CYAN, borderRadius: 3, maxBarThickness: 26 },
+        ] },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: {
@@ -236,101 +271,200 @@
             tooltip: { backgroundColor: tc.surface, titleColor: tc.text, bodyColor: tc.text, borderColor: tc.border, borderWidth: 1,
               callbacks: { label: function (c) { return c.dataset.label + ': ' + money(c.parsed.y); } } },
           },
-          scales: {
-            x: { ticks: { color: tc.muted }, grid: { display: false } },
-            y: { ticks: { color: tc.muted, callback: function (v) { return moneyShort(v); } }, grid: { color: tc.grid }, beginAtZero: true },
-          },
-        },
-      });
-
-      // g2 — ROAS by year + target line
-      makeChart('chartRoas', {
-        type: 'line',
-        data: {
-          labels: years,
-          datasets: [
-            { label: 'ROAS', data: rows.map(function (r) { return r.roas; }), borderColor: C_CYAN, backgroundColor: C_CYAN,
-              tension: 0.25, borderWidth: 2, pointRadius: 3, pointHoverRadius: 5, pointBackgroundColor: C_CYAN },
-            { label: 'Target ROAS', data: years.map(function () { return target; }), borderColor: C_RED, backgroundColor: C_RED,
-              borderWidth: 2, borderDash: [6, 6], pointRadius: 0, tension: 0 },
-          ],
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          layout: { padding: { top: 18 } },
-          plugins: {
-            legend: { labels: { color: tc.text, usePointStyle: true, boxWidth: 8 } },
-            tooltip: { backgroundColor: tc.surface, titleColor: tc.text, bodyColor: tc.text, borderColor: tc.border, borderWidth: 1,
-              callbacks: { label: function (c) { return c.dataset.label + ': ' + Number(c.parsed.y).toFixed(2) + '×'; } } },
-          },
-          scales: {
-            x: { ticks: { color: tc.muted }, grid: { display: false } },
-            y: { ticks: { color: tc.muted, callback: function (v) { return Number(v).toFixed(1) + '×'; } }, grid: { color: tc.grid }, beginAtZero: true },
-          },
-        },
-        plugins: [roasLabelPlugin(tc)],
-      });
-
-      // g3 — Leads by outcome (stacked bar)
-      makeChart('chartLeads', {
-        type: 'bar',
-        data: {
-          labels: years,
-          datasets: [
-            { label: 'Won',  data: rows.map(function (r) { return r.wonLeads; }),  backgroundColor: C_CYAN, maxBarThickness: 44 },
-            { label: 'Lost', data: rows.map(function (r) { return r.lostLeads; }), backgroundColor: C_RED,  maxBarThickness: 44 },
-            { label: 'Open', data: rows.map(function (r) { return r.openLeads; }), backgroundColor: C_GREEN, maxBarThickness: 44 },
-          ],
-        },
-        options: {
-          responsive: true, maintainAspectRatio: false,
-          plugins: {
-            legend: { labels: { color: tc.text, usePointStyle: true, boxWidth: 8 } },
-            tooltip: { backgroundColor: tc.surface, titleColor: tc.text, bodyColor: tc.text, borderColor: tc.border, borderWidth: 1 },
-          },
+          onClick: function (e, els) { if (els && els.length) setFy(rows[els[0].index].fy); },
           scales: {
             x: { stacked: true, ticks: { color: tc.muted }, grid: { display: false } },
-            y: { stacked: true, ticks: { color: tc.muted, precision: 0 }, grid: { color: tc.grid }, beginAtZero: true },
+            y: { stacked: true, ticks: { color: tc.muted, callback: function (v) { return moneyShort(v); } }, grid: { color: tc.grid }, beginAtZero: true },
           },
         },
       });
     }
 
-    function renderAll(data) {
-      var rows = (data.rows && data.rows.data) || [];
-      var total = data.total;
-      var target = data.target || 2;
-      document.getElementById('roasChips').innerHTML = metaChips(data.rows && data.rows.meta);
+    // ---------- ROAS by FY table ----------
+    function renderTable() {
+      var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
+      var total = ROAS_DATA.total, target = ROAS_DATA.target || 2;
+      var cols = [
+        { label: 'FY', num: false, cell: function (r) {
+            if (r._total) return '<span class="yr-cell">All years</span>';
+            return '<span class="yr-cell" title="' + esc(r.countedMethod || '') + '">' + esc(r.fy) + '<small>' + esc(r.periodLabel || '') + '</small></span>';
+          } },
+        { label: 'Google Ads',     num: true, cell: function (r) { return money(r.googleSpend); } },
+        { label: 'Bing Ads',       num: true, cell: function (r) { return money(r.bingSpend); } },
+        { label: 'Simple Digital', num: true, cell: function (r) { return money(r.sdFee); } },
+        { label: 'Total cost',     num: true, cell: function (r) { return money(r.totalCost); } },
+        { label: 'Won',            num: true, cell: function (r) { return r.won == null ? '—' : r.won; } },
+        { label: 'Lost',           num: true, cell: function (r) { return r.lost == null ? '—' : r.lost; } },
+        { label: 'Open',           num: true, cell: function (r) { return r.open == null ? '—' : r.open; } },
+        { label: 'Won revenue',    num: true, cell: function (r) { return money(r.wonRevenue); } },
+        { label: 'ROAS Google',    num: true, cell: function (r) { return pill(r.roasGoogle, target); } },
+        { label: 'ROAS all-in',    num: true, cell: function (r) { return pill(r.roasAllin, target); } },
+        { label: 'Win rate',       num: true, cell: function (r) { return pct(r.winRate); } },
+        { label: 'ROI ($)',        num: true, title: 'Won revenue − cost (on the selected basis).', cell: function (r) { return money((r.wonRevenue || 0) - costOf(r)); } },
+        { label: 'ROI %',          num: true, cell: function (r) { var c = costOf(r); return pct(c ? ((r.wonRevenue || 0) - c) / c : null); } },
+        { label: 'Per-Lead Value', num: true, title: 'Won revenue ÷ (won + lost + open).', cell: function (r) { return money(r.perLeadValue); } },
+      ];
+      function pill(v, t) { if (v == null) return '—'; var p = v >= t; return '<span class="pill ' + (p ? 'roas-pass' : 'roas-fail') + '">' + roasFmt(v) + '</span>'; }
+      function rowHtml(r, cls) {
+        return '<tr class="' + cls + '"' + (r._total ? '' : ' data-fy="' + esc(r.fy) + '"') + '>' + cols.map(function (c) {
+          return '<td class="' + (c.num ? 'num' : '') + '">' + c.cell(r) + '</td>';
+        }).join('') + '</tr>';
+      }
+      var thead = '<tr>' + cols.map(function (c) {
+        var t = c.title ? ' title="' + esc(c.title) + '" style="cursor:help"' : '';
+        return '<th class="' + (c.num ? 'num' : '') + '"' + t + '>' + esc(c.label) + '</th>';
+      }).join('') + '</tr>';
+      var body = rows.map(function (r) {
+        return rowHtml(r, 'clickrow' + (r.fy === SEL.fy ? ' rowsel' : ''));
+      }).join('');
+      var totalRow = rowHtml(Object.assign({ _total: true }, total), 'total' + (SEL.fy === 'All' ? ' rowsel' : ''));
+      document.getElementById('roasTable').innerHTML =
+        '<table class="data roas-table"><thead>' + thead + '</thead><tbody>' + body + totalRow + '</tbody></table>';
+      // Row click → select that FY.
+      document.querySelectorAll('#roasTable tbody tr[data-fy]').forEach(function (tr) {
+        tr.addEventListener('click', function () { setFy(tr.getAttribute('data-fy')); });
+      });
+      var tot = document.querySelector('#roasTable tbody tr.total');
+      if (tot) { tot.classList.add('clickrow'); tot.addEventListener('click', function () { setFy('All'); }); }
+      var note = document.getElementById('roasTableNote');
+      if (note) note.textContent = 'Click a row to filter the page to that FY.';
+    }
+
+    // ---------- deals table ----------
+    function renderDeals() {
+      var host = document.getElementById('dealsTable');
+      if (!DEALS_DATA) { return; }
+      var all = (DEALS_DATA.rows && DEALS_DATA.rows.data) || [];
+      var list = all.filter(function (d) {
+        return (SEL.fy === 'All' || d.fy === SEL.fy) && d.group === SEL.scope && (SEL.status === 'All' || d.status === SEL.status);
+      });
+      if (dealQuery) {
+        var qx = dealQuery.toLowerCase();
+        list = list.filter(function (d) { return [d.org, d.title, d.comment, d.method].join(' ').toLowerCase().indexOf(qx) >= 0; });
+      }
+      list.sort(function (a, b) {
+        var k = dealSort.key, va, vb;
+        if (k === 'value') { va = a.value || 0; vb = b.value || 0; }
+        else if (k === 'date') { va = Date.parse(a.date) || Date.parse('1 ' + a.date) || 0; vb = Date.parse(b.date) || Date.parse('1 ' + b.date) || 0; }
+        else { va = String(a[k] || '').toLowerCase(); vb = String(b[k] || '').toLowerCase(); }
+        return (va < vb ? -1 : va > vb ? 1 : 0) * dealSort.dir;
+      });
+
+      var scopeName = { counted: 'counted as Google Ads', review: 'need review', actag: 'tagged Google Ads but not counted' }[SEL.scope];
+      var tot = list.reduce(function (s, d) { return s + (d.value || 0); }, 0);
+      document.getElementById('dealsHead').textContent = (SEL.fy === 'All' ? 'All years' : SEL.fy) + ' deals';
+      document.getElementById('dealsNote').textContent =
+        list.length + ' ' + (SEL.status === 'All' ? '' : SEL.status.toLowerCase() + ' ') + 'deal' + (list.length === 1 ? '' : 's') + ' ' + scopeName + ', worth ' + money(tot) + '.' +
+        ((SEL.fy === 'All' || SEL.fy <= 'FY24') ? " FY22–FY24 come from Niki's log (month only)." : '');
+
+      var cols = [
+        { key: 'date',   label: 'Enquiry', sortable: true, cell: function (d) { return '<span class="muted">' + esc(d.date) + '</span>'; } },
+        { key: 'org',    label: 'Organisation', sortable: true, cell: function (d) { return esc(d.org); } },
+        { key: 'title',  label: 'Deal', sortable: false, cell: function (d) { return '<span class="muted">' + esc(d.title) + '</span>'; } },
+        { key: 'status', label: 'Status', sortable: true, cell: function (d) { var c = d.status === 'Won' ? 'st-won' : d.status === 'Lost' ? 'st-lost' : 'st-open'; return '<span class="' + c + '">' + esc(d.status) + '</span>'; } },
+        { key: 'value',  label: 'Value', sortable: true, num: true, cell: function (d) { return money(d.value); } },
+        { key: 'method', label: 'How it was counted', sortable: false, cell: function (d) { return esc(d.method); } },
+        { key: 'comment',label: 'Comment', sortable: false, cell: function (d) { return '<span class="muted">' + esc(d.comment) + '</span>'; } },
+      ];
+      var thead = '<tr>' + cols.map(function (c) {
+        var cls = (c.num ? 'num ' : '') + (c.sortable ? 'sort' : '');
+        var car = (c.sortable && dealSort.key === c.key) ? (dealSort.dir > 0 ? ' ▲' : ' ▼') : '';
+        return '<th class="' + cls.trim() + '"' + (c.sortable ? ' data-sort="' + c.key + '"' : '') + '>' + esc(c.label) + car + '</th>';
+      }).join('') + '</tr>';
+      var body = list.map(function (d) {
+        return '<tr>' + cols.map(function (c) { return '<td class="' + (c.num ? 'num' : '') + '">' + c.cell(d) + '</td>'; }).join('') + '</tr>';
+      }).join('');
+      host.innerHTML = list.length
+        ? '<table class="data roas-table"><thead>' + thead + '</thead><tbody>' + body + '</tbody></table>'
+        : '<div class="muted" style="padding:14px">No ' + esc(SEL.status === 'All' ? '' : SEL.status.toLowerCase() + ' ') + 'deals ' + esc(scopeName) + (SEL.fy === 'All' ? '' : ' in ' + esc(SEL.fy)) + '.</div>';
+      host.querySelectorAll('th[data-sort]').forEach(function (th) {
+        th.addEventListener('click', function () {
+          var k = th.getAttribute('data-sort');
+          if (dealSort.key === k) dealSort.dir = -dealSort.dir; else { dealSort.key = k; dealSort.dir = (k === 'value' ? -1 : 1); }
+          renderDeals();
+        });
+      });
+    }
+
+    // ---------- controls / state ----------
+    function setFy(fy) { SEL.fy = fy; syncPressed(); renderKpis(); buildCharts(); renderTable(); renderDeals(); }
+    function setBasis(b) { SEL.basis = b; syncPressed(); renderKpis(); buildCharts(); renderTable(); }
+    function syncPressed() {
+      document.querySelectorAll('#fySeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-fy') === SEL.fy); });
+      document.querySelectorAll('#basisSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-basis') === SEL.basis); });
+      document.querySelectorAll('#statusSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-st') === SEL.status); });
+      document.querySelectorAll('#scopeSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sc') === SEL.scope); });
+    }
+
+    function buildFySeg() {
+      var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
+      var seg = document.getElementById('fySeg');
+      seg.innerHTML = '<button data-fy="All">All years</button>' + rows.map(function (r) { return '<button data-fy="' + esc(r.fy) + '">' + esc(r.fy) + '</button>'; }).join('');
+      seg.querySelectorAll('button').forEach(function (b) { b.addEventListener('click', function () { setFy(b.getAttribute('data-fy')); }); });
+    }
+
+    function renderAll() {
+      var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
+      var total = ROAS_DATA.total;
+      document.getElementById('roasChips').innerHTML = metaChips(ROAS_DATA.rows && ROAS_DATA.rows.meta);
       var asOf = document.getElementById('roasAsOf');
-      if (asOf && data.asOf) asOf.textContent = 'as of ' + fmtDate(data.asOf);
+      if (asOf && ROAS_DATA.asOf) asOf.textContent = 'as of ' + fmtDate(ROAS_DATA.asOf);
 
       if (!rows.length || !total) {
         document.getElementById('roasTable').innerHTML =
           '<div class="needs-setup"><strong>Needs setup</strong><span>' +
-          esc((data.rows && data.rows.meta && data.rows.meta.note) || 'ROAS cache is empty.') + '</span></div>';
+          esc((ROAS_DATA.rows && ROAS_DATA.rows.meta && ROAS_DATA.rows.meta.note) || 'No ROAS data.') + '</span></div>';
         document.getElementById('roasKpis').innerHTML = '';
+        document.getElementById('takeaway').textContent = '';
         return;
       }
-      renderKpis(rows, total, target);
-      renderTable(rows, total);
-      buildCharts(rows, target);
+      if (!SEL.fy) SEL.fy = rows[rows.length - 1].fy;   // default to the latest FY
+      buildFySeg();
+      syncPressed();
+      renderTakeaway();
+      renderKpis();
+      buildCharts();
+      renderTable();
+      renderDeals();
+    }
+
+    function renderTakeaway() {
+      var r = selRow(); if (!r) return;
+      var target = ROAS_DATA.target || 2;
+      var roas = roasOf(r), cost = costOf(r);
+      var tk = document.getElementById('takeaway');
+      if (roas == null) { tk.innerHTML = '<b>' + esc(r.fy) + ':</b> no spend recorded.'; return; }
+      var miss = (target * cost) - (r.wonRevenue || 0);
+      tk.innerHTML = '<b>' + esc(r.fy === 'All' ? 'All years' : r.fy) + ': $' + Number(roas).toFixed(2) + ' back for every $1</b> of ' +
+        esc(SEL.basis === 'google' ? 'Google Ads spend' : 'paid search, all-in') + '. ' +
+        (roas >= target ? 'That clears the $2 target.' : 'That misses the $2 target by ' + money(miss) + ' of won revenue.');
     }
 
     function loadRoas() {
       fetchJSON('/api/operations/roas').then(function (data) {
         ROAS_DATA = data;
-        renderAll(data);
+        renderAll();
       }).catch(function (err) {
         console.error(err);
-        document.getElementById('roasTable').innerHTML =
-          '<div class="needs-setup"><strong>Couldn’t load ROAS</strong><span>' + esc(err.message) + '</span></div>';
+        document.getElementById('roasTable').innerHTML = '<div class="needs-setup"><strong>Couldn’t load ROAS</strong><span>' + esc(err.message) + '</span></div>';
+      });
+      fetchJSON('/api/operations/roas/deals').then(function (data) {
+        DEALS_DATA = data; renderDeals();
+      }).catch(function (err) {
+        console.error(err);
+        document.getElementById('dealsTable').innerHTML = '<div class="needs-setup"><strong>Couldn’t load deals</strong><span>' + esc(err.message) + '</span></div>';
       });
     }
 
+    // Static control wiring (segments that exist in the HTML from the start).
+    document.getElementById('basisSeg').addEventListener('click', function (e) { var b = e.target.closest('button[data-basis]'); if (b) setBasis(b.getAttribute('data-basis')); });
+    document.getElementById('statusSeg').addEventListener('click', function (e) { var b = e.target.closest('button[data-st]'); if (b) { SEL.status = b.getAttribute('data-st'); syncPressed(); renderDeals(); } });
+    document.getElementById('scopeSeg').addEventListener('click', function (e) { var b = e.target.closest('button[data-sc]'); if (b) { SEL.scope = b.getAttribute('data-sc'); syncPressed(); renderDeals(); } });
+    document.getElementById('dealSearch').addEventListener('input', function (e) { dealQuery = e.target.value.trim(); renderDeals(); });
+
     initPage('operations'); // login / top-bar / theme only — this page renders its own content
     renderMarketingSidebar('roas');
-    // Re-draw charts (with cached data) when the theme toggles.
-    window.onThemeChange = function () { if (ROAS_DATA) renderAll(ROAS_DATA); };
+    window.onThemeChange = function () { if (ROAS_DATA) { renderKpis(); buildCharts(); renderTable(); renderDeals(); } };
     if (currentUser()) loadRoas();
   </script>
 </body>

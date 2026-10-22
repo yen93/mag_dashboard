@@ -1,0 +1,163 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-22
+Session: Investigated the standalone "MAG paid search ROAS" artifact's counting
+logic (/q), then rebuilt the dashboard ROAS page to mirror it — switched to
+Australian financial year, added an All-in/Google-only basis toggle, artifact
+cards/charts/tables, a per-FY deals table, new Bing + Simple Digital spend
+tables, and a one-time sheet load of that spend. Then /dcp.
+================================================================================
+
+(No secrets, API keys, tokens, passwords, or connection strings were pasted into
+this chat. The Supabase DB URL was read from Google Secret Manager into an env var
+to run a local check and was never printed — only its character length was echoed —
+so nothing was redacted.)
+
+--------------------------------------------------------------------------------
+USER:
+(/q) Check the artifact at claude.ai/artifact/NTmZBuc5… — are the counted WON deals
+only Niki's sheet + leads JC manually tagged "Could be SEO or Paid Ad"?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+First answered about the DASHBOARD's roas.js (won = clover_audited_deals
+final_gads_tag=Yes), then re-read after the user clarified they meant the ARTIFACT.
+Read the shared artifact: it's a BigQuery/Sheets-backed "Dashboard appifact" whose
+logic lives in its live store (db capability), not its runtime files. Read its
+datasets + the stored index.html via ArtifactData. Found the artifact's counted WON
+set = (1) FY22–FY24: ALL rows of Niki's "Google leads (all years)" log (wholesale,
+not JC-filtered); (2) FY25+: Master Deals (audit) rows where the effective attribution
+COALESCE(JAMES col Q, system col O) is "Google Ads" OR "Could be SEO or Paid Ad".
+So: not only Niki + JC — plain "Google Ads" attribution counts too, and Niki covers
+only FY22–24.
+
+--------------------------------------------------------------------------------
+USER:
+(/q) Not the dashboard ROAS — the artifact. / Does the artifact use event date? /
+How come it has a 2027 tab? / Confirm: Niki for 22-24, then the "MAG Marketing ROAS
+Report – YTD - FY24-27 deal" cols N and Q for 2024 onwards?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Clarified the artifact uses enquiry/creation date (the sheet's Fiscal Year column),
+NOT a GA4 event date; the FY27 tab is just the Australian financial year in progress
+(FY27 = Jul 2026–Jun 2027, mostly calendar-2026). Corrected the col N/Q confusion by
+reading the actual sheet header (Master Deals (audit) row 5): col N = "Google Ads
+Tagged?" (what the DASHBOARD uses), col O = "Attribution", col Q = "JAMES: Final
+Attribution" (what the ARTIFACT uses, falling back to O); and the audit drives FY25+
+(not FY24). Also noted the artifact's WIP value lookup falls back to Deal Value (AUD)
+because the column name doesn't match the sheet.
+
+--------------------------------------------------------------------------------
+USER:
+(pasted, plan mode) Update roas.html: (1) per-FY filter bar + All-in/Google-only
+toggle, ROAS by FY not cal yr; (2) replace cards with the artifact's; (3) add the
+"What we spent vs what we won" chart; (4) rework the table to the artifact's "Year by
+year" shape, rename "ROAS by FY"; (5) add the per-FY deals table.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Entered plan mode. Ran 3 Explore agents: (a) mapped the current roas.html frontend +
+app.js helpers (renderSortableTable, segmented/.segmented CSS, chart helpers, KPI
+tiles, the .acs-reset toggle pattern); (b) confirmed data availability — NO Bing/
+Simple Digital spend in the DB (only google_ads_campaign_monthly, Jul 2024+), FY
+helpers exist but mag_fy_label is START-year vs clover's END-year; (c) verified
+niki_ad_leads_tracking (status 100% populated, cpc summable as annual spend, FY
+derivable from year+month), clover attribution values, GA4 cpc rows, and the "Ad
+spend by month" sheet structure (Google/Bing/SD/Total, May 2022–Sep 2026).
+
+Asked the user three rounds of questions. Decisions: (1) build REAL Bing + Simple
+Digital data via LIVE Microsoft Ads API + Gmail; (2) FY25+ counted set =
+clover final_gads_tag='Yes' UNION (by deal_id) GA4 rows where channel ~* 'cpc';
+FY22–24 from Niki's table; (3) FY22–24 ad spend from Niki's table (sum of cpc).
+Standardized on END-year FY. Wrote the plan to the plan file and exited plan mode
+(approved).
+
+--------------------------------------------------------------------------------
+USER:
+(implicit: proceed with the approved plan)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Implemented the full rebuild:
+
+DB (applied via Supabase MCP, migrations also written to supabase/migrations/):
+- public.bing_ads_campaign_monthly (20261022090000) — mirrors google_ads_campaign_monthly.
+- public.simple_digital_fees_monthly (20261022091000) — monthly SD fee breakdown.
+
+Server:
+- Rewrote server/metrics/roas.js — FY (END-year) model: FY22–24 from
+  niki_ad_leads_tracking (sum(cpc) spend + W/L/O + won$); FY25+ Google from
+  google_ads_campaign_monthly, Bing/SD from the new tables (LEFT JOIN → $0 until
+  filled), counted deals = clover final_gads_tag='Yes' ∪ GA4 channel~cpc. Returns
+  both roasGoogle and roasAllin per row + an All total.
+- Added server/metrics/roas-deals.js + GET /api/operations/roas/deals (scopes
+  counted/review/actag; counts reconcile with /roas via a shared cpc_ids CTE).
+- Wired the import + route in server/index.js; updated its ROAS comment.
+Validated the SQL via execute_sql and ran the modules end-to-end against the live DB
+(pulled SUPABASE_DB_URL from GSM into an env var, printed only its length): all-years
+ROAS 2.91×; counted W/L/O 39/84/4 matched between /roas and /roas/deals.
+
+Frontend:
+- Fully redesigned public/roas.html (app.js?v=5): FY segmented bar + All-in/Google-only
+  toggle; artifact KPI tiles (clickable status tiles → deals); "ROAS by FY" bar+target
+  chart; "What we spent vs what we won" stacked-cost-vs-won chart; wide "ROAS by FY"
+  table (FY, Google/Bing/SD/Total, W/L/O, Won revenue, ROAS Google, ROAS all-in, Win
+  rate, ROI $/%, Per-Lead Value); per-FY deals table with status/scope/search. Boots
+  clean; inline script parse-checked.
+
+Part A scaffolds:
+- supabase/functions/bing-ads-campaign-monthly-sync/index.ts — token mint + upsert done;
+  MS Advertising Reporting-API call left as a TODO; needs BING_ADS_* edge secrets.
+- routines/simple-digital-fees-sync.md — Gmail/GoCardless → simple_digital_fees_monthly.
+
+Docs/memory: rewrote the CLAUDE.md ROAS section for the FY model + the Bing/SD build;
+updated the roas-tab-feature memory + MEMORY.md index.
+
+--------------------------------------------------------------------------------
+USER:
+(/q) For real Bing/Simple Digital — is a Microsoft Ads developer token enough to
+access the billing data? / Walk me through where to get each Bing cred and where to
+put them. / Azure portal link? / Got "creating applications outside of a directory
+has been deprecated" when registering.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained (with web sources) that the dev token alone is NOT enough — it's app
+identity only; you also need delegated (user) OAuth (app-only not supported; scope
+msads.manage + offline_access) and CustomerId/CustomerAccountId; spend comes via the
+Reporting API. Gave a step-by-step for all six BING_ADS_* creds and said they go in
+Supabase Edge Function secrets (not GSM). Provided the Azure App registrations deep
+links. Diagnosed the "deprecated" error as a personal Microsoft account with no Entra
+directory; recommended creating a free Entra directory (free Azure signup), registering
+the app as multitenant + personal accounts, and consenting as the Bing-account user via
+the common endpoint.
+
+--------------------------------------------------------------------------------
+USER:
+Just use the sheet's data for now. I'll set this up tomorrow.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the full "Ad spend by month" sheet and did a one-time load into the new tables so
+the All-in basis works now: Simple Digital (FY25+ months, mirrored directly) into
+simple_digital_fees_monthly; Bing into bing_ads_campaign_monthly as sentinel
+campaign_id=0 "sheet total" rows (flagged: delete where campaign_id=0 before wiring the
+live Bing sync, or it double-counts). Verified All-in now diverges from Google-only
+(FY25 total $41,460 → all-in 1.31× vs Google 1.87×; FY26 $67,450 → 0.50× vs 0.87×;
+FY27 $16,158 → 0.46× vs 0.83×). No code change needed — roas.js reads the tables via
+LEFT JOIN. Reminded the user a manual Cloud Run redeploy is still needed for the page
+rebuild.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat history, updated as_built.txt (new tables, routes, edge-fn scaffold,
+routine, sheet load) and CLAUDE.md, and confirmed .gitignore already covers everything
+sensitive. Did NOT run any git commands — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================
