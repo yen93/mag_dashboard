@@ -120,7 +120,7 @@
           </div>
           <div class="acs-spacer"></div>
           <button type="button" class="acs-reset" id="acsRoasToggle" aria-pressed="false"
-                  title="Show only the rows counted by the ROAS tab (cpc/organic or JC-tagged won/lost/open deals; hides Google Ads?=Yes rows with no channel/tag)">ROAS-counted only</button>
+                  title="Show only the rows counted by the ROAS tab: won deals tagged final_gads_tag=Yes (the ROAS Won numerator), plus cpc/organic or JC-tagged won/lost/open deals (the leads basis)">ROAS-counted only</button>
           <button type="button" class="acs-reset" id="acsJcToggle" aria-pressed="false"
                   title="Show/hide Manual Tagging column">Show Manual Tagging</button>
           <button type="button" class="acs-reset" id="acsXeroToggle" aria-pressed="false"
@@ -485,15 +485,20 @@
       return true;
     }
 
-    // A row is "counted by the ROAS tab" iff it is in the ROAS leads population:
-    // CONTACT_SOURCE_SHOWN (effective JC tag OR cpc/organic, minus free-gift/excluded
-    // links) AND dealStatus in won/lost/open AND calYr set. Mirrors server/lib/sql.js
-    // CONTACT_SOURCE_SHOWN + server/metrics/roas.js deals-CTE gating. KEEP IN SYNC.
+    // A row is "counted by the ROAS tab" if EITHER:
+    //   (a) WON numerator (as of 2026-10-22): a WON deal tagged final_gads_tag='Yes' — this
+    //       is what ROAS now counts for Won $/leads (mirrors server/metrics/roas.js won_audit
+    //       CTE over public.clover_audited_deals). KEEP IN SYNC with roas.js. OR
+    //   (b) the shownLeads basis (the ROAS Per-Lead-Value denominator): CONTACT_SOURCE_SHOWN
+    //       (effective JC tag OR cpc/organic, minus free-gift/excluded links) AND dealStatus
+    //       in won/lost/open AND calYr set. Mirrors server/lib/sql.js CONTACT_SOURCE_SHOWN.
     // (Rows here have already cleared isExcludedRow, so EXCLUDED_DEAL_IDS / nikiOutbound /
-    // uniting are gone — ROAS would still count JC-tagged ones of those, but they aren't
-    // shown on this page at all, so the filter reflects "ROAS-counted rows visible here".)
+    // uniting are gone — so the filter reflects "ROAS-counted rows visible here".)
     function isRoasCounted(r) {
       if (!r || isExcludedRow(r)) return false;
+      // (a) WON numerator = final_gads_tag='Yes' won deals.
+      if (r.dealStatus === 'won' && String(r.finalGadsTag || '').trim().toLowerCase() === 'yes') return true;
+      // (b) shownLeads basis (Per-Lead-Value denominator).
       if (r.calYr == null) return false;
       if (['won', 'lost', 'open'].indexOf(r.dealStatus) === -1) return false;
       if (r.jcManualTag && String(r.jcManualTag).trim()) return true; // effective JC tag branch

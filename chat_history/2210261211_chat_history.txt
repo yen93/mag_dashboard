@@ -1,0 +1,58 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-22
+Session: Updated the GA4 & Ads Leads page's "ROAS-counted only" quick filter
+(isRoasCounted) to match the new ROAS WON logic — won deals tagged
+final_gads_tag=Yes now count as ROAS-counted. Then /dcp.
+================================================================================
+
+(No secrets, API keys, tokens, passwords, or connection strings were pasted into
+this chat, so nothing was redacted.)
+
+--------------------------------------------------------------------------------
+USER:
+ac_contact_sources.html "ROAS-counted only" btn should also be updated accordingly
+(follow-up to the prior change that moved the ROAS WON numerator to
+clover_audited_deals final_gads_tag=Yes).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Re-read the inline isRoasCounted(r) predicate and the #acsRoasToggle button in
+public/ac_contact_sources.html. The old predicate mirrored only CONTACT_SOURCE_SHOWN
+(calYr + won/lost/open + effective JC tag OR cpc/organic, minus free-gift/excluded
+links) — so it no longer matched the ROAS tab, whose WON numerator had just moved to
+clover_audited_deals (final_gads_tag=Yes won deals).
+
+Updated isRoasCounted(r) to have TWO branches (either counts a row):
+  (a) WON numerator: dealStatus === 'won' AND finalGadsTag === 'yes' (mirrors roas.js's
+      won_audit CTE), checked before the calYr gate so a won-Yes row counts even if calYr
+      is null;
+  (b) the shownLeads / Per-Lead-Value basis: the existing CONTACT_SOURCE_SHOWN mirror,
+      unchanged.
+Reworded the button's title tooltip to describe both populations (won final_gads_tag=Yes
+deals + cpc/organic or JC-tagged won/lost/open), and updated the helper's comment block.
+
+Verified against the live DB via Supabase MCP: 16 page rows are won + final_gads_tag=Yes,
+of which 7 would NOT have been counted under the old channel/JC rule (no cpc/organic
+channel, no JC tag) — confirming the new WON branch meaningfully (and correctly) adds
+those 7 rows.
+
+Updated the matching docs: CLAUDE.md (the "ROAS-counted only" quick-filter bullet rewritten
+for the two branches + KEEP-IN-SYNC with roas.js won_audit; and the clover bullet's note
+that had said isRoasCounted was NOT changed — corrected to say it WAS updated with the WON
+branch) and as_built.txt (the isRoasCounted entry). Frontend-only, client-side — no
+server/API/app.js/DB change; needs a manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill (no git). Saved this chat transcript; updated as_built.txt (isRoasCounted
+now has the WON final_gads_tag=Yes branch; refreshed the "Last updated" summary) and
+CLAUDE.md (same, already edited during the task); checked .gitignore (secrets already
+covered, no new sensitive files in the working tree). Did NOT run any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================

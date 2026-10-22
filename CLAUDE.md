@@ -343,26 +343,27 @@ Cloud Run.
       added** (final_gads_tag surfaces only via the existing Manual Tagging column). **This same
       table is ALSO the ROAS WON numerator** (as of 2026-10-22, a follow-up — see the ROAS bullet:
       `roas.js`'s `won_audit` CTE counts `final_gads_tag='Yes'` + status Won). The page's
-      `isExcludedRow()` / `isRoasCounted()` quick-filter mirror were NOT changed for that; they
-      still gate on channel/JC, so the page's "ROAS-counted only" toggle is now a looser mirror of
-      the real (audit-based) WON set — acceptable, not re-synced. `clover_audited_deals` is STATIC
+      `isExcludedRow()` was NOT changed for that, but `isRoasCounted()` (the "ROAS-counted only"
+      toggle) WAS updated to add a WON branch (`dealStatus==='won'` AND `finalGadsTag==='yes'`) so
+      it matches the new WON numerator — see that bullet. `clover_audited_deals` is STATIC
       (reload from the sheet if it changes). Migration: `create_clover_audited_deals`.
     - **"ROAS-counted only" quick filter (as of 2026-10-22):** a toolbar toggle
       (`#acsRoasToggle` → `ROAS_ONLY`, default off; label flips to "Show all rows") that, when
       on, shows ONLY the rows the ROAS tab counts. Client-side/display-only, **inline in
       `public/ac_contact_sources.html`** (no server/API/`app.js` change). Gated in
-      `filteredRows()` by a new inline predicate `isRoasCounted(r)` = NOT `isExcludedRow` AND
-      `calYr` set AND `dealStatus ∈ {won,lost,open}` AND (effective `jcManualTag` set OR — not
-      `free_gifts_opt_ins`, not `isExcludedConversionLink`, and channel `~ /cpc|organic/i`).
-      This is a **THIRD client-side mirror of `CONTACT_SOURCE_SHOWN`** (+ the `roas.js`
-      deals-CTE `dealStatus`/`calYr` gating) — **KEEP IT IN SYNC** with `server/lib/sql.js`
-      `CONTACT_SOURCE_SHOWN` and `roas.js`, NOT with the two `isExcludedRow()` copies (whose
-      `google_ads_ac_field='Yes'` branch is exactly what this filter drops). Net effect: hides
-      the ~87 GAds=Yes/blank-channel/no-tag "for review" rows. Reuses the existing
-      `ORGANIC_OR_CPC` regex + inline `isExcludedConversionLink()`; handler mirrors the
-      Xero/meta toggles (flip bool → `apply()`). Caveat: ROAS also counts JC-tagged rows that
-      are in `EXCLUDED_DEAL_IDS`/`nikiOutbound`, but those are hidden from the page entirely,
-      so the filter = "ROAS-counted rows **visible on this page**".
+      `filteredRows()` by the inline predicate `isRoasCounted(r)`. **As of 2026-10-22 (WON
+      moved to the audit) it has TWO branches** (either one counts): **(a)** the WON numerator
+      — `dealStatus === 'won'` AND `finalGadsTag === 'yes'` (mirrors `roas.js`'s `won_audit`
+      CTE over `clover_audited_deals`); **(b)** the shownLeads/Per-Lead-Value basis — NOT
+      `isExcludedRow` AND `calYr` set AND `dealStatus ∈ {won,lost,open}` AND (effective
+      `jcManualTag` set OR — not `free_gifts_opt_ins`, not `isExcludedConversionLink`, and
+      channel `~ /cpc|organic/i`), i.e. the `CONTACT_SOURCE_SHOWN` mirror. **KEEP IT IN SYNC**
+      with `server/lib/sql.js` `CONTACT_SOURCE_SHOWN` **and** `roas.js`'s `won_audit`, NOT with
+      the two `isExcludedRow()` copies. Reuses the existing `ORGANIC_OR_CPC` regex + inline
+      `isExcludedConversionLink()`; handler mirrors the Xero/meta toggles (flip bool →
+      `apply()`). Caveat: ROAS's lost/open come from `ac_google_ads_deals` (not this page's
+      rows) and some audit Yes-won / JC deals are in `EXCLUDED_DEAL_IDS`/`nikiOutbound` (hidden
+      from the page), so the filter = "ROAS-counted rows **visible on this page**".
     - **`engagement_fee` / `other_fees` / `gst` / `amount_total` (Xero $) columns (as of
       2026-10-20):** the Xero invoice breakdown of a deal, shown behind the page's **"Show
       Xero $"** toolbar toggle (`#acsXeroToggle` → `SHOW_XERO_COLS`; inserted right after the
