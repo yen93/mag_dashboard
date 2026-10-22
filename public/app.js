@@ -222,7 +222,7 @@ function renderMarketingSidebar(active) {
   var items = [
     ['overview',   'Overview',              'marketing.html'],
     ['roas',       'ROAS',                  'roas.html'],
-    ['leads',      'GA4 Leads Tracker',     'ac_contact_sources.html'],
+    ['leads',      'Lead Tracker',          'ac_contact_sources.html'],
     ['calendly',   'Calendly-AC Sync',      'new_paid_leads_tracking.html'],
     ['ga4-agent',  'GA4 Agent',             'ga4_agent.html'],
     ['historical', 'Historical Paid Leads', 'historical_paid_leads.html'],
