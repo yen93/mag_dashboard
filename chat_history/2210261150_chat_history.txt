@@ -1,0 +1,92 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-22
+Session: Re-pointed the ROAS tab's WON numbers to count ONLY deals tagged
+final_gads_tag=Yes in the new ROAS audit table (public.clover_audited_deals),
+replacing the GA4-attributed won source. Planned in plan mode, implemented, then
+/dcp.
+================================================================================
+
+(No secrets, API keys, tokens, passwords, or connection strings were pasted into
+this chat, so nothing was redacted.)
+
+--------------------------------------------------------------------------------
+USER:
+ROAS won data should only count the final_gads_tag=Yes
+(Given in plan mode — no edits allowed until the plan was approved.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the ROAS computation path (read-only): server/metrics/roas.js,
+server/lib/sql.js (CONTACT_SOURCE_SHOWN) and public/roas.html. Found the WON
+numerator (wonLeads/wonAmount) currently comes from the `deals` CTE over
+public.ga4_ac_contact_source filtered by CONTACT_SOURCE_SHOWN (organic/cpc channel
+OR effective JC tag), and that it feeds: the Won $, Won Leads, Win-rate numerator,
+ROAS, ROI, Per-Lead-Value numerator columns + KPIs + all three charts. Lost/Open
+come from public.ac_google_ads_deals (Google Ads?=Yes), and Per-Lead Value's
+denominator is shownLeads (GA4-shown won+lost+open).
+
+Ran a read-only comparison query of three candidate "won" populations by year to
+quantify the choice:
+- current (GA4 via CONTACT_SOURCE_SHOWN): 2024 3/$35k, 2025 12/$143,250, 2026 4/$36k
+- GA4 rows filtered to deal_id tagged Yes: 2024 5/$47k, 2025 6/$45,750, 2026 2/$20k
+- audit (clover_audited_deals Yes+Won, by calendar_year, audit CRM value):
+  2024 10/$89,765, 2025 7/$57,000, 2026 2/$20,000
+Because the interpretations diverged materially, asked the user two questions via
+AskUserQuestion:
+  Q1 Won source → ANSWER: "Audit table (all Yes-won)".
+  Q2 Scope → ANSWER: "Only the Won columns" (keep Lost/Open, win-rate denominator,
+     and Per-Lead-Value's leads denominator exactly as they are today).
+
+Wrote the plan to C:\Users\Cloverly\.claude\plans\roas-won-data-should-golden-shamir.md
+and called ExitPlanMode; the user approved.
+
+Implemented (server/metrics/roas.js):
+- Added a `won_audit` CTE over public.clover_audited_deals: final_gads_tag='yes'
+  AND status='won', bucketed by calendar_year::int, won_amount =
+  sum(parse of deal_value_aud_crm) where the text value's $/commas are stripped via
+  nullif(regexp_replace(... ,'[^0-9.]','','g'),'')::numeric (blank → NULL, not summed);
+  count(*) = won_leads (deal_id unique in the audit); Uniting deals excluded to match
+  the alldeals CTE.
+- Trimmed the `deals` CTE to output only `leads` (= shownLeads, the Per-Lead-Value
+  denominator) — it keeps its LEFT JOIN ga4cs_jc_manual_review + CONTACT_SOURCE_SHOWN
+  filter but no longer computes won.
+- Final SELECT: added LEFT JOIN won_audit w and sourced "wonLeads"←w.won_leads,
+  "wonAmount"←w.won_amount; "shownLeads"←d.leads and lost/open/spend unchanged.
+- shape()/totalRow() math unchanged (they already read wonLeads/wonAmount/leads/
+  lostLeads/openLeads); updated the file header block, SRC, GADS_FILTER comment,
+  countedMethod, the getRoas() note, and two inline "won(shown)"→"won(audit)" comments
+  to reflect the audit source + a static-snapshot caveat.
+
+Implemented (public/roas.html, display copy only, no logic/JS change):
+- "Won Revenue (all years)" KPI info and the "Won Leads"/"Win rate" column tooltips
+  now say Won = ROAS-audit deals tagged final_gads_tag=Yes.
+
+Verified:
+- node --check server/metrics/roas.js → OK.
+- Ran the full composed SELECT via the Supabase MCP (read-only): WON now = 2024 10/$89,765
+  (ROAS 5.84×), 2025 7/$57,000 (1.70×), 2026 2/$20,000 (0.72×); Lost/Open (18/1, 14/6,
+  12/3) and Ad-spend ($15,382 6mo / $33,521 12mo / $27,638 10mo) unchanged from the prior
+  design. Confirmed no leftover d.won_* references.
+
+Flagged the accepted caveats: win rate now mixes populations (audit Yes-won numerator +
+ac_google_ads lost/open denominator); Per-Lead Value = audit Yes-won $ ÷ GA4-shown leads
+(e.g. 2024 $89,765 ÷ 3 reads high); and the won numbers are now a STATIC audit snapshot
+(refresh only by reloading clover_audited_deals). No migration/DB change; needs a manual
+Cloud Run redeploy to ship.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill (no git). Saved this chat transcript; updated as_built.txt (ROAS
+WON source now clover_audited_deals final_gads_tag=Yes — refreshed the "Last updated"
+summary + the roas.js DATA/metric notes) and CLAUDE.md (ROAS bullet: WON numerator now
+counts only final_gads_tag=Yes from the audit, by calendar year/CRM value; static
+snapshot; Lost/Open + leads denominator unchanged); checked .gitignore (secrets already
+covered; no new sensitive files in the working tree). Did NOT run any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================

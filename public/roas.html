@@ -137,7 +137,7 @@
             latest.periodLabel, latest.roas >= target ? 'pos' : 'neg',
             'ROAS for ' + latest.periodLabel + '. Recent enquiries are still open (deals take ~3 months to close), so the latest year typically rises.') +
         kpi('Won Revenue (all years)', money(total.wonRevenue), total.wonLeads + ' won deals', 'pos',
-            'Won deal value credited to Google Ads, ex-GST, summed across all years.') +
+            'Won deal value (CRM) of deals tagged Google Ads (final_gads_tag=Yes) in the ROAS audit, summed across all years.') +
         kpi('Ad Spend (all years)', money(total.adSpend), 'Google Ads only', '',
             'Google Ads spend across all years. Excludes the Simple Digital agency fee (see the FY report for ROAS including the fee).') +
         kpi('ROI (all years)', money(total.roiDollars), pct(total.roiPct) + ' return', total.roiDollars >= 0 ? 'pos' : 'neg',
@@ -155,8 +155,8 @@
         { label: 'Won $',        num: true, cell: function (r) { return money(r.wonAmount); } },
         { label: 'Lost',         num: true, title: 'Count of lost deals created that year flagged Google Ads?=Yes in AC.', cell: function (r) { return r.lostLeads == null ? '—' : r.lostLeads; } },
         { label: 'Open',         num: true, title: 'Count of open deals created that year flagged Google Ads?=Yes in AC.', cell: function (r) { return r.openLeads == null ? '—' : r.openLeads; } },
-        { label: 'Won Leads',    num: true, title: 'Won deals ÷ (won + lost + open deal count) for the year — same denominator as Win rate. Won is Google-Ads-attributed (GA4-shown); lost + open are deals flagged Google Ads?=Yes in AC.', cell: function (r) { return r.wonLeads == null ? '—' : r.wonLeads + ' / ' + ((r.wonLeads || 0) + (r.lostLeads || 0) + (r.openLeads || 0)); } },
-        { label: 'Win rate',     num: true, title: 'Won ÷ (won + lost + open), where lost/open = deals flagged Google Ads?=Yes in AC (created that year).', cell: function (r) { return pct(r.winRate); } },
+        { label: 'Won Leads',    num: true, title: 'Won deals ÷ (won + lost + open deal count) for the year — same denominator as Win rate. Won = ROAS-audit deals tagged final_gads_tag=Yes; lost + open are deals flagged Google Ads?=Yes in AC.', cell: function (r) { return r.wonLeads == null ? '—' : r.wonLeads + ' / ' + ((r.wonLeads || 0) + (r.lostLeads || 0) + (r.openLeads || 0)); } },
+        { label: 'Win rate',     num: true, title: 'Won ÷ (won + lost + open), where won = ROAS-audit deals tagged final_gads_tag=Yes and lost/open = deals flagged Google Ads?=Yes in AC (created that year).', cell: function (r) { return pct(r.winRate); } },
         { label: 'Ad Spend',     num: true, cell: function (r) { return money(r.adSpend); } },
         { label: 'ROI ($)',      num: true, cell: function (r) { return money(r.roiDollars); } },
         { label: 'ROI %',        num: true, cell: function (r) { return pct(r.roiPct); } },

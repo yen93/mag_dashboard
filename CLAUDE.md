@@ -99,43 +99,41 @@ Cloud Run.
     Won $, is hidden; the Won Revenue KPI card stays) + 3 inline Chart.js charts
     (grouped bar, ROAS-vs-2.00×-target line, Leads-by-outcome stacked bar). **As of
     2026-10-20 it is LIVE, computed at request time from existing Supabase tables
-    — NOT a cache, NOT the Google Sheet:** the WON numerator = `public.ga4_ac_contact_source`,
-    counting the rows matched by the shared `CONTACT_SOURCE_SHOWN` predicate (**NOT quite
-    "exactly the rows shown on the page" anymore** — see the divergence note below) — won
-    revenue = CRM `deal_value`, counted by contact `cal_yr`. As of **2026-10-21** `roas.js`
-    imports `CONTACT_SOURCE_SHOWN` from `server/lib/sql.js` (organic/cpc channel OR a JC
-    manual tag; free-gift / excluded-link rows dropped) instead of the old
-    `google_ads_ac_field='Yes' OR channel='google / cpc'` filter — so `google_ads_ac_field`
-    NO LONGER affects the ROAS count (an UNtagged "Google Ads?"=Yes row with no channel is
-    excluded **from ROAS** here — but note that as of later the same day such rows ARE now
-    SHOWN on the GA4 & Ads Leads page, which is a deliberate DISPLAY-only divergence; see the
-    contact-sources "Row-visibility" note). **BUT (as of 2026-10-21, later) a JC manual-review
-    tag DOES feed ROAS:** `CONTACT_SOURCE_SHOWN`'s JC branch now uses the **EFFECTIVE** tag
-    (a `public.ga4cs_jc_manual_review` override wins over `cs.jc_manual_tag`), so a row JC
-    tags "Could be SEO or Paid Ad" enters the WON population (won deal → Won $; lost/open →
-    the GA4-shown `leads` denominator) and a "Not paid ad / SEO" (decision NULL) one doesn't.
-    The predicate therefore **requires consumers to `LEFT JOIN public.ga4cs_jc_manual_review r
-    ON r.contact_id = cs.contact_id`** — `roas.js`'s WON `deals` CTE adds that join. See the
-    contact-sources "JC manual-review tagging" note. **ASYMMETRY (as of 2026-10-21): the Lost /
+    — NOT a cache, NOT the Google Sheet. **WON numerator — as of 2026-10-22 the WON side
+    (Won $/count) counts ONLY deals tagged `final_gads_tag='Yes'` with status Won in the ROAS
+    audit `public.clover_audited_deals`** — a `won_audit` CTE bucketed by the audit's
+    `calendar_year`, won $ = `sum(parsed deal_value_aud_crm)` (text `"$10,800"` → strip
+    `$`/commas). This REPLACED the old GA4-attributed won source (`ga4_ac_contact_source` via
+    `CONTACT_SOURCE_SHOWN`). **So Won $/count + every numerator derived from it (ROAS, ROI,
+    win-rate numerator, Per-Lead-Value numerator) count only Yes-won deals.** NB the WON numbers
+    are a **STATIC audit snapshot** (refresh only by reloading `clover_audited_deals`).
+    `public.ga4_ac_contact_source` + `CONTACT_SOURCE_SHOWN` are now used ONLY for the
+    `shownLeads` basis = the **Per-Lead-Value denominator** (won+lost+open rows shown on the GA4
+    Leads page: organic/cpc channel OR an EFFECTIVE JC tag — a `ga4cs_jc_manual_review` override
+    wins over `cs.jc_manual_tag`, so `roas.js`'s `deals` CTE still `LEFT JOIN
+    public.ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id`). `google_ads_ac_field` is
+    not used here. **ASYMMETRY (as of 2026-10-21): the Lost /
     Open COUNT columns AND the win-rate denominator come from ONLY the deals flagged
     "Google Ads?"=Yes in AC — `public.ac_google_ads_deals` (the full AC
     `dealCustomFieldData` scan; `status_raw=2` lost / `status_raw=0` open, bucketed by
     `public.mag_cal_yr(deal_cdate)`), NOT every CRM deal and NOT the GA4-shown rows**.
     (`activecampaign_deals` has NO Google-Ads field, so it can't be the source; the earlier
     "every lost/open deal in `activecampaign_deals`, all pipelines" design was replaced.)
-    So win rate = won(shown) ÷ (won + Google-Ads?=Yes lost + open). Won $/count stay
-    GA4-attributed (GA4-shown), so Won and Lost/Open come from different populations by
-    design. **The Lost
+    So win rate = won(audit Yes) ÷ (won + Google-Ads?=Yes lost + open), and Per-Lead Value =
+    audit Yes-won $ ÷ GA4-shown leads — Won, Lost/Open and the leads basis come from three
+    different populations by design. **The Lost
     and Open table columns now show deal COUNT, not $** (no more `$`; the `lostAmount`/
     `openAmount` are still in the API payload but not displayed). The **"Won Leads" column
     shows won ÷ (won + lost + open count)** — same denominator as the Win rate %; **Per-Lead
-    Value alone still uses the GA4-shown leads basis** (`shownLeads` in `roas.js`). Column
+    Value alone still uses the GA4-shown leads basis** (`shownLeads` in `roas.js`; note it is
+    now the only thing `ga4_ac_contact_source` feeds here — won moved to the audit). Column
     `title=` tooltips + the intro explain the denominators. Denominator (for ROAS) =
     `sum(cost)` from `public.google_ads_campaign_monthly` by calendar year. Only years
     **with ad spend** are shown (Jul 2024+); a `<12`-month-spend year (2024) reads high
     and the row note says so. The "All years" total is derived in `roas.js`.
-    **This is a live GA4-attributed cross-check, NOT the audited ROAS report** (CRM
-    values + broader attribution → different numbers; 2022–2024 history dropped). The
+    **This is a live cross-check (WON = audit `final_gads_tag=Yes`; lost/open = AC
+    Google-Ads?=Yes), NOT the full audited ROAS report** (ex-GST Buyer Analysis values →
+    different numbers; 2022–2024 history dropped). The
     old sheet-mirror design (cache table `public.roas_year_on_year` + the
     `roas-year-on-year-sync` routine) is **retired** — the routine is DISABLED and the
     table is unused/unread (safe to drop). Ad-spend freshness now depends on the
@@ -342,10 +340,12 @@ Cloud Run.
       JC `jcTagCell` control / Niki pill), its column `text` projection returns `"Yes"`, and
       `isForReview()` returns false for it (the audit already decided — no amber highlight).
       A `'no'`/other value falls through to the normal rules unchanged. **No new table column was
-      added** (final_gads_tag surfaces only via the existing Manual Tagging column). **ROAS
-      (`roas.js` / `CONTACT_SOURCE_SHOWN`) was deliberately NOT touched** — a newly-shown Yes row
-      with no cpc/organic channel and no JC tag still isn't ROAS-counted (and the
-      `isRoasCounted()` quick-filter mirror stays unchanged). `clover_audited_deals` is STATIC
+      added** (final_gads_tag surfaces only via the existing Manual Tagging column). **This same
+      table is ALSO the ROAS WON numerator** (as of 2026-10-22, a follow-up — see the ROAS bullet:
+      `roas.js`'s `won_audit` CTE counts `final_gads_tag='Yes'` + status Won). The page's
+      `isExcludedRow()` / `isRoasCounted()` quick-filter mirror were NOT changed for that; they
+      still gate on channel/JC, so the page's "ROAS-counted only" toggle is now a looser mirror of
+      the real (audit-based) WON set — acceptable, not re-synced. `clover_audited_deals` is STATIC
       (reload from the sheet if it changes). Migration: `create_clover_audited_deals`.
     - **"ROAS-counted only" quick filter (as of 2026-10-22):** a toolbar toggle
       (`#acsRoasToggle` → `ROAS_ONLY`, default off; label flips to "Show all rows") that, when
