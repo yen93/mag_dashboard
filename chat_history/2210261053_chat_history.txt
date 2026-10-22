@@ -1,0 +1,71 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-22
+Session: Made the "Reset" button on the GA4 & Ads Leads page
+(public/ac_contact_sources.html) clear ALL applied row filters — not just the
+date range it previously reset. Then /dcp.
+================================================================================
+
+(No secrets, API keys, tokens, passwords, or connection strings were pasted into
+this chat, so nothing was redacted.)
+
+--------------------------------------------------------------------------------
+USER:
+"Reset" btn should remove all applied filters
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the GA4 & Ads Leads page (public/ac_contact_sources.html, the
+Marketing sidebar "Lead Tracker" page) to find the Reset button and map out every
+filter that can be applied:
+
+- The "Reset" button (id=acsReset) lives inside the date-range popover. Its old
+  handler only reset the date quick-filter: cleared the #acsQuick active state,
+  set the "All" (data-days="0") button active, and called setQuick(0).
+- filteredRows() applies three row-level gates: isExcludedRow(r) (the curated
+  blacklist / nikiOutbound hide), ROAS_ONLY && !isRoasCounted(r) (the
+  "ROAS-counted only" quick filter toggle, id=acsRoasToggle), and inRange(cdate,
+  from, to) (the date range).
+- The in-table search + per-column value filters are owned by TABLE_STATE and
+  passed into renderSortableTable via opts.stateStore. Confirmed in app.js that
+  renderSortableTable reads state.q (search text, line ~550: input.value =
+  state.q) and state.filters (per-column funnel Sets, line ~320), and that on each
+  draw it does host.innerHTML = '' and rebuilds the search box + funnels from that
+  state — so clearing TABLE_STATE.q / TABLE_STATE.filters before apply() resets
+  the visible controls too, no reload needed.
+- The JC (Manual Tagging) / Xero $ / extra-columns buttons toggle column
+  VISIBILITY, not row filtering, so they were deliberately left out of the reset.
+
+Rewrote the acsReset click handler to clear every applied row filter in one click:
+  1. Date range → All: cleared #acsQuick active, set data-days="0" active, blanked
+     #acsFrom / #acsTo values.
+  2. ROAS-counted-only → off: when ROAS_ONLY was on, flipped it false and restored
+     the toggle button's class / aria-pressed / "ROAS-counted only" label
+     (mirroring the toggle's own handler). Referenced the button via
+     getElementById so it works regardless of handler-registration order.
+  3. In-table state: TABLE_STATE.q = '', TABLE_STATE.filters = {},
+     TABLE_STATE.page = 1.
+  4. Called apply() once at the end (replacing the old setQuick(0) which had its
+     own apply()).
+Added an explanatory comment noting the JC/Xero/extra-columns buttons are column
+visibility, not row filters, so they're intentionally left as-is.
+
+Reported the change, noted it's frontend-only (public/ac_contact_sources.html) so
+it needs a manual Cloud Run redeploy to go live, no DB/schema change, and offered
+to also have Reset collapse the column-visibility toggles back to defaults if
+wanted.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill (document, no git): saved this chat-history file; reviewed
+as_built.txt and CLAUDE.md (the Reset behaviour is a small frontend tweak already
+captured here and not separately documented in either file — no update warranted);
+checked .gitignore (already covers secrets/credentials — no change needed). Did
+NOT run any git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================

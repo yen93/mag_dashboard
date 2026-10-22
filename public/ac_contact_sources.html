@@ -713,10 +713,29 @@
           setQuick(Number(b.getAttribute('data-days')));
         });
       });
+      // "Reset" clears ALL applied row filters: the date range, the ROAS-counted-only
+      // quick filter, and the in-table search + per-column value filters. (The JC / Xero /
+      // extra-columns buttons toggle column visibility, not row filtering, so they're left as-is.)
       document.getElementById('acsReset').addEventListener('click', function () {
+        // Date range → All
         document.querySelectorAll('#acsQuick button').forEach(function (x) { x.classList.remove('active'); });
         document.querySelector('#acsQuick button[data-days="0"]').classList.add('active');
-        setQuick(0);
+        document.getElementById('acsFrom').value = '';
+        document.getElementById('acsTo').value = '';
+        // ROAS-counted-only quick filter → off
+        var rb = document.getElementById('acsRoasToggle');
+        if (rb && ROAS_ONLY) {
+          ROAS_ONLY = false;
+          rb.classList.remove('active');
+          rb.setAttribute('aria-pressed', 'false');
+          rb.textContent = 'ROAS-counted only';
+        }
+        // In-table search + per-column value filters (renderSortableTable rebuilds the
+        // search box from TABLE_STATE.q and the funnels from TABLE_STATE.filters).
+        TABLE_STATE.q = '';
+        TABLE_STATE.filters = {};
+        TABLE_STATE.page = 1;
+        apply();
       });
       var jcBtn = document.getElementById('acsJcToggle');
       if (jcBtn) {
