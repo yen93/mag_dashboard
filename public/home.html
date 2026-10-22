@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Home — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* ---- Homepage-specific styling (kept inline, like sales_overview.html) ---- */
+    .home-hero {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      box-shadow: var(--shadow); padding: 24px 26px; margin-bottom: 24px;
+    }
+    .home-hero h1 { margin: 0 0 6px; font-size: 22px; }
+    .home-hero p { margin: 0; color: var(--text-muted); font-size: 14px; line-height: 1.5; }
+
+    .home-section-title { display: flex; align-items: baseline; gap: 10px; margin: 28px 0 14px; }
+    .home-section-title h2 { margin: 0; font-size: 16px; font-weight: 700; }
+    .home-section-title .sub { color: var(--text-muted); font-size: 12px; }
+
+    /* Navigation cards — one per top area, each links out + lists its sub-pages. */
+    .nav-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 16px; }
+    .nav-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      box-shadow: var(--shadow); padding: 20px; display: flex; flex-direction: column;
+    }
+    .nav-card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+    .nav-card-head .ico {
+      width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center;
+      font-size: 18px; background: var(--accent-soft); color: var(--accent); flex: none;
+    }
+    .nav-card-head h3 { margin: 0; font-size: 17px; }
+    .nav-card .desc { color: var(--text-muted); font-size: 13px; line-height: 1.5; margin: 6px 0 14px; }
+    .nav-links { display: flex; flex-direction: column; gap: 2px; margin-bottom: 16px; }
+    .nav-links a {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; border-radius: 8px; text-decoration: none;
+      color: var(--text); font-size: 13px; font-weight: 600;
+    }
+    .nav-links a:hover { background: var(--surface-2); color: var(--accent); }
+    .nav-links a .arrow { color: var(--text-muted); font-size: 12px; }
+    .nav-card .open-btn {
+      margin-top: auto; align-self: flex-start; text-decoration: none;
+      background: var(--accent); color: #fff; font-size: 13px; font-weight: 600;
+      padding: 9px 16px; border-radius: 9px;
+    }
+    .nav-card .open-btn:hover { filter: brightness(1.05); }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab active" href="home.html">Home</a>
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+  </nav>
+
+  <main class="content">
+    <div class="home-hero">
+      <h1 id="greeting">Welcome to MAG Metrics</h1>
+      <p>Sales, Marketing and Operations metrics for My Adventure Group — live from the MAG data warehouse. Pick an area below, or scan the headline numbers first.</p>
+    </div>
+
+    <!-- ============ AT A GLANCE — headline KPIs across all three areas ============ -->
+    <div class="home-section-title">
+      <h2>At a glance</h2>
+      <span class="sub" id="glanceSub">Live headline metrics · Sales year-to-date, Marketing &amp; Operations last 12 months</span>
+    </div>
+    <div class="kpi-grid" id="kpis"></div>
+
+    <!-- ============ EXPLORE — navigate into each area ============ -->
+    <div class="home-section-title">
+      <h2>Explore</h2>
+      <span class="sub">Jump straight to any page</span>
+    </div>
+    <div class="nav-grid" id="navGrid"></div>
+  </main>
+
+  <script src="app.js?v=3"></script>
+  <script>
+    // Quick-link lists mirror the left-sidebar helpers in app.js (single source of
+    // truth for the sub-nav lives there; these are the homepage's shortcut copies).
+    var AREAS = [
+      {
+        key: 'sales', title: 'Sales', ico: '📈', href: 'sales_overview.html',
+        desc: 'Top-line income, enquiries and the LIV conference pipeline — backed by ActiveCampaign deals.',
+        links: [
+          ['Overview', 'sales_overview.html'],
+          ['Conferences', 'sales.html'],
+        ],
+      },
+      {
+        key: 'marketing', title: 'Marketing', ico: '🎯', href: 'marketing.html',
+        desc: 'Leads, reviews, ROAS and Google Ads attribution across GA4 and ActiveCampaign.',
+        links: [
+          ['Overview', 'marketing.html'],
+          ['ROAS', 'roas.html'],
+          ['GA4 Leads Tracker', 'ac_contact_sources.html'],
+          ['Calendly-AC Sync', 'new_paid_leads_tracking.html'],
+          ['GA4 Agent', 'ga4_agent.html'],
+          ['Historical Paid Leads', 'historical_paid_leads.html'],
+        ],
+      },
+      {
+        key: 'operations', title: 'Operations', ico: '⚙️', href: 'operations.html',
+        desc: 'Delivered revenue, pipeline health, buyer analysis and Xero invoice tracking.',
+        links: [
+          ['Overview', 'operations.html'],
+          ['Buyer Analysis', 'mag_buyer_sheet.html'],
+          ['Invoices', 'invoice_tracking.html'],
+        ],
+      },
+    ];
+
+    function renderNav() {
+      document.getElementById('navGrid').innerHTML = AREAS.map(function (a) {
+        var links = a.links.map(function (l) {
+          return '<a href="' + l[1] + '">' + esc(l[0]) + '<span class="arrow">→</span></a>';
+        }).join('');
+        return '<div class="nav-card">' +
+          '<div class="nav-card-head"><span class="ico">' + a.ico + '</span><h3>' + esc(a.title) + '</h3></div>' +
+          '<div class="desc">' + esc(a.desc) + '</div>' +
+          '<div class="nav-links">' + links + '</div>' +
+          '<a class="open-btn" href="' + a.href + '">Open ' + esc(a.title) + ' →</a>' +
+          '</div>';
+      }).join('');
+    }
+
+    // A "needs setup" placeholder metric, used when an area's endpoint fails to load
+    // so the KPI tile still renders instead of leaving a gap.
+    function errMetric(unit, note) {
+      return { value: null, unit: unit, meta: { status: 'pending', note: note || 'Couldn’t load this metric.' } };
+    }
+
+    // Fetch the three area endpoints in parallel and compose the headline KPI row.
+    // Each fetch degrades to pending tiles on failure (never blocks the others).
+    function loadGlance() {
+      var sales = fetchJSON('/api/sales/topline-cards').catch(function () { return null; });
+      var mkt = fetchJSON('/api/metrics/marketing?range=12m').catch(function () { return null; });
+      var ops = fetchJSON('/api/metrics/operations?range=12m').catch(function () { return null; });
+
+      Promise.all([sales, mkt, ops]).then(function (res) {
+        var s = res[0], m = res[1], o = res[2];
+        var sc = (s && s.cards) || {};
+        var mk = (m && m.kpis) || {};
+        var op = (o && o.kpis) || {};
+
+        renderKpis('kpis', [
+          { label: 'Total income (YTD, won)', metric: sc.totalIncome || errMetric('currency') },
+          { label: 'Speaking enquiries (YTD)', metric: sc.speakingEnquiries || errMetric('count') },
+          { label: 'New leads (this month)', metric: mk.newLeads || errMetric('count') },
+          { label: 'Google reviews (this month)', metric: mk.reviews || errMetric('count') },
+          { label: 'Revenue (period)', metric: op.revenue || errMetric('currency') },
+          { label: 'Open pipeline', metric: op.openPipeline || errMetric('currency') },
+          { label: 'Demos (this month)', metric: mk.demosBooked || errMetric('count') },
+          { label: 'Avg review rating', metric: op.avgRating || errMetric('rating') },
+        ]);
+      });
+    }
+
+    initPage('home'); // login / top-bar / theme only — this page renders its own content
+    renderNav();
+    if (currentUser()) {
+      var u = currentUser();
+      var first = u && u.name ? String(u.name).split(' ')[0] : '';
+      if (first) document.getElementById('greeting').textContent = 'Welcome back, ' + first;
+      loadGlance();
+    }
+  </script>
+</body>
+</html>

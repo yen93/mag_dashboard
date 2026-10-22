@@ -271,8 +271,8 @@ app.use('/api/ga4-agent', ga4AgentRouter);
 const publicDir = path.join(__dirname, '..', 'public');
 app.use(express.static(publicDir));
 
-// Root -> the first dashboard page (which bounces to login if not signed in).
-app.get('/', (_req, res) => res.redirect('/sales_overview.html'));
+// Root -> the dashboard homepage (which bounces to login if not signed in).
+app.get('/', (_req, res) => res.redirect('/home.html'));
 
 app.listen(PORT, () => {
   console.log(`[server] listening on http://localhost:${PORT}`);

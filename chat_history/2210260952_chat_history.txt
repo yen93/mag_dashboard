@@ -1,0 +1,111 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-22
+Session: Added an overall dashboard HOMEPAGE — a new top-level landing page
+(public/home.html) with cross-area headline KPIs and navigation cards into Sales,
+Marketing and Operations. Added "Home" as the first top tab on all 14 existing
+pages and repointed the "/" redirect from sales_overview.html to home.html.
+Then /dcp.
+================================================================================
+
+(No secrets, API keys, tokens, passwords, or connection strings were pasted into
+this chat, so nothing was redacted.)
+
+--------------------------------------------------------------------------------
+USER:
+create an overall dashboard homepage
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the codebase before building, to ground the homepage in the existing
+plain-HTML/no-build conventions:
+- public/sales_overview.html (full) — a self-rendering page that calls
+  initPage('sales') for login/top-bar/theme only, then renders its own KPIs via
+  /api/sales/topline-cards; keeps page-specific CSS inline. Used as the template
+  for a self-rendering top-level page.
+- server/index.js — the single Express service; metrics routes under
+  /api/metrics/:area (sales/marketing/operations) + sales/operations
+  sub-resources; "/" previously redirected to /sales_overview.html; static files
+  served from public/.
+- public/app.js — shared helpers: initPage(area, renderFn), currentUser(),
+  fetchJSON(), renderKpis(containerId, cards), metaChips()/renderPendingBody(),
+  esc(), and the three left-sidebar helpers (renderSalesSidebar /
+  renderMarketingSidebar / renderOperationsSidebar) that define each area's
+  sub-page list.
+- public/app.css — the shell (.topbar/.tabbar/.tab.active), .kpi-grid/.kpi,
+  .card/.grid, CSS-variable theming (incl. --accent-soft), and the .subnav
+  layout.
+- public/operations.html and public/marketing.html — reference pages showing the
+  standard initPage(area, renderFn) pattern and the KPI shapes each area returns
+  (operations: revenue/delivered/openPipeline/avgRating; marketing:
+  newLeads/reviews/demosBooked/keynotes).
+- server/metrics/sales-topline-cards.js — /api/sales/topline-cards (no range =
+  YTD) returns cards.totalIncome, speakingEnquiries, bureau, tailor, inbound,
+  outbound, directIndirect, each wrapped by live()/pending().
+
+Confirmed via grep that <nav class="tabbar"> appears once in each of 14 pages
+(roas, marketing, new_paid_leads_tracking, operations, mag_sales_pulse,
+mag_buyer_sheet, invoice_tracking, historical_paid_leads, lead_source_guide,
+ga4_agent, ac_contact_sources, ac_ad_leads_tagging, sales_overview, sales) and
+that the opening line "  <nav class=\"tabbar\">" is identical in all of them.
+
+Decided (and noted to the user) a sensible default rather than asking: make Home
+the default landing (repoint "/") and add it as the first global top tab on every
+page, matching how the nav was recently restructured. Windows for the headline
+KPIs were fixed (Sales YTD; Marketing/Operations 12m) — offered a period toggle
+as a follow-up.
+
+Built the changes (all plain hand-edited static files — no bundler):
+
+1. public/home.html (NEW) — the landing page. Standard shell (topbar + 4-tab
+   tabbar with Home active, no subnav). Page-specific CSS kept inline (hero band,
+   .nav-grid / .nav-card, quick-link rows, "Open →" button). Two sections:
+   - "At a glance": one .kpi-grid (#kpis) of 8 headline tiles rendered by
+     renderKpis — Total income (YTD, won) + Speaking enquiries (YTD) from
+     /api/sales/topline-cards; New leads / Google reviews / Demos (this month)
+     from /api/metrics/marketing?range=12m; Revenue (period) / Open pipeline /
+     Avg review rating from /api/metrics/operations?range=12m. loadGlance()
+     fetches all three in parallel (Promise.all); each fetch .catch()s to null
+     and falls back to an errMetric() pending tile so one area failing never
+     blanks the row or blocks the others.
+   - "Explore": three .nav-card navigation cards (Sales / Marketing / Operations)
+     built from an inline AREAS array, each with an icon, description, quick-links
+     to its sub-pages (mirroring the app.js sidebar helpers — noted inline as
+     shortcut copies, the sidebar helpers remain the single source of truth) and
+     an "Open <Area> →" button.
+   Boots via initPage('home') (login/top-bar/theme only, no renderFn), then
+   renderNav() + loadGlance() guarded by currentUser(); greets the signed-in user
+   by first name. Loads app.js?v=3; no Chart.js (no charts on this page).
+
+2. Top tab bar — inserted <a class="tab" href="home.html">Home</a> as the FIRST
+   tab in all 14 existing pages (active only on home.html). Done as 14 per-file
+   Edits keyed on the unique "  <nav class=\"tabbar\">" line; sales_overview.html's
+   edit also carried the following "Sales" active-tab line.
+
+3. server/index.js — changed the "/" redirect from /sales_overview.html to
+   /home.html (comment updated to "the dashboard homepage").
+
+Verified: booted `node server/index.js`, curl'd "/" → 302 Location /home.html,
+and curl'd /home.html → correct <title>, Home tab active, and the "At a glance"
+section present. Grep confirmed href="home.html">Home appears exactly once in all
+15 files (14 pages + home.html).
+
+Reported what was built, noted (per CLAUDE.md) that Claude does NOT deploy — a
+manual Cloud Run redeploy is needed to go live — and that no DB/schema changes
+were made (no migration). Offered to add a homepage period toggle if the fixed
+KPI windows aren't preferred.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill (document, no git): saved this chat-history file; updated
+as_built.txt to record public/home.html and the new "/" → home.html landing +
+global Home tab; reviewed CLAUDE.md and updated the navigation notes to add the
+Home top tab (now 4 top tabs) and the homepage; checked .gitignore (already
+covers secrets/credentials — no change needed). Did NOT run any git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================

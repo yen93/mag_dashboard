@@ -12,15 +12,19 @@ Cloud Run.
 
 ## Architecture (the non-obvious bits)
 - **Single origin.** `server/index.js` serves both `/api/*` and the static pages
-  in `public/`. `/` redirects to `/sales_overview.html` (the first tab). No SPA
+  in `public/`. `/` redirects to `/home.html` (the dashboard homepage). No SPA
   fallback — each page is a real file.
 - **Frontend = static files in `public/`, no build.** One HTML file per screen
-  Tab bar (in order, **3 top tabs as of 2026-10-22**): `sales_overview.html` ("Sales"),
-  `marketing.html`, `operations.html`; plus `login.html`.
+  Tab bar (in order, **4 top tabs as of 2026-10-22**): `home.html` ("Home"),
+  `sales_overview.html` ("Sales"), `marketing.html`, `operations.html`; plus `login.html`.
+  **`home.html` is the overall dashboard homepage** — the default landing (`/` redirects to
+  it) with cross-area headline KPIs (pulled live from the Sales/Marketing/Operations
+  endpoints) + navigation cards into each area; "Home" is the active top tab only there.
   **Naming gotcha:** the "Sales" tab is `sales_overview.html`;
   `sales.html` is the **Conferences** page (legacy name) — **no longer a top tab**, it now
   lives UNDER Sales via the Sales left sidebar (see below). The `<nav class="tabbar">`
-  block is duplicated in **all 14 pages**, so reordering/adding a top tab = edit them all.
+  block is duplicated in **all 15 pages** (the 14 originals + `home.html`), so
+  reordering/adding a top tab = edit them all.
   **Sales left sidebar (as of 2026-10-22):** `sales.html` ("Conferences") is reached via a
   left sidebar (`<aside class="subnav" id="salesNav">`) shown on **2 pages** —
   `sales_overview.html` (Overview) and `sales.html` (Conferences). Built by ONE helper
