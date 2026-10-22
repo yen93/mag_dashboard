@@ -99,8 +99,9 @@ body {
 .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 .toolbar .spacer { flex: 1; }
 
-/* Marketing left sidebar sub-nav (Marketing page + its sub-pages) */
-.marketing-layout { display: flex; align-items: flex-start; gap: 0; }
+/* Left sidebar sub-nav layout — shared by the Marketing and Operations pages
+   and their sub-pages (.subnav / .subnav-link fill #marketingNav / #operationsNav) */
+.marketing-layout, .operations-layout { display: flex; align-items: flex-start; gap: 0; }
 .subnav {
   flex: 0 0 210px; width: 210px; padding: 18px 12px;
   background: var(--surface); border-right: 1px solid var(--border);
@@ -114,9 +115,9 @@ body {
 }
 .subnav-link:hover { background: var(--surface-2); color: var(--text); }
 .subnav-link.active { background: var(--accent-soft); color: var(--accent); }
-.marketing-layout .content { flex: 1; min-width: 0; }  /* content takes the rest */
+.marketing-layout .content, .operations-layout .content { flex: 1; min-width: 0; }  /* content takes the rest */
 @media (max-width: 860px) {
-  .marketing-layout { flex-direction: column; }
+  .marketing-layout, .operations-layout { flex-direction: column; }
   .subnav {
     flex-direction: row; width: auto; flex: none; min-height: 0;
     position: static; border-right: none; border-bottom: 1px solid var(--border);

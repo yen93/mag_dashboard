@@ -25,12 +25,12 @@
   <nav class="tabbar">
     <a class="tab" href="sales_overview.html">Sales</a>
     <a class="tab" href="marketing.html">Marketing</a>
-    <a class="tab" href="operations.html">Operations</a>
-    <a class="tab" href="mag_buyer_sheet.html">Buyer Analysis</a>
-    <a class="tab active" href="invoice_tracking.html">Invoices</a>
+    <a class="tab active" href="operations.html">Operations</a>
     <a class="tab" href="sales.html">Conferences</a>
   </nav>
 
+  <div class="operations-layout">
+    <aside class="subnav" id="operationsNav"></aside>
   <main class="content">
     <div class="grid" style="margin-bottom:16px">
       <div class="card col-12">
@@ -44,6 +44,7 @@
       </div>
     </div>
   </main>
+  </div>
 
   <script src="app.js?v=2"></script>
   <script>
@@ -93,6 +94,7 @@
     }
 
     initPage('operations'); // login / top-bar / theme only — this page renders its own table
+    renderOperationsSidebar('invoices');
     if (currentUser()) loadInvoiceTracking();
   </script>
 </body>

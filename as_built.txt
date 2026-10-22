@@ -85,13 +85,25 @@ SCRIPTS / APP CODE
   enquiries and inbound/outbound stay "needs setup" until their AC fields/tags
   are mirrored to Supabase.
 - public/ — plain static frontend, served directly (NO build step):
-  - NAV (restructured 2026-10-22): the top tab bar now has just SIX tabs, in
-    order — sales_overview.html ("Sales" top-line KPIs), marketing.html
-    ("Marketing"), operations.html ("Operations"), mag_buyer_sheet.html (nav tab
-    "Buyer Analysis" — renamed 2026-10-13; in-page <h3>/<title> still say "Buyer
-    Sheet"), invoice_tracking.html ("Invoices"), sales.html ("Conferences" —
-    legacy filename; it is the LIV deals table). This <nav class="tabbar"> block is
-    still hand-duplicated in ALL 14 pages (edit them all to change it).
+  - NAV (restructured 2026-10-22, in two passes): the top tab bar now has just
+    FOUR tabs, in order — sales_overview.html ("Sales" top-line KPIs),
+    marketing.html ("Marketing"), operations.html ("Operations"), sales.html
+    ("Conferences" — legacy filename; it is the LIV deals table). This
+    <nav class="tabbar"> block is still hand-duplicated in ALL 14 pages (edit them
+    all to change it).
+  - OPERATIONS LEFT SIDEBAR (new 2026-10-22, 2nd pass): Buyer Analysis
+    (mag_buyer_sheet.html; nav "Buyer Analysis" — in-page <h3>/<title> still say
+    "Buyer Sheet") and Invoices (invoice_tracking.html) are no longer top tabs —
+    they moved UNDER Operations, reached via a left sidebar (<aside class="subnav"
+    id="operationsNav">) shown on 3 pages — operations.html (Overview),
+    mag_buyer_sheet.html (buyer), invoice_tracking.html (invoices). Built by ONE
+    helper, renderOperationsSidebar(active) in app.js (same shape as the Marketing
+    one; single source of truth); each page wraps its content in
+    <div class="operations-layout"> + the aside, keeps "Operations" as the active
+    top tab, and calls renderOperationsSidebar('<key>') after initPage. Reuses the
+    .subnav/.subnav-link CSS; .operations-layout was added alongside
+    .marketing-layout on the three shared layout rules in app.css. (Frontend-only —
+    needs a Cloud Run redeploy to ship.)
   - MARKETING LEFT SIDEBAR (new 2026-10-22): the five former top tabs now live
     UNDER Marketing, reached via a left sidebar (<aside class="subnav"
     id="marketingNav">) shown on 6 pages — marketing.html (Overview), roas.html

@@ -15,11 +15,9 @@ Cloud Run.
   in `public/`. `/` redirects to `/sales_overview.html` (the first tab). No SPA
   fallback — each page is a real file.
 - **Frontend = static files in `public/`, no build.** One HTML file per screen
-  Tab bar (in order): `sales_overview.html` ("Sales"), `marketing.html`,
-  `operations.html`, `mag_buyer_sheet.html` (nav tab "Buyer Analysis" as of
-  2026-10-13 — the in-page `<h3>`/`<title>` still read "Buyer Sheet"),
-  `invoice_tracking.html` ("Invoices"), `sales.html` ("Conferences"); plus
-  `login.html`. **Naming gotcha:** the "Sales" tab is `sales_overview.html`;
+  Tab bar (in order, **4 top tabs as of 2026-10-22**): `sales_overview.html` ("Sales"),
+  `marketing.html`, `operations.html`, `sales.html` ("Conferences"); plus `login.html`.
+  **Naming gotcha:** the "Sales" tab is `sales_overview.html`;
   `sales.html` is the **Conferences** page (legacy name). The `<nav class="tabbar">`
   block is duplicated in **all 14 pages**, so reordering/adding a top tab = edit them all.
   **Marketing left sidebar (as of 2026-10-22):** five pages that used to be top tabs now
@@ -32,6 +30,17 @@ Cloud Run.
   calls `renderMarketingSidebar('<key>')` right after `initPage`. CSS `.marketing-layout`/
   `.subnav`/`.subnav-link` lives in `app.css` (sticky on desktop, horizontal scroll under 860px).
   So those 5 are **no longer top tabs** — to re-point one, edit the helper, not the tabbar.
+  **Operations left sidebar (as of 2026-10-22):** `mag_buyer_sheet.html` (nav "Buyer Analysis" —
+  in-page `<h3>`/`<title>` still read "Buyer Sheet") and `invoice_tracking.html` ("Invoices")
+  are **no longer top tabs** either — they moved UNDER **Operations**, reached via an
+  identical left sidebar (`<aside class="subnav" id="operationsNav">`) shown on **3 pages** —
+  `operations.html` (Overview), `mag_buyer_sheet.html` (buyer), `invoice_tracking.html`
+  (invoices). Built by ONE helper `renderOperationsSidebar(active)` in `app.js` (same shape as
+  the Marketing one — **don't hand-duplicate**); each of the 3 pages wraps its `<main>` in
+  `<div class="operations-layout">` + the aside, keeps **Operations** as the active top tab, and
+  calls `renderOperationsSidebar('<key>')` right after `initPage`. Reuses the same `.subnav`/
+  `.subnav-link` CSS; `.operations-layout` is just added alongside `.marketing-layout` on the
+  three shared layout rules in `app.css`.
   Shared styling in `public/app.css` (CSS
   variables drive theming). Shared logic in `public/app.js`. Each page has an
   inline `<script>` that calls `initPage(area, renderFn)` and maps API data onto

@@ -234,6 +234,24 @@ function renderMarketingSidebar(active) {
   }).join('');
 }
 
+/* Operations left sidebar sub-nav. Fills the #operationsNav <aside> on the
+   Operations page and its sub-pages (Buyer Analysis, Invoices). `active` is the
+   current page's key. Single source of truth for the sub-nav list. */
+function renderOperationsSidebar(active) {
+  var el = document.getElementById('operationsNav');
+  if (!el) return;
+  var items = [
+    ['overview', 'Overview',       'operations.html'],
+    ['buyer',    'Buyer Analysis', 'mag_buyer_sheet.html'],
+    ['invoices', 'Invoices',       'invoice_tracking.html'],
+  ];
+  el.innerHTML = items.map(function (it) {
+    var key = it[0], label = it[1], href = it[2];
+    var cls = 'subnav-link' + (key === active ? ' active' : '');
+    return '<a class="' + cls + '" href="' + href + '">' + label + '</a>';
+  }).join('');
+}
+
 /* Sortable + searchable table. Builds its own search box and re-renders on
    header click / typing. columns: [{key,label,unit,render}] (same shape as
    renderTable; `unit:'date'` sorts chronologically). opts:

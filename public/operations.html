@@ -20,11 +20,11 @@
     <a class="tab" href="sales_overview.html">Sales</a>
     <a class="tab" href="marketing.html">Marketing</a>
     <a class="tab active" href="operations.html">Operations</a>
-    <a class="tab" href="mag_buyer_sheet.html">Buyer Analysis</a>
-    <a class="tab" href="invoice_tracking.html">Invoices</a>
     <a class="tab" href="sales.html">Conferences</a>
   </nav>
 
+  <div class="operations-layout">
+    <aside class="subnav" id="operationsNav"></aside>
   <main class="content">
     <div class="toolbar">
       <strong>Operations overview</strong>
@@ -88,6 +88,7 @@
       </div>
     </div>
   </main>
+  </div>
 
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=2"></script>
@@ -146,6 +147,7 @@
     }
 
     initPage('operations', renderOperations);
+    renderOperationsSidebar('overview');
   </script>
 </body>
 </html>
