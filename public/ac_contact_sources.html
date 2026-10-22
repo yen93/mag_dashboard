@@ -267,6 +267,8 @@
     // tag and not yet reviewed. These get the amber row highlight and a tagging control.
     function isForReview(r) {
       if (!r) return false;
+      // Clover audit "Google Ads Tagged?"=Yes already decides it — never "for review".
+      if (String(r.finalGadsTag || '').trim().toLowerCase() === 'yes') return false;
       if (String(r.googleAdsAcField || '').trim().toLowerCase() !== 'yes') return false;
       if (String(r.channel || '').trim()) return false;
       if (r.jcManualTag && String(r.jcManualTag).trim()) return false;
@@ -303,6 +305,11 @@
     // rows (for-review, already-tagged, or already-reviewed); a read-only pill otherwise.
     // "Not paid ad / SEO" (value __not__) posts an empty decision → reviewed, tag cleared.
     function jcTagCell(v, row) {
+      // Clover ROAS audit "Google Ads Tagged?"=Yes PREVAILS over every other tag — show it
+      // read-only (not the editable JC control). "No"/other falls through to the rules below.
+      if (row && String(row.finalGadsTag || '').trim().toLowerCase() === 'yes') {
+        return '<span class="pill pos" title="Google Ads Tagged? = Yes (Clover ROAS audit)">Yes</span>';
+      }
       // Deal also in Niki's ad-leads tracking sheet (joined by deal_id, display-only).
       // JC's tag PREVAILS unless the row is still "for review" (awaiting a JC decision):
       // on a for-review row that's in Niki's list, show a read-only "In Niki's List"
@@ -447,6 +454,10 @@
     var ORGANIC_OR_CPC = /cpc|organic/i;
     function isExcludedRow(r) {
       if (!r) return false;
+      // Clover ROAS audit "Google Ads Tagged?" = Yes PREVAILS over everything — the row is
+      // ALWAYS shown, overriding even the manual hide-list / Niki-outbound / Uniting hides
+      // below (newest authoritative classification). "No"/other falls through.
+      if (String(r.finalGadsTag || '').trim().toLowerCase() === 'yes') return false;
       // Manual hide-list by deal_id — ALWAYS hidden, overrides every rule below incl. the
       // JC "always show" exemption (per request).
       if (r.dealId != null && EXCLUDED_DEAL_IDS[String(r.dealId).trim()]) return true;
@@ -603,6 +614,7 @@
         cols.push({
           key: 'jcManualTag', label: 'Manual Tagging', render: jcTagCell,
           text: function (v, row) {
+            if (row && String(row.finalGadsTag || '').trim().toLowerCase() === 'yes') return 'Yes'; // audit "Google Ads Tagged?"=Yes prevails
             if (row && row.inNikiList && isForReview(row)) return "In Niki's List"; // for-review + in Niki's sheet
             if (v && String(v).trim()) return String(v);      // tagged, e.g. "Could be SEO or Paid Ad" (JC prevails)
             if (row.jcReviewed) return 'Not paid ad / SEO';   // reviewed, cleared

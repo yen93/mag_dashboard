@@ -80,7 +80,13 @@ const SELECT = `
       SELECT 1 FROM public.niki_ad_leads_tracking n
       WHERE n.deal_id = cs.deal_id
         AND lower(btrim(n.inbound_or_outbound)) LIKE 'outbound%'
-    )                      AS "nikiOutbound"
+    )                      AS "nikiOutbound",
+    -- Clover's ROAS audit (public.clover_audited_deals, "Google Ads Tagged?" → final_gads_tag),
+    -- joined by deal_id. A "Yes" PREVAILS: the row is always shown and this value is what the
+    -- Manual Tagging column displays (see isExcludedRow + the page's jcTagCell). deal_id is
+    -- unique in the audit so a scalar subquery can't fan out the page rows.
+    (SELECT cad.final_gads_tag FROM public.clover_audited_deals cad
+       WHERE cad.deal_id = cs.deal_id LIMIT 1) AS "finalGadsTag"
   FROM public.ga4_ac_contact_source cs
   LEFT JOIN public.ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id
   ORDER BY cs.cdate DESC NULLS LAST`;
@@ -132,6 +138,10 @@ function isExcludedConversionLink(link) {
 const ORGANIC_OR_CPC = /cpc|organic/i;
 function isExcludedRow(r) {
   if (!r) return false;
+  // Clover ROAS audit "Google Ads Tagged?" = Yes PREVAILS over everything — the row is
+  // ALWAYS shown, overriding even the manual hide-list / Niki-outbound / Uniting hides
+  // below (it is the newest authoritative classification). "No"/other falls through.
+  if (String(r.finalGadsTag || '').trim().toLowerCase() === 'yes') return false;
   // Manual hide-list by deal_id — ALWAYS hidden, overrides every rule below incl. the
   // JC "always show" exemption (per request).
   if (r.dealId != null && EXCLUDED_DEAL_IDS.has(String(r.dealId).trim())) return true;

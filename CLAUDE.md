@@ -327,6 +327,26 @@ Cloud Run.
       above.) Knock-on: the re-shown rows DO count toward the page KPIs + chip-count note
       (they're "shown"), but an UNtagged one does NOT count toward ROAS. Migration (unrelated,
       for the FY/calYr/JC columns): `supabase/migrations/20261020060000_contact_source_fy_calyr_jc_columns.sql`.
+    - **Clover ROAS-audit `final_gads_tag` PREVAILS (as of 2026-10-22):** the page joins
+      **`public.clover_audited_deals`** (a static one-time load of the "Master Deals (audit)"
+      tab of James' ROAS audit sheet — every AC deal Jul 2023→Oct 2026; sheet col N "Google Ads
+      Tagged?" → `final_gads_tag` Yes/No/other; RLS on / no policies, read via the direct pg
+      connection) by `deal_id` as the row field **`finalGadsTag`** (a scalar subquery in
+      `ac-contact-sources.js`'s SELECT — `deal_id` is unique in the audit, so no fan-out; **not**
+      a UNION — only EXISTING cache rows are annotated, no new contacts added). A
+      **`final_gads_tag='yes'` PREVAILS over everything:** the check is placed at the **TOP of
+      `isExcludedRow()`** (BOTH copies — server `ac-contact-sources.js` + inline
+      `ac_contact_sources.html`, KEEP IDENTICAL) `→ return false`, so a Yes row is ALWAYS shown,
+      overriding even the `EXCLUDED_DEAL_IDS` / `nikiOutbound` / Uniting hard-hides above. A Yes
+      row shows a read-only green **"Yes"** pill in the **Manual Tagging** column (overriding the
+      JC `jcTagCell` control / Niki pill), its column `text` projection returns `"Yes"`, and
+      `isForReview()` returns false for it (the audit already decided — no amber highlight).
+      A `'no'`/other value falls through to the normal rules unchanged. **No new table column was
+      added** (final_gads_tag surfaces only via the existing Manual Tagging column). **ROAS
+      (`roas.js` / `CONTACT_SOURCE_SHOWN`) was deliberately NOT touched** — a newly-shown Yes row
+      with no cpc/organic channel and no JC tag still isn't ROAS-counted (and the
+      `isRoasCounted()` quick-filter mirror stays unchanged). `clover_audited_deals` is STATIC
+      (reload from the sheet if it changes). Migration: `create_clover_audited_deals`.
     - **"ROAS-counted only" quick filter (as of 2026-10-22):** a toolbar toggle
       (`#acsRoasToggle` → `ROAS_ONLY`, default off; label flips to "Show all rows") that, when
       on, shows ONLY the rows the ROAS tab counts. Client-side/display-only, **inline in
