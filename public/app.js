@@ -252,6 +252,23 @@ function renderOperationsSidebar(active) {
   }).join('');
 }
 
+/* Sales left sidebar sub-nav. Fills the #salesNav <aside> on the Sales page and
+   its sub-pages (Conferences). `active` is the current page's key. Single source
+   of truth for the sub-nav list. */
+function renderSalesSidebar(active) {
+  var el = document.getElementById('salesNav');
+  if (!el) return;
+  var items = [
+    ['overview',    'Overview',    'sales_overview.html'],
+    ['conferences', 'Conferences', 'sales.html'],
+  ];
+  el.innerHTML = items.map(function (it) {
+    var key = it[0], label = it[1], href = it[2];
+    var cls = 'subnav-link' + (key === active ? ' active' : '');
+    return '<a class="' + cls + '" href="' + href + '">' + label + '</a>';
+  }).join('');
+}
+
 /* Sortable + searchable table. Builds its own search box and re-renders on
    header click / typing. columns: [{key,label,unit,render}] (same shape as
    renderTable; `unit:'date'` sorts chronologically). opts:

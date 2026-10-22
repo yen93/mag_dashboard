@@ -1,0 +1,101 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-22
+Session: Nav restructure (part 3) — moved the last standalone top tab,
+Conferences (sales.html), UNDER the Sales tab (sales_overview.html) via a new
+left sidebar sub-nav, shrinking the top tab bar from 4 tabs to 3. Mirrors the
+Marketing- and Operations-sidebar patterns built earlier the same day. Then /dcp.
+================================================================================
+
+(No secrets, API keys, tokens, passwords, or connection strings were pasted into
+this chat, so nothing was redacted.)
+
+--------------------------------------------------------------------------------
+USER:
+Pasted a to-do: transfer one tab — sales.html (the Conferences page) — under the
+sales_overview.html main tab, and add a left sidebar in sales_overview.html where
+that tab would go.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Recognized this as the exact analogue of the Marketing and Operations left-sidebar
+work from earlier the same day, so followed that established pattern rather than
+inventing a new one. Grounded the change by reading:
+- app.js renderMarketingSidebar(active) and renderOperationsSidebar(active) — the
+  single-source-of-truth sub-nav helpers to mirror.
+- app.css .marketing-layout / .operations-layout / .subnav / .subnav-link rules
+  (flex layout, sticky sidebar on desktop, horizontal scroll under 860px) — the
+  three shared layout rules to extend.
+- operations.html (full) — reference for how a page wraps <main> in
+  <div class="operations-layout"> + <aside class="subnav" id="operationsNav"> and
+  calls renderOperationsSidebar('key') right after initPage.
+- sales_overview.html (full) — the "Sales" top tab; a wide, self-rendering page
+  (.content max-width:none) with a sticky .acs-toolbar date filter, inline scripts
+  that call initPage('sales') then render their own KPIs/charts from
+  /api/sales/topline, /api/sales/topline-cards and /api/sales/ac-deals.
+- sales.html (full) — the legacy-named "Conferences" page; self-rendering LIV
+  deals table, calls initPage('sales') (login/top-bar/theme only) + loadLivDeals().
+
+Confirmed via grep that the Conferences top-tab link (href="sales.html") appears
+in all 14 pages — class="tab" on 13 of them and class="tab active" only on
+sales.html itself.
+
+Made the changes (all plain hand-edited static files — no bundler):
+
+1. app.js — added renderSalesSidebar(active), same shape as the Marketing/
+   Operations helpers, filling #salesNav with two items:
+   overview → sales_overview.html, conferences → sales.html.
+
+2. app.css — added .sales-layout alongside .marketing-layout / .operations-layout
+   on all three shared rules (the flex container rule, the ".content { flex:1 }"
+   rule, and the <860px "flex-direction: column" media rule). Reuses the existing
+   .subnav / .subnav-link styles unchanged.
+
+3. Top tab bar — removed the Conferences <a> from all 14 pages, taking the bar
+   from 4 tabs (Sales, Marketing, Operations, Conferences) to 3 (Sales, Marketing,
+   Operations).
+
+4. sales_overview.html — wrapped <main> in <div class="sales-layout"> +
+   <aside class="subnav" id="salesNav">, kept Sales as the active top tab, and
+   added renderSalesSidebar('overview') right after initPage('sales').
+
+5. sales.html — same <main> wrapper, changed the Sales top tab from plain to
+   class="tab active" (it's now a Sales sub-page), and added
+   renderSalesSidebar('conferences') right after initPage('sales'). Left its
+   <title>Conferences — MAG Metrics</title> and the in-page heading as-is.
+
+Snag found and fixed during verification: a grep after the edits showed
+sales_overview.html still carried the Conferences top tab — it had been missed in
+the first batch of removals (12 done, not 13). Removed it. A second grep then
+showed that on 12 pages the removal had left "Operations</a>  </nav>" collapsed
+onto one line, because in those files the original Conferences link had shared its
+line with the closing </nav> (the tabbar whitespace was NOT uniform across all 14
+pages). Valid HTML, but untidy, so split </nav> back onto its own line in all 12.
+
+Final verification greps confirmed: no remaining href="sales.html" in any HTML
+(the only "sales.html" references now are the JS-generated sidebar links in
+app.js); no leftover "Conferences" top tabs (remaining matches are the sales.html
+<title>, the app.js helper, and an unrelated panel title in
+mag_sales_pulse_artifact.html); no "</a>  </nav>" collapses; and every one of the
+14 pages now has exactly 3 top-tab links.
+
+Flagged two follow-ups to the user: (a) sales_overview.html's full-width sticky
+.acs-toolbar (margin: 0 -24px) renders fine inside the new sidebar layout but its
+edge-bleed could want tuning if it looks off; (b) offered to document the new
+Sales sidebar in CLAUDE.md the way Marketing/Operations are documented. Reminded
+that a manual Cloud Run redeploy is needed for the changes to go live (Claude
+never deploys the dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: saved this chat transcript; updated as_built.txt and CLAUDE.md
+to reflect the new Sales left sidebar and the 3-tab top bar; confirmed .gitignore
+already covers all sensitive patterns (no change needed). Did NOT run any git
+commands — the user commits and pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

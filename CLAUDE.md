@@ -15,11 +15,21 @@ Cloud Run.
   in `public/`. `/` redirects to `/sales_overview.html` (the first tab). No SPA
   fallback — each page is a real file.
 - **Frontend = static files in `public/`, no build.** One HTML file per screen
-  Tab bar (in order, **4 top tabs as of 2026-10-22**): `sales_overview.html` ("Sales"),
-  `marketing.html`, `operations.html`, `sales.html` ("Conferences"); plus `login.html`.
+  Tab bar (in order, **3 top tabs as of 2026-10-22**): `sales_overview.html` ("Sales"),
+  `marketing.html`, `operations.html`; plus `login.html`.
   **Naming gotcha:** the "Sales" tab is `sales_overview.html`;
-  `sales.html` is the **Conferences** page (legacy name). The `<nav class="tabbar">`
+  `sales.html` is the **Conferences** page (legacy name) — **no longer a top tab**, it now
+  lives UNDER Sales via the Sales left sidebar (see below). The `<nav class="tabbar">`
   block is duplicated in **all 14 pages**, so reordering/adding a top tab = edit them all.
+  **Sales left sidebar (as of 2026-10-22):** `sales.html` ("Conferences") is reached via a
+  left sidebar (`<aside class="subnav" id="salesNav">`) shown on **2 pages** —
+  `sales_overview.html` (Overview) and `sales.html` (Conferences). Built by ONE helper
+  `renderSalesSidebar(active)` in `app.js` (same shape/single-source-of-truth as the
+  Marketing & Operations helpers — **don't hand-duplicate**); each page wraps its `<main>` in
+  `<div class="sales-layout">` + the aside, keeps **Sales** as the active top tab, and calls
+  `renderSalesSidebar('<key>')` right after `initPage`. Reuses the same `.subnav`/`.subnav-link`
+  CSS; `.sales-layout` is added alongside `.marketing-layout`/`.operations-layout` on the three
+  shared layout rules in `app.css`. `sales.html` keeps its `<title>`/heading "Conferences".
   **Marketing left sidebar (as of 2026-10-22):** five pages that used to be top tabs now
   live UNDER Marketing, reached via a left sidebar (`<aside class="subnav" id="marketingNav">`)
   shown on **6 pages** — `marketing.html` (Overview), `roas.html`, `ac_contact_sources.html`,

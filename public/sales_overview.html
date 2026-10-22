@@ -55,9 +55,10 @@
     <a class="tab active" href="sales_overview.html">Sales</a>
     <a class="tab" href="marketing.html">Marketing</a>
     <a class="tab" href="operations.html">Operations</a>
-    <a class="tab" href="sales.html">Conferences</a>
   </nav>
 
+  <div class="sales-layout">
+    <aside class="subnav" id="salesNav"></aside>
   <main class="content">
     <div class="toolbar">
       <strong>Sales overview</strong>
@@ -191,6 +192,7 @@
 
     <div class="grid" id="deeperGrid"></div>
   </main>
+  </div>
 
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=2"></script>
@@ -932,6 +934,7 @@
     }
 
     initPage('sales'); // login / top-bar / theme only — this page renders its own KPIs
+    renderSalesSidebar('overview');
     window.onThemeChange = apply; // re-colour charts (respecting the active filter)
     renderDeeper();
     if (currentUser()) { wireToolbar(); loadCards(); loadTopline(); loadAcDeals(); }

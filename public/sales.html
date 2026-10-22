@@ -24,12 +24,13 @@
   </header>
 
   <nav class="tabbar">
-    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab active" href="sales_overview.html">Sales</a>
     <a class="tab" href="marketing.html">Marketing</a>
     <a class="tab" href="operations.html">Operations</a>
-    <a class="tab active" href="sales.html">Conferences</a>
   </nav>
 
+  <div class="sales-layout">
+    <aside class="subnav" id="salesNav"></aside>
   <main class="content">
     <div class="grid" style="margin-bottom:16px">
       <div class="card col-12">
@@ -43,6 +44,7 @@
       </div>
     </div>
   </main>
+  </div>
 
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=2"></script>
@@ -96,6 +98,7 @@
     }
 
     initPage('sales'); // login / top-bar / theme only — this page renders its own table
+    renderSalesSidebar('conferences');
     if (currentUser()) loadLivDeals();
   </script>
 </body>
