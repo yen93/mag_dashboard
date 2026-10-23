@@ -1,0 +1,174 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-23
+Session: While blocked on the Microsoft Advertising (Bing Ads) API sync (Code 105),
+pivot to sourcing Bing + Simple Digital ROAS costs from XERO instead. Built, deployed,
+authorised and ran a live Xero bank-transactions sync; both ROAS cost tables now fed
+from Xero. Ended with /dcp.
+================================================================================
+
+NOTE: No live secrets were pasted into this chat. The Xero app's CLIENT SECRET was
+stored by the user directly as a Supabase edge secret (never shown here); only a
+truncated refresh-token preview ("hL_cfy…") ever appeared, via a left()-masked SQL
+read. The Xero CLIENT ID (B9BD329D169447E487D2230B6DF86C97) is a non-confidential
+OAuth identifier (it travels in the browser authorize URL) and is kept as-is, the same
+way the prior session's log kept the Azure client id.
+
+--------------------------------------------------------------------------------
+USER:
+While still stuck on BING_SYNC_NEXT_STEPS, can we fetch Bing and Simple Digital billing
+data from Xero instead?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the live Xero org (MyAdventure Group, 2cc630e1-…) via the claude.ai Xero
+MCP. Both vendors exist as contacts — "Simple Digital" (fc88729b-…) and "Microsoft Ads"
+(5ea7b8c8-…), plus "Microsoft"/"Microsoft Business account". But get_bills returned 0
+bills FY25+ for either, get_repeating_bills was empty, and get_bank_account_transactions
+only returns UNRECONCILED rows (0 for a historical month). The P&L lumps everything into
+one "Advertising and marketing" account (code 302) with no per-vendor split. Conclusion:
+through the MCP connector the per-vendor monthly spend is NOT reachable (the charges are
+reconciled card/direct-debit SPEND transactions, which the MCP can't read); but the full
+Xero Accounting API (BankTransactions endpoint, filterable by contact) CAN read them.
+Recommended Bing-from-Xero as a real escape from the Code-105 Microsoft block; said
+Simple Digital via Xero adds nothing over its existing Gmail routine.
+
+--------------------------------------------------------------------------------
+USER:
+(/q) How do I navigate through Xero to see this "Advertising and marketing" data manually?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(Read-only /q.) Gave two UI routes: (A) Accounting → Reports → Account Transactions,
+Account = Advertising and marketing, set the FY date range — every line shows its Contact;
+or drill in from the P&L figure. (B) Contacts → open Microsoft Ads / Simple Digital to see
+each vendor's activity. Noted the MCP can't see these (reconciled), and that each line
+carries a Contact so vendors can be told apart.
+
+--------------------------------------------------------------------------------
+USER:
+But per transaction in the Advertising and marketing account you can see if it's Simple
+Digital or Microsoft Ads — get it from there.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed: yes, each line carries its Contact, so the vendors separate cleanly in the
+Account Transactions report — and the same data is exposed by the Xero API's
+BankTransactions endpoint (filter by Contact), which a sync can bucket by month. Repeated
+the one limitation: this claude.ai Xero connector can't do it (unreconciled-only), so a
+small Xero OAuth integration of our own is needed. Offered to spec it.
+
+--------------------------------------------------------------------------------
+USER:
+Create a sync from this. Can't you just check per transaction on your end??
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Proved the wall concretely: called get_bank_account_transactions for Sep 2025 → 0 rows
+(the tool is hard-limited to unreconciled). So I genuinely can't read the reconciled
+history via the MCP. Discovered the project already has a Xero-reading pattern: the
+invoice-tracking-sync edge function pulls Xero via an OAuth2 "Custom Connection"
+(client-credentials). Read its source (auth flow, read scopes, secret names). Gathered the
+facts to build the sync: the account is code 302; bing_ads_campaign_monthly PK (month,
+campaign_id) + simple_digital_fees_monthly PK (month); how roas.js sums each (sum(cost) /
+sum(paid_search_fee)); and the current sentinel/sheet rows that would be replaced.
+Built + deployed a NEW edge function xero-ad-spend-sync (verify_jwt:false) with a ?dry=1
+preview mode, reading BankTransactions per contact → monthly ex-GST → writing both tables
+(Bing campaign_id=0 '__xero_msads__' replacing '__sheet_total__'; Simple Digital
+invoice='xero'). The dry run FAILED with "Xero credentials not set".
+
+--------------------------------------------------------------------------------
+ASSISTANT (cont., diagnosing the missing creds):
+invoice_tracking had 112 rows synced the day before, so Xero creds "should" exist — but a
+safe env probe (xero-env-check, listing only env-var NAMES) showed NO XERO_* secrets on
+the project at all. Realised invoice_tracking is actually filled by a scheduled Claude MCP
+routine (using get_invoices), not the edge function — so no stored Xero API creds exist.
+Both paths were therefore blocked: the MCP can't read reconciled txns, and the edge
+function needs a Xero app's client id/secret that didn't exist. Told the user the one
+missing piece is a credential only they can mint, and gave steps to create a Xero
+"Custom Connection".
+
+--------------------------------------------------------------------------------
+USER:
+It says "subscription required to connect".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained Custom Connections are a paid add-on (~US$10/mo). Offered three paths via an
+AskUserQuestion: (1) FREE standard Xero Web app (OAuth auth-code + refresh-token rotation,
+reusing the oauth_token_store infra built for Bing); (2) pay for the Custom Connection;
+(3) manual CSV export now. User chose (1), the free standard app.
+
+--------------------------------------------------------------------------------
+ASSISTANT (cont., building the free-OAuth path):
+Read the oauth_token_store migration + the Bing function's rotation code to mirror it.
+Built a NEW edge function xero-oauth-callback (captures the one-time consent → exchanges
+the auth code → stores the refresh token in oauth_token_store provider='xero') and
+rewrote xero-ad-spend-sync from client-credentials to refresh-token auth + rotation, with
+the tenant resolved live via GET /connections. Deployed both (verify_jwt:false). Gave the
+user Web-app creation steps (redirect URI = the callback function URL) and asked for the
+app's client id + secret.
+
+--------------------------------------------------------------------------------
+USER:
+Done, stored 2 secrets in db. … [then] yes it's a web app. pls note it says "OAuth 2.0
+redirect URI". … [then, twice] Error: invalid_scope. … [then] it's the right client id.
+… [then pointed at] xero_scopes.txt — these are the scopes.
+
+--------------------------------------------------------------------------------
+ASSISTANT (debugging invalid_scope):
+Verified XERO_CLIENT_ID/SECRET were now present (env-name probe). Made the callback build
+the authorize URL server-side from the stored client id (so the user only needs one link).
+First invalid_scope → fixed "+"-vs-"%20" scope encoding (built the query by hand). Still
+invalid_scope. A client_credentials probe returned "scope validation failed"; initially
+mis-read as "it's a Custom Connection", but the user confirmed it's a Web app (it has an
+"OAuth 2.0 redirect URI" field, which Custom Connections lack). Localised the failure with
+server-side curls of the authorize endpoint watching the FIRST redirect (/identity/error =
+rejected vs login page = accepted): openid alone was ACCEPTED (so client id + redirect URI
+are valid/registered) but any accounting.* scope was REJECTED. A scope sweep showed
+accounting.contacts/settings/files accepted, accounting.transactions(.read) +
+accounting.reports.read REJECTED. A web search + the user's xero_scopes.txt confirmed the
+cause: Xero deprecated the broad accounting.transactions scope for apps created from
+2 Mar 2026 — bank transactions now need the GRANULAR accounting.banktransactions.read.
+Switched the callback's scopes to "offline_access accounting.banktransactions.read
+accounting.contacts.read" (tested ACCEPTED) and redeployed.
+
+--------------------------------------------------------------------------------
+USER:
+Allowed.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed the refresh token was stored (oauth_token_store provider='xero', just now). Ran
+?dry=1 — SUCCESS: 26 Microsoft Ads txns + 29 Simple Digital txns, all coded to account
+302. Microsoft Ads total $15,624 ex-GST (Jun 2025→Sep 2026); noted the monthly amounts
+differ from the old sheet (billed card charges vs platform-reported) and GST drops off
+from Jan 2026 (SubTotal handles it). Simple Digital jumped $1,320→$1,920 ex-GST from Mar
+2026 = exactly the +$600 SEO from CLAUDE.md. Added the SEO carve-out (strip $600 from Mar
+2026 → paid_search_fee $1,320; configurable via XERO_SD_SEO_FROM / XERO_SD_SEO_MONTHLY),
+redeployed, and ran ?sync=1 — wrote 16 Bing + 28 Simple Digital rows, 0 errors. Verified:
+only __xero_msads__ / xero rows remain (old sentinels gone); per-FY sums Bing 381 /
+11,715 / 3,528 and SD 11,940 / 15,840 / 5,280 (FY25/26/27); SEO split correct. Scheduled
+the weekly cron xero-ad-spend-sync-weekly ('30 22 * * 0' = Mon 06:30 PH, migration
+20261023120000, applied) — which also keeps the Xero refresh token alive (60-day idle
+expiry). Neutralised the xero-env-check probe to an inert 410 stub (no delete-function MCP
+tool). Updated auto-memory (new xero-ad-spend-sync.md + MEMORY.md index). Flagged that
+this is now the SOLE Bing source — the bing-ads-campaign-monthly-sync cron must NOT also
+be applied (would double-count campaign_id<>0 vs the campaign_id=0 Xero total) — and that
+the Microsoft Advertising API path + the Simple Digital Gmail routine are superseded. No
+dashboard redeploy needed (roas.js already reads the tables live).
+
+--------------------------------------------------------------------------------
+USER:
+(/dcp) Document (save chat history, update as_built.txt + CLAUDE.md + .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran /dcp: wrote this transcript; updated as_built.txt (Last-updated line + Xero
+integration / data-store / automation entries); updated CLAUDE.md's ROAS section to
+document the Xero ad-spend sync superseding the Bing API + Gmail routine; checked
+.gitignore (already comprehensive — new files are .ts source to commit; no new secret
+files; xero_scopes.txt is non-sensitive). Did NOT run any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================

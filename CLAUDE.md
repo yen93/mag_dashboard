@@ -109,10 +109,10 @@ Cloud Run.
       (data starts May 2022). `company LIKE 'uniting%'` excluded (referrals).
     • **FY25+** → cost from monthly tables, deals from the counted set:
       Google = `sum(cost)` `public.google_ads_campaign_monthly`; **Bing = `sum(cost)`
-      `public.bing_ads_campaign_monthly`** (reads $0 until the `bing-ads-campaign-monthly-sync`
-      edge fn + MS Ads creds are wired); **Simple Digital = `sum(paid_search_fee)`
-      `public.simple_digital_fees_monthly`** (reads $0 until the `simple-digital-fees-sync`
-      routine runs). **COUNTED SET (per the user's rule) = `clover_audited_deals`
+      `public.bing_ads_campaign_monthly`** and **Simple Digital = `sum(paid_search_fee)`
+      `public.simple_digital_fees_monthly`** — both now **LIVE from Xero** via the
+      `xero-ad-spend-sync` edge fn (see the "Bing + Simple Digital" paragraph below).
+      **COUNTED SET (per the user's rule) = `clover_audited_deals`
       `final_gads_tag='Yes'` UNION (by `deal_id`) `ga4_ac_contact_source` rows whose
       `channel ~* 'cpc'`** — won $ from the audit `deal_value_aud_crm` (text `"$9,500"` →
       strip `$`/commas), falling back to GA4 `deal_value` for cpc-only deals not in the audit.
@@ -146,11 +146,43 @@ Cloud Run.
     **Secret `GOOGLE_ADS_SA_KEY`** (full SA JSON) is a Supabase edge secret. Bump
     `GOOGLE_ADS_API_VERSION` (default `v26`) when Google sunsets a version. Files:
     `supabase/functions/google-ads-campaign-monthly-sync/index.ts`.
-    **Bing + Simple Digital (the All-in basis, 2026-10-22):** two NEW empty tables feed the
-    All-in cost — `public.bing_ads_campaign_monthly` (migration `20261022090000`, mirrors the
-    Google table) and `public.simple_digital_fees_monthly` (migration `20261022091000`). Both
-    are read by `roas.js` via LEFT JOIN, so All-in = Google-only until they're filled.
-    Bing is filled by the **`bing-ads-campaign-monthly-sync` edge function (IMPLEMENTED +
+    **Bing + Simple Digital (the All-in basis):** two tables feed the All-in cost —
+    `public.bing_ads_campaign_monthly` (migration `20261022090000`, mirrors the Google table)
+    and `public.simple_digital_fees_monthly` (migration `20261022091000`), both read by
+    `roas.js` via LEFT JOIN.
+    **LIVE FROM XERO (2026-10-23) — the active source for BOTH:** the
+    **`xero-ad-spend-sync` edge function** (`--no-verify-jwt`; `supabase/functions/xero-ad-spend-sync/`)
+    reads reconciled **SPEND bank transactions** for the Xero contacts **Microsoft Ads**
+    (`5ea7b8c8-…`) and **Simple Digital** (`fc88729b-…`), both coded to **account 302
+    "Advertising and marketing"** (these are card/direct-debit charges, NOT AP bills, so
+    `get_bills`/Invoices and the claude.ai Xero MCP — unreconciled-only — can't see them; only
+    the REST `BankTransactions` endpoint can). It buckets **ex-GST (SubTotal)** by month and
+    REWRITES `bing_ads_campaign_monthly` (sentinel `campaign_id=0, campaign_name='__xero_msads__'`,
+    `cost`=month total) + `simple_digital_fees_monthly` (`invoice='xero'`, `paid_search_fee`=ex-GST
+    **less $600 SEO from 2026-03** — the debit went $1320→$1920 then, the +$600 is SEO;
+    `seo_component=600`; configurable `XERO_SD_SEO_FROM`/`XERO_SD_SEO_MONTHLY`). `roas.js` already
+    sums both, so **no dashboard redeploy** is needed to pick up the data.
+    **AUTH = a FREE standard Xero "Web app"** (OAuth2 auth-code + refresh-token rotation, NOT a
+    paid Custom Connection). First consent is captured by the **`xero-oauth-callback` edge fn**
+    (its public URL is the app's **Redirect URI**; a no-`?code` visit 302s to the Xero consent
+    screen built from the stored client id); the refresh token lives in `public.oauth_token_store`
+    **`provider='xero'`** and rotates each run (Xero tokens rotate per use + lapse after 60 days
+    idle). Secrets **`XERO_CLIENT_ID`/`XERO_CLIENT_SECRET`** are edge secrets (client id
+    `B9BD329D…`, non-secret). Tenant resolved live via `GET /connections` (MyAdventure Group
+    `2cc630e1-…`). **SCOPE GOTCHA:** Xero deprecated the broad `accounting.transactions` scope
+    for apps created from **2 Mar 2026** — bank txns need the granular
+    **`accounting.banktransactions.read`** (+ `accounting.contacts.read` + `offline_access`); the
+    old scope → authorize-time `invalid_scope`; also encode scope-separator spaces as `%20` (not
+    `+`). Weekly cron **`xero-ad-spend-sync-weekly`** `30 22 * * 0` (Mon 06:30 PH, migration
+    `20261023120000`) — also keeps the refresh token alive. Modes: `?dry=1` (preview, no write),
+    `?sync=1` (write), bare (background).
+    ⚠ **This is now the SOLE Bing + Simple Digital source** — do NOT also run the two superseded
+    syncs below against these tables (the Bing-API per-campaign rows `campaign_id<>0` would
+    double-count the `campaign_id=0` Xero total, since `roas.js` sums all rows). Caveat: Xero
+    figures are actual **billed** card/debit charges (threshold/arrears timing), so months differ
+    from platform-reported spend — the right basis for All-in cost.
+    **HISTORY (superseded 2026-10-23, kept for reference):**
+    Bing was to be filled by the **`bing-ads-campaign-monthly-sync` edge function (IMPLEMENTED +
     DEPLOYED 2026-10-23, `verify_jwt:false` v1)** — full Microsoft Advertising Reporting API
     v13 REST flow (OAuth refresh-token grant → `SubmitGenerateReport` CampaignPerformanceReport
     Aggregation=Monthly → poll → download ZIP → unzip via `fflate` → parse CSV → upsert on
@@ -171,12 +203,11 @@ Cloud Run.
     2026; monthly). Files: `supabase/functions/bing-ads-campaign-monthly-sync/index.ts`,
     `routines/simple-digital-fees-sync.md`. A dashboard redeploy is needed for the roas.js/
     roas.html rebuild + the new `/api/operations/roas/deals` route.
-    **TEMPORARY sheet load (2026-10-22):** until those live syncs run, both tables hold a
-    one-time load from the "Ad spend by month" tab of the ROAS sheet (FY25+). Simple Digital
-    is mirrored per month (the live routine upserts over it). **Bing is loaded as SENTINEL
-    rows `campaign_id=0, campaign_name='__sheet_total__'`** — `delete from
-    public.bing_ads_campaign_monthly where campaign_id=0;` BEFORE wiring the live per-campaign
-    Bing sync, or the monthly totals double-count against the real campaign rows.
+    **(Former TEMPORARY sheet load, now REPLACED):** both tables briefly held a one-time load
+    from the "Ad spend by month" tab of the ROAS sheet (Bing as `campaign_id=0, '__sheet_total__'`;
+    Simple Digital mirrored per month). `xero-ad-spend-sync`'s first run **deleted and replaced**
+    those rows on 2026-10-23, so the sheet load is gone — the tables now hold only the Xero data
+    above.
   - **Contact Sources** (`ac_contact_sources.html` = "GA4 & Ads Leads Tracking",
     `/api/operations/contact-sources`, `server/metrics/ac-contact-sources.js`) is
     also a plain single-table read: as of 2026-10-09 **every display column is stored
