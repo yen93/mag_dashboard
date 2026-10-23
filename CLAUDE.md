@@ -150,10 +150,23 @@ Cloud Run.
     All-in cost — `public.bing_ads_campaign_monthly` (migration `20261022090000`, mirrors the
     Google table) and `public.simple_digital_fees_monthly` (migration `20261022091000`). Both
     are read by `roas.js` via LEFT JOIN, so All-in = Google-only until they're filled.
-    Bing is filled by the **`bing-ads-campaign-monthly-sync` edge function (SCAFFOLD)** — token
-    mint + upsert are done; the MS Advertising Reporting-API call is a TODO, and it needs
+    Bing is filled by the **`bing-ads-campaign-monthly-sync` edge function (IMPLEMENTED +
+    DEPLOYED 2026-10-23, `verify_jwt:false` v1)** — full Microsoft Advertising Reporting API
+    v13 REST flow (OAuth refresh-token grant → `SubmitGenerateReport` CampaignPerformanceReport
+    Aggregation=Monthly → poll → download ZIP → unzip via `fflate` → parse CSV → upsert on
+    `(month, campaign_id)`), with MSA single-use refresh-token **rotation** persisted in the NEW
+    `public.oauth_token_store` table (migration `20261023090000`, `provider='bing_ads'`; seeded
+    from the `BING_ADS_REFRESH_TOKEN` secret, rotated token written back each run). Needs the six
     `BING_ADS_*` edge secrets (client id/secret, refresh token, developer token, account/customer
-    id). Simple Digital is filled by the **`simple-digital-fees-sync` Claude routine** (Gmail MCP
+    id) — **SET**. ⚠ **BLOCKED** at time of writing: every call returns **Code 105
+    InvalidCredentials** (even `GetUser`, which needs no account access). Root cause: the only
+    developer token is the **Gmail Super Admin's SINGLE-USER** token, but OAuth authenticates as
+    the user's **Microsoft/Outlook account** (Gmail is Google-federated → can't do Microsoft
+    OAuth) — the dev token and OAuth identity **must be the same user**. Fix: promote the MS
+    account to Super Admin and self-issue a dev token, OR get a **Universal** dev token. Weekly
+    cron is **staged** (`20261023091000`) but **not yet applied** (held until the backfill works).
+    **Full resume guide: `BING_SYNC_NEXT_STEPS.txt`.** Simple Digital is filled by the
+    **`simple-digital-fees-sync` Claude routine** (Gmail MCP
     → GoCardless "Upcoming Direct Debit … Simple Digital" notices ÷1.1, less $600 SEO from Mar
     2026; monthly). Files: `supabase/functions/bing-ads-campaign-monthly-sync/index.ts`,
     `routines/simple-digital-fees-sync.md`. A dashboard redeploy is needed for the roas.js/

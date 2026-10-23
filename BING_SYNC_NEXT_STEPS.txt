@@ -1,0 +1,110 @@
+================================================================================
+BING ADS SYNC — WHERE WE LEFT OFF + NEXT STEPS
+As of: 2026-10-23
+================================================================================
+
+GOAL
+Fill public.bing_ads_campaign_monthly with real monthly Microsoft Advertising
+(Bing Ads) campaign spend + performance, so the ROAS page's "All-in" cost basis
+(server/metrics/roas.js) uses live Bing cost instead of the one-time sheet estimate.
+Same credentials later unlock Bing ad-performance data (impressions/clicks/CPC/
+keyword/search-query) that GA4 cannot provide.
+
+================================================================================
+DONE (our side — fully built, deployed, ready)
+================================================================================
+- CODE: supabase/functions/bing-ads-campaign-monthly-sync/index.ts rewritten from
+  scaffold to a complete, working REST implementation:
+  OAuth refresh-token grant -> SubmitGenerateReport (CampaignPerformanceReport,
+  Aggregation=Monthly) -> poll to Success -> download ZIP -> unzip (fflate) ->
+  parse CSV -> upsert on (month, campaign_id). Includes MSA refresh-token
+  ROTATION persistence (reads/writes public.oauth_token_store; falls back to the
+  BING_ADS_REFRESH_TOKEN secret as a seed).
+- DB: migration 20261023090000_oauth_token_store.sql APPLIED (table
+  public.oauth_token_store, RLS on / no policies; holds the rotating Bing refresh
+  token, provider='bing_ads').
+- DEPLOY: edge function deployed via Supabase MCP with verify_jwt:false (version 1).
+- SECRETS: the six BING_ADS_* edge secrets were set by the user (step 1).
+- STAGED, NOT YET APPLIED: migration 20261023091000_schedule_bing_ads_campaign_
+  monthly_sync.sql (weekly pg_cron Sun 22:00 UTC = Mon 06:00 PH, 150s timeout).
+  Deliberately held until the backfill succeeds, so no job fails weekly meanwhile.
+- SENTINELS LEFT IN PLACE: public.bing_ads_campaign_monthly still has the 16
+  temporary sheet rows (campaign_id=0, '__sheet_total__', ~$16,787) so the ROAS
+  All-in basis keeps its estimate (no $0 gap). DELETE them only once the live sync
+  returns real rows (see step 3 below), or spend will double-count.
+
+================================================================================
+BLOCKER (Microsoft side — needs Matt / account action)
+================================================================================
+The function reaches Microsoft and authenticates OAuth fine, but EVERY Reporting/
+Customer-Management call returns Code 105 "InvalidCredentials" — including GetUser,
+which needs no account access. Root cause diagnosed:
+  - We OAuth as the MICROSOFT/Outlook account (Gmail can't do Microsoft OAuth —
+    it's Google-federated). That account HAS account access (Standard role; can see
+    campaigns + billing in the UI). OAuth token mints correctly.
+  - BUT the only developer token available is the GMAIL Super Admin's, and it's a
+    SINGLE-USER token -> it authenticates only the Gmail user and rejects the
+    Microsoft account -> 105 on every call.
+  => The developer token and the OAuth identity MUST be the same user.
+
+FIX (either unblocks it; email to Matt the current Super Admin was drafted):
+  Option 1 (preferred): Matt promotes the Microsoft/Outlook account to SUPER ADMIN
+    (Settings -> Users). Then sign in AS that account -> https://ads.microsoft.com/
+    cc/Settings/DevSettings -> Request Token. That token belongs to the OAuth user =
+    guaranteed to work. (Multiple Super Admins are allowed.)
+  Option 2: Matt provides a UNIVERSAL developer token (DevSettings -> switch from
+    "Single user" to "Universal"). A universal token works for any user with access.
+
+Identifiers (NOT secret): Azure app (client) id 7efa40f3-bfae-45de-a3e4-16f9611f4e0b;
+Bing Account ID 180767648; Customer ID 251427668. Real secrets live ONLY in the
+gitignored bing_credentials.txt and Supabase edge secrets.
+
+================================================================================
+NEXT STEPS (in order, once a working dev token is obtained)
+================================================================================
+1. UPDATE THE DEV TOKEN:
+   - Update BING_ADS_DEVELOPER_TOKEN in Supabase edge secrets (dashboard) AND in
+     bing_credentials.txt line 4.
+   - If a new refresh token is also minted (new account), seed it:
+       insert into public.oauth_token_store(provider, refresh_token)
+       values ('bing_ads', '<new refresh token>')
+       on conflict (provider) do update set refresh_token = excluded.refresh_token,
+         updated_at = now();
+     (The function prefers the store over the secret; also update the secret as the
+     seed.) If unsure, DELETE the bing_ads row so it re-seeds from the secret:
+       delete from public.oauth_token_store where provider='bing_ads';
+
+2. VERIFY AUTH then BACKFILL:
+   - Quick check: a GetUser REST call should now return the user (no 105). Or just
+     run the backfill:
+       curl -sS -X POST "https://aivitcomiywiysrfwqxt.supabase.co/functions/v1/\
+         bing-ads-campaign-monthly-sync?sync=1" -H "Content-Type: application/json"
+   - Expect {"ok":true, upserted, distinct_months, first_month, last_month,
+     total_cost}.
+
+3. CLEAR SENTINELS (only after step 2 returns real campaign rows):
+       delete from public.bing_ads_campaign_monthly where campaign_id=0;
+   Then re-run the backfill (step 2) so real per-campaign rows are present with no
+   double-count.
+
+4. SCHEDULE THE WEEKLY CRON:
+   Apply migration 20261023091000_schedule_bing_ads_campaign_monthly_sync.sql
+   (Supabase MCP apply_migration or CLI). Verify via cron.job.
+
+5. REDEPLOY THE DASHBOARD (MANUAL — the user does this, Claude never does):
+     gcloud run deploy dashboard --source . --region australia-southeast1
+   (omit --set-secrets so existing secrets are kept). roas.js already reads
+   bing_ads_campaign_monthly, so once it has real rows the All-in ROAS reflects Bing.
+   NOTE: the dashboard redeploy is ONLY needed for the roas.js/roas.html rebuild
+   from the prior session's ROAS work; the Bing table read is already in the code.
+
+================================================================================
+OPTIONAL / FUTURE
+================================================================================
+- The edge function is a reusable template: adding keyword/search-query/geo
+  performance = a new report request type + table + (new or extended) edge fn.
+- oauth_token_store is generic (keyed by provider) — reusable for any future
+  rotating-OAuth sync.
+- Email to Matt (Super Admin) was drafted in-chat; still needs Matt's email +
+  the user's Microsoft-account email to send.
+================================================================================

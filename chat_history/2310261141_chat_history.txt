@@ -1,0 +1,236 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-23
+Session: Connect Microsoft Advertising (Bing Ads) to the dashboard — walkthrough of
+obtaining API credentials, then building/deploying the live monthly-spend sync edge
+function. Ended BLOCKED on a Microsoft-side credential issue (dev token / user mismatch).
+================================================================================
+
+NOTE ON REDACTIONS: This session involved live OAuth credentials pasted into the chat.
+The following were present and have been REDACTED here: the Azure app CLIENT SECRET
+([REDACTED_CLIENT_SECRET]), OAuth authorization codes ([REDACTED_AUTH_CODE]), OAuth
+access tokens ([REDACTED_ACCESS_TOKEN]), OAuth refresh tokens ([REDACTED_REFRESH_TOKEN]),
+and the Microsoft Advertising developer tokens ([REDACTED_DEV_TOKEN]). Non-secret
+identifiers are kept as-is: Azure Application (client) ID 7efa40f3-bfae-45de-a3e4-16f9611f4e0b,
+Bing Ads Account ID 180767648 (CustomerAccountId), Customer ID 251427668 (CustomerId).
+The real values live only in the gitignored file bing_credentials.txt and in Supabase
+edge secrets — never commit them.
+
+--------------------------------------------------------------------------------
+USER:
+(/q) Walk me through connecting Bing Ads billing. What credentials do we need and how
+do I obtain each?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read server/metrics/roas.js and the existing scaffold supabase/functions/bing-ads-campaign-
+monthly-sync/index.ts. Explained that "connecting Bing billing" means filling
+public.bing_ads_campaign_monthly (the Bing half of the ROAS All-in cost basis) via the
+bing-ads-campaign-monthly-sync edge function, which was a SCAFFOLD (OAuth + upsert done;
+the Reporting API call a TODO). Listed the six required secrets — BING_ADS_CLIENT_ID,
+BING_ADS_CLIENT_SECRET, BING_ADS_REFRESH_TOKEN, BING_ADS_DEVELOPER_TOKEN,
+BING_ADS_ACCOUNT_ID, BING_ADS_CUSTOMER_ID — and how to get each (Azure app registration
+for client id/secret; Microsoft Advertising developer portal for the dev token; the
+account/customer IDs from the Ads UI/URL; the refresh token via a one-time OAuth consent
+flow). Flagged the temporary sentinel rows (campaign_id=0 '__sheet_total__') that must be
+deleted before the live per-campaign sync runs, and that the Reporting code was still a TODO.
+
+--------------------------------------------------------------------------------
+USER:
+(/q) Azure says "creating applications outside of a directory is deprecated — join the
+M365 Developer Program or sign up for Azure." Do I join the M365 Developer Program?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+No — recommended signing up for a free Azure account instead (gives a free Entra directory;
+app registration is free). Advised doing it under a MAG-owned Microsoft account rather than
+a personal one, and noted the app-registration directory need not be MAG's ad-account tenant
+because the app is multi-tenant (/common endpoint).
+
+--------------------------------------------------------------------------------
+USER:
+(/q) I have a free Azure account, what's next?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Walked through registering the app (Entra ID → App registrations → New registration;
+multi-tenant + personal accounts; redirect URI https://login.microsoftonline.com/common/
+oauth2/nativeclient), copying the Application (client) ID, creating a client secret, and
+adding the msads.manage permission. Noted the other four credentials come from Microsoft
+Advertising (needs Super Admin) and the refresh token from the OAuth flow.
+
+--------------------------------------------------------------------------------
+USER:
+I am admin. Where do I get BING_ADS_ACCOUNT_ID, BING_ADS_CUSTOMER_ID, BING_ADS_REFRESH_TOKEN?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Account ID (aid) and Customer ID (cid) come from the Ads UI URL / Account settings;
+developer token from the Developer Portal. Refresh token: gave the two-step OAuth flow
+(authorize URL → copy ?code=… → exchange via curl for a refresh_token). Warned the refresh
+token is a live credential — Supabase secrets only, never the repo.
+
+--------------------------------------------------------------------------------
+USER:
+The account I use for Bing Ads admin is a Gmail. Getting an error.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained Microsoft's API OAuth (login.microsoftonline.com) won't issue tokens for a
+Google-federated login. Recommended adding a Microsoft/Outlook account as a user on the
+Bing Ads account and doing the consent with that.
+
+--------------------------------------------------------------------------------
+USER:
+Tried a free Outlook and the Azure account: "You can't sign in here with a personal
+account. Use your work or school account instead."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Diagnosed the app registration's signInAudience excluded personal accounts. Told them to
+set Supported account types to AzureADandPersonalMicrosoftAccount (Authentication blade or
+Manifest).
+
+--------------------------------------------------------------------------------
+USER:
+Manifest save failed: "Property api.requestedAccessTokenVersion is invalid."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained personal accounts require v2 tokens — set api.requestedAccessTokenVersion to 2
+in the same manifest edit alongside the signInAudience change.
+
+--------------------------------------------------------------------------------
+USER:
+(ran the token-exchange curl, but with the literal YOUR_CLIENT_ID / PASTE_CODE_HERE
+placeholders) → AADSTS9002313 invalid request.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Pointed out the placeholders weren't substituted; gave the full authorize→exchange sequence
+with real values and the single-use/short-lived nature of the auth code.
+
+--------------------------------------------------------------------------------
+USER:
+(ran the real exchange) → success, got token_type Bearer + [REDACTED_ACCESS_TOKEN] +
+[REDACTED_REFRESH_TOKEN].
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed the refresh_token = BING_ADS_REFRESH_TOKEN (now 3 of 6 creds). Flagged the MSA
+refresh-token rotation trap (personal-account refresh tokens are single-use; the scaffold's
+getAccessToken discarded the rotated token → the weekly job would die after one run) and
+said I'd build token persistence into the function. Asked whether they had the dev token +
+account/customer IDs.
+
+--------------------------------------------------------------------------------
+USER:
+Pointed me at C:\Users\Cloverly\claude_code\dashboard\bing_credentials.txt.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the file; confirmed it's gitignored (git check-ignore). 5 of 6 present
+(DEVELOPER_TOKEN=[REDACTED_DEV_TOKEN], ACCOUNT_ID=180767648, CUSTOMER_ID=251427668, client
+id/secret), but line 7 (BING_ADS_REFRESH_TOKEN) was blank and they'd saved the auth CODE
+by mistake. Showed which value (the .0. refresh token, not the .2. code) to paste.
+
+--------------------------------------------------------------------------------
+USER:
+Updated the file.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Verified all six present. Laid out the remaining work (set Supabase secrets, finish
+pullCampaignMonthly, add token persistence, clear sentinels, deploy, backfill, redeploy
+dashboard) and asked to proceed.
+
+--------------------------------------------------------------------------------
+USER:
+Done step 1 (set the six Supabase edge secrets). Do the rest.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Researched the Microsoft Advertising Reporting API v13 (learn.microsoft.com): found a REST
+variant (JSON, no SOAP) — Submit/Poll endpoints under
+https://reporting.api.bingads.microsoft.com/Reporting/v13/GenerateReport; headers
+Authorization/DeveloperToken/CustomerAccountId/CustomerId; report always ZIP-compressed;
+monthly rows labelled first-of-month yyyy-mm-dd; AU timezone value "CanberraMelbourneSydney".
+Then implemented it:
+- Rewrote supabase/functions/bing-ads-campaign-monthly-sync/index.ts: full REST flow
+  (submit CampaignPerformanceReport Aggregation=Monthly → poll to Success → download zip →
+  unzip via fflate → parse CSV → upsert on (month, campaign_id)), PLUS MSA refresh-token
+  persistence (reads the latest token from a new public.oauth_token_store, falls back to the
+  BING_ADS_REFRESH_TOKEN secret as a seed, writes the rotated token back every run; retries
+  with the seed if a stored token is dead).
+- Added migration 20261023090000_oauth_token_store.sql (table public.oauth_token_store,
+  RLS on/no policies) and 20261023091000_schedule_bing_ads_campaign_monthly_sync.sql (weekly
+  pg_cron, Sun 22:00 UTC = Mon 06:00 PH, 150s pg_net timeout). Applied the oauth_token_store
+  migration via Supabase MCP; held the cron migration until the backfill works.
+- Deployed the edge function via Supabase MCP with verify_jwt:false (version 1).
+- Confirmed the table held only the 16 sentinel rows (campaign_id=0, ~$16,787) — left them
+  in place so Bing keeps its estimate (no $0 gap) until the live sync works.
+- Backfill curl → "Submit 401 … Code 105 InvalidCredentials." The function ran end-to-end
+  (OAuth mint OK); Microsoft's Reporting API rejected the credentials.
+- Ran a GetUser/GetAccountsInfo diagnostic (scratchpad script, since deleted): GetUser —
+  which needs NO account access — also returned Code 105. So the problem is the OAuth
+  identity or the developer token, NOT the account IDs.
+
+--------------------------------------------------------------------------------
+USER:
+(re-minted a token under a different account; code prefix changed) → new
+[REDACTED_REFRESH_TOKEN].
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Seeded the new token into public.oauth_token_store (bing_ads) via SQL and re-ran the
+backfill → still Code 105. Fetched the Microsoft "Get Started" docs: a UNIVERSAL developer
+token works for any user; a SINGLE-USER token only for the user it's bound to. Two identities
+had now failed with the same dev token, pointing at the dev token (or an unaccepted user).
+
+--------------------------------------------------------------------------------
+USER:
+(supplied a second dev token [REDACTED_DEV_TOKEN]) ; later clarified via questions: signed
+in as the Microsoft account they CAN see MAG's account/campaigns; but the developer token
+was generated while signed in as the GMAIL admin; their Microsoft account's role is Standard
+(not Super Admin); only one person (Matt) currently has Super Admin.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran further GetUser diagnostics (scratchpad scripts, since deleted) with both dev tokens and
+the Microsoft-account refresh token — all Code 105. Tried to read the identity via an id_token
+(openid scope) but AADSTS70000 (scopes not consented) — the msads.manage refresh token itself
+is still valid. Concluded the root cause: we OAuth as the Microsoft (Standard) account, but
+present a developer token bound to the Gmail Super Admin (single-user) → 105 on every call,
+even GetUser. Fix: the developer token and the OAuth identity must be the SAME user — either
+(a) promote the Microsoft account to Super Admin so it can issue its own token, or (b) get a
+genuinely Universal dev token from the Gmail Super Admin. Confirmed multiple Super Admins are
+allowed. Answered two interleaved /q questions: (1) once access works we can also fetch ad
+PERFORMANCE data (impressions/clicks/CPC/keyword/search-query), not just spend, and create
+new syncs — the function is a reusable template; (2) ad COST/impressions are Bing-only data
+GA4 structurally cannot provide, so the sync is the right direction (it's the missing cost
+half of ROAS).
+
+--------------------------------------------------------------------------------
+USER:
+Compose an email for Matt (the current Super Admin) — I need either a universal dev token or
+to be promoted to Super Admin. Then: shorten it, make it direct.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Drafted (and then tightened) an email to Matt requesting Option 1 (promote the Microsoft
+account to Super Admin → self-issue a dev token, preferred) or Option 2 (provide a Universal
+developer token). Asked for Matt's email + the user's Microsoft-account email to send/draft it
+(not sent — awaiting those).
+
+--------------------------------------------------------------------------------
+USER:
+(/dcp) Document the session (no git) and create a text file for where we left off + next steps.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote this chat history (secrets redacted), created BING_SYNC_NEXT_STEPS.txt, updated
+as_built.txt and CLAUDE.md for the Bing sync implementation + oauth_token_store, and confirmed
+.gitignore already covers bing_credentials.txt. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================
