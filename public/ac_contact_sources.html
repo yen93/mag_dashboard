@@ -667,7 +667,11 @@
       if (ROAS_ROWS === null) {
         host.innerHTML = '<div class="muted" style="padding:14px">Loading ROAS-counted deals…</div>';
         fetchJSON('/api/operations/contact-sources/roas-counted').then(function (data) {
-          ROAS_ROWS = (data.rows && data.rows.data) || [];
+          // Alias status/value → dealStatus/dealValue so the shared renderKpis (default-view
+          // cards) can read these canonical rows unchanged. channel comes from the endpoint.
+          ROAS_ROWS = ((data.rows && data.rows.data) || []).map(function (r) {
+            r.dealStatus = r.status; r.dealValue = r.value; return r;
+          });
           renderRoasView();
         }).catch(function (err) {
           host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load ROAS-counted deals</strong><span>' + esc(err.message) + '</span></div>';
@@ -681,25 +685,11 @@
       var from = parseInput('acsFrom'), to = parseInput('acsTo');
       // Date range still applies (by the deal's resolved cdate); rows with no cdate are kept.
       var rows = ROAS_ROWS.filter(function (r) { return !r.cdate || inRange(r.cdate, from, to); });
-      renderRoasKpis(rows);
+      // SAME KPI cards as the default view (renderKpis reads dealStatus/dealValue/channel,
+      // which the fetch mapped onto each canonical row). renderRoasTable wires onFilter back
+      // to renderKpis so the cards recompute as the in-table search/column filters narrow the set.
+      renderKpis(rows);
       renderRoasTable(rows);
-    }
-
-    function renderRoasKpis(rows) {
-      var won = rows.filter(function (r) { return r.status === 'won'; });
-      var wonVal = won.reduce(function (a, r) { return a + (Number(r.value) || 0); }, 0);
-      var openVal = rows.reduce(function (a, r) { return a + (r.status === 'open' ? (Number(r.value) || 0) : 0); }, 0);
-      var host = document.getElementById('acsKpis');
-      if (!host) return;
-      host.innerHTML =
-        kpi('ROAS-counted deals', rows.length, 'won + lost + open', '',
-            'Deals in the canonical ROAS-counted set (same set the ROAS tab counts).') +
-        kpi('Won', won.length, 'deals', won.length ? 'pos' : '',
-            'Won deals in the ROAS-counted set — reconciles with the ROAS tab Won column per FY.') +
-        kpi('Won value', money(wonVal), 'AUD', '',
-            'Sum of won deal value (AUD) — matches the ROAS tab Won Revenue.') +
-        kpi('Open pipeline', money(openVal), 'AUD', '',
-            'Sum of open deal value (AUD) in the ROAS-counted set.');
     }
 
     function renderRoasTable(rows) {
@@ -722,6 +712,7 @@
           var el = document.getElementById('acsCount');
           if (el) el.textContent = shown === total ? (total + ' deals') : (shown + ' of ' + total + ' deals');
         },
+        onFilter: function (filteredList) { renderKpis(filteredList); },
       });
     }
 

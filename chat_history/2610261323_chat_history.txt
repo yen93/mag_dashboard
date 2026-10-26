@@ -1,0 +1,51 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-26
+Session: Follow-up to the canonical-ROAS-view build (full build logged in
+2610261310_chat_history.txt). Made the GA4 & Ads Leads "ROAS-counted only" view
+reuse the SAME KPI cards as the default view, auto-updating as the ROAS-counted
+table is filtered.
+================================================================================
+
+NOTE ON REDACTIONS: No secrets this session. Supabase reached via MCP (SELECT
+only); no credentials appeared.
+
+--------------------------------------------------------------------------------
+USER: In ac_contact_sources.html, the "ROAS-counted only" view should show the
+SAME cards as the default view, and the card values should auto-update when I
+filter through the ROAS-counted-only filters.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+The ROAS-counted view had been given 4 custom KPI cards; switched it to reuse the
+default-view card set and recompute on filter.
+  • server/metrics/roas-counted.js: the endpoint now also returns `channel`,
+    LEFT-JOINed from ga4_ac_contact_source by deal_id (deal_id is unique there →
+    no fan-out; NULL for Niki/non-GA4 deals), so the default channel cards have
+    data to read. Verified via MCP: 171 rows (no fan-out), but only 3 carry a
+    GA4 channel (all cpc) — GA4 channel is only retained ~60 days, so it's sparse
+    for the mostly-older ROAS-counted set.
+  • public/ac_contact_sources.html: ROAS-counted mode now calls the shared
+    renderKpis() (identical 6 default cards) instead of the removed custom
+    renderRoasKpis(); on fetch each canonical row is aliased status→dealStatus and
+    value→dealValue so renderKpis reads them unchanged; renderRoasTable now passes
+    onFilter: renderKpis so the cards recompute on every in-table search / column
+    filter (date-range changes already re-run renderRoasView → renderKpis).
+Verified: node --check on roas-counted.js OK; inline page script parses via
+vm.compileFunction.
+Flagged the caveat to the user: 4 of the 6 default cards are channel breakdowns
+(Paid/Organic Google/Bing) which will read near-zero here (only 3/171 deals have a
+known channel), while Total Revenue + Total Leads are fully meaningful; offered to
+swap just those four for ROAS-relevant cards (Won/Won value/Lost/Open) if desired.
+Noted a manual Cloud Run redeploy is needed (endpoint + page change; no migration).
+
+--------------------------------------------------------------------------------
+USER: /dcp (this invocation).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this transcript; updated as_built.txt + CLAUDE.md for the reused-cards +
+channel-on-endpoint change; checked .gitignore. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

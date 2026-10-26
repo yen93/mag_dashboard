@@ -9,23 +9,28 @@ import { section } from '../lib/metric.js';
 
 const SRC = 'Live (Supabase): public.roas_counted_deals view';
 
+// `channel` is LEFT-JOINed from ga4_ac_contact_source by deal_id so the page's KPI cards
+// (Paid Google / Bing, Organic …) have data where a GA4 session channel is known. deal_id is
+// unique in that table, so the join can't fan out. NULL for Niki / non-GA4 deals.
 const SELECT = `
   SELECT
-    row_key AS "rowKey",
-    deal_id AS "dealId",
-    fy_end  AS "fyEnd",
-    fy      AS "fy",
-    cdate   AS "cdate",
-    status  AS "status",
-    value   AS "value",
-    source  AS "source",
-    org     AS "org",
-    title   AS "title",
-    email   AS "email",
-    method  AS "method",
-    comment AS "comment"
-  FROM public.roas_counted_deals
-  ORDER BY fy_end DESC, status, value DESC NULLS LAST`;
+    v.row_key AS "rowKey",
+    v.deal_id AS "dealId",
+    v.fy_end  AS "fyEnd",
+    v.fy      AS "fy",
+    v.cdate   AS "cdate",
+    v.status  AS "status",
+    v.value   AS "value",
+    v.source  AS "source",
+    v.org     AS "org",
+    v.title   AS "title",
+    v.email   AS "email",
+    v.method  AS "method",
+    v.comment AS "comment",
+    cs.channel AS "channel"
+  FROM public.roas_counted_deals v
+  LEFT JOIN public.ga4_ac_contact_source cs ON cs.deal_id = v.deal_id
+  ORDER BY v.fy_end DESC, v.status, v.value DESC NULLS LAST`;
 
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
@@ -51,6 +56,7 @@ export async function getRoasCounted() {
     email: r.email || '',
     method: r.method || '',
     comment: r.comment || '',
+    channel: r.channel || '',
   }));
   const won = rows.filter((r) => r.status === 'won').length;
   return {

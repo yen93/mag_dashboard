@@ -446,10 +446,15 @@ Cloud Run.
       When ON, the table **switches its data source** to the canonical view
       `public.roas_counted_deals` via **`GET /api/operations/contact-sources/roas-counted`**
       (`server/metrics/roas-counted.js`), rendering its OWN columns
-      (FY/Date/Org/Deal/Status/Value/Source/Method) with its OWN KPIs and table-state
-      (`ROAS_TABLE_STATE`); rows are lazy-fetched once into `ROAS_ROWS`. This is the SAME set the
-      ROAS tab aggregates, so the page's ROAS-counted list reconciles with the ROAS tab per FY —
-      and it can now show deals the page otherwise can't (Niki FY22–24, off-page clover deals).
+      (FY/Date/Org/Deal/Status/Value/Source/Method) + OWN `ROAS_TABLE_STATE`, but **reusing the
+      SAME KPI cards as the default view** (the shared `renderKpis()`, recomputed on every in-table
+      filter via `onFilter`). Rows are lazy-fetched once into `ROAS_ROWS` and aliased
+      `status→dealStatus` / `value→dealValue` so `renderKpis` reads them; the endpoint also returns
+      `channel` (LEFT JOIN `ga4_ac_contact_source` by deal_id) for the channel cards. **Caveat:**
+      those 4 channel-breakdown cards read near-zero here (GA4 channel is ~60-day-retained; only
+      ~3/171 ROAS-counted deals have one) — Total Revenue/Leads are the meaningful cards. This is
+      the SAME set the ROAS tab aggregates, so the ROAS-counted list reconciles with the ROAS tab
+      per FY — and it can show deals the page otherwise can't (Niki FY22–24, off-page clover deals).
       **The page's default view + every other filter are UNTOUCHED** (still read
       `ga4_ac_contact_source` via `getAcContactSources()`). The old client `isRoasCounted()`
       predicate (and its `filteredRows()` branch) was **RETIRED — do not re-add a row-filter**.
