@@ -9,6 +9,7 @@
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { section } from '../lib/metric.js';
+import { acValueAud } from '../lib/sql.js';
 
 const SRC = 'GA4 + Calendly → ActiveCampaign (Supabase cache)';
 
@@ -22,7 +23,9 @@ const SRC = 'GA4 + Calendly → ActiveCampaign (Supabase cache)';
 //   conversionAction  — the matched GA4 conversion event (calendly_form_submit for
 //                       Calendly; "form_submit" fallback for time-matched forms).
 //   conversion_link   — the page path the conversion event fired on (link / conversionLink).
-//   deal_*            — the AC deal for the contact (value already in AUD, status mapped).
+//   deal_*            — the AC deal for the contact (status mapped). NB: the displayed
+//                       value is NOT cs.deal_value but activecampaign_deals.value joined
+//                       live by deal_id (cents→AUD), to match ROAS — see the SELECT.
 //   source_type       — AC deal "Inbound/ Outbound?" field.
 //   cpc               — paid-ad cost per conversion (AUD), when known.
 //   engagement_fee / other_fees / gst / amount_total
@@ -59,7 +62,12 @@ const SELECT = `
     cs.google_ads_ac_field AS "googleAdsAcField",
     cs.deal_source_ac_field AS "dealSourceAcField",
     cs.deal_title          AS "dealTitle",
-    cs.deal_value          AS "dealValue",
+    -- Displayed deal value = activecampaign_deals.value joined by deal_id (cents→AUD, USD
+    -- converted) — NOT the denormalized cs.deal_value. This is the SAME source ROAS uses
+    -- (roas.js / roas-deals.js via acValueAud), so the "ROAS-counted only" deal values on
+    -- this page match the ROAS tab exactly. No fallback: a blank here means the daily
+    -- activecampaign_deals sync is stale (intentional signal).
+    ${acValueAud('ad')}    AS "dealValue",
     cs.deal_status         AS "dealStatus",
     cs.source_type         AS "sourceType",
     cs.cpc                 AS "cpc",
@@ -89,6 +97,7 @@ const SELECT = `
        WHERE cad.deal_id = cs.deal_id LIMIT 1) AS "finalGadsTag"
   FROM public.ga4_ac_contact_source cs
   LEFT JOIN public.ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id
+  LEFT JOIN public.activecampaign_deals ad ON ad.id::text = cs.deal_id
   ORDER BY cs.cdate DESC NULLS LAST`;
 
 const EXCLUDED_CONVERSION_LINKS = new Set([

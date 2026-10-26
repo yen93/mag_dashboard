@@ -17,8 +17,9 @@
 //         (0 until the simple-digital-fees-sync routine runs).
 //       - Won/Lost/Open + won revenue = COUNTED SET = clover_audited_deals
 //         final_gads_tag='Yes'  UNION (by deal_id)  ga4_ac_contact_source rows whose
-//         channel ~* 'cpc'. Deal value from the audit's deal_value_aud_crm (text "$9,500"
-//         → numeric), falling back to GA4 deal_value for cpc-only rows not in the audit.
+//         channel ~* 'cpc'. Deal value = activecampaign_deals.value joined by deal_id
+//         (cents→AUD, USD converted at USD_AUD_RATE) — the SAME source the GA4 & Ads Leads
+//         page displays, so the "ROAS-counted" deal values there match these figures.
 //
 // Two cost bases are returned per row (Google-only and All-in = Google+Bing+SD); the
 // frontend toggles between them client-side. Only FYs that have ad spend are shown.
@@ -28,6 +29,7 @@
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { section } from '../lib/metric.js';
+import { acValueAud } from '../lib/sql.js';
 
 const SRC =
   'Live (Supabase): FY22–24 niki_ad_leads_tracking; FY25+ google_ads_campaign_monthly + ' +
@@ -82,27 +84,31 @@ const SELECT = `
   ),
   clover_yes AS (
     -- FY25+ counted set (part 1): audited deals tagged Google Ads. fiscal_year is already
-    -- END-year "FYxx". deal_value_aud_crm is text "$9,500" → strip to numeric.
-    SELECT deal_id,
-      right(fiscal_year, 2)::int + 2000 AS fy_end,
-      lower(btrim(status))              AS st,
-      nullif(regexp_replace(coalesce(deal_value_aud_crm, ''), '[^0-9.]', '', 'g'), '')::numeric AS val
-    FROM public.clover_audited_deals
-    WHERE lower(btrim(final_gads_tag)) = 'yes'
-      AND fiscal_year ~ '^FY[0-9]{2}$'
-      AND lower(coalesce(deal_crm_title, '')) NOT LIKE 'uniting%'
+    -- END-year "FYxx". Deal value = activecampaign_deals.value (cents→AUD, USD converted)
+    -- joined by deal_id — the SAME source the GA4 & Ads Leads page shows, so the two agree.
+    SELECT c.deal_id,
+      right(c.fiscal_year, 2)::int + 2000 AS fy_end,
+      lower(btrim(c.status))              AS st,
+      ${acValueAud('ad')}                 AS val
+    FROM public.clover_audited_deals c
+    LEFT JOIN public.activecampaign_deals ad ON ad.id::text = c.deal_id::text
+    WHERE lower(btrim(c.final_gads_tag)) = 'yes'
+      AND c.fiscal_year ~ '^FY[0-9]{2}$'
+      AND lower(coalesce(c.deal_crm_title, '')) NOT LIKE 'uniting%'
   ),
   ga4cpc AS (
     -- FY25+ counted set (part 2): GA4-matched contacts on a cpc channel. FY derived END-year
-    -- from cdate (do NOT trust the generated START-year fy column). deal_value is AUD.
-    SELECT deal_id,
-      extract(year FROM cdate)::int + CASE WHEN extract(month FROM cdate) >= 7 THEN 1 ELSE 0 END AS fy_end,
-      lower(btrim(deal_status)) AS st,
-      deal_value                AS val
-    FROM public.ga4_ac_contact_source
-    WHERE channel ~* 'cpc'
-      AND deal_id IS NOT NULL
-      AND lower(coalesce(deal_title, '')) NOT LIKE 'uniting%'
+    -- from cdate (do NOT trust the generated START-year fy column). Deal value =
+    -- activecampaign_deals.value (cents→AUD, USD converted) by deal_id — same source as the page.
+    SELECT cs.deal_id,
+      extract(year FROM cs.cdate)::int + CASE WHEN extract(month FROM cs.cdate) >= 7 THEN 1 ELSE 0 END AS fy_end,
+      lower(btrim(cs.deal_status)) AS st,
+      ${acValueAud('ad')}          AS val
+    FROM public.ga4_ac_contact_source cs
+    LEFT JOIN public.activecampaign_deals ad ON ad.id::text = cs.deal_id::text
+    WHERE cs.channel ~* 'cpc'
+      AND cs.deal_id IS NOT NULL
+      AND lower(coalesce(cs.deal_title, '')) NOT LIKE 'uniting%'
   ),
   combined_deals AS (
     SELECT deal_id, fy_end, st, val FROM clover_yes

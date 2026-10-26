@@ -10,6 +10,7 @@
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { section } from '../lib/metric.js';
+import { acValueAud } from '../lib/sql.js';
 
 const SRC =
   'Live (Supabase): FY22–24 niki_ad_leads_tracking; FY25+ clover_audited_deals ' +
@@ -32,20 +33,23 @@ const SELECT = `
       AND lower(coalesce(company, '')) NOT LIKE 'uniting%'
   ),
   clover_src AS (
-    SELECT deal_id,
-      right(fiscal_year, 2)::int + 2000 AS fy_end,
-      inquiry_date                      AS date,
-      organization                      AS org,
-      deal_crm_title                    AS title,
-      initcap(lower(btrim(status)))     AS status,
-      nullif(regexp_replace(coalesce(deal_value_aud_crm, ''), '[^0-9.]', '', 'g'), '')::numeric AS value,
-      lower(btrim(final_gads_tag))      AS gtag,
-      coalesce(nullif(btrim(james_final_attribution), ''), nullif(btrim(attribution), '')) AS eff_attr,
-      james_comments                    AS comment
-    FROM public.clover_audited_deals
-    WHERE fiscal_year ~ '^FY[0-9]{2}$'
-      AND right(fiscal_year, 2)::int + 2000 >= 2025
-      AND lower(coalesce(deal_crm_title, '')) NOT LIKE 'uniting%'
+    -- Deal value = activecampaign_deals.value joined by deal_id (cents→AUD, USD converted) —
+    -- the same source roas.js and the GA4 & Ads Leads page use, so the numbers reconcile.
+    SELECT c.deal_id,
+      right(c.fiscal_year, 2)::int + 2000 AS fy_end,
+      c.inquiry_date                      AS date,
+      c.organization                      AS org,
+      c.deal_crm_title                    AS title,
+      initcap(lower(btrim(c.status)))     AS status,
+      ${acValueAud('ad')}                 AS value,
+      lower(btrim(c.final_gads_tag))      AS gtag,
+      coalesce(nullif(btrim(c.james_final_attribution), ''), nullif(btrim(c.attribution), '')) AS eff_attr,
+      c.james_comments                    AS comment
+    FROM public.clover_audited_deals c
+    LEFT JOIN public.activecampaign_deals ad ON ad.id::text = c.deal_id::text
+    WHERE c.fiscal_year ~ '^FY[0-9]{2}$'
+      AND right(c.fiscal_year, 2)::int + 2000 >= 2025
+      AND lower(coalesce(c.deal_crm_title, '')) NOT LIKE 'uniting%'
   ),
   cpc_ids AS (
     -- Every GA4 cpc-channel deal id. The counted set = clover Yes ∪ these (matches roas.js).
@@ -75,11 +79,12 @@ const SELECT = `
       cs.deal_title                    AS org,
       cs.deal_title                    AS title,
       initcap(lower(btrim(cs.deal_status))) AS status,
-      cs.deal_value                    AS value,
+      ${acValueAud('ad')}              AS value,
       'GA4 cpc channel'                AS method,
       NULL                             AS comment,
       'counted'                        AS grp
     FROM public.ga4_ac_contact_source cs
+    LEFT JOIN public.activecampaign_deals ad ON ad.id::text = cs.deal_id::text
     WHERE cs.channel ~* 'cpc'
       AND cs.deal_id IS NOT NULL
       AND lower(coalesce(cs.deal_title, '')) NOT LIKE 'uniting%'

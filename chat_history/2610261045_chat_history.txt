@@ -1,0 +1,144 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-26
+Session: Unified the deal-value SOURCE between the ROAS tab (roas.html) and the
+GA4 & Ads Leads page's "ROAS-counted only" filter (ac_contact_sources.html) so
+the won deal values match — both now derive value from activecampaign_deals.value
+(cents→AUD, USD converted at a hardcoded rate) via a shared SQL helper. Began as a
+/q read-only investigation, iterated into a design, then implemented.
+================================================================================
+
+NOTE ON REDACTIONS: No live secrets were pasted into this chat. Supabase was
+queried via the read-only MCP (SELECT only); no connection strings, keys, or
+tokens appeared. The Supabase project ref (aivitcomiywiysrfwqxt) is already in
+the committed codebase/CLAUDE.md.
+
+--------------------------------------------------------------------------------
+USER (/q):
+"what do we do so that the ROAS deals won value in roas.html and the
+'roas-counted only' deal values in ac_contact_sources.html will be the same"
+(Read-only investigate mode — no changes.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read server/metrics/roas.js, server/metrics/roas-deals.js, server/lib/sql.js
+(CONTACT_SOURCE_SHOWN), and the isRoasCounted/dealValue logic in
+public/ac_contact_sources.html.
+
+Explained they won't match as built, for THREE independent reasons:
+  1. Different value column per deal — roas.js uses the clover audit's
+     deal_value_aud_crm (text "$9,500"→numeric); the page sums r.dealValue =
+     the GA4 cache's deal_value (= activecampaign_deals.value/100 for matched
+     rows, ac_google_ads_deals AUD for gads rows).
+  2. Different deal universe — roas.js counts by deal_id regardless of page
+     visibility; the page's "ROAS-counted only" = rows VISIBLE on the page
+     (EXCLUDED_DEAL_IDS / nikiOutbound / uniting hidden; 60-day window) + all
+     FY22–24 Niki revenue has no page counterpart at all.
+  3. Dedup/grain — roas.js is per-deal_id; the page is per-contact, so a deal
+     on several contacts can be summed more than once.
+
+Confirmed live with a SELECT: for FY25+ won final_gads_tag='Yes' deals, roas.js
+sums $95,500 (11 deals) vs the page's $83,000 for the same deals — 1 deal not on
+the page, 1 value differing. Offered to draft the fix for problem 1.
+
+--------------------------------------------------------------------------------
+USER (/q):
+Proposed fix for problem 1: use activecampaign_deals.value for both
+clover_audited_deals and ga4_ac_contact_source — join it to each and use it as
+the displayed value. "Is this enough for prob 1?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Verified the proposal against data (still /q, read-only). Ran a per-deal_id
+comparison of the three value sources for the 11 FY25+ won Yes deals:
+  • audit deal_value_aud_crm == activecampaign_deals.value/100 for ALL 11
+    (so the audit-vs-AC distinction was a non-issue for this set), BUT
+  • deal 2881: page showed $6,000 while AC value is $8,000 (stale gads cache
+    value), and deal 3598 ($10,500) is absent from the page entirely.
+    $2,000 + $10,500 = the $12,500 gap exactly.
+  • All 11 were match_method=null (gads rows) → page value sourced from
+    ac_google_ads_deals, which is why 2881 was stale.
+Checked full counted-set coverage: 44/44 FY25+ counted deals have an
+activecampaign_deals row, 0 non-AUD.
+
+Verdict: the approach IS right for problem 1 and actually fixes the stale value,
+with four caveats — (A) value is in CENTS, divide by 100; (B) apply as a
+READ-TIME join, don't rewrite the rebuild-owned cache column; (C) coverage is
+100% today so null-risk is low (user later declined a fallback); (D) currency —
+activecampaign_deals stores value+currency but NO AUD-converted amount and no FX
+rate, so USD can't truly be converted without a rate. Noted it does NOT fix
+problems 2 & 3.
+
+--------------------------------------------------------------------------------
+USER:
+Decisions on the four caveats: (1) convert to AUD on join, displayed value not in
+cents for both; (2) yes, leave the sources alone; (3) no fallback — AC deals syncs
+daily, and a blank would correctly signal the sync broke; (4) all displayed values
+in AUD, don't touch sources, just ensure display is AUD.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed 1–3 and flagged the real snag on 4: "not in cents" ≠ "in AUD". For AUD
+deals value/100 is AUD; for USD deals there's no stored rate to convert with.
+Noted it's moot today (0 USD in the counted set) and the page already ignores
+currency, so matching the page keeps the two equal. Asked whether to (a) do
+value/100 with no conversion, or (b) add a non-AUD guard.
+
+--------------------------------------------------------------------------------
+USER:
+"value/100 and then if it's in usd, then convert to AUD. check internet for the
+current exchange rate and use that rate moving forward."
+(This was the go-ahead to implement.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Fetched the USD→AUD rate (WebSearch). Standard search returned stale (~July 2026)
+figures; extended search returned fresh 2026-10-26 quotes clustering 1.422–1.425
+(Valuta 1.42269 stamped today, Xe 1.42207, MSN 1.4209, Wise ~1.423). Chose
+1.4227. Confirmed page-wide blast radius: 126/126 page deals with a deal_id have
+an AC row (0 would blank), 2 USD deals, 0 other currencies.
+
+IMPLEMENTED (5 files):
+1. server/lib/sql.js — added USD_AUD_RATE = 1.4227 (single source of truth) and
+   a shared helper acValueAud(alias) →
+   round((<alias>.value/100) * CASE WHEN lower(currency)='usd' THEN 1.4227 ELSE 1
+   END, 2). No fallback by design.
+2. server/metrics/roas.js — imported acValueAud; rewrote clover_yes and ga4cpc
+   CTEs to LEFT JOIN public.activecampaign_deals ad ON ad.id::text=deal_id::text
+   and value via acValueAud('ad') (was audit deal_value_aud_crm / GA4 deal_value).
+   Qualified all clover columns with alias c. to avoid the shared `status` column
+   ambiguity. Updated the file-header comment.
+3. server/metrics/roas-deals.js — same switch in clover_src (aliased c.) and
+   ga4cpc (added the ad join).
+4. server/metrics/ac-contact-sources.js — imported acValueAud; page SELECT
+   dealValue now acValueAud('ad') via
+   LEFT JOIN public.activecampaign_deals ad ON ad.id::text = cs.deal_id (API
+   field name "dealValue" unchanged, so the client page/KPIs need no edit);
+   updated the deal_* header comment.
+5. Memory roas-tab-feature.md — recorded the value-source unification + the 1.4227
+   rate location.
+
+VALIDATION:
+  • Ran the new clover_yes ∪ ga4cpc won SQL: FY25 $54,250 · FY26 $33,750 ·
+    FY27 $7,500 = $95,500 total, 0 counted won deals missing a value — matches the
+    prior audit figure while now correcting the page's stale 2881 value.
+  • node --check passed on all four edited JS files.
+
+Reminded the user: needs a MANUAL Cloud Run redeploy (no migration, no edge-fn
+change — read-time joins only; Claude never deploys). This fixes problem 1 only;
+the two TOTALS still diverge by problem 2 (off-page + FY22–24 Niki deals) and
+problem 3 (per-contact dedup), which were deliberately left out of scope.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (this invocation — save chat history, update as_built.txt / CLAUDE.md /
+.gitignore; no git commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: saved this transcript, reviewed as_built.txt and CLAUDE.md for
+needed updates (ROAS deal-value sourcing), and checked .gitignore. No git
+operations performed.
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -1,5 +1,23 @@
 // Shared SQL fragments.
 
+// USD→AUD conversion rate, for displaying activecampaign_deals.value (stored in CENTS,
+// with a mixed-case `currency` that is mostly 'aud' but occasionally 'usd') as AUD
+// dollars. Mid-market rate fetched 2026-10-26 (Valuta/Xe/MSN/Wise clustered ~1.422–1.425).
+// Single source of truth — ROAS (roas.js / roas-deals.js) and the GA4 & Ads Leads page
+// (ac-contact-sources.js) all derive their displayed deal value from `acValueAud()` so the
+// numbers match exactly. Update this one constant when the rate drifts materially.
+export const USD_AUD_RATE = 1.4227;
+
+// SQL expression: an `public.activecampaign_deals` row aliased `<alias>` → its value in
+// AUD dollars (cents / 100, USD converted at USD_AUD_RATE). NULL when the row is absent
+// (deliberately no fallback — a blank means the activecampaign_deals daily sync broke).
+export function acValueAud(alias = 'ad') {
+  return (
+    `round((${alias}.value / 100.0) * ` +
+    `CASE WHEN lower(coalesce(${alias}.currency, '')) = 'usd' THEN ${USD_AUD_RATE} ELSE 1 END, 2)`
+  );
+}
+
 // Buckets the free-text lead-source/program taxonomy that MAG encodes in the
 // deal title after "//" (e.g. "Acme // Keynote"). `s` must be the lowercased,
 // trimmed suffix. Kept in one place so Sales/Marketing/Operations agree.
