@@ -151,9 +151,14 @@
     // Toggle for the Xero fee-breakdown columns (Engagement Fee, Other Fees, GST,
     // Amount Total — from mag_gads by deal_id). Default hidden; data stays in the DB.
     var SHOW_XERO_COLS = false;
-    // Quick filter: when on, show ONLY the rows counted by the ROAS tab (see
-    // isRoasCounted). Default off; the toolbar button flips it.
+    // Quick filter: when on, the table SWITCHES data source to the canonical deal-grained
+    // set public.roas_counted_deals (via /api/operations/contact-sources/roas-counted) — the
+    // SAME set the ROAS tab counts, so the two reconcile per FY. Default off. This is a
+    // SEPARATE data source + render path; the default view + all other filters below are
+    // unaffected and still read ga4_ac_contact_source. ROAS_ROWS is lazy-loaded on first use.
     var ROAS_ONLY = false;
+    var ROAS_ROWS = null;        // canonical rows, fetched once on first toggle
+    var ROAS_TABLE_STATE = {};   // separate table state so it doesn't clobber the default view's
 
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
@@ -485,28 +490,11 @@
       return true;
     }
 
-    // A row is "counted by the ROAS tab" if EITHER:
-    //   (a) WON numerator (as of 2026-10-22): a WON deal tagged final_gads_tag='Yes' — this
-    //       is what ROAS now counts for Won $/leads (mirrors server/metrics/roas.js won_audit
-    //       CTE over public.clover_audited_deals). KEEP IN SYNC with roas.js. OR
-    //   (b) the shownLeads basis (the ROAS Per-Lead-Value denominator): CONTACT_SOURCE_SHOWN
-    //       (effective JC tag OR cpc/organic, minus free-gift/excluded links) AND dealStatus
-    //       in won/lost/open AND calYr set. Mirrors server/lib/sql.js CONTACT_SOURCE_SHOWN.
-    // (Rows here have already cleared isExcludedRow, so EXCLUDED_DEAL_IDS / nikiOutbound /
-    // uniting are gone — so the filter reflects "ROAS-counted rows visible here".)
-    function isRoasCounted(r) {
-      if (!r || isExcludedRow(r)) return false;
-      // (a) WON numerator = final_gads_tag='Yes' won deals.
-      if (r.dealStatus === 'won' && String(r.finalGadsTag || '').trim().toLowerCase() === 'yes') return true;
-      // (b) shownLeads basis (Per-Lead-Value denominator).
-      if (r.calYr == null) return false;
-      if (['won', 'lost', 'open'].indexOf(r.dealStatus) === -1) return false;
-      if (r.jcManualTag && String(r.jcManualTag).trim()) return true; // effective JC tag branch
-      var act = (r.conversionAction || '').trim().toLowerCase();
-      if (act === 'free_gifts_opt_ins') return false;
-      if (isExcludedConversionLink(r.link || r.conversionLink)) return false;
-      return ORGANIC_OR_CPC.test(String(r.channel || ''));
-    }
+    // NOTE: the old client-side isRoasCounted() predicate (which filtered THIS page's
+    // ga4_ac_contact_source rows) was RETIRED on 2026-10-26. "ROAS-counted only" now switches
+    // the table to the canonical deal-grained set public.roas_counted_deals (endpoint
+    // /api/operations/contact-sources/roas-counted → applyRoasCounted() below), the same set
+    // the ROAS tab aggregates, so they reconcile. Do NOT re-add a row-filter predicate here.
 
     // ---- date-range filtering ----
     function parseInput(id) {
@@ -524,7 +512,6 @@
       var from = parseInput('acsFrom'), to = parseInput('acsTo');
       return ALL_ROWS.filter(function (r) {
         if (isExcludedRow(r)) return false;
-        if (ROAS_ONLY && !isRoasCounted(r)) return false;
         return inRange(r.cdate, from, to);
       });
     }
@@ -659,10 +646,83 @@
     }
 
     function apply() {
+      // ROAS-counted mode renders the canonical deal set from its own endpoint (separate
+      // data source + columns). Everything else is the normal ga4_ac_contact_source path.
+      if (ROAS_ONLY) { applyRoasCounted(); return; }
       var rows = filteredRows();
       renderKpis(rows);
       renderTable(rows);
       updateDateLabel();
+    }
+
+    // ---- ROAS-counted view (canonical public.roas_counted_deals) ----
+    // Deal-grained, the SAME set the ROAS tab aggregates, so the two reconcile per FY.
+    // FY22-24 = Niki's log (own logged month); FY25+ = clover-Yes / JC / ga4-cpc, deduped by
+    // deal_id. This view intentionally shows deals the default view can't (Niki FY22-24,
+    // off-page clover deals) and uses the deal's own FY, so a deal may read a different FY
+    // here than in the contact-centric default view.
+    function applyRoasCounted() {
+      updateDateLabel();
+      var host = document.getElementById('acsRows');
+      if (ROAS_ROWS === null) {
+        host.innerHTML = '<div class="muted" style="padding:14px">Loading ROAS-counted deals…</div>';
+        fetchJSON('/api/operations/contact-sources/roas-counted').then(function (data) {
+          ROAS_ROWS = (data.rows && data.rows.data) || [];
+          renderRoasView();
+        }).catch(function (err) {
+          host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load ROAS-counted deals</strong><span>' + esc(err.message) + '</span></div>';
+        });
+        return;
+      }
+      renderRoasView();
+    }
+
+    function renderRoasView() {
+      var from = parseInput('acsFrom'), to = parseInput('acsTo');
+      // Date range still applies (by the deal's resolved cdate); rows with no cdate are kept.
+      var rows = ROAS_ROWS.filter(function (r) { return !r.cdate || inRange(r.cdate, from, to); });
+      renderRoasKpis(rows);
+      renderRoasTable(rows);
+    }
+
+    function renderRoasKpis(rows) {
+      var won = rows.filter(function (r) { return r.status === 'won'; });
+      var wonVal = won.reduce(function (a, r) { return a + (Number(r.value) || 0); }, 0);
+      var openVal = rows.reduce(function (a, r) { return a + (r.status === 'open' ? (Number(r.value) || 0) : 0); }, 0);
+      var host = document.getElementById('acsKpis');
+      if (!host) return;
+      host.innerHTML =
+        kpi('ROAS-counted deals', rows.length, 'won + lost + open', '',
+            'Deals in the canonical ROAS-counted set (same set the ROAS tab counts).') +
+        kpi('Won', won.length, 'deals', won.length ? 'pos' : '',
+            'Won deals in the ROAS-counted set — reconciles with the ROAS tab Won column per FY.') +
+        kpi('Won value', money(wonVal), 'AUD', '',
+            'Sum of won deal value (AUD) — matches the ROAS tab Won Revenue.') +
+        kpi('Open pipeline', money(openVal), 'AUD', '',
+            'Sum of open deal value (AUD) in the ROAS-counted set.');
+    }
+
+    function renderRoasTable(rows) {
+      var cols = [
+        { key: 'fy', label: 'FY', render: txt },
+        { key: 'cdate', label: 'Date', unit: 'date' },
+        { key: 'org', label: 'Org', render: txt },
+        { key: 'title', label: 'Deal', render: txt },
+        { key: 'status', label: 'Status', render: statusPill },
+        { key: 'value', label: 'Value', unit: 'currency' },
+        { key: 'source', label: 'Source', render: txt },
+        { key: 'method', label: 'Method', render: txt },
+      ];
+      renderSortableTable('acsRows', rows, cols, {
+        stateStore: ROAS_TABLE_STATE,
+        searchPlaceholder: 'Search ROAS-counted deals…',
+        sortKey: 'fy', sortDir: 'desc',
+        emptyText: 'No ROAS-counted deals in this date range.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('acsCount');
+          if (el) el.textContent = shown === total ? (total + ' deals') : (shown + ' of ' + total + ' deals');
+        },
+      });
     }
 
     // Reflect the active date range on the popover trigger button (and flag it

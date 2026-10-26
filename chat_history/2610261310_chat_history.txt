@@ -1,0 +1,125 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-26
+Session: Reconciling the ROAS tab with the GA4 & Ads Leads "ROAS-counted only"
+view. Part 1 unified the deal VALUE source (activecampaign_deals via a shared
+helper + USD→AUD rate) — saved earlier as 2610261045_chat_history.txt. Part 2
+(this file) investigated why the WON COUNTS still differ per FY, then designed
+and BUILT a single canonical deal-grained view (public.roas_counted_deals) as the
+shared source of truth for both the ROAS tab and the page's ROAS-counted view.
+================================================================================
+
+NOTE ON REDACTIONS: No live secrets were pasted or printed this session. Supabase
+was reached via the MCP (SELECTs + one apply_migration); no connection strings,
+keys, or tokens appeared. The project ref (aivitcomiywiysrfwqxt) and the
+USD→AUD rate (1.4227) are not secrets and are already in the committed codebase.
+
+--------------------------------------------------------------------------------
+EARLIER IN THIS CONVERSATION (recap — full detail in 2610261045_chat_history.txt):
+Via /q, established that the ROAS tab's won values and the page's "ROAS-counted
+only" deal values diverge for THREE reasons: (1) different value column per deal,
+(2) different deal universe, (3) per-contact dedup. Then implemented the fix for
+(1): both sides derive deal value from activecampaign_deals.value (cents→AUD, USD
+converted) via a shared acValueAud() helper (rate 1.4227). Ran /dcp and /cm.
+
+--------------------------------------------------------------------------------
+USER (/q): Why are the WON COUNTS different for each FY between the two tabs?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Reproduced both sides per FY from live data.
+  ROAS tab won: FY22 4 · FY23 12 · FY24 12 · FY25 6 · FY26 4 · FY27 1
+  Page ROAS-counted won: FY22 1 · FY23 0 · FY24 8 · FY25 12 · FY26 5 · FY27 3
+Five drivers, flipping direction at FY25:
+  • FY22–24 ROAS higher: ROAS uses Niki's log (niki_ad_leads_tracking); the page
+    has NO Niki rows (cache barely reaches back that far).
+  • FY25+ page higher: biggest driver = JC-tagged won deals (7+2+1=10) the page's
+    isRoasCounted branch (b) counts but the rebuilt FY-model roas.js does NOT
+    (it only counts clover-Yes ∪ ga4-cpc; the CONTACT_SOURCE_SHOWN/JC path was
+    dropped in the FY rewrite — CLAUDE.md was stale on this). Plus 1 organic-
+    channel won (ROAS counts cpc only), FY-shift (audit fiscal_year vs cdate: 2881
+    FY25→page FY24, 3859 FY26→page FY25), and 1 off-page clover deal (3598).
+  • No dedup effect (page_won_rows == distinct deals).
+
+--------------------------------------------------------------------------------
+USER (/q): Is ga4_ac_event_matches upsert (not truncate+rebuild each sync)?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed from the live rebuild_ga4_ac_matches() definition: section 2 does
+INSERT … ON CONFLICT (event_uid) DO UPDATE (accumulating). No TRUNCATE/DELETE
+anywhere; the only "truncate" string is the "no truncate" comment. Return JSON
+reports event_audit_upserted / event_audit_retained_total / accumulating:true.
+
+--------------------------------------------------------------------------------
+USER (/q, iterative design): Proposed a direction — one shared deal source for
+both tabs (FY22-24 niki; FY24+ jc_audited_deals + clover + ga4), main table =
+ga4_ac_contact_source, remove the excluded-deals list. Then refined: use
+ga4_ac_contact_source (not event_matches) for the cpc source; union niki in with
+dedup; create a new deal-grained cache table as the shared source of truth while
+keeping ac_contact_sources.html's default/other views untouched. Then: clover
+prevails over niki on dedup. Then: FY should be based on the contact's cdate.
+
+--------------------------------------------------------------------------------
+ASSISTANT (across several /q turns, all read-only, with supporting SELECTs):
+  • jc_audited_deals (mag_gads 'Could be SEO or Paid Ad') = 19 deals, 9 already
+    clover-Yes, 0 ga4-cpc → 10 net-new to ROAS (exactly the page's extra FY25+).
+  • event_matches has NO deal_id/value/status → wrong source; use
+    ga4_ac_contact_source channel~cpc instead. Agreed.
+  • Niki: 130 counted rows; 26 have no deal_id; 104 resolve a contact cdate.
+  • Niki∩clover-Yes = 25 deals; clover-Yes has FY24=18/FY25=21/FY26=18/FY27=4.
+    Recommended the dedup be FY-scoped; user chose "clover prevails always" —
+    clarified it's safe as a deal_id-collision rule (only ~1 boundary deal), but
+    flagged not to let it mean "clover sources FY24 too" (would override Niki).
+  • FY-from-contact-cdate: found it scatters Niki badly (40 deal-linked rows /
+    13 won jump to FY25-26 by contact creation date) — so Niki must use its OWN
+    logged month. Recommended deal-date for all; user decided: "deal date for
+    Niki's deals, cdate for the rest."
+
+Wrote a full build plan; user approved ("go"). Asked 3 confirms via the question
+tool → answers: accept FY24 Niki+clover mix; include ALL Niki incl outbound;
+build as a VIEW (always live, no refresh job).
+
+BUILD (all validated via MCP SELECTs before/after):
+  1. Migration roas_counted_deals_view (apply_migration, SUCCESS):
+     - public.ac_value_aud(value, currency) — IMMUTABLE fn, cents→AUD, USD@1.4227;
+       now the SINGLE source for the rate.
+     - public.roas_counted_deals VIEW: Niki (own date/value; FY from logged month)
+       ∪ FY25+ {clover final_gads_tag='yes' ∪ mag_gads 'Could be SEO or Paid Ad'
+       ∪ ga4 channel~cpc}, status+value from activecampaign_deals (value via
+       ac_value_aud), FY from contact cdate (coalesce deal cdate). Dedup by
+       deal_id precedence clover>jc>ga4cpc>niki; niki no-deal rows kept
+       ('niki-'||id). Verified won/FY: FY22 6·FY23 11·FY24 15·FY25 16·FY26 7·FY27 2.
+     - Noticed contact-cdate puts 2 clover returning-customer wins in FY22 — raised
+       it; user accepted ("cdate for the rest").
+  2. server/lib/sql.js: acValueAud() now emits public.ac_value_aud(alias.value,
+     alias.currency); removed the JS USD_AUD_RATE constant (rate lives in the fn).
+  3. server/metrics/roas.js: rewritten — deal counts + won$/open$ now GROUP the
+     view; spend CTEs unchanged (niki cpc FY22-24; google/bing/sd monthly FY25+).
+     Live query OK (ROAS FY22 35.2×/11.1× … FY27 1.76×/0.84×).
+  4. server/metrics/roas-deals.js: counted = the view; review/actag = clover not
+     in the view. Live query OK (counted 171, review 65).
+  5. server/metrics/roas-counted.js (NEW) + route GET
+     /api/operations/contact-sources/roas-counted (server/index.js).
+  6. public/ac_contact_sources.html: the "ROAS-counted only" toggle now SWITCHES
+     the table's data source to that endpoint (own columns FY/Date/Org/Deal/Status/
+     Value/Source/Method, own KPIs + table state); default view + all other filters
+     untouched. Retired the client isRoasCounted() predicate.
+
+VERIFICATION: all 6 server files `node --check` OK; inline page script parses via
+vm.compileFunction; server boots clean and the 3 ROAS routes return 401 (auth
+gate, expected without a token). Both tabs now read the same view → reconcile per
+FY by construction. Updated the roas-tab-feature memory. Noted a manual Cloud Run
+redeploy is required (migration already applied); CLAUDE.md/as_built to be
+refreshed via /dcp.
+
+--------------------------------------------------------------------------------
+USER: /dcp (this invocation).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this transcript; updated as_built.txt and CLAUDE.md for the new canonical
+view architecture; checked .gitignore. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

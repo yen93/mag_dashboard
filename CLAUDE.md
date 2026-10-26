@@ -115,26 +115,27 @@ Cloud Run.
       cpc for Google + Xero-billed Simple Digital. (This replaced the old hard-coded
       `bingSpend`/`sdFee`=0 for `fy_end<=2024` in `roas.js`; those are now plain
       `coalesce(...,0)` like FY25+.)
-    • **FY25+** → cost from monthly tables, deals from the counted set:
-      Google = `sum(cost)` `public.google_ads_campaign_monthly`; **Bing = `sum(cost)`
+    • **FY25+** → **SPEND** from monthly tables: Google = `sum(cost)`
+      `public.google_ads_campaign_monthly`; **Bing = `sum(cost)`
       `public.bing_ads_campaign_monthly`** and **Simple Digital = `sum(paid_search_fee)`
       `public.simple_digital_fees_monthly`** — both now **LIVE from Xero** via the
       `xero-ad-spend-sync` edge fn (see the "Bing + Simple Digital" paragraph below).
-      **COUNTED SET (per the user's rule) = `clover_audited_deals`
-      `final_gads_tag='Yes'` UNION (by `deal_id`) `ga4_ac_contact_source` rows whose
-      `channel ~* 'cpc'`**. **DEAL VALUE (won$/open$) — as of 2026-10-26 — comes from
-      `public.activecampaign_deals.value` LEFT-JOINed by `deal_id`** (cents→AUD, USD
-      converted) via the shared helper **`acValueAud(alias)` in `server/lib/sql.js`** — NOT
-      the audit `deal_value_aud_crm` and NOT GA4 `deal_value` anymore. `acValueAud` is the
-      single source of truth for the **`USD_AUD_RATE`** constant (hardcoded **1.4227**,
-      mid-market fetched 2026-10-26 — bump that ONE constant to refresh the rate). This is
-      the SAME source the GA4 & Ads Leads page displays (see that page's bullet), so the ROAS
-      won values and the page's **"ROAS-counted only"** deal values reconcile **per deal**.
-      **No fallback** — a blank value means the daily `activecampaign_deals` sync broke
-      (intentional signal). The same `acValueAud` join is used in `roas-deals.js`
-      (`clover_src` + `ga4cpc`). NB: this closes only the VALUE-per-deal gap; the two TOTALS
-      still differ by universe (ROAS counts off-page + FY22–24 Niki deals the page can't
-      show) and per-contact dedup — deliberate. FY22–24 Niki value is untouched (already AUD).
+    **DEAL COUNTS + won$/open$ (ALL FYs) — as of 2026-10-26 — come from the canonical VIEW
+    `public.roas_counted_deals`**, NOT from inline CTEs. `roas.js` just `GROUP BY fy_end` over the
+    view; spend stays computed in `roas.js` (niki cpc FY22–24; google/bing/sd monthly FY25+). The
+    view is the **SINGLE source of truth** shared with `roas-deals.js` AND the GA4 & Ads Leads page's
+    **"ROAS-counted only"** view, so all three reconcile per FY. **View set** = Niki (won/lost/open,
+    excl uniting; its OWN sheet value; FY from its own logged month) ∪ FY25+ {`clover_audited_deals`
+    `final_gads_tag='yes'` ∪ `mag_gads_direct_inbound_lead_source` `jc_final_attr='Could be SEO or
+    Paid Ad'` ∪ `ga4_ac_contact_source` `channel~cpc`}; FY25+ status+value pulled uniformly from
+    `activecampaign_deals` (value via **`public.ac_value_aud(value,currency)`** = cents→AUD, USD@1.4227
+    — the SINGLE rate source; `server/lib/sql.js acValueAud()` emits a call to it), FY25+ **FY from the
+    CONTACT cdate**; **deduped by `deal_id`, precedence `clover > jc > ga4cpc > niki`** ("clover
+    prevails"); niki rows with no deal_id kept via surrogate `'niki-'||id`. **Owner decisions:** FY24 =
+    Niki+clover mix; include ALL Niki incl **outbound**; a **VIEW** (always live, no refresh job).
+    Rebuild the underlying tables, not the view. Known quirk: 2 clover returning-customer wins land in
+    **FY22** by contact cdate (deals really FY24+) — accepted. Per-FY won: FY22 6·FY23 11·FY24 15·FY25
+    16·FY26 7·FY27 2.
     **END-YEAR FY is derived explicitly in SQL for every source** (`extract(year)+(month>=7?1:0)`;
     clover's `fiscal_year` text is already END-year via `right(fiscal_year,2)+2000`). As of
     2026-10-23 `public.mag_fy_label` / GA4's generated `fy` are ALSO END-year (migration
@@ -144,11 +145,16 @@ Cloud Run.
     basis. Win rate = won ÷ (won+lost+open); Per-Lead Value = won$ ÷ (won+lost+open). Only FYs
     **with ad spend** are shown; `<12`-month-spend years (FY22 partial, FY27 current) are flagged.
     **Deals table** = `/api/operations/roas/deals` (`server/metrics/roas-deals.js`): a flat
-    per-deal list (FY22–24 from Niki; FY25+ from clover classified `counted`=Yes OR cpc /
-    `review`=`final_gads_tag='Uncertain'` / `actag`=attributed Google Ads but not counted,
-    plus GA4 cpc deals not in the audit). The page filters it client-side by FY + status
-    (Won/Lost/Open/All) + scope + search. **Counts reconcile with `/roas`** (counted W/L/O =
-    the metric's W/L/O) because both use the same `clover Yes ∪ cpc` set.
+    per-deal list — group `counted` = the `roas_counted_deals` view; `review` =
+    `clover_audited_deals` `final_gads_tag='Uncertain'` not in the view; `actag` = clover
+    attributed-Google-Ads not counted. The page filters it client-side by FY + status + scope +
+    search. **Counts reconcile with `/roas`** because both read the same view.
+    **GA4 & Ads Leads "ROAS-counted only" view** = `/api/operations/contact-sources/roas-counted`
+    (`server/metrics/roas-counted.js`, a plain SELECT of the view). The page's toggle **SWITCHES its
+    data source** to this endpoint with its own columns (FY/Date/Org/Deal/Status/Value/Source/Method)
+    + own KPIs/table-state; the page's **default view + all other filters are UNTOUCHED** (still
+    `ga4_ac_contact_source`). The old client `isRoasCounted()` predicate was **retired — do not
+    re-add a row-filter**.
     **NOT the full audited ROAS report** (ex-GST Buyer Analysis values → different numbers).
     The old calendar-year design (`won_audit` CTE by `calendar_year`; lost/open from
     `ac_google_ads_deals`; `CONTACT_SOURCE_SHOWN` for the shown-leads basis) is **replaced**,
@@ -430,40 +436,38 @@ Cloud Run.
       `isForReview()` returns false for it (the audit already decided — no amber highlight).
       A `'no'`/other value falls through to the normal rules unchanged. **No new table column was
       added** (final_gads_tag surfaces only via the existing Manual Tagging column). **This same
-      table is ALSO the ROAS WON numerator** (as of 2026-10-22, a follow-up — see the ROAS bullet:
-      `roas.js`'s `won_audit` CTE counts `final_gads_tag='Yes'` + status Won). The page's
-      `isExcludedRow()` was NOT changed for that, but `isRoasCounted()` (the "ROAS-counted only"
-      toggle) WAS updated to add a WON branch (`dealStatus==='won'` AND `finalGadsTag==='yes'`) so
-      it matches the new WON numerator — see that bullet. `clover_audited_deals` is STATIC
-      (reload from the sheet if it changes). Migration: `create_clover_audited_deals`.
-    - **"ROAS-counted only" quick filter (as of 2026-10-22):** a toolbar toggle
-      (`#acsRoasToggle` → `ROAS_ONLY`, default off; label flips to "Show all rows") that, when
-      on, shows ONLY the rows the ROAS tab counts. Client-side/display-only, **inline in
-      `public/ac_contact_sources.html`** (no server/API/`app.js` change). Gated in
-      `filteredRows()` by the inline predicate `isRoasCounted(r)`. **As of 2026-10-22 (WON
-      moved to the audit) it has TWO branches** (either one counts): **(a)** the WON numerator
-      — `dealStatus === 'won'` AND `finalGadsTag === 'yes'` (mirrors `roas.js`'s `won_audit`
-      CTE over `clover_audited_deals`); **(b)** the shownLeads/Per-Lead-Value basis — NOT
-      `isExcludedRow` AND `calYr` set AND `dealStatus ∈ {won,lost,open}` AND (effective
-      `jcManualTag` set OR — not `free_gifts_opt_ins`, not `isExcludedConversionLink`, and
-      channel `~ /cpc|organic/i`), i.e. the `CONTACT_SOURCE_SHOWN` mirror. **KEEP IT IN SYNC**
-      with `server/lib/sql.js` `CONTACT_SOURCE_SHOWN` **and** `roas.js`'s `won_audit`, NOT with
-      the two `isExcludedRow()` copies. Reuses the existing `ORGANIC_OR_CPC` regex + inline
-      `isExcludedConversionLink()`; handler mirrors the Xero/meta toggles (flip bool →
-      `apply()`). Caveat: ROAS's lost/open come from `ac_google_ads_deals` (not this page's
-      rows) and some audit Yes-won / JC deals are in `EXCLUDED_DEAL_IDS`/`nikiOutbound` (hidden
-      from the page), so the filter = "ROAS-counted rows **visible on this page**".
+      table is ALSO the FY25+ ROAS counted source**: `final_gads_tag='Yes'` deals feed the
+      canonical `public.roas_counted_deals` view (as of 2026-10-26 — the old `won_audit` CTE in
+      `roas.js` and the client `isRoasCounted()` branch are both retired; see the ROAS bullet).
+      `clover_audited_deals` is STATIC (reload from the sheet if it changes). Migration:
+      `create_clover_audited_deals`.
+    - **"ROAS-counted only" toggle (REBUILT 2026-10-26 — now a data-source SWITCH, not a row
+      filter):** `#acsRoasToggle` → `ROAS_ONLY` (default off; label flips to "Show all rows").
+      When ON, the table **switches its data source** to the canonical view
+      `public.roas_counted_deals` via **`GET /api/operations/contact-sources/roas-counted`**
+      (`server/metrics/roas-counted.js`), rendering its OWN columns
+      (FY/Date/Org/Deal/Status/Value/Source/Method) with its OWN KPIs and table-state
+      (`ROAS_TABLE_STATE`); rows are lazy-fetched once into `ROAS_ROWS`. This is the SAME set the
+      ROAS tab aggregates, so the page's ROAS-counted list reconciles with the ROAS tab per FY —
+      and it can now show deals the page otherwise can't (Niki FY22–24, off-page clover deals).
+      **The page's default view + every other filter are UNTOUCHED** (still read
+      `ga4_ac_contact_source` via `getAcContactSources()`). The old client `isRoasCounted()`
+      predicate (and its `filteredRows()` branch) was **RETIRED — do not re-add a row-filter**.
+      Caveat: because the view uses the deal's FY (Niki = own logged month; clover/jc/ga4 =
+      contact cdate), a deal can read a different FY here than in the contact-centric default view.
     - **Displayed deal value (`dealValue` / "AC Value" column) now comes from the AC-deals
       join, not the cache (as of 2026-10-26):** `server/metrics/ac-contact-sources.js`'s SELECT
       no longer reads the denormalized `cs.deal_value` for display — it `LEFT JOIN public.
       activecampaign_deals ad ON ad.id::text = cs.deal_id` and returns `${acValueAud('ad')}` as
-      `dealValue` (shared helper in `server/lib/sql.js`: `value/100`, USD→AUD at `USD_AUD_RATE`
-      = **1.4227**). This makes the page's **"ROAS-counted only"** won values match the ROAS tab
-      **per deal** (ROAS uses the same `acValueAud` join). The API field name `dealValue` is
-      unchanged, so the inline page (`renderKpis`, `isFeeMismatch`, the AC Value column) and the
-      `ROAS_ONLY` sums pick it up with **no client-side edit**. **No fallback** — a blank means
-      the daily `activecampaign_deals` sync is stale (intentional). Coverage is 100% today
-      (126/126 page deals have an AC row; the only non-AUD are 2 USD deals, now converted).
+      `dealValue`. `acValueAud()` (in `server/lib/sql.js`) now emits a call to the Postgres fn
+      **`public.ac_value_aud(value, currency)`** = `value/100`, USD→AUD at **1.4227** (as of
+      2026-10-26 the rate lives ONLY in that fn — the JS `USD_AUD_RATE` constant was removed; the
+      fn is shared with the `roas_counted_deals` view). This applies to the page's **default** AC
+      Value column; the **"ROAS-counted only"** view no longer sums these rows (it reads the
+      canonical view instead — see its bullet above). The API field name `dealValue` is unchanged,
+      so the inline page (`renderKpis`, `isFeeMismatch`, the AC Value column) picks it up with **no
+      client-side edit**. **No fallback** — a blank means the daily `activecampaign_deals` sync is
+      stale (intentional). Coverage 100% today (126/126 page deals have an AC row; 2 USD, converted).
     - **`engagement_fee` / `other_fees` / `gst` / `amount_total` (Xero $) columns (as of
       2026-10-20):** the Xero invoice breakdown of a deal, shown behind the page's **"Show
       Xero $"** toolbar toggle (`#acsXeroToggle` → `SHOW_XERO_COLS`; inserted right after the

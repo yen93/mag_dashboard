@@ -17,6 +17,7 @@ import { getAcAdLeads } from './metrics/ac-ad-leads.js';
 import { getPaidGoogleEnquiries } from './metrics/paid-google-enquiries.js';
 import { getRoas } from './metrics/roas.js';
 import { getRoasDeals } from './metrics/roas-deals.js';
+import { getRoasCounted } from './metrics/roas-counted.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { cached, clearCache } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
@@ -273,6 +274,18 @@ operations.get('/roas/deals', async (_req, res) => {
   } catch (err) {
     console.error('[operations:roas-deals]', err);
     res.status(502).json({ error: 'Failed to load ROAS deals from data source.', detail: err.message });
+  }
+});
+// ROAS-counted deals — the canonical deal-grained set behind the GA4 & Ads Leads page's
+// "ROAS-counted only" view. Same source (public.roas_counted_deals) as the ROAS tab, so the
+// two reconcile. See server/metrics/roas-counted.js. Plain SELECT, cached briefly.
+operations.get('/contact-sources/roas-counted', async (_req, res) => {
+  try {
+    const payload = await cached('operations:roas-counted', getRoasCounted, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:roas-counted]', err);
+    res.status(502).json({ error: 'Failed to load ROAS-counted deals from data source.', detail: err.message });
   }
 });
 app.use('/api/operations', operations);

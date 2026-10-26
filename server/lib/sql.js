@@ -1,21 +1,13 @@
 // Shared SQL fragments.
 
-// USD→AUD conversion rate, for displaying activecampaign_deals.value (stored in CENTS,
-// with a mixed-case `currency` that is mostly 'aud' but occasionally 'usd') as AUD
-// dollars. Mid-market rate fetched 2026-10-26 (Valuta/Xe/MSN/Wise clustered ~1.422–1.425).
-// Single source of truth — ROAS (roas.js / roas-deals.js) and the GA4 & Ads Leads page
-// (ac-contact-sources.js) all derive their displayed deal value from `acValueAud()` so the
-// numbers match exactly. Update this one constant when the rate drifts materially.
-export const USD_AUD_RATE = 1.4227;
-
-// SQL expression: an `public.activecampaign_deals` row aliased `<alias>` → its value in
-// AUD dollars (cents / 100, USD converted at USD_AUD_RATE). NULL when the row is absent
-// (deliberately no fallback — a blank means the activecampaign_deals daily sync broke).
+// SQL expression: an `public.activecampaign_deals` row aliased `<alias>` → its value in AUD
+// dollars (cents / 100, USD converted). The USD→AUD rate now lives in ONE place — the Postgres
+// function `public.ac_value_aud(value, currency)` (migration roas_counted_deals_view, rate
+// 1.4227 as of 2026-10-26) — which is ALSO used by the `public.roas_counted_deals` view, so the
+// page's default "AC Value" column and the ROAS tab share a single rate. Update the rate there.
+// NULL when the activecampaign_deals row is absent (no fallback — a blank flags a broken sync).
 export function acValueAud(alias = 'ad') {
-  return (
-    `round((${alias}.value / 100.0) * ` +
-    `CASE WHEN lower(coalesce(${alias}.currency, '')) = 'usd' THEN ${USD_AUD_RATE} ELSE 1 END, 2)`
-  );
+  return `public.ac_value_aud(${alias}.value, ${alias}.currency)`;
 }
 
 // Buckets the free-text lead-source/program taxonomy that MAG encodes in the
