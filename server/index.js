@@ -19,6 +19,7 @@ import { getRoas } from './metrics/roas.js';
 import { getRoasDeals } from './metrics/roas-deals.js';
 import { getRoasCounted } from './metrics/roas-counted.js';
 import { ga4AgentRouter } from './ga4Agent.js';
+import { roasAssistantRouter } from './roasAssistant.js';
 import { cached, clearCache } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
 import { canReviewJc } from './users.js';
@@ -292,6 +293,10 @@ app.use('/api/operations', operations);
 
 // MAG GA4 Agent — on-demand GA4 reports via the GA4 On-Demand Report Claude routine.
 app.use('/api/ga4-agent', ga4AgentRouter);
+
+// ROAS tab read-only chat assistant (context-stuffed Claude call; no DB tools). See
+// server/roasAssistant.js. Needs ANTHROPIC_API_KEY.
+app.use('/api/roas-assistant', roasAssistantRouter);
 
 // Serve the plain HTML/CSS/JS pages from public/.
 const publicDir = path.join(__dirname, '..', 'public');

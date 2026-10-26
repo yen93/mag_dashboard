@@ -35,6 +35,34 @@
     button.kpi:hover { border-color: var(--text-muted); }
     .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
     .kpi-info:hover, .kpi-info:focus { color: var(--accent); outline: none; }
+    /* ---- ROAS chat assistant (read-only), bottom-right ---- */
+    #asstLauncher { position: fixed; right: 20px; bottom: 20px; z-index: 50; border: none;
+      border-radius: 999px; padding: 12px 18px; font: inherit; font-weight: 600; cursor: pointer;
+      background: var(--accent); color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
+    #asstLauncher:hover { filter: brightness(1.05); }
+    #asstPanel { position: fixed; right: 20px; bottom: 20px; z-index: 51; width: 380px;
+      max-width: calc(100vw - 32px); height: 560px; max-height: calc(100vh - 100px);
+      display: none; flex-direction: column; background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; box-shadow: 0 14px 44px rgba(0,0,0,.35); overflow: hidden; }
+    #asstPanel.open { display: flex; }
+    .asst-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px;
+      border-bottom: 1px solid var(--border); background: var(--surface-2); }
+    .asst-head .t { font-weight: 700; font-size: 14px; }
+    .asst-head .s { font-size: 11px; color: var(--text-muted); }
+    .asst-head .x { margin-left: auto; background: none; border: none; color: var(--text-muted);
+      font-size: 20px; line-height: 1; cursor: pointer; }
+    .asst-msgs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+    .asst-msg { max-width: 85%; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
+    .asst-msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+    .asst-msg.bot { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
+    .asst-msg.err { align-self: flex-start; background: rgba(226,72,61,.12); color: #e2483d; border: 1px solid rgba(226,72,61,.3); }
+    .asst-hint { font-size: 12px; color: var(--text-muted); }
+    .asst-form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
+    .asst-form textarea { flex: 1; resize: none; font: inherit; font-size: 13.5px; padding: 8px 10px;
+      border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); height: 40px; max-height: 120px; }
+    .asst-form button { border: none; border-radius: 10px; padding: 0 14px; font: inherit; font-weight: 600;
+      cursor: pointer; background: var(--accent); color: #fff; }
+    .asst-form button:disabled { opacity: .5; cursor: default; }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -466,6 +494,105 @@
     renderMarketingSidebar('roas');
     window.onThemeChange = function () { if (ROAS_DATA) { renderKpis(); buildCharts(); renderTable(); renderDeals(); } };
     if (currentUser()) loadRoas();
+  </script>
+
+  <!-- ROAS read-only chat assistant (bottom-right). Answers from the ROAS tab data
+       via /api/roas-assistant; the model has no write access (context-stuffed only). -->
+  <button id="asstLauncher" type="button" aria-label="Ask about this data" hidden>💬 Ask about this data</button>
+  <section id="asstPanel" aria-live="polite" hidden>
+    <div class="asst-head">
+      <div>
+        <div class="t">ROAS assistant</div>
+        <div class="s">Read-only · answers from this tab's data</div>
+      </div>
+      <button class="x" id="asstClose" type="button" aria-label="Close">×</button>
+    </div>
+    <div class="asst-msgs" id="asstMsgs"></div>
+    <form class="asst-form" id="asstForm">
+      <textarea id="asstInput" rows="1" placeholder="Ask about ROAS, deals, win rate…" autocomplete="off"></textarea>
+      <button type="submit" id="asstSend">Send</button>
+    </form>
+  </section>
+  <script>
+    (function () {
+      if (!currentUser()) return; // page bounces to login anyway, but don't mount for guests
+      var launcher = document.getElementById('asstLauncher');
+      var panel = document.getElementById('asstPanel');
+      var msgsEl = document.getElementById('asstMsgs');
+      var form = document.getElementById('asstForm');
+      var input = document.getElementById('asstInput');
+      var sendBtn = document.getElementById('asstSend');
+      var history = [];      // [{role:'user'|'assistant', content}]
+      var busy = false;
+      var greeted = false;
+
+      launcher.hidden = false;
+
+      function bubble(text, cls) {
+        var d = document.createElement('div');
+        d.className = 'asst-msg ' + cls;
+        d.textContent = text;
+        msgsEl.appendChild(d);
+        msgsEl.scrollTop = msgsEl.scrollHeight;
+        return d;
+      }
+      function hint(text) {
+        var d = document.createElement('div');
+        d.className = 'asst-hint';
+        d.textContent = text;
+        msgsEl.appendChild(d);
+      }
+      function openPanel() {
+        panel.classList.add('open'); panel.hidden = false; launcher.hidden = true;
+        if (!greeted) {
+          greeted = true;
+          hint('Ask me about the ROAS figures on this tab — e.g. “Which FY had the best all-in ROAS?”, “How many won deals in FY25?”, or “What does All-in cost include?”. I’m read-only.');
+        }
+        setTimeout(function () { input.focus(); }, 50);
+      }
+      function closePanel() { panel.classList.remove('open'); panel.hidden = true; launcher.hidden = false; }
+
+      launcher.addEventListener('click', openPanel);
+      document.getElementById('asstClose').addEventListener('click', closePanel);
+
+      function setBusy(v) {
+        busy = v; sendBtn.disabled = v; input.disabled = v;
+        sendBtn.textContent = v ? '…' : 'Send';
+      }
+
+      function send() {
+        if (busy) return;
+        var q = input.value.trim();
+        if (!q) return;
+        input.value = ''; input.style.height = '40px';
+        bubble(q, 'user');
+        history.push({ role: 'user', content: q });
+        setBusy(true);
+        var thinking = bubble('Thinking…', 'bot');
+        postJSON('/api/roas-assistant', { messages: history })
+          .then(function (resp) {
+            thinking.remove();
+            var ans = (resp && resp.answer) || 'No answer.';
+            bubble(ans, 'bot');
+            history.push({ role: 'assistant', content: ans });
+          })
+          .catch(function (err) {
+            thinking.remove();
+            bubble(err.message || 'Something went wrong.', 'err');
+            history.pop(); // drop the unanswered user turn so retry stays clean
+          })
+          .finally(function () { setBusy(false); input.focus(); });
+      }
+
+      form.addEventListener('submit', function (e) { e.preventDefault(); send(); });
+      input.addEventListener('keydown', function (e) {
+        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+      });
+      input.addEventListener('input', function () {
+        input.style.height = '40px';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      });
+    })();
   </script>
 </body>
 </html>

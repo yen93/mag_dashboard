@@ -50,6 +50,14 @@ export const config = {
     fireUrl: env.GA4_ROUTINE_FIRE_URL || '',
     fireToken: env.GA4_ROUTINE_FIRE_TOKEN || '',
   },
+  anthropic: {
+    // Anthropic API key for the ROAS tab's read-only chat assistant
+    // (server/roasAssistant.js). The key stays server-side — never sent to the
+    // browser. Set via Secret Manager / --set-secrets, same as SUPABASE_DB_URL.
+    // Model is overridable; defaults to a fast, cheap Claude model.
+    apiKey: env.ANTHROPIC_API_KEY || '',
+    model: env.ANTHROPIC_MODEL || 'claude-haiku-5-5',
+  },
 };
 
 export function hasSource(name) {
@@ -70,6 +78,8 @@ export function hasSource(name) {
       return Boolean(config.email.gmailUser && config.email.gmailAppPassword);
     case 'ga4Agent':
       return Boolean(config.ga4Agent.fireUrl && config.ga4Agent.fireToken);
+    case 'anthropic':
+      return Boolean(config.anthropic.apiKey);
     default:
       return false;
   }

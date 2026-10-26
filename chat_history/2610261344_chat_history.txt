@@ -1,0 +1,88 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-26
+Session: Added a READ-ONLY chat assistant to the ROAS tab (bottom-right widget) so
+dashboard users can ask questions about the ROAS data. First a /q on the best
+approach (routine vs API), then built the MVP: a context-stuffed Claude API
+endpoint (no DB tools = read-only by construction) + the widget.
+================================================================================
+
+NOTE ON REDACTIONS: No secrets pasted or printed. ANTHROPIC_API_KEY appears only
+as a config variable NAME (no value); Supabase reached via MCP earlier in the
+conversation (read-only). Nothing required redaction.
+
+--------------------------------------------------------------------------------
+USER (/q): Add a chat assistant to the lower-right of the ROAS tab ONLY, so any
+dashboard user can ask questions about the data / dashboard. Wanted the /q skill
+"loaded" so it stays read-only each turn. Asked: Claude routine, or build an API?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked the existing GA4-agent pattern (server/ga4Agent.js) — it fires a Claude
+ROUTINE (fire URL + token), writes to a table, and the browser POLLS until done
+(async, slow). Recommendation:
+  • Correction: /q is a Claude Code CLI skill — it cannot be "loaded" into a
+    browser widget or a cloud routine. Read-only must be enforced STRUCTURALLY
+    (what tools the model gets), not by a skill/prompt.
+  • Build an API (Express + Claude Messages API), not a routine — synchronous,
+    controllable, cheaper, and lets read-only be a hard guarantee. Routines fit
+    slow on-demand reports, not an interactive chat.
+  • MVP = context-stuffing, NO DB tools: the page already fetches /roas + /roas/deals
+    + /roas-counted; send {question + that data + a primer} to a new endpoint →
+    one Claude call → answer. Read-only by construction (model gets data, not a DB).
+  • V2 (later) = add read-only TOOLS (existing GET endpoints or a SELECT-only DB
+    role) for questions beyond the tab.
+  • Practicalities: widget inline on roas.html only; JWT-gated; ANTHROPIC_API_KEY
+    via Secret Manager; Haiku for cost; cap tokens/throttle; treat data as
+    untrusted (prompt-injection). Offered to build the MVP.
+
+--------------------------------------------------------------------------------
+USER: Go with the MVP.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Built it (read-only by construction — the model gets the ROAS JSON + a primer and
+has NO database connection and NO tools):
+  1. server/config.js — added anthropic.apiKey (ANTHROPIC_API_KEY) + anthropic.model
+     (ANTHROPIC_MODEL, default 'claude-haiku-5-5') and a hasSource('anthropic') case.
+  2. server/roasAssistant.js (NEW) — POST /api/roas-assistant, requireAuth-gated.
+     Fetches getRoas()+getRoasDeals() server-side, builds a compact JSON snapshot +
+     a PRIMER (ROAS tab semantics: FY END-year, All-in vs Google-only, counted set,
+     value source, spend sources, win rate / per-lead value, AUD), calls the
+     Anthropic Messages API via fetch (x-api-key, anthropic-version 2023-06-01),
+     returns { answer }. Accepts multi-turn { messages } or { question }; caps
+     turns (16) + per-message length (4000); ensures first msg is 'user'; treats the
+     snapshot as untrusted (no embedded-instruction following); API key stays
+     server-side. 503 if the key is unset; 502 on API error.
+  3. server/index.js — imported + mounted app.use('/api/roas-assistant', ...).
+  4. public/roas.html — bottom-right launcher ("Ask about this data") + chat panel
+     (read-only label, message list, auto-grow textarea, Enter-to-send, typing
+     indicator, error bubbles) in a self-contained inline <style> + markup + <script>
+     using the existing global postJSON/currentUser from app.js. ROAS tab only; no
+     shared files touched.
+Validation: node --check OK on config.js / roasAssistant.js / index.js; all 3
+roas.html inline scripts parse (vm.compileFunction); server boots clean and
+POST /api/roas-assistant returns 401 without a token (auth gate works → router
+mounted, imports resolve). Could not run a live Claude call (no ANTHROPIC_API_KEY
+locally; don't set secrets/deploy) — endpoint degrades to a graceful 503 shown as
+an error bubble.
+Housekeeping: a stray dev `node` from earlier smoke tests still holds port 8080; I
+tried to kill it but the sandbox denied the process-kill (Interfere With
+Workloads) — harmless leftover, flagged to the user.
+To go live (user's steps; Claude never deploys): create ANTHROPIC_API_KEY in Secret
+Manager and attach ADDITIVELY with `gcloud run services update dashboard
+--update-secrets ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest` (NOT --set-secrets,
+which would drop existing secrets), then redeploy; optionally set ANTHROPIC_MODEL;
+verify the default model id is valid for the account.
+
+--------------------------------------------------------------------------------
+USER: /dcp (this invocation).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this transcript; updated as_built.txt + CLAUDE.md for the ROAS assistant;
+checked .gitignore (the ANTHROPIC_API_KEY lives only in Secret Manager, never in
+the repo; patterns already cover key/secret files). No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

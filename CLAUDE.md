@@ -590,6 +590,18 @@ before changing them).
   Verification on that account). Store both in Secret Manager + `--set-secrets`,
   same as Supabase. Without them the server still boots and logs codes to the
   console (dev), but no real emails go out.
+- **`ANTHROPIC_API_KEY`** (+ optional **`ANTHROPIC_MODEL`**, default
+  `claude-haiku-5-5`) — powers the ROAS tab's **read-only chat assistant**
+  (`server/roasAssistant.js`, `POST /api/roas-assistant`; widget bottom-right on
+  `roas.html`). The endpoint context-stuffs the ROAS data (`getRoas`+`getRoasDeals`)
+  + a primer and makes ONE Anthropic Messages API call — **no DB, no tools, so it's
+  read-only by construction**; the key stays server-side. Without it the route
+  returns 503 and the widget shows it gracefully. **Attach ADDITIVELY on redeploy:**
+  `gcloud run services update dashboard --region australia-southeast1
+  --update-secrets ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest` (`--update-secrets`,
+  NOT `--set-secrets`, so the existing `SUPABASE_DB_URL`/`GMAIL_*` secrets aren't
+  dropped). MVP only — deeper/cross-tab Q&A would need read-only *tools* (the GET
+  endpoints or a SELECT-only DB role), never a write path.
 - Not yet configured: `AC_API_URL`/`AC_API_KEY` (ActiveCampaign), `XERO_*`
   (Xero OAuth), `CALENDLY_TOKEN`, `MONDAY_TOKEN`,
   `GOOGLE_SERVICE_ACCOUNT_JSON`/`BUYER_ANALYSIS_SHEET_ID` (the MAG Buyer
