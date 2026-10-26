@@ -1,0 +1,61 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-26
+Session: Expanded the ROAS assistant's primer so it can answer "how does this tab
+refresh / is the data live / sheets vs snapshots" questions, and loosened its
+refusal stance. (Follow-up to the assistant build in 2610261344/2610261414.)
+================================================================================
+
+NOTE ON REDACTIONS: No secrets appeared this session. (Earlier in the broader
+conversation two plaintext env-var secrets surfaced in a gcloud describe and were
+redacted in 2610261414_chat_history.txt; nothing new here.)
+
+--------------------------------------------------------------------------------
+USER (/q): Pasted a transcript where the ROAS assistant REFUSED "how often does
+this tab auto-refresh / is the data live / no sheets, no snapshots?" (it answered
+"I am read-only and cannot provide technical aspects … only the DATA SNAPSHOT").
+Asked: can we feed as_built or better context so it can answer this kind of question?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Diagnosed: the PRIMER told it to answer ONLY from the data snapshot and to avoid
+technical topics, and it had no operational facts — so it correctly declined.
+Recommendation: YES, give it the facts — but DON'T dump raw as_built.txt (it holds
+developer-only internals: edge-fn names, Supabase project ref, service accounts,
+secret NAMES, crons, IAM, migration ids → disclosure risk; also large/noisy).
+Instead add a short curated "how this tab works / data freshness" section to the
+primer and relax the refusal. Verified the facts first: roas.html has NO timer-based
+refresh (only a setTimeout for input focus), and the ROAS endpoints are cached ~10
+min server-side (cached(..., 10*60*1000) in index.js); data is computed live from
+the roas_counted_deals view at request time. Offered to implement.
+
+--------------------------------------------------------------------------------
+USER: Go ahead and implement it.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Edited server/roasAssistant.js PRIMER:
+  • Opening now says to answer questions about the ROAS figures AND how the tab
+    sources/refreshes its data (from the primer), declining only genuinely
+    out-of-scope things (other tabs' internals, credentials, infrastructure
+    specifics), keeping the read-only + don't-guess/leak guardrails.
+  • Added a "How this tab sources & refreshes its data (you MAY answer these)"
+    section: computed LIVE from the database each page load (a view recomputed per
+    read — NOT a Sheet/snapshot); NO auto-refresh timer (reload to re-fetch); ~10-min
+    server response cache; underlying data refreshed by background syncs (ad spend
+    weekly, deals daily; FY22–24 + audit are one-time loads); with an explicit
+    instruction to keep it high-level and NOT name internal systems/tables/service
+    accounts/schedules/credentials.
+node --check OK. Server-side prompt change only — ships with the next --source
+Cloud Run redeploy (no DB/secret change).
+
+--------------------------------------------------------------------------------
+USER: /dcp (this invocation).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this transcript; updated as_built.txt + CLAUDE.md to note the primer now
+covers data-freshness/how-it-works questions; checked .gitignore. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================
