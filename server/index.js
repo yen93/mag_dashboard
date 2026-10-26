@@ -294,8 +294,8 @@ app.use('/api/operations', operations);
 // MAG GA4 Agent — on-demand GA4 reports via the GA4 On-Demand Report Claude routine.
 app.use('/api/ga4-agent', ga4AgentRouter);
 
-// ROAS tab read-only chat assistant (context-stuffed Claude call; no DB tools). See
-// server/roasAssistant.js. Needs ANTHROPIC_API_KEY.
+// ROAS tab read-only chat assistant (context-stuffed OpenAI call; no DB tools). See
+// server/roasAssistant.js. Needs OPENAI_API_KEY.
 app.use('/api/roas-assistant', roasAssistantRouter);
 
 // Serve the plain HTML/CSS/JS pages from public/.

@@ -3,11 +3,11 @@
 // Read-only BY CONSTRUCTION: the model is given the ROAS tab's DATA (fetched here,
 // server-side, from the same read-only metric composers the page uses) plus a short
 // primer — it has NO database connection and NO tools, so there is nothing it can
-// mutate. The Anthropic API key stays server-side (never reaches the browser).
+// mutate. The OpenAI API key stays server-side (never reaches the browser).
 //
 // Flow: POST /api/roas-assistant { messages:[{role,content}] | question }
 //   -> build a system prompt = primer + a compact snapshot of /roas + /roas/deals
-//   -> one Anthropic Messages API call -> return { answer }.
+//   -> one OpenAI Chat Completions call -> return { answer }.
 //
 // This is the MVP (context-stuffed). To answer questions beyond the ROAS tab later,
 // add read-only TOOLS (the existing GET endpoints, or a SELECT-only DB role) — never
@@ -24,7 +24,7 @@ roasAssistantRouter.use(requireAuth);
 
 const MAX_MSG_CHARS = 4000;   // per message
 const MAX_TURNS = 16;         // most recent turns kept
-const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
 
 // Static primer: what the ROAS tab is and how to read it. Keeps answers grounded even
 // for "how does this work" questions. Mirrors server/metrics/roas.js semantics.
@@ -88,15 +88,16 @@ function sanitizeMessages(body) {
     if (content) clean.push({ role, content });
   }
   if (!clean.length) return null;
-  // Keep the most recent turns; the Anthropic API requires the first message to be 'user'.
+  // Keep the most recent turns and ensure the conversation starts with a 'user' turn
+  // (the system prompt is added separately as the first message in the request).
   const trimmed = clean.slice(-MAX_TURNS);
   while (trimmed.length && trimmed[0].role !== 'user') trimmed.shift();
   return trimmed.length ? trimmed : null;
 }
 
 roasAssistantRouter.post('/', async (req, res) => {
-  if (!hasSource('anthropic')) {
-    return res.status(503).json({ error: 'Assistant not configured (set ANTHROPIC_API_KEY).' });
+  if (!hasSource('openai')) {
+    return res.status(503).json({ error: 'Assistant not configured (set OPENAI_API_KEY).' });
   }
   const messages = sanitizeMessages(req.body);
   if (!messages) return res.status(400).json({ error: 'Ask a question first.' });
@@ -112,31 +113,29 @@ roasAssistantRouter.post('/', async (req, res) => {
   const system = `${PRIMER}\n\n=== DATA SNAPSHOT (JSON) ===\n${JSON.stringify(context)}`;
 
   try {
-    const r = await fetch(ANTHROPIC_URL, {
+    const r = await fetch(OPENAI_URL, {
       method: 'POST',
       headers: {
-        'x-api-key': config.anthropic.apiKey,
-        'anthropic-version': '2023-06-01',
+        Authorization: 'Bearer ' + config.openai.apiKey,
         'content-type': 'application/json',
       },
+      // OpenAI Chat Completions: the system prompt is the first message in the array
+      // (unlike Anthropic's separate `system` field). Our client messages follow it.
       body: JSON.stringify({
-        model: config.anthropic.model,
+        model: config.openai.model,
         max_tokens: 1024,
-        system,
-        messages,
+        messages: [{ role: 'system', content: system }, ...messages],
       }),
     });
     if (!r.ok) {
       const detail = (await r.text().catch(() => '')).slice(0, 300);
-      console.error('[roas-assistant] anthropic error', r.status, detail);
+      console.error('[roas-assistant] openai error', r.status, detail);
       return res.status(502).json({ error: 'The assistant is unavailable right now. Please try again.' });
     }
     const data = await r.json();
-    const answer = (Array.isArray(data.content) ? data.content : [])
-      .filter((b) => b && b.type === 'text')
-      .map((b) => b.text)
-      .join('\n')
-      .trim();
+    const answer = String(
+      (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || ''
+    ).trim();
     if (!answer) return res.status(502).json({ error: 'The assistant returned an empty reply.' });
     res.json({ answer });
   } catch (err) {

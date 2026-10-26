@@ -147,8 +147,10 @@ Cloud Run.
     **Deals table** = `/api/operations/roas/deals` (`server/metrics/roas-deals.js`): a flat
     per-deal list — group `counted` = the `roas_counted_deals` view; `review` =
     `clover_audited_deals` `final_gads_tag='Uncertain'` not in the view; `actag` = clover
-    attributed-Google-Ads not counted. The page filters it client-side by FY + status + scope +
-    search. **Counts reconcile with `/roas`** because both read the same view.
+    attributed-Google-Ads not counted. The page filters it client-side by FY + status + search,
+    and (as of 2026-10-26) shows ONLY the `counted` group — the `#scopeSeg` counted/review/actag
+    toggles were removed from `roas.html` (`SEL.scope` fixed at `'counted'`); review/actag still
+    come from the API but aren't UI-selectable. **Counts reconcile with `/roas`** (same view).
     **GA4 & Ads Leads "ROAS-counted only" view** = `/api/operations/contact-sources/roas-counted`
     (`server/metrics/roas-counted.js`, a plain SELECT of the view). The page's toggle **SWITCHES its
     data source** to this endpoint with its own columns (FY/Date/Org/Deal/Status/Value/Source/Method)
@@ -590,18 +592,21 @@ before changing them).
   Verification on that account). Store both in Secret Manager + `--set-secrets`,
   same as Supabase. Without them the server still boots and logs codes to the
   console (dev), but no real emails go out.
-- **`ANTHROPIC_API_KEY`** (+ optional **`ANTHROPIC_MODEL`**, default
-  `claude-haiku-5-5`) — powers the ROAS tab's **read-only chat assistant**
-  (`server/roasAssistant.js`, `POST /api/roas-assistant`; widget bottom-right on
-  `roas.html`). The endpoint context-stuffs the ROAS data (`getRoas`+`getRoasDeals`)
-  + a primer and makes ONE Anthropic Messages API call — **no DB, no tools, so it's
-  read-only by construction**; the key stays server-side. Without it the route
-  returns 503 and the widget shows it gracefully. **Attach ADDITIVELY on redeploy:**
-  `gcloud run services update dashboard --region australia-southeast1
-  --update-secrets ANTHROPIC_API_KEY=ANTHROPIC_API_KEY:latest` (`--update-secrets`,
-  NOT `--set-secrets`, so the existing `SUPABASE_DB_URL`/`GMAIL_*` secrets aren't
-  dropped). MVP only — deeper/cross-tab Q&A would need read-only *tools* (the GET
-  endpoints or a SELECT-only DB role), never a write path.
+- **`OPENAI_API_KEY`** (+ optional **`OPENAI_MODEL`**, default `gpt-4o-mini`) —
+  powers the ROAS tab's **read-only chat assistant** (`server/roasAssistant.js`,
+  `POST /api/roas-assistant`; widget bottom-right on `roas.html`). The endpoint
+  context-stuffs the ROAS data (`getRoas`+`getRoasDeals`) + a primer and makes ONE
+  OpenAI Chat Completions call (system prompt = first message) — **no DB, no tools,
+  so it's read-only by construction**; the key stays server-side. Without it the route
+  returns 503 and the widget shows it gracefully. **GOTCHA:** this is the **Cloud Run
+  service's own env var** — the OpenAI key that already exists as a **Supabase edge
+  secret** (used by `buyer-sheet-sync`) is NOT visible to the dashboard; it must be set
+  on the Cloud Run service too. **Attach ADDITIVELY on redeploy:** `gcloud run services
+  update dashboard --region australia-southeast1 --update-secrets
+  OPENAI_API_KEY=OPENAI_API_KEY:latest` (`--update-secrets`, NOT `--set-secrets`, so the
+  existing `SUPABASE_DB_URL`/`GMAIL_*` secrets aren't dropped). MVP only — deeper/cross-tab
+  Q&A would need read-only *tools* (the GET endpoints or a SELECT-only DB role), never a
+  write path.
 - Not yet configured: `AC_API_URL`/`AC_API_KEY` (ActiveCampaign), `XERO_*`
   (Xero OAuth), `CALENDLY_TOKEN`, `MONDAY_TOKEN`,
   `GOOGLE_SERVICE_ACCOUNT_JSON`/`BUYER_ANALYSIS_SHEET_ID` (the MAG Buyer

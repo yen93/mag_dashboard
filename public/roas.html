@@ -142,11 +142,6 @@
             <button data-st="Open">Open</button>
             <button data-st="All">All</button>
           </div>
-          <div class="segmented" id="scopeSeg">
-            <button data-sc="counted">Counted as Google Ads</button>
-            <button data-sc="review">Needs review</button>
-            <button data-sc="actag">Tagged, not counted</button>
-          </div>
           <input class="table-search" id="dealSearch" type="search" placeholder="Search organisation, deal or comment" />
         </div>
         <p class="muted" id="dealsNote" style="font-size:12px"></p>
@@ -421,7 +416,6 @@
       document.querySelectorAll('#fySeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-fy') === SEL.fy); });
       document.querySelectorAll('#basisSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-basis') === SEL.basis); });
       document.querySelectorAll('#statusSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-st') === SEL.status); });
-      document.querySelectorAll('#scopeSeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-sc') === SEL.scope); });
     }
 
     function buildFySeg() {
@@ -487,7 +481,6 @@
     // Static control wiring (segments that exist in the HTML from the start).
     document.getElementById('basisSeg').addEventListener('click', function (e) { var b = e.target.closest('button[data-basis]'); if (b) setBasis(b.getAttribute('data-basis')); });
     document.getElementById('statusSeg').addEventListener('click', function (e) { var b = e.target.closest('button[data-st]'); if (b) { SEL.status = b.getAttribute('data-st'); syncPressed(); renderDeals(); } });
-    document.getElementById('scopeSeg').addEventListener('click', function (e) { var b = e.target.closest('button[data-sc]'); if (b) { SEL.scope = b.getAttribute('data-sc'); syncPressed(); renderDeals(); } });
     document.getElementById('dealSearch').addEventListener('input', function (e) { dealQuery = e.target.value.trim(); renderDeals(); });
 
     initPage('operations'); // login / top-bar / theme only — this page renders its own content
