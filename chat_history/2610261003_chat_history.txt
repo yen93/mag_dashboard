@@ -1,0 +1,90 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-26
+Session: Added Bing + Simple Digital spend to FY22–FY24 on the ROAS "What we
+spent vs what we won" chart, sourcing the data from Xero — by extending the
+xero-ad-spend-sync fetch window back to FY22 and un-gating the FY<=2024
+hard-zeroing in roas.js.
+================================================================================
+
+NOTE ON REDACTIONS: No live secrets were pasted into this chat. Xero/Supabase
+credentials live only as Supabase edge secrets and in Google Secret Manager
+(never shown). The Xero tenant id and non-secret contact GUIDs that appeared are
+already in the committed codebase.
+
+--------------------------------------------------------------------------------
+USER (pasted brief):
+Update the ROAS "What we spent vs what we won" graph to include Bing Ads and
+Simple Digital spending for FY22–FY24, and fetch that spend data from Xero.
+(Ran in plan mode.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran three parallel Explore agents to map the architecture:
+  • Frontend chart (public/roas.html, canvas #chartSpend): already a grouped+
+    stacked bar with datasets Google Ads (r.googleSpend), Bing Ads (r.bingSpend),
+    Simple Digital (r.sdFee) under stack:'cost', beside Won revenue (stack:'rev').
+    It plots whatever the API returns — NO frontend change needed. The chart
+    ignores the All-in/Google-only basis toggle (always shows the full breakdown).
+  • Backend (server/metrics/roas.js): one CTE SQL. FY22–24 Google = sum(cpc) from
+    niki_ad_leads_tracking; FY25+ from the google/bing/sd monthly tables via LEFT
+    JOIN. The bing/sd CTEs already GROUP BY every FY. The ONLY thing blocking
+    FY22–24 Bing/SD was lines 133–134: CASE WHEN a.fy_end<=2024 THEN 0 … hard-
+    zeroing bingSpend/sdFee. fy_axis keys FY<=2024 off niki.google_spend>0.
+    Output fields: googleSpend, bingSpend, sdFee, totalCost(=sum), wonRevenue,
+    roasGoogle, roasAllin, etc.
+  • Xero sync (supabase/functions/xero-ad-spend-sync/index.ts): fetch bounded by
+    SINCE (default 2024-07-01); BankTransactions for contacts Microsoft Ads +
+    Simple Digital; buckets ex-GST by month. Writes are date-unconditional:
+    Simple Digital deletes EVERY row then reinserts; Bing deletes all
+    campaign_id=0 then reinserts. So extending SINCE back + re-running would
+    backfill FY22–24 IF Xero holds those charges.
+
+Established a key constraint: the claude.ai Xero MCP tools cover only the current
+FY + 3 preceding (FY24–FY27 from today) and get_bank_account_transactions is
+unreconciled-only — so the MCP can't fetch FY22–24 reconciled ad-spend; the edge
+fn's direct REST BankTransactions call is the only path. A Xero P&L for FY24
+confirmed $60,069 on account 302 "Advertising and marketing" (not vendor-split).
+A read-only query of the current tables showed bing earliest = 2025-06,
+simple_digital earliest = 2024-07 (exactly the current SINCE floor) — strongly
+implying SD has unfetched FY22–24 history while Bing simply wasn't running then.
+
+Wrote the plan to the plan file and exited plan mode; user approved.
+
+EXECUTION:
+1. Edited index.ts: SINCE default 2024-07-01 → 2021-07-01 (FY22 start), with a
+   comment that it must stay a full-history floor (the wipe-then-reinsert writes
+   would delete FY22–24 rows if narrowed). Redeployed via Supabase MCP
+   deploy_edge_function (verify_jwt:false) → version 7, ACTIVE.
+2. Edited roas.js:133–134: replaced the two "CASE WHEN fy_end<=2024 THEN 0 ELSE
+   coalesce(...) END" with plain coalesce(b.bing_spend,0) / coalesce(s.sd_fee,0).
+3. Dry-run (?dry=1, writes nothing) confirmed exactly: Simple Digital history back
+   to Mar 2022 (~$920/mo ex-GST through 2024); Bing earliest Jun 2025 → nothing in
+   FY22–24. No orphan FY (SD's earliest FY22 months join the FY22 axis row Niki
+   already provides).
+4. Real backfill (?sync=1): Simple Digital 28 → 56 months written; Bing 17
+   (unchanged); no errors.
+5. Verified via SQL — per-FY Simple Digital: FY22 $3,680 (4 mo), FY23 $11,040
+   (12), FY24 $11,540 (12); Bing $0 for all three. Ran the full edited roas.js
+   query end-to-end: FY22 total $5,376, FY23 $34,866, FY24 $44,733 (= Niki Google
+   + Xero SD); still 6 FY rows, FY25+ unchanged.
+6. Docs: updated CLAUDE.md (FY22–24 now mixed basis = Niki Google + Xero SD, Bing
+   $0; Xero fetch window now 2021-07; dashboard redeploy needed for the roas.js
+   un-gating) and the xero-ad-spend-sync memory file.
+
+Closed by reporting that the data + edge fn are live, Bing is legitimately $0 for
+FY22–24 (no spend existed), the window change is durable (weekly cron re-fetches
+the full window), and the remaining action is the USER's dashboard redeploy to
+Cloud Run to pick up the roas.js change (Claude never deploys the dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file, updated as_built.txt, CLAUDE.md
+(already updated during the session), and checked .gitignore. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

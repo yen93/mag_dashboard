@@ -101,12 +101,20 @@ Cloud Run.
     chart, a wide "ROAS by FY" table, and a per-FY **deals table**). LIVE, computed at
     request time from Supabase — NOT a cache, NOT the Google Sheet.
     **FY SOURCING (matches the artifact):**
-    • **FY22–FY24** → `public.niki_ad_leads_tracking` (Niki's Google Ads lead log):
+    • **FY22–FY24** → **Google** from `public.niki_ad_leads_tracking` (Niki's Google Ads lead log):
       Google spend = `sum(cpc)` over every lead row in the FY (per-lead click cost);
       Won/Lost/Open counts + won revenue (`deal_value`) from rows with those statuses
       (status `Unidentified`/`N/A` excluded from counts but their cpc still counts as
       spend). FY derived in SQL from `year`+`month` (no stored FY/day); FY22 is partial
       (data starts May 2022). `company LIKE 'uniting%'` excluded (referrals).
+      **Simple Digital is ALSO counted into the FY22–24 All-in cost** (as of 2026-10-26) —
+      `sd_fee` from `public.simple_digital_fees_monthly`, same LEFT JOIN as FY25+ (SD history
+      runs back to Mar 2022 in Xero: FY22 $3,680 / FY23 $11,040 / FY24 $11,540). **Bing is $0
+      for FY22–24** — MAG didn't run Microsoft/Bing Ads until mid-FY25 (earliest Xero charge
+      Jun 2025), so there's nothing to count. So FY22–24 is a **mixed basis**: Niki per-lead
+      cpc for Google + Xero-billed Simple Digital. (This replaced the old hard-coded
+      `bingSpend`/`sdFee`=0 for `fy_end<=2024` in `roas.js`; those are now plain
+      `coalesce(...,0)` like FY25+.)
     • **FY25+** → cost from monthly tables, deals from the counted set:
       Google = `sum(cost)` `public.google_ads_campaign_monthly`; **Bing = `sum(cost)`
       `public.bing_ads_campaign_monthly`** and **Simple Digital = `sum(paid_search_fee)`
@@ -117,8 +125,9 @@ Cloud Run.
       `channel ~* 'cpc'`** — won $ from the audit `deal_value_aud_crm` (text `"$9,500"` →
       strip `$`/commas), falling back to GA4 `deal_value` for cpc-only deals not in the audit.
     **END-YEAR FY is derived explicitly in SQL for every source** (`extract(year)+(month>=7?1:0)`;
-    clover's `fiscal_year` text is already END-year via `right(fiscal_year,2)+2000`). Do NOT use
-    `public.mag_fy_label` or GA4's generated `fy` — they are START-year (off by one).
+    clover's `fiscal_year` text is already END-year via `right(fiscal_year,2)+2000`). As of
+    2026-10-23 `public.mag_fy_label` / GA4's generated `fy` are ALSO END-year (migration
+    `20261023130000`), so they now MATCH this convention — the old START-year off-by-one is gone.
     **Two cost bases per row** (`roasGoogle` = won$÷Google, `roasAllin` = won$÷(Google+Bing+SD));
     the frontend toggles between them client-side. ROI $/% and the "cost" KPI follow the active
     basis. Win rate = won ÷ (won+lost+open); Per-Lead Value = won$ ÷ (won+lost+open). Only FYs
@@ -162,6 +171,14 @@ Cloud Run.
     **less $600 SEO from 2026-03** — the debit went $1320→$1920 then, the +$600 is SEO;
     `seo_component=600`; configurable `XERO_SD_SEO_FROM`/`XERO_SD_SEO_MONTHLY`). `roas.js` already
     sums both, so **no dashboard redeploy** is needed to pick up the data.
+    **FETCH WINDOW (as of 2026-10-26): `SINCE` default is `2021-07-01` (FY22 start), not the old
+    `2024-07-01`** — so the All-in cost basis now covers FY22–24 too (Simple Digital has Xero
+    history back to Mar 2022; Bing only from Jun 2025). Override via the `XERO_SPEND_SINCE` secret.
+    **Keep this a full-history floor** — both writes wipe-then-reinsert the whole window (SD deletes
+    EVERY row; Bing deletes all `campaign_id=0`), so narrowing `SINCE` on a later cron run would
+    DELETE the FY22–24 rows. (Note: picking up FY22–24 on the DASHBOARD also required removing the
+    old `fy_end<=2024 THEN 0` gate on `bingSpend`/`sdFee` in `roas.js` — that IS a dashboard
+    redeploy; the "no redeploy" line above only covers the data itself.)
     **AUTH = a FREE standard Xero "Web app"** (OAuth2 auth-code + refresh-token rotation, NOT a
     paid Custom Connection). First consent is captured by the **`xero-oauth-callback` edge fn**
     (its public URL is the app's **Redirect URI**; a no-`?code` visit 302s to the Xero consent
@@ -290,7 +307,8 @@ Cloud Run.
       contact_id ∈ `activecampaign_contacts`.
     - **`fy` / `cal_yr` / `jc_manual_tag` columns (as of 2026-10-20):** `ga4_ac_contact_source`
       carries three extra columns the GA4 Leads Tracker shows. `cal_yr` (int) and `fy`
-      (text, `"FY26"` = last 2 digits of the AU FY start year, FY starting Jul 1) are
+      (text, `"FY27"` = last 2 digits of the AU FY **END** year, FY ending Jun 30 — END-year
+      as of migration `20261023130000`, matching the ROAS tab; was START-year until 2026-10-23) are
       **GENERATED STORED** from `cdate` via IMMUTABLE helpers `public.mag_cal_yr()` /
       `public.mag_fy_label()` (UTC, matching the page's existing cdate date handling) — so
       they need **no sync maintenance** and are correct even for the static roas rows.

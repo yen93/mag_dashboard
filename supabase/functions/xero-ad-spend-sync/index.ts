@@ -48,8 +48,11 @@ const XERO_CLIENT_SECRET = Deno.env.get("XERO_CLIENT_SECRET") ?? "";
 const XERO_REFRESH_SEED = Deno.env.get("XERO_REFRESH_TOKEN") ?? "";
 // Preferred org id if several are connected (defaults to MyAdventure Group).
 const PREFERRED_TENANT = Deno.env.get("XERO_TENANT_ID") ?? "2cc630e1-5f48-4cc7-b6ba-1d3cc0baf035";
-// Pull spend from this date on (FY25 = Jul 2024 onward is what ROAS FY25+ needs).
-const SINCE = Deno.env.get("XERO_SPEND_SINCE") ?? "2024-07-01";
+// Pull spend from this date on. Starts at FY22 (2021-07) so the ROAS All-in cost basis
+// also covers FY22–FY24 (Simple Digital history; Bing/MS Ads only began mid-FY25). Keep
+// this a full-history floor: both writes below wipe-then-reinsert the whole window, so a
+// narrower value on a later cron run would DELETE the FY22–24 rows.
+const SINCE = Deno.env.get("XERO_SPEND_SINCE") ?? "2021-07-01";
 // Simple Digital bundles a fixed SEO component into the direct debit from this month
 // on; ROAS only counts the paid-search portion, so strip it (per CLAUDE.md).
 const SD_SEO_FROM = Deno.env.get("XERO_SD_SEO_FROM") ?? "2026-03-01";
