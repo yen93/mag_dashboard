@@ -1,0 +1,49 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-27
+Session: Switched the ROAS headline (KPI cards, both charts, and the ROAS-by-FY
+table) to use the billed Xero ENGAGEMENT FEE as won revenue, falling back to the
+AC/contracted value where a deal isn't invoiced. (Follow-up to the same-day Xero
+backfill + deals-table work in 2710261552; earlier context in 2710261409/2710261432.)
+================================================================================
+
+--------------------------------------------------------------------------------
+USER: "the cards, graphs, and main ROAS by FY should now reflect these xero
+engagement fee values."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Flagged the coverage gap (only ~32/57 won deals have a Xero engagement fee) and
+ASKED how uninvoiced won deals should count → user chose "Xero fee, else AC value"
+(fallback, full coverage).
+Made a single source-level change in server/metrics/roas.js: the `deals` CTE's
+won_rev is now `coalesce(sum(coalesce(xero_engagement_fee, value)) FILTER (WHERE
+status='won'),0)` — so won revenue = billed engagement fee where invoiced, else the
+AC/niki contracted value. This flows through roas.js shape()/wonRevenue into ALL
+derived figures: KPI cards (ROAS, Won revenue from ads, ROI), both charts
+(ROAS-by-FY bars + "what we spent vs what we won"), and the ROAS-by-FY table
+(won revenue, ROAS Google/All-in, ROI $/%, per-lead value). Open pipeline stays on
+contracted value (open deals aren't invoiced). Also updated the CTE comment and the
+getRoas note string, and the roas.html "Won revenue from ads" KPI tooltip to state
+the new basis.
+Verified with node --check and a per-FY before/after query:
+  FY22 59,765→58,955 · FY23 123,400→118,400 · FY24 148,500→151,330 (ticks up: some
+  invoices billed extras above contract) · FY25 189,440→179,692 · FY26 53,750→53,100
+  · FY27 16,000→12,000. (Pure-Xero-only would have gutted older FYs — e.g. FY25
+  $100,752 vs $179,692 — confirming the fallback was the right call.)
+Needs a manual Cloud Run redeploy (roas.js + roas.html); DB view already has the
+columns.
+
+--------------------------------------------------------------------------------
+USER (/dcp): Ran dcp (this export).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat-history file; updated as_built.txt and CLAUDE.md to note that the
+ROAS headline (cards/charts/by-FY table) now uses won revenue = Xero engagement fee
+else contracted value (the earlier "KPIs/charts stay on AC revenue" note is
+superseded). .gitignore already covers all sensitive patterns; no new sensitive
+files. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

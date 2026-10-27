@@ -168,8 +168,13 @@ Cloud Run.
     `charges.lines` line tables where present, a net/GST/total fallback for the compact backfill JSON).
     The fee split follows `invoice_tracking`: engagement = service accounts **220–228**, other =
     expense **465/311**, gst = invoice tax, total = invoice total, summed across a deal's invoices.
-    **ROAS KPIs/charts/the by-FY table stay on AC won-revenue** (the Xero switch is deals-display
-    only — only ~32/57 won deals have Xero data, so a headline switch would understate).
+    **ROAS HEADLINE now uses WON REVENUE = Xero engagement fee where invoiced, else the AC/
+    contracted value (as of 2026-10-27)** — `roas.js` `won_rev = sum(coalesce(xero_engagement_fee,
+    value)) FILTER (status='won')`. Flows into the KPI cards, both charts and the ROAS-by-FY table
+    (won rev, ROAS Google/All-in, ROI, per-lead value). The **fallback is deliberate** (only ~32/57
+    won deals have a Xero fee; pure-Xero would gut older FYs). **Open pipeline stays on contracted
+    value** (open deals aren't invoiced). Deals-table / ROAS-counted DISPLAY columns still show the
+    raw Xero fee (blank when uninvoiced), but the headline won-revenue falls back to AC.
     **GA4 & Ads Leads "ROAS-counted only" view** = `/api/operations/contact-sources/roas-counted`
     (`server/metrics/roas-counted.js`, a plain SELECT of the view). The page's toggle **SWITCHES its
     data source** to this endpoint with its own columns (FY/Date/Org/Deal/Status/Value/Source/Method)

@@ -37,12 +37,15 @@ const SELECT = `
     -- truth, shared with roas-deals.js and the GA4 & Ads Leads "ROAS-counted only" view).
     -- FY is already resolved per-source inside the view (niki = its own logged month;
     -- clover/jc/ga4 = contact cdate). Value is AUD (ac_value_aud).
+    -- WON REVENUE uses the actual billed Xero ENGAGEMENT FEE where the deal is invoiced
+    -- (xero_engagement_fee), falling back to the AC/niki contracted value otherwise — so ROAS,
+    -- the charts and the ROAS-by-FY table reflect billed fees where known without losing coverage.
     SELECT fy_end,
       count(*) FILTER (WHERE status IN ('won','lost','open'))         AS leads,
       count(*) FILTER (WHERE status = 'won')                          AS won,
       count(*) FILTER (WHERE status = 'lost')                         AS lost,
       count(*) FILTER (WHERE status = 'open')                         AS open,
-      coalesce(sum(value) FILTER (WHERE status = 'won'), 0)::numeric  AS won_rev,
+      coalesce(sum(coalesce(xero_engagement_fee, value)) FILTER (WHERE status = 'won'), 0)::numeric AS won_rev,
       coalesce(sum(value) FILTER (WHERE status = 'open'), 0)::numeric AS open_val
     FROM public.roas_counted_deals
     GROUP BY fy_end
@@ -230,6 +233,7 @@ export async function getRoas() {
     `FY22–24 from Niki's log; FY25+ Won/Lost/Open = audit final_gads_tag=Yes ∪ GA4 cpc. ` +
     (anyBing ? '' : 'Bing spend not yet connected (reads $0). ') +
     (anySd ? '' : 'Simple Digital fee not yet connected (reads $0). ') +
+    `Won revenue = billed Xero engagement fee where invoiced, else contracted value. ` +
     `Revenue credited in the FY the enquiry came in.`;
 
   return {
