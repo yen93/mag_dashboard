@@ -6,62 +6,219 @@
   <title>ROAS — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
   <style>
+    /* ============================================================
+       ROAS tab — bespoke visual layer. DESIGN ONLY: every id, class
+       hook, toggle, control and JS behaviour is unchanged; this just
+       restyles what's already here. Scoped to this page via inline CSS.
+       ============================================================ */
+
+    /* Page-local accent + depth tokens (theme-aware). */
+    :root {
+      --roas-accent: var(--accent);
+      --roas-accent-2: #6a4bf5;
+      --roas-accent-soft: #eef2fe;
+      --roas-shadow: 0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --roas-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+      --roas-amber: #c99a17;
+    }
+    html[data-theme='dark'] {
+      --roas-accent-2: #9b7dff;
+      --roas-accent-soft: #1b2440;
+      --roas-shadow: 0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --roas-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+      --roas-amber: #e3b84a;
+    }
+
     /* Wide tables — use the full screen width (still scrolls on narrow screens). */
     .content { max-width: none; }
-    .roas-controls { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-    .ctl-label { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .05em; }
-    .roas-take { font-size: 15px; line-height: 1.45; margin: 12px 0 2px; max-width: 80ch; }
-    .roas-take b { font-weight: 600; }
-    .roas-dealbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: 10px; }
-    /* ROAS table: compact, right-aligned numbers, highlighted total row. */
-    table.roas-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    table.roas-table th, table.roas-table td { padding: 9px 12px; border-bottom: 1px solid var(--border); white-space: nowrap; }
-    table.roas-table thead th { text-align: right; color: var(--text-muted); font-weight: 600; position: sticky; top: 0; background: var(--surface); cursor: default; }
-    table.roas-table thead th:first-child, table.roas-table td:first-child { text-align: left; }
-    table.roas-table td.num, table.roas-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
-    table.roas-table tbody tr:hover { background: var(--surface-2); }
-    table.roas-table tbody tr.rowsel { background: color-mix(in srgb, var(--accent) 12%, transparent); }
-    table.roas-table tbody tr.clickrow { cursor: pointer; }
-    table.roas-table tfoot td, table.roas-table tr.total td { border-top: 2px solid var(--border); font-weight: 700; background: var(--surface-2); }
-    table.roas-table th.sort { cursor: pointer; }
-    .yr-cell { font-weight: 600; cursor: help; }
-    .yr-cell small { display: block; font-weight: 400; color: var(--text-muted); font-size: 11px; }
-    .pill.roas-pass { background: rgba(23,166,115,.16); color: #17a673; }
-    .pill.roas-fail { background: rgba(226,72,61,.16); color: #e2483d; }
-    .st-won { color: #17a673; font-weight: 600; }
-    .st-lost { color: var(--text-muted); }
-    .st-open { color: #c99a17; }
+    .marketing-layout .content { padding: 26px 30px 72px; }
+
+    /* Soft aurora backdrop behind the whole tab. */
+    body {
+      background:
+        radial-gradient(1100px 400px at 100% -8%, color-mix(in srgb, var(--roas-accent) 11%, transparent), transparent 60%),
+        radial-gradient(820px 340px at -6% 2%, color-mix(in srgb, var(--roas-accent-2) 9%, transparent), transparent 56%),
+        var(--bg);
+      background-attachment: fixed;
+    }
+
+    /* ---------- Page hero ---------- */
+    .roas-hero {
+      display: flex; align-items: flex-end; justify-content: space-between; gap: 20px;
+      flex-wrap: wrap; margin: 0 0 22px; padding-bottom: 20px;
+      border-bottom: 1px solid var(--border);
+    }
+    .roas-hero-eyebrow {
+      display: inline-block; font-size: 11.5px; font-weight: 700; letter-spacing: .15em;
+      text-transform: uppercase; color: var(--roas-accent); margin-bottom: 8px;
+    }
+    .roas-hero-title {
+      margin: 0; font-size: 30px; font-weight: 800; letter-spacing: -.025em; line-height: 1.08;
+      background: linear-gradient(115deg, var(--text), color-mix(in srgb, var(--text) 52%, var(--roas-accent)));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .roas-hero-sub { margin: 8px 0 0; color: var(--text-muted); font-size: 14.5px; line-height: 1.5; }
+    .roas-hero-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      font-size: 12px; font-weight: 600; color: var(--roas-accent);
+      background: var(--roas-accent-soft);
+      border: 1px solid color-mix(in srgb, var(--roas-accent) 26%, transparent);
+      padding: 8px 14px; border-radius: 999px; white-space: nowrap;
+    }
+    .roas-hero-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--pos);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--pos) 24%, transparent); }
+
+    /* ---------- Cards (charts + tables) ---------- */
+    .card {
+      border-radius: 16px; box-shadow: var(--roas-shadow);
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+    }
+    .grid .card { position: relative; overflow: hidden; }
+    .grid .card::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--roas-accent), var(--roas-accent-2));
+      opacity: 0; transition: opacity .25s ease;
+    }
+    .grid .card:hover { transform: translateY(-3px); box-shadow: var(--roas-shadow-lift); }
+    .grid .card:hover::before { opacity: .95; }
+    .card-head h3 {
+      font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .card-head h3::before {
+      content: ""; width: 4px; height: 17px; border-radius: 3px; flex: none;
+      background: linear-gradient(var(--roas-accent), var(--roas-accent-2));
+    }
+    .chart-box { height: 318px; }
+
+    /* ---------- Controls bar ---------- */
+    .roas-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    #roasAsOf { font-weight: 600; }
+
+    /* Segmented toggles — gradient active pill. */
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: linear-gradient(135deg, var(--roas-accent), var(--roas-accent-2));
+      color: #fff;
+      box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--roas-accent) 60%, transparent);
+    }
+
+    /* ---------- Takeaway callout ---------- */
+    .roas-take {
+      font-size: 15px; line-height: 1.5; margin: 16px 0 0; max-width: none;
+      padding: 14px 16px 14px 18px;
+      background: linear-gradient(90deg, var(--roas-accent-soft), transparent 92%);
+      border: 1px solid var(--border); border-left: 3px solid var(--roas-accent);
+      border-radius: 12px;
+    }
+    .roas-take b { font-weight: 700; color: var(--text); }
+    #roasChips { display: inline-flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+
+    /* ---------- KPI tiles ---------- */
+    .kpi-grid { gap: 14px; margin: 18px 0 8px; grid-template-columns: repeat(auto-fit, minmax(192px, 1fr)); }
+    .kpi {
+      position: relative; border-radius: 16px; padding: 18px 18px 16px; overflow: hidden;
+      box-shadow: var(--roas-shadow);
+      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .kpi::after {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--roas-accent), var(--roas-accent-2));
+      opacity: 0; transition: opacity .2s ease;
+    }
+    .kpi:hover::after { opacity: .9; }
+    .kpi .label { font-size: 12px; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    .kpi .value { font-size: 29px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 11px 0 6px; }
+    .kpi .delta { font-size: 12px; font-weight: 600; }
+    /* Emphasise the first tile (ROAS headline). */
+    .kpi-grid .kpi:first-child {
+      background: linear-gradient(140deg, color-mix(in srgb, var(--roas-accent) 13%, var(--surface)), var(--surface) 70%);
+      border-color: color-mix(in srgb, var(--roas-accent) 32%, var(--border));
+    }
+    .kpi-grid .kpi:first-child .value { color: var(--roas-accent); }
     button.kpi { text-align: left; font: inherit; color: inherit; cursor: pointer; border: 1px solid var(--border); }
-    button.kpi:hover { border-color: var(--text-muted); }
+    button.kpi:hover {
+      transform: translateY(-3px);
+      border-color: color-mix(in srgb, var(--roas-accent) 42%, var(--border));
+      box-shadow: 0 14px 32px -14px color-mix(in srgb, var(--roas-accent) 45%, transparent);
+    }
     .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
     .kpi-info:hover, .kpi-info:focus { color: var(--accent); outline: none; }
+
+    /* ---------- Pills ---------- */
+    .pill.roas-pass { background: color-mix(in srgb, var(--pos) 16%, transparent); color: var(--pos); border-color: transparent; }
+    .pill.roas-fail { background: color-mix(in srgb, var(--neg) 16%, transparent); color: var(--neg); border-color: transparent; }
+
+    /* ---------- Tables (ROAS by FY + deals) ---------- */
+    .table-scroll { border-radius: 12px; }
+    table.roas-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.roas-table th, table.roas-table td { padding: 10px 12px; border-bottom: 1px solid color-mix(in srgb, var(--border) 65%, transparent); white-space: nowrap; }
+    table.roas-table thead th {
+      text-align: right; color: var(--text-muted); font-weight: 700;
+      font-size: 11px; text-transform: uppercase; letter-spacing: .045em;
+      position: sticky; top: 0; z-index: 1; cursor: default;
+      background: var(--surface-2); border-bottom: 1px solid var(--border);
+    }
+    table.roas-table thead th:first-child, table.roas-table td:first-child { text-align: left; }
+    table.roas-table td.num, table.roas-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    table.roas-table tbody tr { transition: background .14s ease; }
+    table.roas-table tbody tr:hover { background: var(--surface-2); }
+    table.roas-table tbody tr.clickrow { cursor: pointer; }
+    table.roas-table tbody tr.clickrow:hover { background: color-mix(in srgb, var(--roas-accent) 8%, transparent); }
+    table.roas-table tbody tr.rowsel { background: color-mix(in srgb, var(--roas-accent) 13%, transparent); box-shadow: inset 3px 0 0 var(--roas-accent); }
+    table.roas-table tfoot td, table.roas-table tr.total td { border-top: 2px solid var(--border); font-weight: 700; background: var(--surface-2); }
+    table.roas-table th.sort { cursor: pointer; }
+    table.roas-table th.sort:hover { color: var(--roas-accent); }
+    .yr-cell { font-weight: 700; cursor: help; }
+    .yr-cell small { display: block; font-weight: 400; color: var(--text-muted); font-size: 11px; }
+    .st-won { color: var(--pos); font-weight: 700; }
+    .st-lost { color: var(--text-muted); }
+    .st-open { color: var(--roas-amber); font-weight: 600; }
+
+    /* ---------- Deals toolbar ---------- */
+    .roas-dealbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; margin-bottom: 14px; }
+    .table-search { border-radius: 10px; margin-bottom: 0; }
+
+    @media (max-width: 860px) {
+      .marketing-layout .content { padding: 20px 16px 64px; }
+      .roas-hero-title { font-size: 25px; }
+    }
+
     /* ---- ROAS chat assistant (read-only), bottom-right ---- */
     #asstLauncher { position: fixed; right: 20px; bottom: 20px; z-index: 50; border: none;
       border-radius: 999px; padding: 12px 18px; font: inherit; font-weight: 600; cursor: pointer;
-      background: var(--accent); color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.25); }
-    #asstLauncher:hover { filter: brightness(1.05); }
-    #asstPanel { position: fixed; right: 20px; bottom: 20px; z-index: 51; width: 380px;
-      max-width: calc(100vw - 32px); height: 560px; max-height: calc(100vh - 100px);
+      background: linear-gradient(135deg, var(--roas-accent), var(--roas-accent-2)); color: #fff;
+      box-shadow: 0 10px 28px -8px color-mix(in srgb, var(--roas-accent) 65%, transparent);
+      transition: transform .2s ease, box-shadow .2s ease; }
+    #asstLauncher:hover { transform: translateY(-2px); box-shadow: 0 16px 34px -10px color-mix(in srgb, var(--roas-accent) 70%, transparent); }
+    #asstPanel { position: fixed; right: 20px; bottom: 20px; z-index: 51; width: 384px;
+      max-width: calc(100vw - 32px); height: 564px; max-height: calc(100vh - 100px);
       display: none; flex-direction: column; background: var(--surface); border: 1px solid var(--border);
-      border-radius: 14px; box-shadow: 0 14px 44px rgba(0,0,0,.35); overflow: hidden; }
+      border-radius: 16px; box-shadow: 0 20px 56px -16px rgba(0,0,0,.45); overflow: hidden; }
     #asstPanel.open { display: flex; }
-    .asst-head { display: flex; align-items: center; gap: 8px; padding: 12px 14px;
-      border-bottom: 1px solid var(--border); background: var(--surface-2); }
+    .asst-head { display: flex; align-items: center; gap: 8px; padding: 13px 15px;
+      border-bottom: 1px solid var(--border);
+      background: linear-gradient(135deg, color-mix(in srgb, var(--roas-accent) 12%, var(--surface-2)), var(--surface-2)); }
     .asst-head .t { font-weight: 700; font-size: 14px; }
     .asst-head .s { font-size: 11px; color: var(--text-muted); }
     .asst-head .x { margin-left: auto; background: none; border: none; color: var(--text-muted);
       font-size: 20px; line-height: 1; cursor: pointer; }
+    .asst-head .x:hover { color: var(--text); }
     .asst-msgs { flex: 1; overflow-y: auto; padding: 14px; display: flex; flex-direction: column; gap: 10px; }
-    .asst-msg { max-width: 85%; padding: 9px 12px; border-radius: 12px; font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
-    .asst-msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 4px; }
+    .asst-msg { max-width: 85%; padding: 9px 12px; border-radius: 13px; font-size: 13.5px; line-height: 1.45; white-space: pre-wrap; word-wrap: break-word; }
+    .asst-msg.user { align-self: flex-end; background: linear-gradient(135deg, var(--roas-accent), var(--roas-accent-2)); color: #fff; border-bottom-right-radius: 4px; }
     .asst-msg.bot { align-self: flex-start; background: var(--surface-2); border: 1px solid var(--border); border-bottom-left-radius: 4px; }
-    .asst-msg.err { align-self: flex-start; background: rgba(226,72,61,.12); color: #e2483d; border: 1px solid rgba(226,72,61,.3); }
-    .asst-hint { font-size: 12px; color: var(--text-muted); }
+    .asst-msg.err { align-self: flex-start; background: color-mix(in srgb, var(--neg) 12%, transparent); color: var(--neg); border: 1px solid color-mix(in srgb, var(--neg) 30%, transparent); }
+    .asst-hint { font-size: 12px; color: var(--text-muted); line-height: 1.5; }
     .asst-form { display: flex; gap: 8px; padding: 10px; border-top: 1px solid var(--border); }
     .asst-form textarea { flex: 1; resize: none; font: inherit; font-size: 13.5px; padding: 8px 10px;
       border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); height: 40px; max-height: 120px; }
+    .asst-form textarea:focus { outline: 2px solid var(--roas-accent); border-color: transparent; }
     .asst-form button { border: none; border-radius: 10px; padding: 0 14px; font: inherit; font-weight: 600;
-      cursor: pointer; background: var(--accent); color: #fff; }
+      cursor: pointer; background: linear-gradient(135deg, var(--roas-accent), var(--roas-accent-2)); color: #fff; }
     .asst-form button:disabled { opacity: .5; cursor: default; }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
@@ -85,8 +242,32 @@
   <div class="marketing-layout">
     <aside class="subnav" id="marketingNav"></aside>
   <main class="content">
+
+    <!-- Page hero (design-only; no JS hooks) -->
+    <header class="roas-hero">
+      <div class="roas-hero-main">
+        <span class="roas-hero-eyebrow">Marketing · Paid Search</span>
+        <h1 class="roas-hero-title">Return on Ad Spend</h1>
+        <p class="roas-hero-sub">Won revenue against paid-search cost, by Australian financial year (Jul–Jun).</p>
+      </div>
+      <div class="roas-hero-badge"><span class="dot"></span> Live from Supabase</div>
+    </header>
+
+    <!-- Charts -->
+    <div class="grid">
+      <div class="card col-6">
+        <div class="card-head"><h3>ROAS by FY (target 2.00×)</h3></div>
+        <div class="chart-box"><canvas id="chartRoas"></canvas></div>
+      </div>
+      <div class="card col-6">
+        <div class="card-head"><h3>What we spent vs what we won</h3></div>
+        <div class="chart-box"><canvas id="chartSpend"></canvas></div>
+      </div>
+    </div>
+
+    
     <!-- Controls -->
-    <div class="card" style="margin-bottom:16px">
+    <div class="card" style="margin:16px 0 0">
       <div class="roas-controls">
         <span class="ctl-label">Financial year</span>
         <div class="segmented" id="fySeg"></div>
@@ -105,17 +286,7 @@
     <!-- KPI cards -->
     <div class="kpi-grid" id="roasKpis"></div>
 
-    <!-- Charts -->
-    <div class="grid">
-      <div class="card col-6">
-        <div class="card-head"><h3>ROAS by FY (target 2.00×)</h3></div>
-        <div class="chart-box"><canvas id="chartRoas"></canvas></div>
-      </div>
-      <div class="card col-6">
-        <div class="card-head"><h3>What we spent vs what we won</h3></div>
-        <div class="chart-box"><canvas id="chartSpend"></canvas></div>
-      </div>
-    </div>
+    
 
     <!-- ROAS by FY table -->
     <div class="grid" style="margin-top:16px">
