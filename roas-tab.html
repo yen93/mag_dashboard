@@ -108,6 +108,28 @@
     line-height: 1.6;
     margin: 0 0 4px 0;
   }
+  /* Green-lined box marking parts added or changed in the latest update. */
+  .changed {
+    border: 2px solid #2e7d32;
+    background: #f1f8f1;
+    border-radius: 6px;
+    padding: 14px 18px;
+    margin: 0 0 16px 0;
+  }
+  .changed .changed-tag {
+    display: inline-block;
+    background: #2e7d32;
+    color: #ffffff;
+    font-family: 'Lato', sans-serif;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 0.6px;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-bottom: 10px;
+  }
+  .changed p:last-child, .changed ul:last-child { margin-bottom: 0; }
 </style>
 </head>
 <body>
@@ -275,6 +297,71 @@
   </div>
 </div>
 <div class="header-strip">
+  <div class="col"><h2>What keeps the figures up to date</h2></div>
+</div>
+<div class="content-band">
+  <div class="col">
+
+    <div class="changed">
+      <span class="changed-tag">New</span>
+      <p><strong>The ROAS tab has no cache table of its own.</strong> It reads a single live
+      database <b>view</b> of counted deals (plus the monthly ad-spend tables) and recalculates
+      every figure the moment the page is opened. A view holds no data itself &mdash; it simply
+      re-reads the tables below each time it&rsquo;s queried. Those underlying tables are what
+      actually refresh, and each one is on its own schedule:</p>
+
+      <table style="width:100%; border-collapse:collapse; font-family:'Lato',sans-serif; font-size:14px; margin:6px 0 14px 0;">
+        <thead>
+          <tr>
+            <th style="text-align:left; background:#37474F; color:#ffffff; padding:9px 12px; border:1px solid #37474F; font-size:13px; letter-spacing:0.4px;">Source feeding the view</th>
+            <th style="text-align:left; background:#37474F; color:#ffffff; padding:9px 12px; border:1px solid #37474F; font-size:13px; letter-spacing:0.4px;">How it updates</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#ffffff; vertical-align:top;"><b>ActiveCampaign deals</b> &mdash; deal status &amp; value, FY25+ (<code>activecampaign_deals</code>)</td>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#ffffff; vertical-align:top;"><b>Daily</b> sync, around 5:00&nbsp;am PH (<code>activecampaign-deals-sync</code>)</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#fbfdfb; vertical-align:top;"><b>GA4 paid-click leads</b> &mdash; cpc-channel deals (<code>ga4_ac_contact_source</code>)</td>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#fbfdfb; vertical-align:top;"><b>Daily</b> sync, around 6:00&nbsp;am PH (<code>contact-sources-sync</code>)</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#ffffff; vertical-align:top;"><b>ROAS audit deals</b> &mdash; tagged &ldquo;Google&nbsp;Ads&nbsp;=&nbsp;Yes&rdquo; (<code>clover_audited_deals</code>)</td>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#ffffff; vertical-align:top;"><b>Static</b> &mdash; a one-time load from the audit sheet; only changes when someone reloads it</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#fbfdfb; vertical-align:top;"><b>Niki&rsquo;s Google Ads log</b> &mdash; all FY22&ndash;FY24 deals &amp; spend (<code>niki_ad_leads_tracking</code>)</td>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#fbfdfb; vertical-align:top;"><b>Static</b> &mdash; a one-time load; only changes when someone reloads it</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#ffffff; vertical-align:top;"><b>Google Ads spend</b>, monthly (<code>google_ads_campaign_monthly</code>)</td>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#ffffff; vertical-align:top;"><b>Weekly</b>, Monday around 6:00&nbsp;am PH (Google Ads sync)</td>
+          </tr>
+          <tr>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#fbfdfb; vertical-align:top;"><b>Bing &amp; Simple Digital spend</b>, monthly (<code>bing_ads_campaign_monthly</code>, <code>simple_digital_fees_monthly</code>)</td>
+            <td style="padding:9px 12px; border:1px solid #e0e0e0; background:#fbfdfb; vertical-align:top;"><b>Weekly</b>, Monday around 6:30&nbsp;am PH, from Xero (<code>xero-ad-spend-sync</code>)</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <p><b>So does it auto-update the instant a new conversion comes in? Not quite.</b> A brand-new
+      won deal appears once the <b>next scheduled sync</b> writes it into one of the tables above
+      &mdash; usually the <b>next day</b>, not within the hour. On top of that, the page keeps each
+      result for about <b>10 minutes</b>, so a just-refreshed figure can take a few minutes to replace
+      one you&rsquo;re already looking at. The two <b>static</b> sources (Niki&rsquo;s log and the ROAS
+      audit) don&rsquo;t refresh on a schedule at all &mdash; they only change when someone reloads
+      them.</p>
+
+      <p>One more thing worth knowing: a FY25+ deal is only <b>counted</b> once it&rsquo;s attributed
+      to paid search &mdash; tagged &ldquo;Google&nbsp;Ads&nbsp;=&nbsp;Yes&rdquo;, given a JC manual
+      tag, or matched to a GA4 paid click. Simply creating a deal in ActiveCampaign isn&rsquo;t enough
+      for it to land on this tab.</p>
+    </div>
+
+  </div>
+</div>
+<div class="header-strip">
   <div class="col"><h2>The two cost bases</h2></div>
 </div>
 <div class="content-band">
@@ -374,7 +461,7 @@
 <div class="closing-band">
   <div class="col">
     <p>Updated by: Julienne</p>
-    <p>Last Update: 26 October 2026</p>
+    <p>Last Update: 27 October 2026</p>
   </div>
 </div>
 

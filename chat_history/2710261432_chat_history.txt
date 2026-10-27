@@ -1,0 +1,135 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-27
+Session: ROAS front-end redesign + documenting/propagating the ROAS data-freshness
+story — a /q on how the ROAS tab is sourced, a green-boxed "What keeps the figures
+up to date" section added to the iMAG guide (roas-tab.html), and the same
+knowledge fed into the ROAS chat assistant's primer. (The redesign portion is also
+captured in 2710261409_chat_history.txt; included here in brief for continuity.)
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"i just moved the Charts above the controls. kindly redesign the page in
+roas.html. make it at least 10x better ... maintain the current structure,
+toggles, buttons, layout, data, etc. only modify the front-end design."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(Full detail in 2710261409_chat_history.txt.) Design-only upgrade of
+`public/roas.html`: rewrote the inline <style> into a theme-aware visual layer
+(aurora backdrop, gradient KPI tiles with the ROAS headline emphasised, gradient
+segmented toggles, accent callout for the takeaway, polished sticky-header tables,
+themed chat-assistant widget), added a purely-additive page hero, and aligned the
+controls card to full width (margin:16px → margin:16px 0 0). No ids, controls,
+data, or JS changed.
+
+--------------------------------------------------------------------------------
+USER (/dcp):
+Ran dcp.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved 2710261409_chat_history.txt; left as_built.txt/CLAUDE.md/.gitignore
+unchanged (CSS-only change, nothing sensitive). No git commands.
+
+--------------------------------------------------------------------------------
+USER (/cm):
+Asked for a one-line paste-ready git commit command.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected `git status` (nothing staged; M public/roas.html, M roas-tab.html, new
+chat-history + 3 roas-diagram pngs). Output a single
+`git commit -m "style(roas): redesign ROAS tab front-end ..."` line. (Did not run
+it — just composed it.)
+
+--------------------------------------------------------------------------------
+USER (/q):
+"which db table is used as cache table for roas? it auto updates whenever there
+are new conversions right?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated read-only and answered: there is NO cache table for the ROAS tab — it
+is computed LIVE at request time. Evidence:
+  • `server/metrics/roas.js` GROUPs the VIEW `public.roas_counted_deals` by FY and
+    joins the monthly spend tables; header comment confirms "LIVE, computed at
+    request time ... NOT a cache".
+  • `server/index.js:262` wraps getRoas in `cached('operations:roas', getRoas,
+    10*60*1000)` — a ~10-min in-memory response cache (same for /roas/deals and
+    /contact-sources/roas-counted).
+  • Confirmed via Supabase information_schema (project aivitcomiywiysrfwqxt) that
+    `roas_counted_deals` is a VIEW and the sources (bing/clover/ga4/google/niki/
+    simple_digital + ga4_ac_contact_source) are BASE TABLEs.
+Explained the two freshness layers (10-min response cache; base tables filled by
+scheduled syncs) and that a new conversion does NOT appear instantly — it shows
+after the next daily/weekly sync (usually next day), and FY25+ deals must be
+attributed to paid search (Google Ads=Yes / JC tag / GA4 cpc) to be counted.
+Gave the source→cadence table (AC deals daily ~5am PH; GA4 leads daily ~6am PH;
+clover audit + Niki's log static; Google Ads weekly Mon ~6am; Bing+SD weekly Mon
+~6:30am via Xero). No changes made (/q).
+
+--------------------------------------------------------------------------------
+USER (/imag_page_update):
+"add a new section for this table re Source feeding the view and How it updates."
+Target: `C:\Users\Cloverly\claude_code\dashboard\roas-tab.html`.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Note: roas-tab.html has three very large embedded-image lines (258/284/307), so
+read it in small ranges. The file is an iMAG-themed guide (Lato, header banner,
+intro band, gray header-strips + white content-bands, closing band) with sections
+incl. "Where the figures come from", "The two cost bases", "How it's built".
+Made three in-place edits (theme preserved):
+  1. Added the `.changed` green-box CSS block before `</style>` (page didn't have
+     it).
+  2. Inserted a NEW section "What keeps the figures up to date" after "Where the
+     figures come from" (before "The two cost bases"), its whole body in a green
+     `New` box: a lead-in (no cache table; it reads a live VIEW), the requested
+     "Source feeding the view / How it updates" table (dark header row, light
+     cells, inline-styled so no theme CSS changed), and plain-English notes that
+     it does NOT auto-update on new conversions (next-day + ~10-min cache; static
+     sources), plus the paid-search-attribution requirement.
+  3. Bumped "Last Update" 26 → 27 October 2026.
+Verified with grep. All grounded in the /q findings.
+
+--------------------------------------------------------------------------------
+USER:
+"feed this to the chat assistant. it should know this"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read `server/roasAssistant.js` — the ROAS widget is a read-only, context-stuffed
+OpenAI Chat Completions call (system prompt = PRIMER + live /roas + /roas/deals
+snapshot; no DB/tools). The PRIMER already had a high-level "How this tab sources
+& refreshes" section that deliberately said "do NOT name ... tables ... exact
+schedules". Replaced that section with an enriched version carrying the same facts
+now in the published guide:
+  • No cache table; the counted-deals set is a VIEW re-read on every query.
+  • Per-source cadence: AC deals DAILY ~5am PH; GA4 cpc leads DAILY ~6am PH; ROAS
+    audit + Niki's FY22–24 log STATIC one-time loads; Google Ads spend WEEKLY Mon
+    ~6am; Bing+Simple Digital (via Xero) WEEKLY Mon ~6:30am.
+  • Consequence: a new won deal appears after the next sync (usually next day) +
+    the ~10-min cache; static sources never auto-refresh.
+  • FY25+ deals must be attributed to paid search to be counted.
+  • Relaxed the restriction to allow sharing cadence/behaviours, but kept
+    credentials/secrets/API keys/service accounts/infrastructure off-limits.
+Flagged that roasAssistant.js runs on the Cloud Run `dashboard` service, so it
+needs the user's manual redeploy (and OPENAI_API_KEY attached) to take effect.
+
+--------------------------------------------------------------------------------
+USER (/dcp):
+Ran dcp (this export).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat-history file. Reviewed as_built.txt and CLAUDE.md — the ROAS tab's
+data layer (view + sync schedules) and the assistant are already accurately
+described there; this session only reworded the assistant primer and added a guide
+section (no new component, route, env var, or convention), so both were left
+unchanged. Confirmed .gitignore already covers all sensitive patterns; no new
+sensitive files. Did NOT run any git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================
