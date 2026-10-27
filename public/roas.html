@@ -220,6 +220,42 @@
     .asst-form button { border: none; border-radius: 10px; padding: 0 14px; font: inherit; font-weight: 600;
       cursor: pointer; background: linear-gradient(135deg, var(--roas-accent), var(--roas-accent-2)); color: #fff; }
     .asst-form button:disabled { opacity: .5; cursor: default; }
+
+    /* ---- Xero "See Invoice" (deals table) — mirrors the Buyer Sheet ---- */
+    .charge-cell { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+    .see-inv {
+      background: var(--surface); color: var(--roas-accent); border: 1px solid var(--border);
+      border-radius: 999px; padding: 2px 9px; font-size: 11px; font-weight: 700; cursor: pointer;
+      opacity: 0; transition: opacity .12s; white-space: nowrap;
+    }
+    tr:hover .see-inv, .see-inv:focus { opacity: 1; outline: none; }
+    .see-inv:focus { box-shadow: 0 0 0 2px var(--roas-accent); }
+    .inv-backdrop {
+      position: fixed; inset: 0; z-index: 9998; display: none;
+      background: rgba(0,0,0,.45); align-items: flex-start; justify-content: center;
+      padding: 48px 16px; overflow: auto;
+    }
+    .inv-backdrop.open { display: flex; }
+    .inv-modal {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 16px; max-width: 760px; width: 100%; box-shadow: 0 24px 60px rgba(0,0,0,.4);
+    }
+    .inv-head { display: flex; align-items: center; gap: 10px; padding: 14px 18px; border-bottom: 1px solid var(--border); }
+    .inv-head h3 { margin: 0; font-size: 16px; }
+    .inv-close { margin-left: auto; background: none; border: none; color: var(--text-muted); font-size: 22px; line-height: 1; cursor: pointer; }
+    .inv-body { padding: 10px 18px 18px; }
+    .inv-deal-sum { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 12px; padding: 10px 12px;
+      background: var(--roas-accent-soft); border: 1px solid var(--border); border-radius: 10px; font-size: 13px; }
+    .inv-deal-sum b { font-variant-numeric: tabular-nums; }
+    .inv-card { border: 1px solid var(--border); border-radius: 10px; padding: 12px 14px; margin-top: 12px; }
+    .inv-card-head { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: baseline; margin-bottom: 8px; }
+    .inv-card-head .num { font-weight: 700; font-size: 15px; }
+    .inv-meta { color: var(--text-muted); font-size: 12px; }
+    .inv-lines { width: 100%; border-collapse: collapse; font-size: 13px; margin-top: 6px; }
+    .inv-lines th, .inv-lines td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); }
+    .inv-lines td.n, .inv-lines th.n { text-align: right; font-variant-numeric: tabular-nums; }
+    .inv-tot { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 13px; }
+    .inv-tot b { font-variant-numeric: tabular-nums; }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -324,6 +360,14 @@
   </main>
   </div>
 
+  <!-- Xero invoice viewer (opened by the deals table's "See Invoice" buttons) -->
+  <div class="inv-backdrop" id="invBackdrop" aria-hidden="true">
+    <div class="inv-modal" role="dialog" aria-modal="true" aria-labelledby="invTitle">
+      <div class="inv-head"><h3 id="invTitle">Invoice</h3><button class="inv-close" id="invClose" type="button" aria-label="Close">×</button></div>
+      <div class="inv-body" id="invBody"></div>
+    </div>
+  </div>
+
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=5"></script>
   <script>
@@ -337,13 +381,76 @@
     var _audWhole = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
     function money(v) { return (v === null || v === undefined) ? '—' : _audWhole.format(Number(v) || 0); }
     function moneyShort(v) { v = Number(v) || 0; if (Math.abs(v) >= 1000) return '$' + Math.round(v / 1000) + 'k'; return '$' + Math.round(v); }
+    var _aud2 = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    function money2(v) { return (v === null || v === undefined) ? '—' : _aud2.format(Number(v) || 0); }
+
+    // ---- Xero invoice viewer (deals table "See Invoice"), mirrors the Buyer Sheet ----
+    var INVOICES = {}; // parsed invoice arrays, keyed by deal row key
+    function parseInvoices(raw) {
+      if (!raw) return [];
+      try { var v = typeof raw === 'string' ? JSON.parse(raw) : raw; return (Array.isArray(v) ? v : [v]).filter(function (x) { return x && typeof x === 'object'; }); }
+      catch (e) { return []; }
+    }
+    function totalChargeCell(d) {
+      var amt = money2(d.xeroTotal);
+      var invs = INVOICES[d.key] || [];
+      if (!invs.length) return '<span class="charge-cell">' + amt + '</span>';
+      return '<span class="charge-cell">' + amt +
+        '<button type="button" class="see-inv" data-key="' + esc(String(d.key)) + '">See Invoice' + (invs.length > 1 ? ' (' + invs.length + ')' : '') + '</button></span>';
+    }
+    function invStr(o, k) { return (o && o[k] != null && o[k] !== '') ? esc(String(o[k])) : '—'; }
+    function renderInvoiceCard(inv) {
+      var charges = inv && inv.charges;
+      var lines = (charges && Array.isArray(charges.lines)) ? charges.lines : [];
+      var rows = lines.map(function (l) {
+        return '<tr><td>' + invStr(l, 'description') + '</td><td>' + invStr(l, 'account_code') + '</td>' +
+          '<td>' + (l && l.category ? esc(l.category) : '—') + '</td>' +
+          '<td class="n">' + money2(l && l.net) + '</td><td class="n">' + money2(l && l.tax) + '</td><td class="n">' + money2(l && l.gross) + '</td></tr>';
+      }).join('');
+      var linesTbl = lines.length
+        ? '<table class="inv-lines"><thead><tr><th>Description</th><th>Acct</th><th>Type</th><th class="n">Net</th><th class="n">GST</th><th class="n">Gross</th></tr></thead><tbody>' + rows + '</tbody></table>'
+        : '';
+      var tot = charges
+        ? '<div class="inv-tot"><span>Engagement: <b>' + money2(charges.engagement_fee) + '</b></span><span>Other: <b>' + money2(charges.other_fees) + '</b></span><span>GST: <b>' + money2(charges.gst) + '</b></span><span>Total: <b>' + money2(charges.total != null ? charges.total : inv.amount_total) + '</b></span></div>'
+        : '<div class="inv-tot"><span>Net: <b>' + money2(inv.amount_net) + '</b></span><span>GST: <b>' + money2(inv.amount_tax) + '</b></span><span>Total: <b>' + money2(inv.amount_total) + '</b></span></div>';
+      var status = inv && (inv.status || inv.xero_status);
+      return '<div class="inv-card"><div class="inv-card-head"><span class="num">' + invStr(inv, 'invoice_number') + '</span>' +
+        (status ? '<span class="pill">' + esc(String(status)) + '</span>' : '') +
+        '<span class="inv-meta">' + (inv && inv.invoice_date ? 'Issued ' + esc(inv.invoice_date) : '') + (inv && inv.reference ? ' · ' + esc(inv.reference) : '') + '</span></div>' +
+        linesTbl + tot + '</div>';
+    }
+    function openInvoice(key, d) {
+      var invs = INVOICES[key] || [];
+      if (!invs.length) return;
+      document.getElementById('invTitle').textContent = ((d && d.org) ? d.org + ' — ' : '') + 'Invoice' + (invs.length > 1 ? 's (' + invs.length + ')' : '');
+      var head = d ? '<div class="inv-deal-sum"><span>Engagement <b>' + money2(d.xeroEngagementFee) + '</b></span>' +
+        '<span>Other <b>' + money2(d.xeroOtherFees) + '</b></span><span>GST <b>' + money2(d.xeroGst) + '</b></span>' +
+        '<span>Total <b>' + money2(d.xeroTotal) + '</b></span>' +
+        (d.invoiceNumbers ? '<span class="muted">' + esc(d.invoiceNumbers) + '</span>' : '') + '</div>' : '';
+      document.getElementById('invBody').innerHTML = head + invs.map(renderInvoiceCard).join('');
+      document.getElementById('invBackdrop').classList.add('open');
+    }
+    function closeInvoice() { document.getElementById('invBackdrop').classList.remove('open'); }
+    (function wireInvModal() {
+      document.getElementById('invClose').addEventListener('click', closeInvoice);
+      document.getElementById('invBackdrop').addEventListener('click', function (e) { if (e.target === this) closeInvoice(); });
+      document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeInvoice(); });
+      document.addEventListener('click', function (e) {
+        var btn = e.target.closest && e.target.closest('.see-inv');
+        if (!btn) return;
+        var key = btn.getAttribute('data-key');
+        var d = ((DEALS_DATA && DEALS_DATA.rows && DEALS_DATA.rows.data) || []).filter(function (r) { return String(r.key) === String(key); })[0];
+        openInvoice(key, d);
+      });
+    })();
     function pct(ratio) { return (ratio === null || ratio === undefined) ? '—' : (Number(ratio) * 100).toFixed(1) + '%'; }
     function roasFmt(v) { return (v === null || v === undefined) ? '—' : Number(v).toFixed(2) + '×'; }
 
     var ROAS_DATA = null, DEALS_DATA = null;   // cached payloads for theme re-render
     var _roasCharts = {};
     var SEL = { fy: null, basis: 'allin', status: 'Won', scope: 'counted' };
-    var dealSort = { key: 'value', dir: -1 }, dealQuery = '';
+    var dealSort = { key: 'xeroTotal', dir: -1 }, dealQuery = '';
+    var DEAL_NUMKEYS = { value: 1, xeroEngagementFee: 1, xeroGst: 1, xeroOtherFees: 1, xeroTotal: 1 };
 
     // basis-aware helpers
     function costOf(r) { return SEL.basis === 'google' ? (r.googleSpend || 0) : (r.totalCost || 0); }
@@ -536,19 +643,24 @@
         var qx = dealQuery.toLowerCase();
         list = list.filter(function (d) { return [d.org, d.title, d.comment, d.method].join(' ').toLowerCase().indexOf(qx) >= 0; });
       }
+      // Parse each visible deal's Xero invoice JSON for the See Invoice buttons.
+      list.forEach(function (d) { INVOICES[d.key] = parseInvoices(d.xeroInvoiceJson); });
+
       list.sort(function (a, b) {
         var k = dealSort.key, va, vb;
-        if (k === 'value') { va = a.value || 0; vb = b.value || 0; }
+        if (DEAL_NUMKEYS[k]) { va = a[k] || 0; vb = b[k] || 0; }
         else if (k === 'date') { va = Date.parse(a.date) || Date.parse('1 ' + a.date) || 0; vb = Date.parse(b.date) || Date.parse('1 ' + b.date) || 0; }
         else { va = String(a[k] || '').toLowerCase(); vb = String(b[k] || '').toLowerCase(); }
         return (va < vb ? -1 : va > vb ? 1 : 0) * dealSort.dir;
       });
 
       var scopeName = { counted: 'counted as Google Ads', review: 'need review', actag: 'tagged Google Ads but not counted' }[SEL.scope];
-      var tot = list.reduce(function (s, d) { return s + (d.value || 0); }, 0);
+      var billed = list.reduce(function (s, d) { return s + (d.xeroTotal || 0); }, 0);
+      var nInv = list.filter(function (d) { return d.xeroTotal != null; }).length;
       document.getElementById('dealsHead').textContent = (SEL.fy === 'All' ? 'All years' : SEL.fy) + ' deals';
       document.getElementById('dealsNote').textContent =
-        list.length + ' ' + (SEL.status === 'All' ? '' : SEL.status.toLowerCase() + ' ') + 'deal' + (list.length === 1 ? '' : 's') + ' ' + scopeName + ', worth ' + money(tot) + '.' +
+        list.length + ' ' + (SEL.status === 'All' ? '' : SEL.status.toLowerCase() + ' ') + 'deal' + (list.length === 1 ? '' : 's') + ' ' + scopeName + '. ' +
+        'Xero-billed ' + money(billed) + ' across ' + nInv + ' invoiced deal' + (nInv === 1 ? '' : 's') + '.' +
         ((SEL.fy === 'All' || SEL.fy <= 'FY24') ? " FY22–FY24 come from Niki's log (month only)." : '');
 
       var cols = [
@@ -556,7 +668,10 @@
         { key: 'org',    label: 'Organisation', sortable: true, cell: function (d) { return esc(d.org); } },
         { key: 'title',  label: 'Deal', sortable: false, cell: function (d) { return '<span class="muted">' + esc(d.title) + '</span>'; } },
         { key: 'status', label: 'Status', sortable: true, cell: function (d) { var c = d.status === 'Won' ? 'st-won' : d.status === 'Lost' ? 'st-lost' : 'st-open'; return '<span class="' + c + '">' + esc(d.status) + '</span>'; } },
-        { key: 'value',  label: 'Value', sortable: true, num: true, cell: function (d) { return money(d.value); } },
+        { key: 'xeroEngagementFee', label: 'Engagement Fee', sortable: true, num: true, cell: function (d) { return money2(d.xeroEngagementFee); } },
+        { key: 'xeroGst',       label: 'GST',        sortable: true, num: true, cell: function (d) { return money2(d.xeroGst); } },
+        { key: 'xeroOtherFees', label: 'Other Fees', sortable: true, num: true, cell: function (d) { return money2(d.xeroOtherFees); } },
+        { key: 'xeroTotal',     label: 'Total',      sortable: true, num: true, cell: totalChargeCell },
         { key: 'method', label: 'How it was counted', sortable: false, cell: function (d) { return esc(d.method); } },
         { key: 'comment',label: 'Comment', sortable: false, cell: function (d) { return '<span class="muted">' + esc(d.comment) + '</span>'; } },
       ];
@@ -574,7 +689,7 @@
       host.querySelectorAll('th[data-sort]').forEach(function (th) {
         th.addEventListener('click', function () {
           var k = th.getAttribute('data-sort');
-          if (dealSort.key === k) dealSort.dir = -dealSort.dir; else { dealSort.key = k; dealSort.dir = (k === 'value' ? -1 : 1); }
+          if (dealSort.key === k) dealSort.dir = -dealSort.dir; else { dealSort.key = k; dealSort.dir = (DEAL_NUMKEYS[k] ? -1 : 1); }
           renderDeals();
         });
       });

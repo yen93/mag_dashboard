@@ -151,6 +151,25 @@ Cloud Run.
     and (as of 2026-10-26) shows ONLY the `counted` group — the `#scopeSeg` counted/review/actag
     toggles were removed from `roas.html` (`SEL.scope` fixed at `'counted'`); review/actag still
     come from the API but aren't UI-selectable. **Counts reconcile with `/roas`** (same view).
+    **XERO INVOICE COLUMNS (as of 2026-10-27):** the `roas_counted_deals` view appends 5 Xero
+    columns — `xero_engagement_fee`/`xero_gst`/`xero_other_fees`/`xero_total` (numeric) +
+    `xero_invoice_json` (jsonb). Each is `COALESCE(xt, bf)`: **xt** = `public.invoice_tracking`
+    aggregated by **AC deal title** (sum of the fee fields; `jsonb_agg(invoice_json)`) — the SAME
+    aggregation `buyer-sheet-sync` does, so these **reconcile with `mag_buyer_sheet`**, and a live
+    `invoice_tracking` match WINS; **bf** = `public.roas_deal_xero_backfill` by `deal_id` (a static
+    one-time Xero reconciliation of older won deals that predate invoice_tracking's 2026+ window —
+    reload from Xero if it changes). The join is resolved at the view's **final stage** by
+    `deal_id → activecampaign_deals.title`, so both FY25+ and niki rows pick it up. Migrations
+    `20261027140000` (columns) / `20261027150000` (backfill table) / `20261027150100` (fallback).
+    Both `roas-deals.js` and `roas-counted.js` now return these columns. The **Deals table**
+    (`roas.html`) and the **"ROAS-counted only" view** (`ac_contact_sources.html`) both DROP the AC
+    Value column and show **Engagement Fee / GST / Other Fees / Total**, with a hover **"See Invoice"**
+    button on Total opening a **buyer-sheet-style modal** (`inv-backdrop`/`inv-modal`; renders
+    `charges.lines` line tables where present, a net/GST/total fallback for the compact backfill JSON).
+    The fee split follows `invoice_tracking`: engagement = service accounts **220–228**, other =
+    expense **465/311**, gst = invoice tax, total = invoice total, summed across a deal's invoices.
+    **ROAS KPIs/charts/the by-FY table stay on AC won-revenue** (the Xero switch is deals-display
+    only — only ~32/57 won deals have Xero data, so a headline switch would understate).
     **GA4 & Ads Leads "ROAS-counted only" view** = `/api/operations/contact-sources/roas-counted`
     (`server/metrics/roas-counted.js`, a plain SELECT of the view). The page's toggle **SWITCHES its
     data source** to this endpoint with its own columns (FY/Date/Org/Deal/Status/Value/Source/Method)

@@ -1,0 +1,136 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-27
+Session: Added a Xero invoice breakdown to the ROAS pipeline — 5 new columns on the
+roas_counted_deals view (sourced from invoice_tracking, buyer-sheet style), a
+one-time Xero backfill of older won deals, and surfaced the columns + a "See
+Invoice" modal on both the ROAS deals table and the GA4 "ROAS-counted only" view.
+(Earlier parts of this conversation — the roas.html redesign, the data-freshness
+/q + iMAG guide section + assistant primer — are in 2710261409 / 2710261432.)
+================================================================================
+
+--------------------------------------------------------------------------------
+USER (/q): "the value col in roas_counted_deals are from AC right? not xero?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read-only. Confirmed via pg_get_viewdef: the view's `value` is NOT Xero. FY25+ rows
+= ac_value_aud(activecampaign_deals.value,currency) (AC, cents→AUD, USD@1.4227);
+FY22–24 niki rows = niki_ad_leads_tracking.deal_value (Niki's sheet). Xero only
+feeds ad SPEND (Bing/Simple Digital) in roas.js, never this view's revenue.
+
+--------------------------------------------------------------------------------
+USER: "add columns in this roas_counted_deals table for xero_engagement_fee,
+xero_gst, xero_other_fees, xero_total, xero_invoice_json, you can use cache table
+of mag_buyer_sheet.html as reference"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+roas_counted_deals is a VIEW, so "add columns" = extend the view. Investigated the
+reference: mag_buyer_sheet has engagement_fee/amount_total/invoice_json only (no
+gst/other_fees); mag_gads_direct_inbound_lead_source has the 4 numerics by deal_id
+but no invoice_json; the ROOT is public.invoice_tracking (the Xero invoice cache) —
+it has ALL FIVE (engagement_fee, gst, other_fees, amount_total, invoice_json) and
+is what buyer-sheet-sync aggregates by AC deal title. Coverage check: match by
+invoice_tracking title ~5 deals, by mag_gads deal_id ~22, buyer sheet ~1.
+ASKED the user which source to use → chose "invoice_tracking (buyer-sheet way)".
+Applied migration CREATE OR REPLACE VIEW (two passes): first a fy25-only join (only
+2 rows filled because 3 matched deals are represented by their NIKI row), then the
+CORRECT version — resolve the Xero join at the FINAL stage by deal_id →
+activecampaign_deals.title → an aggregated `xero` CTE (sum eng/gst/other/total,
+jsonb_agg(invoice_json)), appended as 5 columns after the existing 13 (so all
+consumers using explicit column lists keep working). Verified: 171 rows preserved
+(no fan-out), 5 rows populated, every row reconciles (eng+other+gst=total),
+xero_invoice_json a valid JSON array. Mirrored to local migration
+20261027140000_roas_counted_deals_add_xero_columns.sql.
+
+--------------------------------------------------------------------------------
+USER (/q): "invoice_tracking is auto synced right?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Yes — by a scheduled Claude CLOUD ROUTINE `invoice-tracking-sync`
+(trig_013TGsR7euBvPbAz45UpS8tb), cron `0 22 * * 0-4` = Mon–Fri ~6am PH, via the
+account's Xero MCP connector (read-only, NO stored token — fails silently if the
+connector auth lapses). Pages 2026+ ACCREC invoices, computes the fee split +
+charges breakdown, upserts invoice_tracking. Confirmed live: 114 rows, last synced
+2026-10-26 22:20 UTC. Caveats: 2026+ invoices only; different Xero path from the
+xero-ad-spend-sync edge fn.
+
+--------------------------------------------------------------------------------
+USER: "process deals in roas_counted_deals from oldest date one time only"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Clarified scope (view can't store data; "process" ambiguous). ASKED → user chose
+WON deals only + a NEW backfill table with view fallback.
+Built: public.roas_deal_xero_backfill (deal_id PK, 5 xero cols + invoice_numbers,
+matched, match_note, xero_invoice_json jsonb) via migration
+20261027150000; updated the view (migration 20261027150100) so the Xero columns
+COALESCE(invoice_tracking-by-title, backfill-by-deal_id) — live match still wins.
+Then PROCESSED the 54 won deals oldest→newest via the Xero MCP: resolved ~48
+contacts (get_contacts), fetched each deal's invoices (get_invoices,
+issued_date_start=2023-07-01 — the MCP only exposes current FY + 3 prior, so
+pre-Jul-2023 invoices are unreachable), MATCHED by event date/description (never by
+aggregating a contact — ICMI is a booking agency with 13 invoices for many
+clients), split line items like invoice_tracking (engagement = service accounts
+220–228, other = expense 465/311, gst = tax, total = total; summed across
+deposit+balance+travel). Upserted in 4 batches (33 rows: 31 matched + 2 audit-note
+skips). RESULT: won-deal Xero coverage 3 → 32 of 57; all 29 matched rows reconcile
+(0 mismatches). Unmatched are pre-window / not-in-Xero / no-deal_id, each with a
+match_note. Backfill DATA is a static Xero reconciliation (not seeded in a
+migration; reproducible from Xero). Verified via the view. Noted it's DB-only/live.
+
+--------------------------------------------------------------------------------
+USER: "update roas.html to use xero_engagement_fee and not AC values. update the FY
+Deals table to include all 5 xero columns where the invoice can be viewed just like
+mag_buyer_sheet.html's 'see invoice' btn hover"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the buyer sheet's See-Invoice modal (hover button → modal with per-invoice
+line tables from a charges.lines block). ASKED scope (whole ROAS calc would
+understate at 32/57 coverage) → user chose "Deals table only".
+Server: added the 5 xero columns (xeroEngagementFee/Gst/OtherFees/Total +
+xeroInvoiceJson) to server/metrics/roas-deals.js (counted CTE + nulls in the extra
+CTE + outer select + JS map).
+Frontend public/roas.html: in the deals table, DROPPED the AC "Value" column, added
+Engagement Fee / GST / Other Fees / Total (sortable, 2dp) with a hover "See
+Invoice" button on Total; added a buyer-sheet-style modal (CSS + HTML +
+money2/parseInvoices/totalChargeCell/renderInvoiceCard/openInvoice + delegated
+wiring) that shows line items where present and a net/GST/total fallback for the
+compact backfill JSON; default sort xeroTotal desc; note now reads
+"Xero-billed $X across N invoiced deals". KPIs/charts/ROAS-by-FY table left on AC
+revenue. Validated: view query runs, node --check OK, all inline scripts parse.
+
+--------------------------------------------------------------------------------
+USER: "yes, update the 'ROAS-counted only' view"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Server: added the 5 xero columns to server/metrics/roas-counted.js
+(/api/operations/contact-sources/roas-counted).
+Frontend public/ac_contact_sources.html (ROAS-counted toggle view only): replaced
+the AC Value column with the 4 Xero currency columns (via renderSortableTable
+unit:'currency' → numeric sort) + a "See Invoice" Total column (custom render +
+`text` projection to keep the per-column filter clean); added the invoice modal
+CSS/HTML and a self-contained helper <script> keyed by rowKey. The page's DEFAULT
+view + all other filters untouched; shared KPI cards stay on AC dealValue. Both the
+ROAS deals table and this view read the same roas_counted_deals view, so they
+reconcile. Validated: roas-counted.js node --check OK, no duplicate helpers, inline
+scripts parse, endpoint query returns the new columns. Flagged a manual Cloud Run
+redeploy is needed for the frontend + 3 server files.
+
+--------------------------------------------------------------------------------
+USER (/dcp): Ran dcp (this export).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat-history file; updated as_built.txt (new backfill table + the view's
+Xero columns + the two endpoints/pages surfacing them) and CLAUDE.md (ROAS bullet:
+Xero invoice columns on the view, invoice_tracking source, backfill table, deals
+table + ROAS-counted view display). .gitignore already covers all sensitive
+patterns; no new sensitive files. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

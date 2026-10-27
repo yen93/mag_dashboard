@@ -24,6 +24,7 @@ const SELECT = `
       org, title,
       initcap(status)                   AS status,
       value, method, comment,
+      xero_engagement_fee, xero_gst, xero_other_fees, xero_total, xero_invoice_json,
       'counted'                         AS grp
     FROM public.roas_counted_deals
   ),
@@ -53,6 +54,8 @@ const SELECT = `
            WHEN eff_attr IS NOT NULL THEN 'Audit: ' || eff_attr
            ELSE 'Audit' END AS method,
       comment,
+      NULL::numeric AS xero_engagement_fee, NULL::numeric AS xero_gst,
+      NULL::numeric AS xero_other_fees, NULL::numeric AS xero_total, NULL::jsonb AS xero_invoice_json,
       CASE WHEN gtag = 'uncertain' THEN 'review' ELSE 'actag' END AS grp
     FROM extra_src
     WHERE gtag = 'uncertain'
@@ -60,11 +63,15 @@ const SELECT = `
   )
   SELECT key, fy AS "fy", fy_end AS "fyEnd",
     date AS "date", org AS "org", title AS "title", status AS "status",
-    value AS "value", method AS "method", comment AS "comment", grp AS "group"
+    value AS "value", method AS "method", comment AS "comment", grp AS "group",
+    xero_engagement_fee AS "xeroEngagementFee", xero_gst AS "xeroGst",
+    xero_other_fees AS "xeroOtherFees", xero_total AS "xeroTotal", xero_invoice_json AS "xeroInvoiceJson"
   FROM (
-    SELECT key, fy_end, fy, date, org, title, status, value, method, comment, grp FROM counted
+    SELECT key, fy_end, fy, date, org, title, status, value, method, comment,
+      xero_engagement_fee, xero_gst, xero_other_fees, xero_total, xero_invoice_json, grp FROM counted
     UNION ALL
-    SELECT key, fy_end, fy, date, org, title, status, value, method, comment, grp FROM extra
+    SELECT key, fy_end, fy, date, org, title, status, value, method, comment,
+      xero_engagement_fee, xero_gst, xero_other_fees, xero_total, xero_invoice_json, grp FROM extra
   ) u
   ORDER BY fy_end DESC, status, value DESC NULLS LAST`;
 
@@ -86,6 +93,11 @@ export async function getRoasDeals() {
     method: r.method || '',
     comment: r.comment || '',
     group: r.group || '',
+    xeroEngagementFee: num(r.xeroEngagementFee),
+    xeroGst: num(r.xeroGst),
+    xeroOtherFees: num(r.xeroOtherFees),
+    xeroTotal: num(r.xeroTotal),
+    xeroInvoiceJson: r.xeroInvoiceJson || null,
   }));
   return {
     asOf: new Date().toISOString(),

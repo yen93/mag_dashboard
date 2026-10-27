@@ -27,6 +27,11 @@ const SELECT = `
     v.email   AS "email",
     v.method  AS "method",
     v.comment AS "comment",
+    v.xero_engagement_fee AS "xeroEngagementFee",
+    v.xero_gst            AS "xeroGst",
+    v.xero_other_fees     AS "xeroOtherFees",
+    v.xero_total          AS "xeroTotal",
+    v.xero_invoice_json   AS "xeroInvoiceJson",
     cs.channel AS "channel"
   FROM public.roas_counted_deals v
   LEFT JOIN public.ga4_ac_contact_source cs ON cs.deal_id = v.deal_id
@@ -56,6 +61,11 @@ export async function getRoasCounted() {
     email: r.email || '',
     method: r.method || '',
     comment: r.comment || '',
+    xeroEngagementFee: num(r.xeroEngagementFee),
+    xeroGst: num(r.xeroGst),
+    xeroOtherFees: num(r.xeroOtherFees),
+    xeroTotal: num(r.xeroTotal),
+    xeroInvoiceJson: r.xeroInvoiceJson || null,
     channel: r.channel || '',
   }));
   const won = rows.filter((r) => r.status === 'won').length;
