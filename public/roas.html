@@ -164,6 +164,9 @@
     }
     table.roas-table thead th:first-child, table.roas-table td:first-child { text-align: left; }
     table.roas-table td.num, table.roas-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    /* Deals table: left-align every column (header + values), incl. the money columns. */
+    #dealsTable table.roas-table th, #dealsTable table.roas-table td,
+    #dealsTable table.roas-table td.num, #dealsTable table.roas-table th.num { text-align: left; }
     table.roas-table tbody tr { transition: background .14s ease; }
     table.roas-table tbody tr:hover { background: var(--surface-2); }
     table.roas-table tbody tr.clickrow { cursor: pointer; }
@@ -684,7 +687,6 @@
         { key: 'xeroOtherFees', label: 'Other Fees', sortable: true, num: true, cell: function (d) { return money2(d.xeroOtherFees); } },
         { key: 'xeroTotal',     label: 'Total',      sortable: true, num: true, cell: totalChargeCell },
         { key: 'method', label: 'How it was counted', sortable: false, cell: function (d) { return esc(d.method); } },
-        { key: 'comment',label: 'Comment', sortable: false, cell: function (d) { return '<span class="muted">' + esc(d.comment) + '</span>'; } },
       ];
       var thead = '<tr>' + cols.map(function (c) {
         var cls = (c.num ? 'num ' : '') + (c.sortable ? 'sort' : '');
