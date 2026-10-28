@@ -76,8 +76,11 @@ const SELECT = `
     GROUP BY 1
   ),
   sd AS (
+    -- paid_search_fee is the ROAS cost (SEO already stripped out); seo_component is the
+    -- billed-but-excluded SEO portion, surfaced separately for display only.
     SELECT extract(year FROM month)::int + CASE WHEN extract(month FROM month) >= 7 THEN 1 ELSE 0 END AS fy_end,
-      round(sum(paid_search_fee))::numeric AS sd_fee
+      round(sum(paid_search_fee))::numeric            AS sd_fee,
+      round(sum(coalesce(seo_component, 0)))::numeric AS sd_seo
     FROM public.simple_digital_fees_monthly
     GROUP BY 1
   ),
@@ -93,6 +96,7 @@ const SELECT = `
     (CASE WHEN a.fy_end <= 2024 THEN n.google_spend ELSE g.google_spend END) AS "googleSpend",
     coalesce(b.bing_spend, 0)                                          AS "bingSpend",
     coalesce(s.sd_fee, 0)                                              AS "sdFee",
+    coalesce(s.sd_seo, 0)                                              AS "sdSeo",
     coalesce(d.won, 0)                                                 AS "won",
     coalesce(d.lost, 0)                                                AS "lost",
     coalesce(d.open, 0)                                                AS "open",
@@ -120,6 +124,7 @@ function shape(r) {
   const googleSpend = num(r.googleSpend) || 0;
   const bingSpend = num(r.bingSpend) || 0;
   const sdFee = num(r.sdFee) || 0;
+  const sdSeo = num(r.sdSeo) || 0; // SEO portion of the SD charge — display only, NOT in totalCost
   const totalCost = googleSpend + bingSpend + sdFee;
   const won = num(r.won) || 0;
   const lost = num(r.lost) || 0;
@@ -144,6 +149,7 @@ function shape(r) {
     googleSpend,
     bingSpend,
     sdFee,
+    sdSeo,
     totalCost,
     won,
     lost,
@@ -169,6 +175,7 @@ function totalRow(rows) {
   const googleSpend = sum('googleSpend');
   const bingSpend = sum('bingSpend');
   const sdFee = sum('sdFee');
+  const sdSeo = sum('sdSeo');
   const totalCost = googleSpend + bingSpend + sdFee;
   const won = sum('won');
   const lost = sum('lost');
@@ -182,6 +189,7 @@ function totalRow(rows) {
     googleSpend,
     bingSpend,
     sdFee,
+    sdSeo,
     totalCost,
     won,
     lost,

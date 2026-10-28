@@ -120,6 +120,11 @@ Cloud Run.
       `public.bing_ads_campaign_monthly`** and **Simple Digital = `sum(paid_search_fee)`
       `public.simple_digital_fees_monthly`** — both now **LIVE from Xero** via the
       `xero-ad-spend-sync` edge fn (see the "Bing + Simple Digital" paragraph below).
+      Simple Digital's `seo_component` (the $600/mo SEO carve-out, **excluded** from the
+      ROAS cost) is **NOT** in the cost — but as of 2026-10-28 `roas.js`'s `sd` CTE also
+      sums it as `sd_seo` → `sdSeo`, surfaced as a **display-only "SEO (excluded)" column**
+      in the ROAS-by-FY table (`roas.html`, right after "Simple Digital", hidden on the
+      Ads-only basis). `totalCost`/both ROAS bases are unchanged — it's purely visibility.
     **DEAL COUNTS + won$/open$ (ALL FYs) — as of 2026-10-26 — come from the canonical VIEW
     `public.roas_counted_deals`**, NOT from inline CTEs. `roas.js` just `GROUP BY fy_end` over the
     view; spend stays computed in `roas.js` (niki cpc FY22–24; google/bing/sd monthly FY25+). The

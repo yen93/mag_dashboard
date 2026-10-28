@@ -600,6 +600,7 @@
         { label: 'Google Ads',     num: true, cell: function (r) { return money(r.googleSpend); } },
         { label: 'Bing Ads',       num: true, cell: function (r) { return money(r.bingSpend); } },
         { label: 'Simple Digital', num: true, cell: function (r) { return money(r.sdFee); } },
+        { label: 'SEO (excluded)', num: true, title: 'Simple Digital SEO component — billed but NOT counted in the ROAS cost.', cell: function (r) { return money(r.sdSeo); } },
         { label: 'Total cost',     num: true, cell: function (r) { return money(r.totalCost); } },
         { label: 'Won',            num: true, cell: function (r) { return r.won == null ? '—' : r.won; } },
         { label: 'Lost',           num: true, cell: function (r) { return r.lost == null ? '—' : r.lost; } },
@@ -615,7 +616,7 @@
       // Each basis shows only its own ROAS column. "Ads only" (google) also hides Simple Digital
       // (it isn't in that cost stack) and the all-in ROAS; "All-in" hides the ads-only ROAS.
       if (SEL.basis === 'google') {
-        cols = cols.filter(function (c) { return c.label !== 'Simple Digital' && c.label !== 'ROAS all-in'; });
+        cols = cols.filter(function (c) { return c.label !== 'Simple Digital' && c.label !== 'SEO (excluded)' && c.label !== 'ROAS all-in'; });
       } else {
         cols = cols.filter(function (c) { return c.label !== 'ROAS Ads'; });
       }
