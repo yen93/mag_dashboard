@@ -696,7 +696,7 @@
     }
 
     // ---------- controls / state ----------
-    function setFy(fy) { SEL.fy = fy; syncPressed(); renderKpis(); buildCharts(); renderTable(); renderDeals(); }
+    function setFy(fy) { SEL.fy = fy; syncPressed(); renderKpis(); renderTable(); renderDeals(); }  // charts intentionally NOT rebuilt — they show all FYs; only the basis toggle (or theme) re-renders them
     function setBasis(b) { SEL.basis = b; syncPressed(); renderKpis(); buildCharts(); renderTable(); }
     function syncPressed() {
       document.querySelectorAll('#fySeg button').forEach(function (b) { b.classList.toggle('active', b.getAttribute('data-fy') === SEL.fy); });
