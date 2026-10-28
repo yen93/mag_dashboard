@@ -221,6 +221,7 @@ function renderMarketingSidebar(active) {
   if (!el) return;
   var items = [
     ['overview',   'Overview',              'marketing.html'],
+    ['roi',        'ROI',                   'roi.html'],
     ['roas',       'ROAS',                  'roas.html'],
     ['leads',      'Lead Tracker',          'ac_contact_sources.html'],
     ['calendly',   'Calendly-AC Sync',      'new_paid_leads_tracking.html'],

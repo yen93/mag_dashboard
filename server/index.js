@@ -18,6 +18,7 @@ import { getPaidGoogleEnquiries } from './metrics/paid-google-enquiries.js';
 import { getRoas } from './metrics/roas.js';
 import { getRoasDeals } from './metrics/roas-deals.js';
 import { getRoasCounted } from './metrics/roas-counted.js';
+import { getMarketingRoi } from './metrics/marketing-roi.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
 import { cached, clearCache } from './lib/cache.js';
@@ -290,6 +291,23 @@ operations.get('/contact-sources/roas-counted', async (_req, res) => {
   }
 });
 app.use('/api/operations', operations);
+
+// Marketing sub-resources. The ROI page (whole-business revenue vs ad spend by Australian
+// financial year) is computed live at request time from Supabase — revenue from
+// invoice_tracking (Xero), ad spend from the google/bing/simple_digital monthly tables, and
+// deals from activecampaign_deals. See server/metrics/marketing-roi.js. Cached briefly.
+const marketing = express.Router();
+marketing.use(requireAuth);
+marketing.get('/roi', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:roi', getMarketingRoi, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:roi]', err);
+    res.status(502).json({ error: 'Failed to load marketing ROI from data source.', detail: err.message });
+  }
+});
+app.use('/api/marketing', marketing);
 
 // MAG GA4 Agent — on-demand GA4 reports via the GA4 On-Demand Report Claude routine.
 app.use('/api/ga4-agent', ga4AgentRouter);

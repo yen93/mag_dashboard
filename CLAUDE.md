@@ -23,8 +23,8 @@ Cloud Run.
   **Naming gotcha:** the "Sales" tab is `sales_overview.html`;
   `sales.html` is the **Conferences** page (legacy name) — **no longer a top tab**, it now
   lives UNDER Sales via the Sales left sidebar (see below). The `<nav class="tabbar">`
-  block is duplicated in **all 15 pages** (the 14 originals + `home.html`), so
-  reordering/adding a top tab = edit them all.
+  block is duplicated in **all 16 pages** (the 14 originals + `home.html` + `roi.html`),
+  so reordering/adding a top tab = edit them all.
   **Sales left sidebar (as of 2026-10-22):** `sales.html` ("Conferences") is reached via a
   left sidebar (`<aside class="subnav" id="salesNav">`) shown on **2 pages** —
   `sales_overview.html` (Overview) and `sales.html` (Conferences). Built by ONE helper
@@ -34,16 +34,31 @@ Cloud Run.
   `renderSalesSidebar('<key>')` right after `initPage`. Reuses the same `.subnav`/`.subnav-link`
   CSS; `.sales-layout` is added alongside `.marketing-layout`/`.operations-layout` on the three
   shared layout rules in `app.css`. `sales.html` keeps its `<title>`/heading "Conferences".
-  **Marketing left sidebar (as of 2026-10-22):** five pages that used to be top tabs now
-  live UNDER Marketing, reached via a left sidebar (`<aside class="subnav" id="marketingNav">`)
-  shown on **6 pages** — `marketing.html` (Overview), `roas.html`, `ac_contact_sources.html`,
+  **Marketing left sidebar (as of 2026-10-22; +`roi.html` 2026-10-28):** five former top
+  tabs plus the new **ROI** page live UNDER Marketing, reached via a left sidebar
+  (`<aside class="subnav" id="marketingNav">`) shown on **7 pages** — `marketing.html`
+  (Overview), **`roi.html` (ROI, new 2026-10-28)**, `roas.html`, `ac_contact_sources.html`,
   `new_paid_leads_tracking.html`, `ga4_agent.html`, `historical_paid_leads.html`. The sidebar
   link list is built by ONE helper `renderMarketingSidebar(active)` in `app.js` (single source
-  of truth — **don't hand-duplicate it**); each of the 6 pages wraps its `<main>` in
+  of truth — **don't hand-duplicate it**); each of the 7 pages wraps its `<main>` in
   `<div class="marketing-layout">` + the aside, keeps **Marketing** as the active top tab, and
   calls `renderMarketingSidebar('<key>')` right after `initPage`. CSS `.marketing-layout`/
   `.subnav`/`.subnav-link` lives in `app.css` (sticky on desktop, horizontal scroll under 860px).
-  So those 5 are **no longer top tabs** — to re-point one, edit the helper, not the tabbar.
+  So those are **no longer (or never were) top tabs** — to re-point one, edit the helper, not the tabbar.
+  **ROI page (`roi.html` = Marketing sidebar "ROI", `/api/marketing/roi`,
+  `server/metrics/marketing-roi.js`)** is a self-rendering page (same pattern as `roas.html`:
+  `initPage('marketing')` with no renderFn + `renderMarketingSidebar('roi')` + its own
+  `fetchJSON`). LIVE, computed at request time from Supabase, framed by Australian FY (Jul–Jun,
+  END-year) with an FY filter bar (default = current FY). Unlike ROAS it is **WHOLE-BUSINESS,
+  NOT ad-attributed**: revenue = ALL Xero invoices (`invoice_tracking.amount_total` incl GST, by
+  `invoice_date`); ad spend = all-in Google + Bing + Simple Digital monthly; deals = ALL
+  `activecampaign_deals` (status 1/2/0 by `cdate`, won value via `public.ac_value_aud`). FY axis =
+  FYs with Google spend OR Xero revenue (≈ FY25–FY27). **Caveat:** `invoice_tracking` is 2026+
+  only, so revenue exists FY26/FY27 and reads **blank (null, not $0)** for earlier FYs — surfaced
+  on the page. 3 cards (Total revenue / Total ad spend / Deals won) + 2 charts (revenue-vs-spend
+  by month as a 2-line SHARED-$-axis chart — **not** dual-axis; AC pipeline Won/Open/Lost) + an
+  ROI-by-FY table, all re-rendered client-side on FY change. The 6 other Marketing pages' `app.js`
+  was bumped to `?v=7` so the ROI link shows.
   **Operations left sidebar (as of 2026-10-22):** `mag_buyer_sheet.html` (nav "Buyer Analysis" —
   in-page `<h3>`/`<title>` still read "Buyer Sheet") and `invoice_tracking.html` ("Invoices")
   are **no longer top tabs** either — they moved UNDER **Operations**, reached via an

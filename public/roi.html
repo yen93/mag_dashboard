@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ROI — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab active" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+  </nav>
+
+  <div class="marketing-layout">
+    <aside class="subnav" id="marketingNav"></aside>
+  <main class="content">
+    <div class="toolbar">
+      <strong>ROI — revenue vs ad spend</strong>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:13px">Financial year</span>
+      <div class="segmented" id="fyBar"></div>
+    </div>
+
+    <p class="muted" id="roiNote" style="font-size:12px;margin:-4px 0 16px"></p>
+
+    <div class="kpi-grid" id="kpis"></div>
+
+    <div class="grid">
+      <div class="card col-8">
+        <div class="card-head"><h3>Revenue vs ad spend by month</h3><span class="chips" id="monthChips"></span></div>
+        <div class="chart-box" id="roi-month-chart"><canvas id="roiMonthCanvas"></canvas></div>
+      </div>
+      <div class="card col-4">
+        <div class="card-head"><h3>AC pipeline (deals)</h3><span class="chips" id="pipeChips"></span></div>
+        <div class="chart-box" id="roi-pipe-chart"><canvas id="roiPipelineCanvas"></canvas></div>
+      </div>
+
+      <div class="card col-12">
+        <div class="card-head"><h3>ROI by financial year</h3><span class="chips" id="fyTableChips"></span></div>
+        <div id="roiFyTable"></div>
+      </div>
+    </div>
+  </main>
+  </div>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js?v=7"></script>
+  <script>
+    var ROI = null;    // full API payload
+    var SEL = null;    // selected fy_end (number) or 'all'
+
+    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+
+    // The row to show for the current selection ('all' -> the summed total row).
+    function currentRow() {
+      if (!ROI) return null;
+      if (SEL === 'all') return ROI.total;
+      return (ROI.rows.data || []).find(function (r) { return r.fyEnd === SEL; }) || ROI.total;
+    }
+
+    // Monthly series for the current selection (filtered to the FY, or all months).
+    function currentMonths() {
+      var all = (ROI.byMonth.data || []);
+      if (SEL === 'all') return all.slice();
+      return all.filter(function (m) { return m.fyEnd === SEL; });
+    }
+
+    function buildFyBar() {
+      var bar = document.getElementById('fyBar');
+      var rows = ROI.rows.data || [];
+      var btns = rows.map(function (r) {
+        return '<button data-fy="' + r.fyEnd + '">' + r.fy + '</button>';
+      });
+      btns.push('<button data-fy="all">All</button>');
+      bar.innerHTML = btns.join('');
+      bar.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var v = b.getAttribute('data-fy');
+          setFy(v === 'all' ? 'all' : Number(v));
+        });
+      });
+    }
+
+    function syncFyBar() {
+      document.querySelectorAll('#fyBar button').forEach(function (b) {
+        var v = b.getAttribute('data-fy');
+        var on = (SEL === 'all' && v === 'all') || (SEL !== 'all' && Number(v) === SEL);
+        b.classList.toggle('active', on);
+      });
+    }
+
+    function setFy(sel) { SEL = sel; syncFyBar(); render(); }
+
+    function render() {
+      var row = currentRow();
+      var meta = ROI.rows.meta;
+
+      // Cards: Total revenue (Xero) · Total ad spend (Xero) · Deals won (AC)
+      var revSub = row.roi != null ? ('ROI ' + row.roi.toFixed(2) + '×') :
+        (row.hasRevenue ? null : 'No Xero invoice data for this FY');
+      renderKpis('kpis', [
+        { label: 'Total revenue (Xero)',
+          metric: { value: row.hasRevenue ? row.revenue : null, unit: 'currency', meta: meta },
+          sub: revSub },
+        { label: 'Total ad spend (Xero)',
+          metric: { value: row.totalSpend, unit: 'currency' },
+          sub: 'Google + Bing + Simple Digital' },
+        { label: 'Deals won (AC)',
+          metric: { value: row.dealsWon, unit: 'count' },
+          sub: row.dealsOpen + ' open · ' + row.dealsLost + ' lost' },
+      ]);
+
+      // Revenue vs ad spend by month — two series on ONE shared $ axis (not a dual axis):
+      // ad spend sits low against revenue, which is the ROI story.
+      var months = currentMonths();
+      setChips('monthChips', ROI.byMonth.meta);
+      lineChart('roiMonthCanvas', months, [
+        { key: 'revenue', label: 'Revenue', color: '#3b6ef0' },
+        { key: 'spend',   label: 'Ad spend', color: '#e2483d' },
+      ], { xKey: 'month', xLabel: monthLabel });
+
+      // AC pipeline — Won / Open / Lost deal counts for the selection.
+      setChips('pipeChips', meta);
+      barChart('roiPipelineCanvas', ['Won', 'Open', 'Lost'],
+        [row.dealsWon, row.dealsOpen, row.dealsLost],
+        { colors: ['#17a673', '#3b6ef0', '#e2483d'] });
+
+      // ROI by FY table (always the full per-FY list, regardless of selection).
+      setChips('fyTableChips', meta);
+      renderTable('roiFyTable', ROI.rows.data, [
+        { key: 'fy', label: 'FY' },
+        { key: 'revenue', label: 'Revenue (Xero)', unit: 'currency',
+          render: function (v, r) { return r.hasRevenue ? fmt(v, 'currency') : '<span class="muted">—</span>'; } },
+        { key: 'totalSpend', label: 'Ad spend', unit: 'currency' },
+        { key: 'dealsWon', label: 'Deals won', unit: 'count' },
+        { key: 'dealsOpen', label: 'Open', unit: 'count' },
+        { key: 'dealsLost', label: 'Lost', unit: 'count' },
+        { key: 'roi', label: 'ROI', unit: 'text',
+          render: function (v) { return v != null ? v.toFixed(2) + '×' : '<span class="muted">—</span>'; } },
+      ]);
+    }
+
+    function loadRoi() {
+      fetchJSON('/api/marketing/roi')
+        .then(function (data) {
+          ROI = data;
+          document.getElementById('roiNote').textContent = (data.rows.meta && data.rows.meta.note) || '';
+          if (!data.rows.data || !data.rows.data.length) {
+            // Pending / empty — show source chips + a needs-setup note, no charts.
+            setChips('monthChips', data.rows.meta);
+            setChips('pipeChips', data.rows.meta);
+            renderKpis('kpis', [
+              { label: 'Total revenue (Xero)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
+              { label: 'Total ad spend (Xero)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
+              { label: 'Deals won (AC)', metric: { value: null, unit: 'count', meta: data.rows.meta } },
+            ]);
+            return;
+          }
+          SEL = data.defaultFy != null ? data.defaultFy : 'all';
+          buildFyBar();
+          syncFyBar();
+          render();
+        })
+        .catch(function (err) { console.error(err); });
+    }
+
+    initPage('marketing');               // login / top bar / theme only (no auto-fetch)
+    renderMarketingSidebar('roi');
+    window.onThemeChange = function () { if (ROI) render(); };
+    if (currentUser()) loadRoi();
+  </script>
+</body>
+</html>

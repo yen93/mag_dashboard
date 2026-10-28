@@ -24,7 +24,11 @@ SCRIPTS / APP CODE
   server/lib/cache.js. Dedicated sub-resource routers read pre-computed Supabase
   cache tables (plain SELECTs, 10-min cache): /api/sales/deals (LIV deals),
   /api/sales/topline (Sales top-line KPIs), /api/operations/buyer-sheet,
-  /api/operations/invoice-tracking, /api/operations/roas (ROAS by calendar year).
+  /api/operations/invoice-tracking, /api/operations/roas (ROAS by financial year).
+  Some dedicated routes are instead computed LIVE at request time (still 10-min
+  cached): /api/operations/roas + /roas/deals, and /api/marketing/roi (NEW
+  2026-10-28 — whole-business ROI by FY: revenue vs ad spend, via a dedicated
+  `marketing` router mounted at /api/marketing).
   The one WRITE route is POST /api/operations/contact-sources/jc-tag (set the JC
   manual-review tag; requireAuth + canReviewJc gate = admins + James). Listens on
   $PORT (default 8080).
@@ -154,12 +158,13 @@ SCRIPTS / APP CODE
     .subnav/.subnav-link CSS; .operations-layout was added alongside
     .marketing-layout on the three shared layout rules in app.css. (Frontend-only —
     needs a Cloud Run redeploy to ship.)
-  - MARKETING LEFT SIDEBAR (new 2026-10-22): the five former top tabs now live
-    UNDER Marketing, reached via a left sidebar (<aside class="subnav"
-    id="marketingNav">) shown on 6 pages — marketing.html (Overview), roas.html
-    (ROAS), ac_contact_sources.html (GA4 Leads Tracker),
-    new_paid_leads_tracking.html (Calendly-AC Sync), ga4_agent.html (GA4 Agent),
-    historical_paid_leads.html (Historical Paid Leads). The sidebar's link list is
+  - MARKETING LEFT SIDEBAR (new 2026-10-22; +ROI 2026-10-28): the former top tabs
+    now live UNDER Marketing, reached via a left sidebar (<aside class="subnav"
+    id="marketingNav">) shown on 7 pages — marketing.html (Overview), roi.html
+    (ROI, NEW 2026-10-28), roas.html (ROAS), ac_contact_sources.html (GA4 Leads
+    Tracker), new_paid_leads_tracking.html (Calendly-AC Sync), ga4_agent.html
+    (GA4 Agent), historical_paid_leads.html (Historical Paid Leads). The sidebar's
+    link list is
     built by ONE helper, renderMarketingSidebar(active) in app.js (single source of
     truth, not duplicated markup); each page wraps its content in
     <div class="marketing-layout"> + the aside, keeps "Marketing" as the active top
@@ -170,8 +175,23 @@ SCRIPTS / APP CODE
     ac_ad_leads_tagging.html ("AC Ad Leads Tagging"), mag_sales_pulse.html ("MAG
     Sales Pulse"), lead_source_guide.html (a guide; its active top tab is now
     Marketing since GA4 Leads Tracker left the top bar).
+  - roi.html (NEW 2026-10-28, Marketing sidebar "ROI") is a self-rendering page
+    (initPage('marketing') with no renderFn + renderMarketingSidebar('roi') + its
+    own fetchJSON of /api/marketing/roi; backed by server/metrics/marketing-roi.js).
+    WHOLE-BUSINESS (deliberately NOT ad-attributed like ROAS), framed by Australian
+    FY (Jul–Jun END-year). 3 KPI cards (Total revenue (Xero) / Total ad spend (Xero)
+    / Deals won (AC)), a revenue-vs-ad-spend-by-month chart (2 lines on ONE shared $
+    axis — NOT dual-axis), an AC pipeline Won/Open/Lost bar chart, and an ROI-by-FY
+    table; an FY filter bar (All + each FY, default = current FY) re-renders
+    client-side. Revenue = all Xero invoices (invoice_tracking.amount_total incl GST,
+    by invoice_date — 2026+ ONLY, so revenue exists FY26/FY27, blank before);
+    ad spend = all-in Google + Bing + Simple Digital monthly; deals = ALL
+    activecampaign_deals (status 1/2/0 by cdate, won value via public.ac_value_aud).
+    FY axis = FYs with Google spend OR Xero revenue (FY25–FY27). The 6 other
+    Marketing pages' app.js was bumped to ?v=7 so the ROI link shows. Needs a
+    Cloud Run redeploy to ship.
   - roas.html is a self-rendering page (reads /api/operations/roas + /roas/deals;
-    app.js?v=5; does not use the generic chart helpers). Rebuilt 2026-10-22 to mirror
+    app.js?v=7; does not use the generic chart helpers). Rebuilt 2026-10-22 to mirror
     the "MAG paid search ROAS" artifact, by Australian FINANCIAL YEAR: a top control bar
     (FY segmented filter: All + each FY; All-in vs Google-only cost-basis toggle) + a
     takeaway line; artifact KPI tiles (ROAS w/ pass-fail pill, cost (basis-aware), Won

@@ -1,0 +1,97 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-28
+Session: Built a new "ROI" tab under Marketing (plan-mode → implementation). Cards
+(Total revenue Xero · Total ad spend Xero · Deals won AC) + 2 charts (revenue-vs-spend
+by month, AC pipeline Won/Open/Lost), framed by Australian financial year like the ROAS
+tab. Owner chose WHOLE-BUSINESS scope (not ad-attributed) + FY framing. New endpoint
+/api/marketing/roi, new page roi.html. Ends with this /dcp.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted into or printed in this chat.
+Only non-secret identifiers appeared (Supabase project ref aivitcomiywiysrfwqxt) and
+aggregate business figures (per-FY revenue/spend/deal counts).
+
+--------------------------------------------------------------------------------
+USER:
+(pasted request) "Create a new ROI Tab under Marketing. cards: Total revenue (xero),
+total spend (xero), deals won (AC). Graphs: Revenue vs spend by month, AC Pipeline
+Won/Open/Lost Leads". Session ran in plan mode.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored conventions. Read renderMarketingSidebar + roas.js first-hand, then launched
+two parallel Explore agents:
+ • Frontend agent: confirmed the page skeleton (marketing.html / roas.html shell,
+   tabbar duplicated in 15 pages, marketing-layout + #marketingNav aside), app.js
+   helpers (initPage, renderKpis, lineChart, barChart, monthLabel, fetchJSON,
+   renderTable, metaChips), app.css selectors, and that renderMarketingSidebar
+   (app.js ~L219) is the single source of truth for the Marketing sidebar.
+ • Server agent: confirmed the cached-route pattern in server/index.js (mirror
+   /api/operations/roas), the lib wrappers (cache.js, metric.js live/pending/section,
+   range.js), that invoice_tracking has a date (invoice_date) + money cols for
+   revenue-by-month (2026+ only), that the 3 monthly spend tables
+   (google_ads_campaign_monthly.cost, bing_ads_campaign_monthly.cost,
+   simple_digital_fees_monthly.paid_search_fee) bucket by `month`, and that
+   activecampaign_deals uses status 1=won/2=lost/0=open with value in cents.
+
+Flagged the key fork to the user via AskUserQuestion: (1) ROI scope — marketing-attributed
+vs whole-business vs mixed; (2) time window — standard 3M/6M/12M/YTD selector vs FY-like-ROAS
+vs fixed all-time.
+
+--------------------------------------------------------------------------------
+USER:
+Answered: scope = "Whole business" (Total revenue = all Xero invoiced revenue;
+deals won + pipeline = ALL AC deals). Time window = "FY like ROAS tab".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Verified the exact data columns and ran a sanity query against Supabase
+(aivitcomiywiysrfwqxt): invoice_tracking confirmed to have amount_total/engagement_fee/
+other_fees/gst; revenue by FY = FY26 ~$494k, FY27 ~$412k (2026+ only, as expected);
+Google spend FY25–FY27; Bing FY25–FY27; Simple Digital FY22–FY27; AC deals by FY
+(FY24 w70/o57/l492, FY25 w108/o151/l564, FY26 w67/o128/l328, FY27 w13/o114/l67).
+Settled the FY axis = FYs with Google spend OR Xero revenue → FY25–FY27, default = current FY.
+
+Wrote the plan to the plan file and called ExitPlanMode — user approved.
+
+Implementation:
+ • server/metrics/marketing-roi.js (NEW) — getMarketingRoi(): two queries in Promise.all.
+   BY_FY (per-FY revenue from invoice_tracking.amount_total, all-in ad spend = google+bing+
+   sd, deal counts + won value via public.ac_value_aud, axis = google-spend OR revenue FYs).
+   BY_MONTH (revenue vs spend by month, floored at 2024-07 via FULL OUTER JOIN). shape()/
+   totalRow()/fyEndOfMonth() helpers; ROI ratio recomputed (not averaged); revenue null
+   (not $0) for pre-2026 FYs; supabaseConfigured() pending guard; section() wrappers.
+ • server/index.js — imported getMarketingRoi; added a NEW dedicated `marketing`
+   express.Router() with requireAuth + GET /roi (cache key 'marketing:roi', 10-min TTL),
+   mounted app.use('/api/marketing', marketing) before the GA4-agent router.
+ • public/roi.html (NEW) — mirrors the roas.html self-rendering shell (initPage('marketing')
+   with no renderFn + renderMarketingSidebar('roi') + own fetchJSON). FY filter bar
+   (All + each FY), 3 KPI cards, revenue-vs-spend as a 2-LINE SHARED-$-AXIS chart (loaded
+   the dataviz skill first; deliberately NOT dual-axis since spend ≪ revenue), AC pipeline
+   Won/Open/Lost barChart, and an ROI-by-FY table. Client-side setFy() re-renders.
+ • public/app.js — added ['roi','ROI','roi.html'] tuple to renderMarketingSidebar
+   (after Overview, before ROAS).
+ • Bumped app.js?v= to v=7 on the 6 Marketing sidebar pages (marketing, roas,
+   ac_contact_sources, new_paid_leads_tracking, ga4_agent, historical_paid_leads);
+   roi.html ships at v=7.
+
+Verification: validated BOTH SQL queries directly against the live DB (ac_value_aud +
+FULL OUTER JOIN + FY axis all work; FY26 ROI ≈7.5×, FY27 ≈21.7×). node --check passed on
+both server files. Booted the server locally: /api/health 200, /api/marketing/roi 401
+(registered + auth-guarded), /roi.html 200. Stopped the test server (port 8080 only).
+Recorded a project memory (roi-tab-feature) + MEMORY.md index line. Told the user a
+manual Cloud Run redeploy is required (Claude never deploys) and noted two easy tweaks
+(ex-GST revenue; grouped bars instead of lines).
+
+--------------------------------------------------------------------------------
+USER:
+"dcp"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp routine (no git): wrote this chat-history file, updated as_built.txt and
+CLAUDE.md to reflect the new ROI tab, and checked .gitignore.
+
+================================================================================
+END OF EXPORT
+================================================================================
