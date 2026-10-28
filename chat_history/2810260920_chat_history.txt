@@ -1,0 +1,68 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-28
+Session: Renamed the two "how it was counted" (method) labels on the
+public.roas_counted_deals view — "Niki Google Ads log" → "Niki's Audit" and
+"Audit: Google Ads tagged" → "Clover's Audit". View-only change, applied live via
+migration; no application code touched, no redeploy. Ends with a /q confirmation of
+scope, then this /dcp.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted into or printed in this chat.
+Only non-secret identifiers appeared (Supabase project ref aivitcomiywiysrfwqxt).
+
+--------------------------------------------------------------------------------
+USER:
+(pasted) "Update 'how it was counted' tag names: 1. rename 'Niki Google Ads log' to
+'Niki's Audit'. 2. rename 'Audit: Google Ads tagged' to 'Clover's Audit'." (roas.html
+was open in the IDE.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Grepped the repo for the two strings — found only in three supabase/migrations SQL
+files (the roas_counted_deals view's `method` column), none in JS/HTML. Pulled the
+live view def with pg_get_viewdef (project aivitcomiywiysrfwqxt) to get the current
+source of truth (post jc-drop: the view has no jc branch; method CASE is clover →
+'Audit: Google Ads tagged' else 'GA4 cpc channel', and the niki CTE literal 'Niki
+Google Ads log'). Confirmed both roas-deals.js (Deals table) and roas-counted.js
+(ROAS-counted view) select `method` straight from the view, so changing the two
+literals in the view fixes both surfaces with no code change.
+
+Wrote migration file 20261028120000_roas_counted_deals_rename_method_labels.sql
+(full CREATE OR REPLACE VIEW, identical to live except the two renamed literals:
+'Niki Google Ads log' → 'Niki''s Audit', 'Audit: Google Ads tagged' → 'Clover''s
+Audit'; GA4 cpc channel unchanged). Applied it live via apply_migration
+(roas_counted_deals_rename_method_labels) → success. Verified with a SELECT
+method, count(*) GROUP BY: Clover's Audit 61, GA4 cpc channel 1, Niki's Audit 101.
+Noted no redeploy needed (view read live) and that the review/actag 'Audit: …'
+labels in roas-deals.js:53-55 were left alone since that group isn't UI-shown.
+
+--------------------------------------------------------------------------------
+USER:
+"so only roas_counted_deals view table has been touched? /q"
+
+--------------------------------------------------------------------------------
+ASSISTANT (read-only /q):
+Confirmed yes. git status --short showed the only working-tree change is the new
+untracked migration file. Summary given:
+- DB (live): public.roas_counted_deals recreated via CREATE OR REPLACE VIEW; only
+  the two method string literals changed, all columns/joins/filters/rows identical;
+  no underlying table, data row, or other view/function modified.
+- Repo: one new untracked file, the migration; nothing else edited (roas.js,
+  roas-deals.js, roas-counted.js, roas.html all untouched).
+- No app code edited, no redeploy; the two JS metrics read method from the view so
+  they pick up the new labels live. Flagged that the review/actag 'Audit: …' labels
+  in roas-deals.js are unchanged by design (that group isn't shown on the page).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: saved this chat-history file; updated as_built.txt and CLAUDE.md
+to reflect the renamed method labels; confirmed .gitignore already covers the
+sensitive patterns (no change). Did NOT run any git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================
