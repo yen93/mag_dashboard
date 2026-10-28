@@ -1,0 +1,114 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-28
+Session: Built the new Marketing "ROI" tab end-to-end (plan-mode → implement →
+verify → /dcp → /cm), then reworked it per owner feedback: "Total spend" switched
+from ad-only to ALL Xero expenses (new xero_expenses_monthly table seeded from the
+Xero P&L), and the pipeline chart switched to per-AC-pipeline Won/Open/Lost. Ends
+with this second /dcp. (Supersedes 2810261534_chat_history.txt, which covered only
+the first half.)
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted or printed. Only non-secret
+identifiers (Supabase project ref aivitcomiywiysrfwqxt; Xero org id
+2cc630e1-…; Xero contact ids) and aggregate business figures appeared.
+
+--------------------------------------------------------------------------------
+USER:
+(pasted) "Create a new ROI Tab under Marketing. cards: Total revenue (xero), total
+spend (xero), deals won (AC). Graphs: Revenue vs spend by month, AC Pipeline
+Won/Open/Lost Leads". Ran in plan mode.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored conventions (read renderMarketingSidebar + roas.js, then 2 parallel Explore
+agents for the frontend page pattern and the server routing / Xero+AC data). Asked
+the owner two clarifying questions. Answers: scope = WHOLE-BUSINESS; time framing = FY
+like the ROAS tab. Verified data in Supabase (invoice_tracking has amount_total; revenue
+only FY26/FY27; AC deals by FY). Wrote the plan, ExitPlanMode → approved.
+
+Built it:
+ • server/metrics/marketing-roi.js (getMarketingRoi): per-FY revenue (invoice_tracking),
+   ad-spend (google+bing+sd — later replaced), deal counts + won value; BY_MONTH series;
+   FY axis FY25–FY27; default = current FY. section()/live() wrappers, pending guard.
+ • server/index.js: new `marketing` express.Router() + GET /roi (cache 'marketing:roi'),
+   mounted /api/marketing.
+ • public/roi.html: self-rendering marketing-sidebar page (initPage('marketing') +
+   renderMarketingSidebar('roi')), FY filter bar, 3 KPI cards, a 2-line shared-$-axis
+   revenue-vs-spend chart (loaded dataviz skill; NOT dual-axis), a pipeline bar, an
+   ROI-by-FY table.
+ • app.js: added ['roi','ROI','roi.html'] to renderMarketingSidebar; bumped the 6
+   Marketing pages to app.js?v=7.
+Verified: both SQL queries against the live DB, node --check, server boot (health 200,
+/api/marketing/roi 401, /roi.html 200). Wrote a project memory. Flagged: manual Cloud
+Run redeploy needed; invoice_tracking is 2026+ so revenue starts FY26.
+
+--------------------------------------------------------------------------------
+USER:
+"dcp"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp (no git): saved 2810261534_chat_history.txt, updated as_built.txt + CLAUDE.md
+for the ROI tab (tabbar 15→16 pages, Marketing sidebar 6→7, ROI page description),
+left .gitignore as is.
+
+--------------------------------------------------------------------------------
+USER:
+"cm"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected changes (nothing staged) and output one pasteable commit line:
+feat(marketing): add whole-business ROI tab (revenue vs ad spend by FY) with
+/api/marketing/roi endpoint, roi.html page, sidebar link, app.js v=7 bump, and docs.
+
+--------------------------------------------------------------------------------
+USER:
+"'Total ad spend (Xero)' should be all expenses not just the ads and agencies.
+across all depts. 'AC pipeline (deals)' graph should be for each AC pipeline"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated: no expenses table existed in Supabase (only ad-spend tables); AC has 9
+pipelines (dealGroups 3/5/7/9/14/17/18/19/20) with no name table. Probed the Xero P&L
+(get_profit_and_loss) — total income / total_expenses / total_cost_of_sales available
+per period; current + 3 prior FYs only. Asked the owner two questions; answers: card =
+"Total spend" and use ALL COSTS (operating expenses + cost of sales); sourcing = seed
+now, automate later.
+
+Pulled monthly P&L via the Xero MCP for all 28 months FY25–FY27 (2024-07 … 2026-10),
+capturing total_expenses + total_cost_of_sales per month. Created + seeded a new table:
+ • public.xero_expenses_monthly (migration create_xero_expenses_monthly): month PK,
+   operating_expenses, cost_of_sales, total_spend (GENERATED = op+cos), synced_at.
+   28 rows. Per-FY totals: FY25 $966,995 · FY26 $1,200,286 · FY27-to-date $229,465.
+   STATIC one-time load — refresh routine pending.
+
+Reworked the feature:
+ • marketing-roi.js: spend now from xero_expenses_monthly (per FY + per month), NOT the
+   ad tables; FY axis = FYs with expenses OR revenue; added a per-pipeline query
+   (activecampaign_deals."group" → name map) returned as a `pipelines` array; note
+   reworded to flag FY26 revenue is partial (Jan–Jun 2026) so FY26 ROI reads low.
+ • roi.html: card "Total ad spend"→"Total spend" (sub "All expenses + cost of sales");
+   monthly chart relabelled; pipeline chart replaced with a horizontal STACKED bar per
+   pipeline (Won/Open/Lost), own Chart instance, filtered by FY (aggregated for All);
+   ROI-by-FY table column "Ad spend"→"Total spend".
+Verified: rewritten BY_FY/BY_MONTH/PIPELINE queries against the live DB (FY26 ROI 0.41
+— understated due to half-year revenue; FY27 1.80), node --check, server boot (401/200).
+Updated the roi-tab-feature memory + MEMORY.md, and corrected as_built.txt (new
+xero_expenses_monthly DATA STORE + ROI bullet) and CLAUDE.md (ROI paragraph). Flagged:
+data is already live in Supabase (no edge deploy), but the dashboard code still needs a
+manual Cloud Run redeploy; changes uncommitted.
+
+--------------------------------------------------------------------------------
+USER:
+"dcp"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp again (no git): wrote this chat-history file; as_built.txt + CLAUDE.md were
+already updated this session to the final ROI state (verified current); .gitignore
+left as is (no new sensitive files).
+
+================================================================================
+END OF EXPORT
+================================================================================

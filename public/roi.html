@@ -38,13 +38,13 @@
     <div class="kpi-grid" id="kpis"></div>
 
     <div class="grid">
-      <div class="card col-8">
-        <div class="card-head"><h3>Revenue vs ad spend by month</h3><span class="chips" id="monthChips"></span></div>
+      <div class="card col-12">
+        <div class="card-head"><h3>Revenue vs spend by month</h3><span class="chips" id="monthChips"></span></div>
         <div class="chart-box" id="roi-month-chart"><canvas id="roiMonthCanvas"></canvas></div>
       </div>
-      <div class="card col-4">
-        <div class="card-head"><h3>AC pipeline (deals)</h3><span class="chips" id="pipeChips"></span></div>
-        <div class="chart-box" id="roi-pipe-chart"><canvas id="roiPipelineCanvas"></canvas></div>
+      <div class="card col-12">
+        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by pipeline</h3><span class="chips" id="pipeChips"></span></div>
+        <div class="chart-box" id="roi-pipe-chart" style="height:380px"><canvas id="roiPipelineCanvas"></canvas></div>
       </div>
 
       <div class="card col-12">
@@ -114,9 +114,9 @@
         { label: 'Total revenue (Xero)',
           metric: { value: row.hasRevenue ? row.revenue : null, unit: 'currency', meta: meta },
           sub: revSub },
-        { label: 'Total ad spend (Xero)',
+        { label: 'Total spend (Xero)',
           metric: { value: row.totalSpend, unit: 'currency' },
-          sub: 'Google + Bing + Simple Digital' },
+          sub: 'All expenses + cost of sales' },
         { label: 'Deals won (AC)',
           metric: { value: row.dealsWon, unit: 'count' },
           sub: row.dealsOpen + ' open · ' + row.dealsLost + ' lost' },
@@ -128,14 +128,12 @@
       setChips('monthChips', ROI.byMonth.meta);
       lineChart('roiMonthCanvas', months, [
         { key: 'revenue', label: 'Revenue', color: '#3b6ef0' },
-        { key: 'spend',   label: 'Ad spend', color: '#e2483d' },
+        { key: 'spend',   label: 'Total spend', color: '#e2483d' },
       ], { xKey: 'month', xLabel: monthLabel });
 
-      // AC pipeline — Won / Open / Lost deal counts for the selection.
-      setChips('pipeChips', meta);
-      barChart('roiPipelineCanvas', ['Won', 'Open', 'Lost'],
-        [row.dealsWon, row.dealsOpen, row.dealsLost],
-        { colors: ['#17a673', '#3b6ef0', '#e2483d'] });
+      // AC pipeline — Won / Open / Lost per pipeline for the selection.
+      setChips('pipeChips', ROI.pipelines.meta);
+      renderPipeline();
 
       // ROI by FY table (always the full per-FY list, regardless of selection).
       setChips('fyTableChips', meta);
@@ -143,13 +141,57 @@
         { key: 'fy', label: 'FY' },
         { key: 'revenue', label: 'Revenue (Xero)', unit: 'currency',
           render: function (v, r) { return r.hasRevenue ? fmt(v, 'currency') : '<span class="muted">—</span>'; } },
-        { key: 'totalSpend', label: 'Ad spend', unit: 'currency' },
+        { key: 'totalSpend', label: 'Total spend', unit: 'currency' },
         { key: 'dealsWon', label: 'Deals won', unit: 'count' },
         { key: 'dealsOpen', label: 'Open', unit: 'count' },
         { key: 'dealsLost', label: 'Lost', unit: 'count' },
         { key: 'roi', label: 'ROI', unit: 'text',
           render: function (v) { return v != null ? v.toFixed(2) + '×' : '<span class="muted">—</span>'; } },
       ]);
+    }
+
+    // AC pipeline chart — one horizontal stacked bar per pipeline (Won/Open/Lost),
+    // filtered to the selected FY (or aggregated across all FYs for "All").
+    var _pipeChart = null;
+    function renderPipeline() {
+      var src = (ROI.pipelines && ROI.pipelines.data) || [];
+      var rows;
+      if (SEL === 'all') {
+        var byGroup = {};
+        src.forEach(function (p) {
+          if (!byGroup[p.group]) byGroup[p.group] = { pipeline: p.pipeline, won: 0, open: 0, lost: 0 };
+          byGroup[p.group].won += p.won; byGroup[p.group].open += p.open; byGroup[p.group].lost += p.lost;
+        });
+        rows = Object.keys(byGroup).map(function (k) { return byGroup[k]; });
+      } else {
+        rows = src.filter(function (p) { return p.fyEnd === SEL; });
+      }
+      // Largest pipelines first (by total deal count).
+      rows.sort(function (a, b) { return (b.won + b.open + b.lost) - (a.won + a.open + a.lost); });
+
+      var tc = themeColors();
+      var cfg = {
+        type: 'bar',
+        data: {
+          labels: rows.map(function (r) { return r.pipeline; }),
+          datasets: [
+            { label: 'Won',  data: rows.map(function (r) { return r.won; }),  backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 26 },
+            { label: 'Open', data: rows.map(function (r) { return r.open; }), backgroundColor: '#3b6ef0', borderRadius: 4, maxBarThickness: 26 },
+            { label: 'Lost', data: rows.map(function (r) { return r.lost; }), backgroundColor: '#e2483d', borderRadius: 4, maxBarThickness: 26 },
+          ],
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: true, position: 'top', labels: { color: tc.text, usePointStyle: true, boxWidth: 8, padding: 12 } } },
+          scales: {
+            x: { stacked: true, beginAtZero: true, ticks: { color: tc.muted, precision: 0 }, grid: { color: tc.grid } },
+            y: { stacked: true, ticks: { color: tc.muted }, grid: { display: false } },
+          },
+        },
+      };
+      if (_pipeChart) _pipeChart.destroy();
+      var el = document.getElementById('roiPipelineCanvas');
+      if (el) _pipeChart = new Chart(el.getContext('2d'), cfg);
     }
 
     function loadRoi() {
@@ -163,7 +205,7 @@
             setChips('pipeChips', data.rows.meta);
             renderKpis('kpis', [
               { label: 'Total revenue (Xero)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
-              { label: 'Total ad spend (Xero)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
+              { label: 'Total spend (Xero)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Deals won (AC)', metric: { value: null, unit: 'count', meta: data.rows.meta } },
             ]);
             return;

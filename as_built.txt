@@ -179,17 +179,20 @@ SCRIPTS / APP CODE
     (initPage('marketing') with no renderFn + renderMarketingSidebar('roi') + its
     own fetchJSON of /api/marketing/roi; backed by server/metrics/marketing-roi.js).
     WHOLE-BUSINESS (deliberately NOT ad-attributed like ROAS), framed by Australian
-    FY (Jul–Jun END-year). 3 KPI cards (Total revenue (Xero) / Total ad spend (Xero)
-    / Deals won (AC)), a revenue-vs-ad-spend-by-month chart (2 lines on ONE shared $
-    axis — NOT dual-axis), an AC pipeline Won/Open/Lost bar chart, and an ROI-by-FY
-    table; an FY filter bar (All + each FY, default = current FY) re-renders
-    client-side. Revenue = all Xero invoices (invoice_tracking.amount_total incl GST,
-    by invoice_date — 2026+ ONLY, so revenue exists FY26/FY27, blank before);
-    ad spend = all-in Google + Bing + Simple Digital monthly; deals = ALL
-    activecampaign_deals (status 1/2/0 by cdate, won value via public.ac_value_aud).
-    FY axis = FYs with Google spend OR Xero revenue (FY25–FY27). The 6 other
-    Marketing pages' app.js was bumped to ?v=7 so the ROI link shows. Needs a
-    Cloud Run redeploy to ship.
+    FY (Jul–Jun END-year). 3 KPI cards (Total revenue (Xero) / Total spend (Xero)
+    / Deals won (AC)), a revenue-vs-spend-by-month chart (2 lines on ONE shared $
+    axis — NOT dual-axis), an AC-pipeline Won/Open/Lost chart broken down PER PIPELINE
+    (horizontal stacked bars), and an ROI-by-FY table; an FY filter bar (All + each FY,
+    default = current FY) re-renders client-side. Revenue = all Xero invoices
+    (invoice_tracking.amount_total incl GST, by invoice_date — 2026+ ONLY, so revenue
+    exists FY26 (partial Jan–Jun 2026)/FY27, blank before); TOTAL SPEND = ALL Xero
+    expenses across every dept (operating expenses + cost of sales) from the new
+    public.xero_expenses_monthly table (see DATA STORES); deals = ALL activecampaign_deals
+    (status 1/2/0 by cdate, won value via public.ac_value_aud), also split per pipeline
+    (activecampaign_deals."group"). FY axis = FYs with Xero expenses OR Xero revenue
+    (FY25–FY27). NB because FY26 revenue is half-year vs full-year spend, FY26 ROI reads
+    low (~0.41) — a known, page-noted artifact. The 6 other Marketing pages' app.js was
+    bumped to ?v=7 so the ROI link shows. Needs a Cloud Run redeploy to ship.
   - roas.html is a self-rendering page (reads /api/operations/roas + /roas/deals;
     app.js?v=7; does not use the generic chart helpers). Rebuilt 2026-10-22 to mirror
     the "MAG paid search ROAS" artifact, by Australian FINANCIAL YEAR: a top control bar
@@ -471,6 +474,15 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     the +$600 is SEO, not paid search). This REPLACED the one-time sheet load and SUPERSEDES
     the simple-digital-fees-sync Gmail routine. 56 rows, Mar 2022–Oct 2026 (as of 2026-10-26
     the fetch window was extended back to FY22 — see xero-ad-spend-sync in AUTOMATIONS).
+  - public.xero_expenses_monthly (NEW 2026-10-28) — whole-business monthly expenses from the
+    Xero P&L, backing the Marketing ROI tab's "Total spend" (all costs across every dept).
+    PK month (date); cols operating_expenses (P&L Total Expenses), cost_of_sales (COGS),
+    total_spend (GENERATED = operating_expenses + cost_of_sales), synced_at. STATIC one-time
+    load seeded from the Xero MCP get_profit_and_loss for FY25–FY27 (28 months, 2024-07…
+    2026-10) — migration create_xero_expenses_monthly. Read by server/metrics/marketing-roi.js
+    (sum per FY + per month). NOT yet auto-refreshed — a refresh routine/edge fn is pending
+    (reload monthly P&L totals; current + 3 prior FYs are available from Xero). FY27 is
+    partial (to the seed date). NOT the same as the ad-spend tables (those stay ad-only for ROAS).
   - public.ga4_ac_contact_source — as of 2026-10-22 ROAS uses this ONLY for the
     `shownLeads` basis (the Per-Lead-Value denominator = won+lost+open rows the shared
     CONTACT_SOURCE_SHOWN predicate counts: organic/cpc channel OR an EFFECTIVE JC tag — a
