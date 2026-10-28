@@ -1,0 +1,55 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-28
+Session: Made the ROAS "Ads only" (Google-only) cost-basis toggle also hide
+Simple Digital from the "What we spent vs what we won" chart, and hide the
+"Simple Digital" + "ROAS all-in" columns from the "ROAS by FY" table.
+(Front-end only; public/roas.html.)
+================================================================================
+
+--------------------------------------------------------------------------------
+USER (pasted spec):
+  chart_to_update: "What we spent vs what we won"
+  columns_to_hide (ROAS by FY table): 1. Simple Digital  2. ROAS all-in
+  what_to_do: update the "Ads only" toggle events —
+    - hide Simple Digital in the chart
+    - hide those two columns
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read public/roas.html to find the relevant code. Confirmed the "Ads only" button
+is the google-basis button in #basisSeg (data-basis="google"), and that
+setBasis() already re-runs buildCharts() + renderTable() on toggle, so gating on
+SEL.basis === 'google' is sufficient — no new event wiring needed.
+
+Made two edits, both in the page's inline <script>:
+
+1. buildCharts() — the "What we spent vs what we won" chart (#chartSpend).
+   Replaced the inline datasets array literal with a `spendDatasets` array that
+   always includes Google Ads, Bing Ads, then Won revenue, and only pushes the
+   Simple Digital cost dataset when SEL.basis !== 'google'. So on "Ads only" the
+   SD slice drops out of the stacked cost bar.
+
+2. renderTable() — the "ROAS by FY" table. After the `cols` array is built, added
+   a guard: when SEL.basis === 'google', filter out the columns labelled
+   'Simple Digital' and 'ROAS all-in'. (cols is a `var`, so reassignment via
+   .filter is fine.) Columns reappear on the "All-in" basis since renderTable()
+   re-runs.
+
+Both revert automatically when "All-in" is reselected. No server/DB change — this
+is purely display logic in public/roas.html. Noted to the user it needs a manual
+Cloud Run redeploy to go live (per project policy, Claude does not deploy).
+
+--------------------------------------------------------------------------------
+USER (/dcp): Ran dcp (this export).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat-history file; updated as_built.txt's roas.html description to note
+the basis-aware column/dataset hiding; reviewed CLAUDE.md (no update needed — the
+"Ads only" toggle behaviour is a UI detail below its level of description);
+reviewed .gitignore (no change — no new sensitive files). Did NOT run any git
+commands — user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

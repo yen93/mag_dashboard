@@ -310,7 +310,7 @@
         <span class="ctl-label">Cost basis</span>
         <div class="segmented" id="basisSeg">
           <button data-basis="allin">All-in (Google + Bing + Simple Digital)</button>
-          <button data-basis="google">Google Ads only</button>
+          <button data-basis="google">Ads only</button>
         </div>
         <div class="spacer"></div>
         <span class="muted" id="roasAsOf" style="font-size:13px"></span>
@@ -557,14 +557,18 @@
       });
 
       // What we spent vs what we won (stacked cost by channel beside won revenue)
+      // On the "Ads only" (google) basis, Simple Digital is excluded from the cost stack.
+      var spendDatasets = [
+        { label: 'Google Ads', stack: 'cost', data: rows.map(function (r) { return r.googleSpend; }), backgroundColor: C_RED, maxBarThickness: 26 },
+        { label: 'Bing Ads', stack: 'cost', data: rows.map(function (r) { return r.bingSpend; }), backgroundColor: C_BING, maxBarThickness: 26 },
+      ];
+      if (SEL.basis !== 'google') {
+        spendDatasets.push({ label: 'Simple Digital', stack: 'cost', data: rows.map(function (r) { return r.sdFee; }), backgroundColor: C_SD, maxBarThickness: 26 });
+      }
+      spendDatasets.push({ label: 'Won revenue', stack: 'rev', data: rows.map(function (r) { return r.wonRevenue; }), backgroundColor: C_CYAN, borderRadius: 3, maxBarThickness: 26 });
       makeChart('chartSpend', {
         type: 'bar',
-        data: { labels: labels, datasets: [
-          { label: 'Google Ads', stack: 'cost', data: rows.map(function (r) { return r.googleSpend; }), backgroundColor: C_RED, maxBarThickness: 26 },
-          { label: 'Bing Ads', stack: 'cost', data: rows.map(function (r) { return r.bingSpend; }), backgroundColor: C_BING, maxBarThickness: 26 },
-          { label: 'Simple Digital', stack: 'cost', data: rows.map(function (r) { return r.sdFee; }), backgroundColor: C_SD, maxBarThickness: 26 },
-          { label: 'Won revenue', stack: 'rev', data: rows.map(function (r) { return r.wonRevenue; }), backgroundColor: C_CYAN, borderRadius: 3, maxBarThickness: 26 },
-        ] },
+        data: { labels: labels, datasets: spendDatasets },
         options: {
           responsive: true, maintainAspectRatio: false,
           plugins: {
@@ -605,6 +609,10 @@
         { label: 'ROI %',          num: true, cell: function (r) { var c = costOf(r); return pct(c ? ((r.wonRevenue || 0) - c) / c : null); } },
         { label: 'Per-Lead Value', num: true, title: 'Won revenue ÷ (won + lost + open).', cell: function (r) { return money(r.perLeadValue); } },
       ];
+      // On the "Ads only" (google) basis, Simple Digital and the all-in ROAS are irrelevant — hide those columns.
+      if (SEL.basis === 'google') {
+        cols = cols.filter(function (c) { return c.label !== 'Simple Digital' && c.label !== 'ROAS all-in'; });
+      }
       function pill(v, t) { if (v == null) return '—'; var p = v >= t; return '<span class="pill ' + (p ? 'roas-pass' : 'roas-fail') + '">' + roasFmt(v) + '</span>'; }
       function rowHtml(r, cls) {
         return '<tr class="' + cls + '"' + (r._total ? '' : ' data-fy="' + esc(r.fy) + '"') + '>' + cols.map(function (c) {
