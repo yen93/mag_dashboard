@@ -1,0 +1,77 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-28
+Session: (continuation) Two ROAS-tab front-end tweaks in public/roas.html — renamed
+the "ROAS Google" table column to "ROAS Ads", and made the All-in cost-basis toggle
+hide that ads-only ROAS column (so each basis shows only its own ROAS column). Ends
+with this /dcp + /cm. (The earlier half of this session — the /q on clover-vs-jc
+precedence and the removal of the jc source from public.roas_counted_deals — was
+saved in 2810260853_chat_history.txt.)
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted into or printed in this chat.
+Only non-secret identifiers appeared (Supabase project ref aivitcomiywiysrfwqxt).
+
+--------------------------------------------------------------------------------
+USER (earlier in session, already documented in 2810260853_chat_history.txt):
+/q "clover deals prevail over jc deals right?" → then "how many jc deals are in the
+ROAS view table?" → then "update view table, jc deals should no longer be included at
+all. do not change any of the sources, just the view table" → then confirmed no
+redeploy needed → /dcp → /cm.
+
+--------------------------------------------------------------------------------
+ASSISTANT (earlier, summary):
+Confirmed clover prevails over jc from the live roas_counted_deals view (dedup by
+deal_id, precedence clover>jc>ga4cpc>niki). Counted 10 jc deals (of 171). On request,
+applied migration roas_counted_deals_drop_jc_source (CREATE OR REPLACE VIEW) removing
+the jc branch (mag_gads jc_final_attr='Could be SEO or Paid Ad') from the FY25+
+fy25_ids CTE + the dead 'jc' arms of the method/dedup CASEs; no underlying tables
+touched, JC tagging UI left as-is. Verified 171→163 (niki 99→101 because 2 jc deal_ids
+also live in Niki's log and resurfaced as niki; net 8 distinct removed); per-FY won
+FY25 16→9, FY27 2→1. Confirmed no redeploy (view read live; only the 10-min cache
+lags). Ran /dcp (saved chat, updated as_built.txt + CLAUDE.md incl. correcting the now-
+stale "JC tag FEEDS ROAS" notes, .gitignore unchanged) and produced a docs commit line.
+
+--------------------------------------------------------------------------------
+USER:
+(pasted) what_to_do: 1. update "All-in" toggle events and hide "ROAS Google" when
+active/clicked. 2. rename "ROAS Google" to "ROAS Ads". (roas.html was open in the IDE.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Grepped public/roas.html for the basis-toggle + table-column logic. Found renderTable()
+builds a `cols` array; the "ROAS Google" column (label at ~line 605, cell pill(r.roasGoogle))
+and "ROAS all-in" (pill(r.roasAllin)); an existing filter hid Simple Digital + "ROAS all-in"
+when SEL.basis==='google' (the Ads-only basis). setBasis() already calls renderTable() on
+every basis click, so the toggle event wiring already re-renders — only the column-filter
+needed extending. Confirmed "ROAS Google" appears only as that one table-column label (KPI
+card uses roasOf() which switches by basis; no other static "ROAS Google" string).
+
+Made two edits in public/roas.html renderTable():
+1. Renamed the column label 'ROAS Google' → 'ROAS Ads' (cell still renders r.roasGoogle =
+   won$ ÷ Google/ads spend).
+2. Extended the per-basis column filter to be symmetric — each basis shows only its own ROAS
+   column:
+     if (SEL.basis === 'google') { hide 'Simple Digital' + 'ROAS all-in'; }
+     else                        { hide 'ROAS Ads'; }
+   Updated the explanatory comment accordingly.
+
+Verified the 3 inline <script> blocks still parse (node new Function() check →
+ALL_INLINE_SCRIPTS_PARSE_OK). Frontend-only (public/roas.html), no server/DB/app.js change,
+no cache-buster bump needed (roas.html served fresh) — needs a manual Cloud Run redeploy to
+ship. Offered to fold into docs + give a commit line.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp then /cm
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: saved this chat-history file, updated as_built.txt (new most-recent
+changelog entry for the ROAS Ads rename + symmetric per-basis ROAS column hide) and CLAUDE.md
+(ROAS bullet notes the column rename + that each basis shows only its own ROAS column), and
+checked .gitignore (no new sensitive files). No git commands run — the user commits/pushes
+themselves. Then produced a single-line Conventional Commits `git commit -m` for the change.
+
+================================================================================
+END OF EXPORT
+================================================================================

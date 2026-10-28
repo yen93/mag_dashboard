@@ -126,16 +126,22 @@ Cloud Run.
     view is the **SINGLE source of truth** shared with `roas-deals.js` AND the GA4 & Ads Leads page's
     **"ROAS-counted only"** view, so all three reconcile per FY. **View set** = Niki (won/lost/open,
     excl uniting; its OWN sheet value; FY from its own logged month) ∪ FY25+ {`clover_audited_deals`
-    `final_gads_tag='yes'` ∪ `mag_gads_direct_inbound_lead_source` `jc_final_attr='Could be SEO or
-    Paid Ad'` ∪ `ga4_ac_contact_source` `channel~cpc`}; FY25+ status+value pulled uniformly from
+    `final_gads_tag='yes'` ∪ `ga4_ac_contact_source` `channel~cpc`}. **The jc source
+    (`mag_gads_direct_inbound_lead_source` `jc_final_attr='Could be SEO or Paid Ad'`) was REMOVED from
+    the view 2026-10-28 (migration `roas_counted_deals_drop_jc_source`) — jc deals are NO LONGER
+    counted in ROAS.** It was a view-only change: no underlying table/source was touched, and the JC
+    manual-tagging UI on the GA4 page still works, it just no longer feeds the ROAS count. FY25+
+    status+value pulled uniformly from
     `activecampaign_deals` (value via **`public.ac_value_aud(value,currency)`** = cents→AUD, USD@1.4227
     — the SINGLE rate source; `server/lib/sql.js acValueAud()` emits a call to it), FY25+ **FY from the
-    CONTACT cdate**; **deduped by `deal_id`, precedence `clover > jc > ga4cpc > niki`** ("clover
+    CONTACT cdate**; **deduped by `deal_id`, precedence `clover > ga4cpc > niki`** ("clover
     prevails"); niki rows with no deal_id kept via surrogate `'niki-'||id`. **Owner decisions:** FY24 =
     Niki+clover mix; include ALL Niki incl **outbound**; a **VIEW** (always live, no refresh job).
     Rebuild the underlying tables, not the view. Known quirk: 2 clover returning-customer wins land in
-    **FY22** by contact cdate (deals really FY24+) — accepted. Per-FY won: FY22 6·FY23 11·FY24 15·FY25
-    16·FY26 7·FY27 2.
+    **FY22** by contact cdate (deals really FY24+) — accepted. (Dropping jc removed 10 rows, but 2 of
+    those deal_ids also live in Niki's log and resurfaced as niki rows, so the view went 171→163 deals;
+    net 8 distinct deals removed.) Per-FY won (after the jc removal): FY22 6·FY23 11·FY24 15·FY25
+    9·FY26 7·FY27 1.
     **END-YEAR FY is derived explicitly in SQL for every source** (`extract(year)+(month>=7?1:0)`;
     clover's `fiscal_year` text is already END-year via `right(fiscal_year,2)+2000`). As of
     2026-10-23 `public.mag_fy_label` / GA4's generated `fy` are ALSO END-year (migration
@@ -144,6 +150,11 @@ Cloud Run.
     the frontend toggles between them client-side. ROI $/% and the "cost" KPI follow the active
     basis. Win rate = won ÷ (won+lost+open); Per-Lead Value = won$ ÷ (won+lost+open). Only FYs
     **with ad spend** are shown; `<12`-month-spend years (FY22 partial, FY27 current) are flagged.
+    In the **"ROAS by FY" table** the two ROAS columns are **per-basis SYMMETRIC** (each basis
+    shows only its own): the ads-only column renders `roasGoogle` and is labelled **"ROAS Ads"**
+    (renamed from "ROAS Google" 2026-10-28); the **Ads-only** (google) basis hides *Simple Digital*
+    + *ROAS all-in*, and the **All-in** basis hides *ROAS Ads* — both via `renderTable()`'s column
+    filter, re-rendered on each basis click (`setBasis()` → `renderTable()`).
     **Deals table** = `/api/operations/roas/deals` (`server/metrics/roas-deals.js`): a flat
     per-deal list — group `counted` = the `roas_counted_deals` view; `review` =
     `clover_audited_deals` `final_gads_tag='Uncertain'` not in the view; `actag` = clover
@@ -383,12 +394,16 @@ Cloud Run.
       reset is distinguishable from a "not" — both NULL `decision`), via **`POST
       /api/operations/contact-sources/jc-tag`** (gated by `canReviewJc`; body `{decision}`
       to set, `{reset:true}` to delete the override; parameterized upsert/delete + log then
-      `clearCache()`). **The read path and ROAS treat this override as the
-      EFFECTIVE tag — it WINS over `cs.jc_manual_tag` — so both the SELECT in
-      `ac-contact-sources.js` AND `CONTACT_SOURCE_SHOWN` LEFT JOIN
+      `clearCache()`). **The read path treats this override as the
+      EFFECTIVE tag — it WINS over `cs.jc_manual_tag` — so the SELECT in
+      `ac-contact-sources.js` LEFT JOINs
       `ga4cs_jc_manual_review r ON r.contact_id = cs.contact_id`.** `jcManualTag` shown on
-      the page is thus the effective value, and a positive tag FEEDS ROAS (see the ROAS
-      bullet). Client gate `canTagJc()` mirrors the server; the JC column is **default-open
+      the page is thus the effective value. **NOTE (as of 2026-10-28): the JC tag NO LONGER
+      FEEDS ROAS.** It used to, via `CONTACT_SOURCE_SHOWN` (which also LEFT JOINs the override),
+      but ROAS stopped reading `CONTACT_SOURCE_SHOWN` in the 2026-10-26 view refactor (`roas.js`
+      now only `GROUP BY`s `public.roas_counted_deals`), and on 2026-10-28 the jc source was
+      removed from that view entirely (see the ROAS bullet). `CONTACT_SOURCE_SHOWN` is still
+      defined in `server/lib/sql.js` but has no ROAS consumer now. Client gate `canTagJc()` mirrors the server; the JC column is **default-open
       for reviewers**; `app.js` gained `postJSON()`; page is `app.js?v=5`. **Gotcha: the JC
       cell's `render` is an interactive `<select>`, so its stripped HTML is identical for
       every row — the column therefore supplies a `text(v,row)` projection (tag value /
@@ -438,13 +453,15 @@ Cloud Run.
       identical copies, "KEEP IDENTICAL" — **edit both together:** the page's inline
       `isExcludedRow()` (`public/ac_contact_sources.html`) and the server `isExcludedRow()`
       (`server/metrics/ac-contact-sources.js`, drives the chip count / API rows). **It
-      intentionally DIVERGES from the `CONTACT_SOURCE_SHOWN` SQL predicate (`server/lib/sql.js`),
-      which `roas.js` uses: that predicate OMITS the `google_ads_ac_field` branch (channel +
-      effective-JC-tag only) so merely SHOWING these rows doesn't affect ROAS — DO NOT
-      "re-sync" it by adding a google_ads branch there.** (But a JC manual-review tag DOES
-      feed ROAS via the effective-tag branch — see the JC manual-review tagging bullet
-      above.) Knock-on: the re-shown rows DO count toward the page KPIs + chip-count note
-      (they're "shown"), but an UNtagged one does NOT count toward ROAS. Migration (unrelated,
+      intentionally DIVERGES from the `CONTACT_SOURCE_SHOWN` SQL predicate (`server/lib/sql.js`):
+      that predicate OMITS the `google_ads_ac_field` branch (channel + effective-JC-tag only).
+      (Historical note: `CONTACT_SOURCE_SHOWN` used to drive the ROAS shown-leads basis, but
+      `roas.js` stopped using it in the 2026-10-26 view refactor — ROAS now reads only
+      `public.roas_counted_deals` — so this divergence no longer has any ROAS effect; it's kept
+      so the two display copies stay in sync with the predicate's intent.)** (As of 2026-10-28
+      the JC tag NO LONGER feeds ROAS either — the jc source was removed from the view; see the
+      JC manual-review tagging + ROAS bullets above.) Knock-on: the re-shown rows DO count toward
+      the page KPIs + chip-count note (they're "shown"). Migration (unrelated,
       for the FY/calYr/JC columns): `supabase/migrations/20261020060000_contact_source_fy_calyr_jc_columns.sql`.
     - **Clover ROAS-audit `final_gads_tag` PREVAILS (as of 2026-10-22):** the page joins
       **`public.clover_audited_deals`** (a static one-time load of the "Master Deals (audit)"

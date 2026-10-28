@@ -1,0 +1,97 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-28
+Session: Removed the "jc" source from the ROAS counted-deals view
+(public.roas_counted_deals) so "Could be SEO or Paid Ad" (jc) deals are no longer
+counted in ROAS — a view-only change, no underlying sources/tables touched, no
+dashboard redeploy needed. Started as a /q about clover-vs-jc precedence. Ends with
+this /dcp.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted into or printed in this chat.
+Only non-secret identifiers appeared (Supabase project ref aivitcomiywiysrfwqxt).
+
+--------------------------------------------------------------------------------
+USER:
+(/q — read-only) "clover deals prevail over jc deals right?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed yes against the live view definition (not just the docs). Read
+pg_get_viewdef('public.roas_counted_deals'). The dedup CTE dedupes by deal_id with
+row_number() OVER (PARTITION BY deal_id ORDER BY CASE source WHEN 'clover' THEN 1
+WHEN 'jc' THEN 2 WHEN 'ga4cpc' THEN 3 ELSE 4 END) and keeps rn=1, so when a deal_id
+is tagged by both clover and jc, clover (priority 1) wins. Full precedence:
+clover > jc > ga4cpc > niki (niki rows with no deal_id bypass dedup). Noted the
+precedence only decides the source/method LABEL for a shared deal; the deal is still
+counted once and spend/status/value are unaffected.
+
+--------------------------------------------------------------------------------
+USER:
+"so how many jc deals are in the ROAS view table?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran a GROUP BY source count on public.roas_counted_deals. Result (171 total):
+niki 99, clover 61, jc 10, ga4cpc 1. Reported 10 jc deals — the count that survived
+AFTER clover prevailed (jc-tagged deals clover did not also claim).
+
+--------------------------------------------------------------------------------
+USER:
+"update view table, jc deals should no longer be included at all. do not change any
+of the sources, just the view table"
+(This cancels the /q no-action constraint for this follow-up.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Previewed impact first with SELECTs: none of the 10 jc deals also qualify via clover
+or ga4cpc (jc_also_ga4cpc=0, jc_also_clover=0), so removing the jc branch cleanly
+drops those 10 with no re-labelling.
+
+Applied migration roas_counted_deals_drop_jc_source via CREATE OR REPLACE VIEW:
+removed only the jc UNION ALL branch (mag_gads_direct_inbound_lead_source where
+jc_final_attr = 'Could be SEO or Paid Ad') from the fy25_ids CTE, and the now-dead
+'jc' WHEN from the fy25 method CASE and the dedup ORDER BY CASE. Every other
+source (clover, ga4cpc, niki), column, and the Xero-invoice joins left identical.
+No underlying tables touched.
+
+Verified: GROUP BY source now niki 101, clover 61, ga4cpc 1; jc 0; total 163.
+Explained why 163 not 161: 2 of the removed jc deal_ids ALSO exist in Niki's Google
+Ads log and previously won the dedup tie-break (jc priority 2 beats niki 4), so they
+had displayed as jc; with jc gone they correctly fall back to their niki source
+(niki 99 -> 101). Net distinct deals removed = 8. Dropping them would have meant
+changing the niki source, which the user said not to do — so this is correct.
+
+Flagged that this is a live view read at request time by roas.js / roas-deals.js /
+roas-counted.js, so the ROAS tab, deals table, and GA4 "ROAS-counted only" view all
+now show 163 and still reconcile per FY, with no dashboard redeploy. Noted it
+reverses the documented design where a jc tag feeds ROAS, and asked whether to also
+touch the JC tagging side.
+
+--------------------------------------------------------------------------------
+USER:
+"leave the tagging side as-is /q no need to redeploy right?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed no redeploy needed: the change was purely a database view
+(CREATE OR REPLACE VIEW); no application code changed; roas.js / roas-deals.js /
+roas-counted.js read the view live via SQL at request time. Read
+server/lib/cache.js to confirm the only lag is the in-memory response cache
+(DEFAULT_TTL_MS = 10 minutes per instance), so the new 163 count appears within
+~10 min of the next load (sooner on a cold start). Nothing to deploy. Left the JC
+tagging UI untouched as requested.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: saved this chat-history file, updated as_built.txt and CLAUDE.md
+to reflect that the ROAS counted-deals view no longer includes the jc source, and
+checked .gitignore (no new sensitive files). No git commands run — the user
+commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

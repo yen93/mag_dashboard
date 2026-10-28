@@ -602,16 +602,19 @@
         { label: 'Lost',           num: true, cell: function (r) { return r.lost == null ? '—' : r.lost; } },
         { label: 'Open',           num: true, cell: function (r) { return r.open == null ? '—' : r.open; } },
         { label: 'Won revenue',    num: true, cell: function (r) { return money(r.wonRevenue); } },
-        { label: 'ROAS Google',    num: true, cell: function (r) { return pill(r.roasGoogle, target); } },
+        { label: 'ROAS Ads',       num: true, cell: function (r) { return pill(r.roasGoogle, target); } },
         { label: 'ROAS all-in',    num: true, cell: function (r) { return pill(r.roasAllin, target); } },
         { label: 'Win rate',       num: true, cell: function (r) { return pct(r.winRate); } },
         { label: 'ROI ($)',        num: true, title: 'Won revenue − cost (on the selected basis).', cell: function (r) { return money((r.wonRevenue || 0) - costOf(r)); } },
         { label: 'ROI %',          num: true, cell: function (r) { var c = costOf(r); return pct(c ? ((r.wonRevenue || 0) - c) / c : null); } },
         { label: 'Per-Lead Value', num: true, title: 'Won revenue ÷ (won + lost + open).', cell: function (r) { return money(r.perLeadValue); } },
       ];
-      // On the "Ads only" (google) basis, Simple Digital and the all-in ROAS are irrelevant — hide those columns.
+      // Each basis shows only its own ROAS column. "Ads only" (google) also hides Simple Digital
+      // (it isn't in that cost stack) and the all-in ROAS; "All-in" hides the ads-only ROAS.
       if (SEL.basis === 'google') {
         cols = cols.filter(function (c) { return c.label !== 'Simple Digital' && c.label !== 'ROAS all-in'; });
+      } else {
+        cols = cols.filter(function (c) { return c.label !== 'ROAS Ads'; });
       }
       function pill(v, t) { if (v == null) return '—'; var p = v >= t; return '<span class="pill ' + (p ? 'roas-pass' : 'roas-fail') + '">' + roasFmt(v) + '</span>'; }
       function rowHtml(r, cls) {
