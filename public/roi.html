@@ -43,7 +43,7 @@
         <div class="chart-box" id="roi-month-chart"><canvas id="roiMonthCanvas"></canvas></div>
       </div>
       <div class="card col-12">
-        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by pipeline</h3><span class="chips" id="pipeChips"></span></div>
+        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by pipeline</h3><label class="pipe-toggle" style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-left:10px"><input type="checkbox" id="pipeWonToggle" style="margin:0">Won only</label><span class="chips" id="pipeChips"></span></div>
         <div class="chart-box" id="roi-pipe-chart" style="height:380px"><canvas id="roiPipelineCanvas"></canvas></div>
       </div>
 
@@ -60,6 +60,7 @@
   <script>
     var ROI = null;    // full API payload
     var SEL = null;    // selected fy_end (number) or 'all'
+    var PIPE_WON_ONLY = false;   // pipeline chart: show only the Won count per pipeline
 
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
@@ -166,19 +167,26 @@
       } else {
         rows = src.filter(function (p) { return p.fyEnd === SEL; });
       }
-      // Largest pipelines first (by total deal count).
-      rows.sort(function (a, b) { return (b.won + b.open + b.lost) - (a.won + a.open + a.lost); });
+      // Sort: by won count when showing won only, else by total deal count. Largest first.
+      rows.sort(function (a, b) {
+        if (PIPE_WON_ONLY) return b.won - a.won;
+        return (b.won + b.open + b.lost) - (a.won + a.open + a.lost);
+      });
+
+      var datasets = PIPE_WON_ONLY
+        ? [{ label: 'Won', data: rows.map(function (r) { return r.won; }), backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 26 }]
+        : [
+            { label: 'Won',  data: rows.map(function (r) { return r.won; }),  backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 26 },
+            { label: 'Open', data: rows.map(function (r) { return r.open; }), backgroundColor: '#3b6ef0', borderRadius: 4, maxBarThickness: 26 },
+            { label: 'Lost', data: rows.map(function (r) { return r.lost; }), backgroundColor: '#e2483d', borderRadius: 4, maxBarThickness: 26 },
+          ];
 
       var tc = themeColors();
       var cfg = {
         type: 'bar',
         data: {
           labels: rows.map(function (r) { return r.pipeline; }),
-          datasets: [
-            { label: 'Won',  data: rows.map(function (r) { return r.won; }),  backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 26 },
-            { label: 'Open', data: rows.map(function (r) { return r.open; }), backgroundColor: '#3b6ef0', borderRadius: 4, maxBarThickness: 26 },
-            { label: 'Lost', data: rows.map(function (r) { return r.lost; }), backgroundColor: '#e2483d', borderRadius: 4, maxBarThickness: 26 },
-          ],
+          datasets: datasets,
         },
         options: {
           indexAxis: 'y', responsive: true, maintainAspectRatio: false,
@@ -220,6 +228,10 @@
 
     initPage('marketing');               // login / top bar / theme only (no auto-fetch)
     renderMarketingSidebar('roi');
+    document.getElementById('pipeWonToggle').addEventListener('change', function () {
+      PIPE_WON_ONLY = this.checked;
+      if (ROI) renderPipeline();
+    });
     window.onThemeChange = function () { if (ROI) render(); };
     if (currentUser()) loadRoi();
   </script>
