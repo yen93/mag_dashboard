@@ -109,6 +109,13 @@ const PIPELINE_SQL = `
   WHERE cdate IS NOT NULL AND "group" IS NOT NULL
   GROUP BY 1, 2`;
 
+// Per-FY Xero P&L spend accounts (for the "Where the spend goes" chart).
+const CATEGORIES_SQL = `
+  SELECT fy_end AS "fyEnd", account_name AS "account", kind AS "kind",
+         round(amount)::numeric AS "amount"
+  FROM public.xero_pnl_accounts_fy
+  ORDER BY fy_end, amount DESC`;
+
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
 // FY END year a 'YYYY-MM' month belongs to.
@@ -173,10 +180,13 @@ export async function getMarketingRoi() {
       rows: section([], pend),
       byMonth: section([], pend),
       pipelines: section([], pend),
+      categories: section([], pend),
     };
   }
 
-  const [fyRows, monthRows, pipeRows] = await Promise.all([q(BY_FY), q(BY_MONTH), q(PIPELINE_SQL)]);
+  const [fyRows, monthRows, pipeRows, catRows] = await Promise.all([
+    q(BY_FY), q(BY_MONTH), q(PIPELINE_SQL), q(CATEGORIES_SQL),
+  ]);
   const rows = fyRows.map(shape);
 
   if (!rows.length) {
@@ -189,6 +199,7 @@ export async function getMarketingRoi() {
       rows: section([], pend),
       byMonth: section([], pend),
       pipelines: section([], pend),
+      categories: section([], pend),
     };
   }
 
@@ -213,6 +224,15 @@ export async function getMarketingRoi() {
       open: num(p.open) || 0,
       lost: num(p.lost) || 0,
     }));
+
+  const OWNER_WAGE_ACCOUNTS = new Set(['Wages - James & Mia', 'Super - James & Mia']);
+  const categories = catRows.map((c) => ({
+    fyEnd: num(c.fyEnd),
+    account: c.account,
+    kind: c.kind,
+    amount: num(c.amount) || 0,
+    isOwnerWage: OWNER_WAGE_ACCOUNTS.has(c.account),
+  }));
 
   const total = totalRow(rows);
 
@@ -239,5 +259,6 @@ export async function getMarketingRoi() {
     rows: section(rows, { source: SRC, status: 'live', note }),
     byMonth: section(months, { source: SRC, status: 'live', note: null }),
     pipelines: section(pipelines, { source: SRC, status: 'live', note: null }),
+    categories: section(categories, { source: SRC, status: 'live', note: null }),
   };
 }

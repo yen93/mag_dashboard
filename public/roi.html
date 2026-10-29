@@ -50,6 +50,12 @@
       </div>
 
       <div class="card col-12">
+        <div class="card-head"><h3>Where the spend goes</h3><span class="chips" id="catChips"></span></div>
+        <p class="muted" style="font-size:12px;margin:-6px 0 8px">Top expense categories (Xero P&amp;L accounts) for the selected FY — the rest grouped as “Other”.</p>
+        <div class="chart-box" id="roi-cat-chart" style="height:360px"><canvas id="roiCatCanvas"></canvas></div>
+      </div>
+
+      <div class="card col-12">
         <div class="card-head"><h3>ROI by financial year</h3><span class="chips" id="fyTableChips"></span></div>
         <div id="roiFyTable"></div>
       </div>
@@ -150,6 +156,10 @@
       // AC pipeline — Won / Open / Lost per pipeline for the selection.
       setChips('pipeChips', ROI.pipelines.meta);
       renderPipeline();
+
+      // Where the spend goes — top expense categories + Other for the selection.
+      setChips('catChips', ROI.categories.meta);
+      renderCategories();
 
       // ROI by FY table (always the full per-FY list, regardless of selection).
       setChips('fyTableChips', meta);
@@ -265,6 +275,71 @@
       if (el) _pipeChart = new Chart(el.getContext('2d'), cfg);
     }
 
+    var _catChart = null;
+    var CAT_TOP_N = 8;
+    function renderCategories() {
+      var row = currentRow();
+      var src = (ROI.categories && ROI.categories.data) || [];
+      // Gather the category rows for the selection.
+      var rows;
+      if (SEL === 'all') {
+        // Sum each account across all FYs.
+        var byAcct = {};
+        src.forEach(function (c) {
+          if (!byAcct[c.account]) byAcct[c.account] = { account: c.account, amount: 0, isOwnerWage: c.isOwnerWage };
+          byAcct[c.account].amount += c.amount;
+        });
+        rows = Object.keys(byAcct).map(function (k) { return byAcct[k]; });
+      } else {
+        rows = src.filter(function (c) { return c.fyEnd === SEL; })
+                  .map(function (c) { return { account: c.account, amount: c.amount, isOwnerWage: c.isOwnerWage }; });
+      }
+      // Honour the "exclude owner wages" toggle: drop those categories.
+      if (EXCL_OWNER) rows = rows.filter(function (r) { return !r.isOwnerWage; });
+      rows.sort(function (a, b) { return b.amount - a.amount; });
+
+      // If there's no spend data for this FY (FY22/FY23), clear the chart.
+      var hasData = row && row.hasSpend && rows.length;
+      if (!hasData) { if (_catChart) { _catChart.destroy(); _catChart = null; } return; }
+
+      // Top N + "Other" reconciled to the authoritative total spend on the page.
+      var top = rows.slice(0, CAT_TOP_N);
+      var authTotal = EXCL_OWNER ? effSpend(row) : row.totalSpend; // see roi.html helpers
+      var shownSum = top.reduce(function (a, r) { return a + r.amount; }, 0);
+      var other = Math.max(0, Math.round(authTotal - shownSum));
+      var labels = top.map(function (r) { return r.account; });
+      var data = top.map(function (r) { return r.amount; });
+      if (other > 0) { labels.push('Other'); data.push(other); }
+
+      var tc = themeColors();
+      var cfg = {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Spend',
+            data: data,
+            backgroundColor: labels.map(function (l) { return l === 'Other' ? '#9aa4b2' : '#17a673'; }),
+            borderRadius: 4, maxBarThickness: 26,
+          }],
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function (ctx) { return fmt(ctx.parsed.x, 'currency'); } } },
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: tc.muted, callback: compactAud }, grid: { color: tc.grid } },
+            y: { ticks: { color: tc.muted }, grid: { display: false } },
+          },
+        },
+      };
+      if (_catChart) _catChart.destroy();
+      var el = document.getElementById('roiCatCanvas');
+      if (el) _catChart = new Chart(el.getContext('2d'), cfg);
+    }
+
     function loadRoi() {
       fetchJSON('/api/marketing/roi')
         .then(function (data) {
@@ -274,6 +349,7 @@
             // Pending / empty — show source chips + a needs-setup note, no charts.
             setChips('monthChips', data.rows.meta);
             setChips('pipeChips', data.rows.meta);
+            setChips('catChips', data.rows.meta);
             renderKpis('kpis', [
               { label: 'Total revenue (Xero)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Total spend (Xero)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },

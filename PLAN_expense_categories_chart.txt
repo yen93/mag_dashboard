@@ -1,0 +1,367 @@
+================================================================================
+BUILD PLAN — "Where the spend goes" horizontal bar chart (top expense categories
+per FY) for the Marketing ROI tab
+Written 2026-10-29 for handoff to Antigravity (or any dev). Self-contained: the
+real Xero data is embedded below as seed SQL, so NO Xero access is needed to build.
+================================================================================
+
+--------------------------------------------------------------------------------
+0. TL;DR / WHAT YOU ARE BUILDING
+--------------------------------------------------------------------------------
+Add ONE new card to the ROI tab (public/roi.html) below the existing
+"Revenue vs spend by month" and "AC pipeline" charts: a HORIZONTAL BAR chart
+titled "Where the spend goes" showing the top ~8 expense categories for the
+selected financial year, with everything else rolled into an "Other" bar. It
+re-renders on FY change and honours the existing "Exclude owner wages" toggle.
+
+Data = the Xero P&L expense accounts (expense + cost-of-sales accounts), grouped
+by Australian financial year (END-year: FY25 = Jul 2024–Jun 2025). Stored as a new
+STATIC seed table (per-FY annual totals). Build is: (1) create+seed table,
+(2) add a backend query to the ROI endpoint, (3) add the chart to the page.
+
+IMPORTANT TERMINOLOGY NOTE: these are NOT "cost centers". A cost center is a
+department/unit (Admin, IT, …) tracked via Xero "tracking categories" — MAG has
+only one tracking category ("Salesperson" → "Sam") and does NOT track spend by
+department. So the correct label is "expense categories" / "where the spend goes"
+(Xero GL account names), not "cost centers". Use that wording in the UI.
+
+--------------------------------------------------------------------------------
+1. CONTEXT — how this app & the ROI tab work (so you don't have to re-discover)
+--------------------------------------------------------------------------------
+- Plain HTML/CSS/JS frontend in public/ (NO build step, NO bundler) + an Express
+  API in server/. One HTML file per screen. Charts use Chart.js vendored at
+  public/vendor/chart.umd.min.js. ESM on the server ("type":"module").
+- Supabase (Postgres) is the data source. Project ref: aivitcomiywiysrfwqxt
+  (name "MAGTestProject"). Server reads it via server/providers/supabase.js's
+  q(sql) helper (pooled pg, SSL rejectUnauthorized:false).
+- The ROI tab:
+    * Page:     public/roi.html  (self-rendering; inline <script>)
+    * Endpoint: GET /api/marketing/roi
+    * Metric:   server/metrics/marketing-roi.js  (exports getMarketingRoi())
+- marketing-roi.js shape: it runs a few SQL queries with q(), wraps each result
+  list in section(data, meta) from server/lib/metric.js, and returns:
+      { asOf, defaultFy, total, rows, byMonth, pipelines }
+  where rows.data is the per-FY array (each row has: fy, fyEnd, revenue,
+  hasRevenue, opEx, cos, totalSpend, hasSpend, ownerWages, dealsWon/Open/Lost,
+  wonValue, roi). YOU WILL ADD a new `categories` section to this payload.
+- roi.html inline script conventions you will reuse:
+    * SEL = selected fy_end (a number) or the string 'all'.
+    * currentRow() -> the per-FY row object for SEL (or the summed total for 'all').
+    * render() re-renders EVERYTHING on any FY change; call your new render fn there.
+    * Chart pattern: keep a module-level chart var, destroy() it, rebuild with
+      `new Chart(canvasEl.getContext('2d'), cfg)`. See renderPipeline() and
+      renderMonthChart() already in roi.html — COPY THAT PATTERN.
+    * Helpers available in app.js (already loaded): themeColors() -> {text,muted,
+      grid,surface,border,accent}; fmt(value,'currency') -> "$12,345" ("—" for
+      null); monthLabel(). roi.html also defines compactAud(v) -> "$15k"/"$1.5m".
+    * The "Exclude owner wages" toggle: var EXCL_OWNER (default true) +
+      effSpend(row)/effRoi(row)/effMonthSpend(m) helpers already in roi.html.
+- FINANCIAL YEAR convention is END-year, Jul–Jun:
+      fy_end = extract(year from d) + (extract(month from d) >= 7 ? 1 : 0)
+  Labels are 'FY' || right(fy_end::text, 2)  (e.g. 2025 -> "FY25").
+
+--------------------------------------------------------------------------------
+2. KEY DATA FACTS / DECISIONS (read before coding)
+--------------------------------------------------------------------------------
+(a) SOURCE: Xero P&L, ACCRUAL, ex-GST. For each FY the "spend" accounts are the
+    union of the P&L `expense_accounts` (operating expenses) and
+    `cost_of_sales_accounts`. We IGNORE income and other-income accounts here.
+(b) GRANULARITY: PER-FY annual totals are enough — the chart is per-FY, so there's
+    no need for monthly category data. (This is why the seed below is small.)
+(c) COVERAGE: Xero's API only exposes the current + 3 prior financial years, so we
+    only have FY24, FY25, FY26, FY27. FY27 is PARTIAL (Jul–Oct 2026, year-to-date).
+    FY22/FY23 have NO P&L (same limit as the rest of the ROI tab) — the chart
+    should simply render empty / "No Xero P&L for this FY (pre-FY24)" for those,
+    mirroring how the spend card already behaves (row.hasSpend === false).
+(d) "OTHER" RECONCILIATION: do NOT seed every tiny account. Seed only the top ~12
+    accounts per FY (below). At render time compute:
+        Other = (that FY's authoritative total spend) − (sum of the named bars shown)
+    The authoritative total spend per FY is ALREADY on the page as
+    row.totalSpend (and effSpend(row) when owner wages are excluded). This makes
+    the chart total always reconcile to the "Total spend" KPI card, and the
+    long tail + any negative accrual lines fall into Other automatically.
+(e) OWNER-WAGES TOGGLE INTERPLAY: two category rows are owner comp —
+    "Wages - James & Mia" and "Super - James & Mia". When EXCL_OWNER is true
+    (the default), DROP those two bars and compute Other against effSpend(row)
+    (which already excludes owner wages). When false, include them and use
+    row.totalSpend. This keeps the chart consistent with the rest of the tab.
+(f) NEGATIVE amounts exist in raw accrual P&L (year-end reversals). None of the
+    TOP-12 seed rows below are negative, so you can ignore sign for the bars; the
+    negatives live in the tail and net into Other via the reconciliation in (d).
+(g) STATIC DATA: this is a one-time seed (like xero_expenses_monthly today — the
+    ROI tab's expenses are a static Xero P&L load, refresh routine still pending).
+    A future refresh would re-pull these per-FY account breakdowns from the Xero
+    P&L (MCP get_profit_and_loss, one call per FY). Out of scope for this build.
+
+--------------------------------------------------------------------------------
+3. STEP 1 — CREATE + SEED THE TABLE (Supabase / Postgres)
+--------------------------------------------------------------------------------
+Run as a migration (preferred) or plain SQL against the Supabase project. Table
+is per-FY, per-account. `kind` distinguishes operating expense vs cost of sales
+(useful if you later want to colour/segment by it; not required for the basic bar).
+
+--- DDL -------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS public.xero_pnl_accounts_fy (
+  fy_end       integer     NOT NULL,          -- AU FY end year (END-year): 2025 = FY25
+  account_name text        NOT NULL,          -- Xero GL account name (verbatim)
+  kind         text        NOT NULL           -- 'expense' | 'cost_of_sales'
+                 CHECK (kind IN ('expense','cost_of_sales')),
+  amount       numeric     NOT NULL,          -- AUD, ex-GST, accrual, annual total for the FY
+  synced_at    timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (fy_end, account_name)
+);
+COMMENT ON TABLE public.xero_pnl_accounts_fy IS
+  'Per-financial-year Xero P&L spend accounts (expense + cost_of_sales), for the ROI tab "Where the spend goes" chart. STATIC seed from the Xero P&L via MCP (top ~12 accounts per FY; the long tail folds into an "Other" bar computed at render time against xero_expenses_monthly total_spend). END-year FY. FY27 is partial (YTD). Refresh routine pending.';
+
+--- SEED (top ~12 spend accounts per FY; amounts are real Xero P&L figures) ------
+-- FY24 = Jul 2023–Jun 2024.  (FY24 total spend reconciles to ~$812,208.)
+INSERT INTO public.xero_pnl_accounts_fy (fy_end, account_name, kind, amount) VALUES
+(2024,'MAG program delivery expenses','cost_of_sales',143151.91),
+(2024,'Wages - James & Mia','expense',123402.00),
+(2024,'Setup costs of BASE CAMP & SHED','expense',81844.23),
+(2024,'MAG Casual Staff','expense',80726.44),
+(2024,'WrkPod Staff','expense',69935.73),
+(2024,'Advertising and marketing','expense',60069.44),
+(2024,'WRKPOD mthly desk fee','expense',31851.70),
+(2024,'Super - James & Mia','expense',26400.00),
+(2024,'Staff training','expense',25209.38),
+(2024,'Motor vehicle expenses','expense',21175.53),
+(2024,'Travel and accommodation','cost_of_sales',18834.27),
+(2024,'Fuel and oil','cost_of_sales',14712.99),
+-- FY25 = Jul 2024–Jun 2025.  (FY25 total spend reconciles to ~$966,995.)
+(2025,'Wages - James & Mia','expense',270000.00),
+(2025,'MAG program delivery expenses','cost_of_sales',127414.89),
+(2025,'MAG Casual Staff','expense',91218.68),
+(2025,'Advertising and marketing','expense',83504.38),
+(2025,'WrkPod Staff','expense',81454.29),
+(2025,'WRKPOD mthly desk fee','expense',39874.65),
+(2025,'Rent/ Pindari Lease','expense',33628.72),
+(2025,'Super - James & Mia','expense',31050.00),
+(2025,'Insurance - General','expense',27190.13),
+(2025,'Setup costs of BASE CAMP & SHED','expense',24445.26),
+(2025,'Travel and accommodation','cost_of_sales',22484.02),
+(2025,'Motor vehicle expenses','expense',19377.90),
+-- FY26 = Jul 2025–Jun 2026.  (FY26 total spend reconciles to ~$1,200,286.)
+(2026,'Wages - James & Mia','expense',360000.00),
+(2026,'MAG program delivery expenses','cost_of_sales',193902.74),
+(2026,'WrkPod Staff','expense',130017.21),
+(2026,'MAG Casual Staff','expense',109504.02),
+(2026,'Advertising and marketing','expense',94055.76),
+(2026,'Super - James & Mia','expense',43200.00),
+(2026,'Travel and accommodation','cost_of_sales',36562.88),
+(2026,'General small business Expenses','expense',29990.70),
+(2026,'Setup costs of BASE CAMP & SHED','expense',29946.37),
+(2026,'Replacement assets (low cost)','expense',27441.87),
+(2026,'Staff training','expense',18291.40),
+(2026,'Insurance - General','expense',17224.51),
+-- FY27 = Jul 2026–Jun 2027, PARTIAL (through ~29 Oct 2026). total spend ~$227,756.
+(2027,'Wages - James & Mia','expense',67586.00),
+(2027,'WrkPod Staff','expense',50406.09),
+(2027,'Advertising and marketing','expense',22191.15),
+(2027,'MAG program delivery expenses','cost_of_sales',11586.43),
+(2027,'Setup costs of BASE CAMP & SHED','expense',9694.93),
+(2027,'Insurance - General','expense',9089.90),
+(2027,'Superannuation','expense',7351.50),
+(2027,'General small business Expenses','expense',7135.55),
+(2027,'MAG Casual Staff','expense',5762.50),
+(2027,'Software subscriptions','expense',4909.69),
+(2027,'Purchases - Book','cost_of_sales',4772.73),
+(2027,'Replacement assets (low cost)','expense',4602.60);
+
+-- Verify:
+--   SELECT fy_end, count(*), round(sum(amount)) FROM public.xero_pnl_accounts_fy GROUP BY 1 ORDER BY 1;
+-- Expect 12 rows per FY; the per-FY sum is LESS than total_spend (the rest is "Other").
+
+--------------------------------------------------------------------------------
+4. STEP 2 — BACKEND: add a `categories` section to /api/marketing/roi
+--------------------------------------------------------------------------------
+File: server/metrics/marketing-roi.js
+
+(a) Add a query constant near BY_FY / BY_MONTH / PIPELINE_SQL:
+
+    // Per-FY Xero P&L spend accounts (for the "Where the spend goes" chart).
+    const CATEGORIES_SQL = `
+      SELECT fy_end AS "fyEnd", account_name AS "account", kind AS "kind",
+             round(amount)::numeric AS "amount"
+      FROM public.xero_pnl_accounts_fy
+      ORDER BY fy_end, amount DESC`;
+
+(b) In getMarketingRoi(), add CATEGORIES_SQL to the Promise.all and map it. Find:
+
+        const [fyRows, monthRows, pipeRows] = await Promise.all([q(BY_FY), q(BY_MONTH), q(PIPELINE_SQL)]);
+
+    change to:
+
+        const [fyRows, monthRows, pipeRows, catRows] = await Promise.all([
+          q(BY_FY), q(BY_MONTH), q(PIPELINE_SQL), q(CATEGORIES_SQL),
+        ]);
+
+(c) Shape the categories (anywhere after `rows`/`fyEnds` are built; `num` helper
+    already exists in the file):
+
+        const OWNER_WAGE_ACCOUNTS = new Set(['Wages - James & Mia', 'Super - James & Mia']);
+        const categories = catRows.map((c) => ({
+          fyEnd: num(c.fyEnd),
+          account: c.account,
+          kind: c.kind,
+          amount: num(c.amount) || 0,
+          isOwnerWage: OWNER_WAGE_ACCOUNTS.has(c.account),
+        }));
+
+(d) Add it to BOTH return objects (the normal one AND the `notConfigured()` /
+    empty-rows fallbacks, as section([], pend)). In the live return:
+
+        categories: section(categories, { source: SRC, status: 'live', note: null }),
+
+    In the two pending/empty returns (where rows/byMonth/pipelines are
+    section([], pend)), add:  categories: section([], pend),
+
+(e) node --check server/metrics/marketing-roi.js  (must print OK).
+
+NOTE: no new route is needed — it's just another field on the existing
+/api/marketing/roi payload. The 10-min cache (server/lib/cache.js) already covers it.
+
+--------------------------------------------------------------------------------
+5. STEP 3 — FRONTEND: the chart card + render fn (public/roi.html)
+--------------------------------------------------------------------------------
+(a) HTML — add a new card in the <div class="grid"> block, e.g. right AFTER the
+    "AC pipeline" card and BEFORE the "ROI by financial year" table card:
+
+    <div class="card col-12">
+      <div class="card-head"><h3>Where the spend goes</h3><span class="chips" id="catChips"></span></div>
+      <p class="muted" style="font-size:12px;margin:-6px 0 8px">Top expense categories (Xero P&amp;L accounts) for the selected FY — the rest grouped as “Other”.</p>
+      <div class="chart-box" id="roi-cat-chart" style="height:360px"><canvas id="roiCatCanvas"></canvas></div>
+    </div>
+
+(b) JS — add a module-level var and a render fn, modelled on renderPipeline().
+    Put TOP_N = 8 (that's the "top ~8"). Place this near renderPipeline():
+
+    var _catChart = null;
+    var CAT_TOP_N = 8;
+    function renderCategories() {
+      var row = currentRow();
+      var src = (ROI.categories && ROI.categories.data) || [];
+      // Gather the category rows for the selection.
+      var rows;
+      if (SEL === 'all') {
+        // Sum each account across all FYs.
+        var byAcct = {};
+        src.forEach(function (c) {
+          if (!byAcct[c.account]) byAcct[c.account] = { account: c.account, amount: 0, isOwnerWage: c.isOwnerWage };
+          byAcct[c.account].amount += c.amount;
+        });
+        rows = Object.keys(byAcct).map(function (k) { return byAcct[k]; });
+      } else {
+        rows = src.filter(function (c) { return c.fyEnd === SEL; })
+                  .map(function (c) { return { account: c.account, amount: c.amount, isOwnerWage: c.isOwnerWage }; });
+      }
+      // Honour the "exclude owner wages" toggle: drop those categories.
+      if (EXCL_OWNER) rows = rows.filter(function (r) { return !r.isOwnerWage; });
+      rows.sort(function (a, b) { return b.amount - a.amount; });
+
+      // If there's no spend data for this FY (FY22/FY23), clear the chart.
+      var hasData = row && row.hasSpend && rows.length;
+      if (!hasData) { if (_catChart) { _catChart.destroy(); _catChart = null; } return; }
+
+      // Top N + "Other" reconciled to the authoritative total spend on the page.
+      var top = rows.slice(0, CAT_TOP_N);
+      var authTotal = EXCL_OWNER ? effSpend(row) : row.totalSpend; // see roi.html helpers
+      var shownSum = top.reduce(function (a, r) { return a + r.amount; }, 0);
+      var other = Math.max(0, Math.round(authTotal - shownSum));
+      var labels = top.map(function (r) { return r.account; });
+      var data = top.map(function (r) { return r.amount; });
+      if (other > 0) { labels.push('Other'); data.push(other); }
+
+      var tc = themeColors();
+      var cfg = {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Spend',
+            data: data,
+            backgroundColor: labels.map(function (l) { return l === 'Other' ? '#9aa4b2' : '#17a673'; }),
+            borderRadius: 4, maxBarThickness: 26,
+          }],
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function (ctx) { return fmt(ctx.parsed.x, 'currency'); } } },
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: tc.muted, callback: compactAud }, grid: { color: tc.grid } },
+            y: { ticks: { color: tc.muted }, grid: { display: false } },
+          },
+        },
+      };
+      if (_catChart) _catChart.destroy();
+      var el = document.getElementById('roiCatCanvas');
+      if (el) _catChart = new Chart(el.getContext('2d'), cfg);
+    }
+
+(c) Wire it into render(): add these two lines alongside the other chart calls
+    (near renderPipeline()):
+
+        setChips('catChips', ROI.categories.meta);
+        renderCategories();
+
+    Because render() already re-runs on FY change AND on the owner-wages toggle
+    (the exclOwnerToggle listener calls render()), the category chart updates for
+    both automatically — no extra listener needed.
+
+(d) Pending/empty guard: in loadRoi()'s empty branch (where it sets monthChips/
+    pipeChips and returns early), also add:  setChips('catChips', data.rows.meta);
+
+--------------------------------------------------------------------------------
+6. EXPECTED RESULT (sanity targets)
+--------------------------------------------------------------------------------
+With the default "Exclude owner wages" ON (owner-wage bars removed), FY25 should
+show roughly, in order: MAG program delivery (~$127k), MAG Casual Staff (~$91k),
+Advertising (~$84k), WrkPod Staff (~$81k), WRKPOD desk fee (~$40k), Rent (~$34k),
+Insurance - General (~$27k), Setup BASE CAMP (~$24k), then "Other" (~the rest of
+effSpend $665,945 minus those 8). Toggle owner wages back ON and two big bars
+appear: Wages - James & Mia ($270k) and Super - James & Mia ($31,050), with Other
+recomputed against totalSpend $966,995.
+
+FY22 / FY23: no bars (row.hasSpend is false) — chart stays empty. That's correct
+(Xero only exposes 4 FYs). You may optionally show a small "No Xero P&L for this
+FY (pre-FY24)" note in that case.
+
+--------------------------------------------------------------------------------
+7. DEPLOY & VERIFY
+--------------------------------------------------------------------------------
+- The Supabase table/seed is live as soon as the SQL runs (no deploy needed for data).
+- The code changes (marketing-roi.js + roi.html) require a MANUAL Cloud Run
+  redeploy — the user does this, NOT the agent:
+      gcloud run deploy dashboard --source . --region australia-southeast1
+  (gcloud full path on the user's machine:
+   C:\Users\Cloverly\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd)
+  Do NOT pass --set-secrets on a plain redeploy (it would drop existing secrets).
+- Verify locally first if possible: with SUPABASE_DB_URL set, `npm run dev` then
+  GET http://localhost:8080/api/marketing/roi and confirm the payload has a
+  `categories` section with rows; open roi.html and flip FY + the owner-wages
+  toggle to confirm the bars + Other update and that Other never goes negative.
+
+--------------------------------------------------------------------------------
+8. DOCS TO UPDATE AFTER BUILD (optional but recommended)
+--------------------------------------------------------------------------------
+- CLAUDE.md: in the ROI page paragraph, mention the new "Where the spend goes"
+  horizontal bar (top-N Xero P&L accounts + Other, honours the owner-wages toggle)
+  and the new static table public.xero_pnl_accounts_fy.
+- Memory file roi-tab-feature.md (if used): same one-liner.
+
+--------------------------------------------------------------------------------
+9. NICE-TO-HAVES (skip for v1)
+--------------------------------------------------------------------------------
+- A small N selector (6 / 8 / 12) on the card.
+- Colour bars by `kind` (cost_of_sales vs expense) instead of flat green.
+- A proper refresh job: re-pull get_profit_and_loss per FY (4 calls) and
+  wipe/reinsert xero_pnl_accounts_fy — pair it with the pending refresh for
+  xero_expenses_monthly so both stay in sync.
+- % labels on each bar (share of total spend).
+
+================================================================================
+END OF PLAN
+================================================================================
