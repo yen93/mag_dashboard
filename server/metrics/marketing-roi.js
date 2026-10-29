@@ -56,7 +56,8 @@ const BY_FY = `
       sum(total_income)      AS revenue,
       sum(operating_expenses) AS op_ex,
       sum(cost_of_sales)      AS cos,
-      sum(total_spend)        AS total
+      sum(total_spend)        AS total,
+      sum(coalesce(owner_wages, 0)) AS owner_wages
     FROM public.xero_expenses_monthly GROUP BY 1
   ),
   d AS (
@@ -79,6 +80,7 @@ const BY_FY = `
     round(p.op_ex)::numeric               AS "opEx",
     round(p.cos)::numeric                 AS "cos",
     round(p.total)::numeric               AS "totalSpend",  -- null for FYs with no Xero P&L
+    round(p.owner_wages)::numeric         AS "ownerWages",  -- owner/director wages+super (subset of opEx)
     coalesce(d.won, 0)                    AS "dealsWon",
     coalesce(d.open, 0)                   AS "dealsOpen",
     coalesce(d.lost, 0)                   AS "dealsLost",
@@ -91,7 +93,8 @@ const BY_FY = `
 const BY_MONTH = `
   SELECT to_char(date_trunc('month', month), 'YYYY-MM') AS "month",
          round(coalesce(total_income, 0))::numeric AS "revenue",
-         round(coalesce(total_spend, 0))::numeric  AS "spend"
+         round(coalesce(total_spend, 0))::numeric  AS "spend",
+         round(coalesce(owner_wages, 0))::numeric  AS "ownerWages"
   FROM public.xero_expenses_monthly
   WHERE month >= '${MONTH_FLOOR}'
   ORDER BY 1`;
@@ -126,6 +129,7 @@ function shape(r) {
     cos: num(r.cos),
     totalSpend,
     hasSpend: totalSpend !== null,
+    ownerWages: num(r.ownerWages) || 0, // owner/director wages+super (subset of totalSpend)
     dealsWon: num(r.dealsWon) || 0,
     dealsOpen: num(r.dealsOpen) || 0,
     dealsLost: num(r.dealsLost) || 0,
@@ -150,6 +154,7 @@ function totalRow(rows) {
     cos: sum('cos'),
     totalSpend,
     hasSpend: anySpend,
+    ownerWages: sum('ownerWages'),
     dealsWon: sum('dealsWon'),
     dealsOpen: sum('dealsOpen'),
     dealsLost: sum('dealsLost'),
@@ -194,6 +199,7 @@ export async function getMarketingRoi() {
     fyEnd: fyEndOfMonth(m.month),
     revenue: num(m.revenue) || 0,
     spend: num(m.spend) || 0,
+    ownerWages: num(m.ownerWages) || 0,
   }));
 
   // Per-pipeline counts, scoped to the FY axis (so the chart matches the shown FYs).
@@ -222,8 +228,9 @@ export async function getMarketingRoi() {
     `sales) across every dept; deals = all ActiveCampaign deals by created date. ` +
     `Xero only exposes the last 4 financial years, so revenue/spend reach back to ${firstRev ? firstRev.fy : 'FY24'} ` +
     `only — earlier FYs (${rows[0].fy}+) show deal counts but blank revenue/spend/ROI. The current FY is ` +
-    `partial (year-to-date), so its spend is below a full year. Expenses/revenue are a static Xero P&L load ` +
-    `(refresh pending).`;
+    `partial (year-to-date), so its spend is below a full year. The "excl. owner wages" toggle removes ` +
+    `director wages+super (Wages/Super – James & Mia) from spend/ROI — the business runs near-breakeven ` +
+    `with them in. Expenses/revenue are a static Xero P&L load (refresh pending).`;
 
   return {
     asOf: new Date().toISOString(),

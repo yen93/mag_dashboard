@@ -62,8 +62,15 @@ Cloud Run.
   **Xero's API only exposes the current + 3 prior FYs**, so the P&L reaches back to **FY24** only,
   while deals reach **FY22** — so **FY22/FY23 appear with deal counts but blank (null, not $0)
   revenue/spend/ROI** (tracked via `hasRevenue`/`hasSpend`; surfaced on the page). The current FY
-  is partial (YTD) so its spend is below a full year. 3 cards (Total revenue / **Total spend** /
-  Deals won) + 2 charts (**revenue-vs-spend by month** = a **DUAL-AXIS combo chart** as of
+  is partial (YTD) so its spend is below a full year. **"Exclude owner wages" toggle
+  (`#exclOwnerToggle`, DEFAULT ON, 2026-10-29):** subtracts director wages+super (Xero accounts
+  *Wages/Super – James & Mia*, stored monthly in the new `xero_expenses_monthly.owner_wages`
+  column — a subset of `operating_expenses`, don't double-count) from Total spend and recomputes
+  ROI **client-side** (`effSpend()`/`effRoi()`/`effMonthSpend()` in `roi.html`); backend returns
+  `ownerWages` per FY + per month. WITH owner comp in, the business runs ~breakeven (ROI ~0.96–0.99
+  = Xero's own net profit); excluding it, ROI ≈ 1.2–1.45 (operating profit before director pay).
+  3 cards (Total revenue / **Total spend** / Deals won) + 2 charts (**revenue-vs-spend by month** =
+  a **DUAL-AXIS combo chart** as of
   2026-10-29: green **spend bars** on the left $ axis, blue **revenue line** on the right $ axis —
   self-rendered by `renderMonthChart()` in `roi.html`, **no longer** the shared-axis `lineChart`;
   **AC pipeline Won/Open/Lost per pipeline** as horizontal stacked bars, with a **"Won only"

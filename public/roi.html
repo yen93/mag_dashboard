@@ -27,8 +27,9 @@
     <aside class="subnav" id="marketingNav"></aside>
   <main class="content">
     <div class="toolbar">
-      <strong>ROI — revenue vs ad spend</strong>
+      <strong>ROI — revenue vs spend</strong>
       <div class="spacer"></div>
+      <label style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-right:14px"><input type="checkbox" id="exclOwnerToggle" style="margin:0" checked>Exclude owner wages</label>
       <span class="muted" style="font-size:13px">Financial year</span>
       <div class="segmented" id="fyBar"></div>
     </div>
@@ -62,6 +63,19 @@
     var ROI = null;    // full API payload
     var SEL = null;    // selected fy_end (number) or 'all'
     var PIPE_WON_ONLY = false;   // pipeline chart: show only the Won count per pipeline
+    var EXCL_OWNER = true;       // subtract owner/director wages+super from spend & ROI
+
+    // Effective spend/ROI for a FY row, honouring the "exclude owner wages" toggle.
+    function effSpend(row) {
+      if (!row || !row.hasSpend) return null;
+      return row.totalSpend - (EXCL_OWNER ? (row.ownerWages || 0) : 0);
+    }
+    function effRoi(row) {
+      var s = effSpend(row);
+      return (row && row.hasRevenue && s) ? row.revenue / s : null;
+    }
+    // Effective monthly spend (for the month chart bars).
+    function effMonthSpend(m) { return m.spend - (EXCL_OWNER ? (m.ownerWages || 0) : 0); }
 
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
@@ -110,15 +124,19 @@
       var meta = ROI.rows.meta;
 
       // Cards: Total revenue (Xero) · Total spend (Xero) · Deals won (AC)
-      var revSub = row.roi != null ? ('ROI ' + row.roi.toFixed(2) + '×') :
+      var spend = effSpend(row);           // honours the "exclude owner wages" toggle
+      var roi = effRoi(row);
+      var spendSub = !row.hasSpend ? 'No Xero P&L for this FY (pre-FY24)' :
+        (EXCL_OWNER ? 'Expenses + cost of sales, excl. owner wages' : 'All expenses + cost of sales');
+      var revSub = roi != null ? ('ROI ' + roi.toFixed(2) + '×') :
         (row.hasRevenue ? null : 'No Xero P&L for this FY (pre-FY24)');
       renderKpis('kpis', [
         { label: 'Total revenue (Xero)',
           metric: { value: row.hasRevenue ? row.revenue : null, unit: 'currency', meta: meta },
           sub: revSub },
         { label: 'Total spend (Xero)',
-          metric: { value: row.hasSpend ? row.totalSpend : null, unit: 'currency' },
-          sub: row.hasSpend ? 'All expenses + cost of sales' : 'No Xero P&L for this FY (pre-FY24)' },
+          metric: { value: row.hasSpend ? spend : null, unit: 'currency' },
+          sub: spendSub },
         { label: 'Deals won (AC)',
           metric: { value: row.dealsWon, unit: 'count' },
           sub: row.dealsOpen + ' open · ' + row.dealsLost + ' lost' },
@@ -140,12 +158,12 @@
         { key: 'revenue', label: 'Revenue (Xero)', unit: 'currency',
           render: function (v, r) { return r.hasRevenue ? fmt(v, 'currency') : '<span class="muted">—</span>'; } },
         { key: 'totalSpend', label: 'Total spend', unit: 'currency',
-          render: function (v, r) { return r.hasSpend ? fmt(v, 'currency') : '<span class="muted">—</span>'; } },
+          render: function (v, r) { return r.hasSpend ? fmt(effSpend(r), 'currency') : '<span class="muted">—</span>'; } },
         { key: 'dealsWon', label: 'Deals won', unit: 'count' },
         { key: 'dealsOpen', label: 'Open', unit: 'count' },
         { key: 'dealsLost', label: 'Lost', unit: 'count' },
         { key: 'roi', label: 'ROI', unit: 'text',
-          render: function (v) { return v != null ? v.toFixed(2) + '×' : '<span class="muted">—</span>'; } },
+          render: function (v, r) { var x = effRoi(r); return x != null ? x.toFixed(2) + '×' : '<span class="muted">—</span>'; } },
       ]);
     }
 
@@ -166,8 +184,8 @@
         data: {
           labels: months.map(function (m) { return monthLabel(m.month); }),
           datasets: [
-            { type: 'bar', label: 'Spend', order: 2, yAxisID: 'ySpend',
-              data: months.map(function (m) { return m.spend; }),
+            { type: 'bar', label: EXCL_OWNER ? 'Spend (excl. owner wages)' : 'Spend', order: 2, yAxisID: 'ySpend',
+              data: months.map(function (m) { return effMonthSpend(m); }),
               backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 34 },
             { type: 'line', label: 'Revenue', order: 1, yAxisID: 'yRevenue',
               data: months.map(function (m) { return m.revenue; }),
@@ -276,6 +294,10 @@
     document.getElementById('pipeWonToggle').addEventListener('change', function () {
       PIPE_WON_ONLY = this.checked;
       if (ROI) renderPipeline();
+    });
+    document.getElementById('exclOwnerToggle').addEventListener('change', function () {
+      EXCL_OWNER = this.checked;
+      if (ROI) render();
     });
     window.onThemeChange = function () { if (ROI) render(); };
     if (currentUser()) loadRoi();
