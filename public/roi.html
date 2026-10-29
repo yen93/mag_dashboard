@@ -40,6 +40,7 @@
     <div class="grid">
       <div class="card col-12">
         <div class="card-head"><h3>Revenue vs spend by month</h3><span class="chips" id="monthChips"></span></div>
+        <p class="muted" style="font-size:12px;margin:-6px 0 8px">The payoff over time — spend bars, revenue line</p>
         <div class="chart-box" id="roi-month-chart"><canvas id="roiMonthCanvas"></canvas></div>
       </div>
       <div class="card col-12">
@@ -123,14 +124,10 @@
           sub: row.dealsOpen + ' open · ' + row.dealsLost + ' lost' },
       ]);
 
-      // Revenue vs ad spend by month — two series on ONE shared $ axis (not a dual axis):
-      // ad spend sits low against revenue, which is the ROI story.
-      var months = currentMonths();
+      // Revenue vs spend by month — spend as green bars (left $ axis), revenue as a
+      // blue line (right $ axis). Dual axis so spend reads clearly against much larger revenue.
       setChips('monthChips', ROI.byMonth.meta);
-      lineChart('roiMonthCanvas', months, [
-        { key: 'revenue', label: 'Revenue', color: '#3b6ef0' },
-        { key: 'spend',   label: 'Total spend', color: '#e2483d' },
-      ], { xKey: 'month', xLabel: monthLabel });
+      renderMonthChart();
 
       // AC pipeline — Won / Open / Lost per pipeline for the selection.
       setChips('pipeChips', ROI.pipelines.meta);
@@ -149,6 +146,53 @@
         { key: 'roi', label: 'ROI', unit: 'text',
           render: function (v) { return v != null ? v.toFixed(2) + '×' : '<span class="muted">—</span>'; } },
       ]);
+    }
+
+    // Revenue vs spend by month — combo chart: green spend bars on the left $ axis,
+    // blue revenue line on the right $ axis (dual axis).
+    var _monthChart = null;
+    function compactAud(v) {
+      var n = Math.abs(v);
+      if (n >= 1e6) return '$' + (v / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'm';
+      if (n >= 1e3) return '$' + (v / 1e3).toFixed(n % 1e3 ? 1 : 0) + 'k';
+      return '$' + Math.round(v);
+    }
+    function renderMonthChart() {
+      var months = currentMonths();
+      var tc = themeColors();
+      var cfg = {
+        type: 'bar',
+        data: {
+          labels: months.map(function (m) { return monthLabel(m.month); }),
+          datasets: [
+            { type: 'bar', label: 'Spend', order: 2, yAxisID: 'ySpend',
+              data: months.map(function (m) { return m.spend; }),
+              backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 34 },
+            { type: 'line', label: 'Revenue', order: 1, yAxisID: 'yRevenue',
+              data: months.map(function (m) { return m.revenue; }),
+              borderColor: '#3b6ef0', backgroundColor: '#3b6ef0', tension: 0.3,
+              pointRadius: 3, pointHoverRadius: 5, borderWidth: 2 },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: true, position: 'top', labels: { color: tc.text, usePointStyle: true, boxWidth: 8, padding: 12 } },
+            tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + fmt(ctx.parsed.y, 'currency'); } } },
+          },
+          scales: {
+            x: { ticks: { color: tc.muted }, grid: { display: false } },
+            ySpend: { position: 'left', beginAtZero: true,
+              ticks: { color: tc.muted, callback: compactAud }, grid: { color: tc.grid } },
+            yRevenue: { position: 'right', beginAtZero: true,
+              ticks: { color: '#3b6ef0', callback: compactAud }, grid: { drawOnChartArea: false } },
+          },
+        },
+      };
+      if (_monthChart) _monthChart.destroy();
+      var el = document.getElementById('roiMonthCanvas');
+      if (el) _monthChart = new Chart(el.getContext('2d'), cfg);
     }
 
     // AC pipeline chart — one horizontal stacked bar per pipeline (Won/Open/Lost),
