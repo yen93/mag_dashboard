@@ -58,8 +58,9 @@ const SELECT = `
     -- from public.google_ads_xero_monthly (xero-ad-spend-sync). This REPLACES the
     -- old split (Niki's per-lead cpc FY22–24 + google_ads_campaign_monthly /
     -- Google Ads API FY25+) — all Google cost now comes from Xero.
+    -- NB: sums are NOT rounded — the page shows real cents (money() formats to 2dp).
     SELECT extract(year FROM month)::int + CASE WHEN extract(month FROM month) >= 7 THEN 1 ELSE 0 END AS fy_end,
-      round(sum(cost))::numeric       AS google_spend,
+      sum(cost)::numeric              AS google_spend,
       count(DISTINCT month)           AS months,
       to_char(min(month), 'Mon')      AS first_month,
       to_char(max(month), 'Mon YYYY') AS last_month
@@ -68,16 +69,16 @@ const SELECT = `
   ),
   bing AS (
     SELECT extract(year FROM month)::int + CASE WHEN extract(month FROM month) >= 7 THEN 1 ELSE 0 END AS fy_end,
-      round(sum(cost))::numeric AS bing_spend
+      sum(cost)::numeric AS bing_spend
     FROM public.bing_ads_campaign_monthly
     GROUP BY 1
   ),
   sd AS (
     -- paid_search_fee is the ROAS cost (SEO already stripped out); seo_component is the
-    -- billed-but-excluded SEO portion, surfaced separately for display only.
+    -- billed-but-excluded SEO portion, surfaced separately for display only. Not rounded.
     SELECT extract(year FROM month)::int + CASE WHEN extract(month FROM month) >= 7 THEN 1 ELSE 0 END AS fy_end,
-      round(sum(paid_search_fee))::numeric            AS sd_fee,
-      round(sum(coalesce(seo_component, 0)))::numeric AS sd_seo
+      sum(paid_search_fee)::numeric            AS sd_fee,
+      sum(coalesce(seo_component, 0))::numeric AS sd_seo
     FROM public.simple_digital_fees_monthly
     GROUP BY 1
   ),
