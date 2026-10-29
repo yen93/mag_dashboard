@@ -1,0 +1,140 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-29
+Session: Redesigned the Marketing ROI tab's "Revenue vs spend by month" chart into
+a dual-axis combo chart (green spend bars + blue revenue line), added a "Won only"
+toggle to the per-pipeline chart, and — the main work — re-sourced ROI revenue AND
+spend from the Xero P&L so FY25 shows revenue and the whole series extends back to
+FY24 (FY22/FY23 show deals only, due to Xero's 4-FY API limit).
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted or printed. Only non-secret
+identifiers appeared (Supabase project ref aivitcomiywiysrfwqxt; Xero org id
+2cc630e1-…) and aggregate business figures (monthly/FY revenue and expenses).
+
+--------------------------------------------------------------------------------
+USER:
+"in roi.html, update 'AC pipeline — Won / Open / Lost by pipeline' so it has a
+toggle to only show won count per pipeline"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added a "Won only" toggle to the pipeline chart in public/roi.html:
+- Added a checkbox `#pipeWonToggle` (label "Won only") in the card header next to
+  the chips, with inline styling.
+- Added a state var `PIPE_WON_ONLY` (default false).
+- Reworked `renderPipeline()` so when the toggle is on it renders ONLY the Won
+  dataset and sorts pipelines by won count (desc); off, it keeps the full
+  Won/Open/Lost stacked bars sorted by total deal count.
+- Wired a `change` listener that flips the flag and re-renders just the pipeline
+  chart (no refetch).
+Noted this is frontend-only, so a manual Cloud Run redeploy is needed (Claude
+never deploys).
+
+--------------------------------------------------------------------------------
+USER:
+Supplied a screenshot and: "change Revenue vs spend by month graph design. make it
+look like this: [image] in roi tab". The reference showed green SPEND bars on a left
+$ axis (~$0–$15k) and a blue REVENUE line on a right $ axis (~$0–$150k), i.e. a
+dual-axis combo chart with subtitle "The payoff over time — spend bars, revenue line".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Replaced the old shared-axis 2-line `lineChart` for the month chart with a custom
+dual-axis combo chart in public/roi.html:
+- Added a subtitle line "The payoff over time — spend bars, revenue line".
+- Added `renderMonthChart()` (self-rendered via `new Chart(...)`, keeping a
+  `_monthChart` ref like `renderPipeline`): green Spend bars on left `ySpend` axis,
+  blue Revenue line on right `yRevenue` axis; `compactAud()` helper for "$15k"/"$1.5m"
+  tick labels; full-currency tooltips; index-mode interaction.
+- Swapped the `lineChart(...)` call in `render()` for `renderMonthChart()`.
+Flagged that this contradicts the old CLAUDE.md note ("shared-$-axis … not dual-axis")
+and that a redeploy is needed; offered to update CLAUDE.md (done later in the session).
+
+--------------------------------------------------------------------------------
+USER:
+"there should be rev for fy25. also, extend all values to fy22"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Diagnosed the data gap via Supabase (project aivitcomiywiysrfwqxt):
+- `xero_expenses_monthly`: only Jul 2024 (FY25) → Oct 2026 (28 rows). No FY22–FY24.
+- `invoice_tracking` (the current ROI revenue source): only Jan 2026 → Oct 2026, i.e.
+  FY26/FY27 only — which is exactly why FY25 showed no revenue.
+- `activecampaign_deals`: deals exist FY22–FY27.
+
+Since invoice_tracking has no pre-2026 invoices, FY25/earlier revenue had to come
+from the Xero P&L. Asked one scoping question (revenue basis): the owner chose
+"Xero P&L for all FYs" (source revenue AND spend from the P&L, ex-GST, consistent
+apples-to-apples; replaces invoice_tracking on the ROI tab, dropping GST from the
+recent-FY revenue).
+
+Discovered a hard limit while pulling the P&L via the Xero MCP
+(get_profit_and_loss, org MyAdventure Group 2cc630e1-…): the tool only exposes the
+current + 3 prior financial years. FY24 (Jul 2023) works; FY23 (Sep 2022) returns
+"Start date is out of range. Only dates within the last 3 financial years are
+supported." So revenue/spend can reach back to FY24 only; deals already reach FY22.
+
+Pulled the monthly P&L (total_income, total_cost_of_sales, total_expenses) for the
+full window Jul 2023–Oct 2026, using the comparison-period feature to get two months
+per call. Pulled Jul–Dec 2023 + Jan 2024 directly, then delegated the remaining 33
+months (Feb 2024 → Oct 2026) to a general-purpose subagent to keep the bulky P&L
+responses out of the main context; it returned compact per-month JSON
+{income, cos, opex}. Verified three existing table rows matched the fresh P&L
+exactly and that total_spend = operating_expenses + cost_of_sales.
+
+Data changes (Supabase, already live):
+- Migration `xero_expenses_monthly_add_total_income`: added `total_income` numeric
+  column (+ comment). (`total_spend` is a GENERATED column = op_ex + cos, so it must
+  be omitted from INSERTs — hit and fixed that error.)
+- Deleted and re-inserted the whole table: 40 monthly rows, Jul 2023 → Oct 2026,
+  each with operating_expenses, cost_of_sales, total_income.
+
+Verified the resulting FY aggregation:
+  FY22 deals-only (won 162) · FY23 deals-only (won 73) ·
+  FY24 rev $807k / spend $812k / ROI 0.99 · FY25 rev $948k / spend $967k / ROI 0.98 ·
+  FY26 rev $1.15m / spend $1.20m / ROI 0.96 · FY27 (partial) rev $360k / spend $228k /
+  ROI 1.58.
+
+Backend (server/metrics/marketing-roi.js):
+- Header/SRC rewritten: revenue + spend both from xero_expenses_monthly (P&L).
+- `MONTH_FLOOR` → 2023-07-01 (FY24).
+- `BY_FY`: a single `pnl` CTE (revenue=sum(total_income), op_ex, cos, total) + deals
+  CTE; `axis` = pnl FYs UNION deal FYs; revenue/spend returned NULL (not coalesced
+  to 0) for FYs with no P&L.
+- `BY_MONTH`: now a plain select of xero_expenses_monthly (revenue + spend from the
+  one table), dropping the old invoice_tracking FULL OUTER JOIN.
+- `shape()` / `totalRow()`: revenue and totalSpend now nullable, added `hasSpend`
+  (alongside `hasRevenue`); ROI stays null when either is missing.
+- Note text updated to explain the Xero 4-FY limit and partial current FY.
+- Syntax-checked with `node --check` (OK).
+
+Frontend (public/roi.html):
+- Total spend card + "Total spend" table column made null-safe (show "—" and
+  "No Xero P&L for this FY (pre-FY24)" via hasSpend); revenue card message updated.
+
+Docs/memory:
+- Updated the ROI paragraph in CLAUDE.md (P&L revenue+spend source, FY axis =
+  P&L∪deals, FY22/FY23 blank-$, generated total_spend column, dual-axis combo month
+  chart, Won-only pipeline toggle, negative-bar accrual caveat).
+- Updated memory file roi-tab-feature.md (description + body) with the new sourcing,
+  the FY-range limit, per-FY figures, and the two chart changes.
+
+Closed by summarizing the result table, flagging the hard Xero 4-FY limit (FY22/FY23
+can't get revenue/spend without a non-P&L source like raw bank txns), noting the raw
+monthly P&L has year-end accrual reversals that can produce a negative spend bar
+(kept as-is; annual totals net out), and reminding that a manual Cloud Run redeploy
+is needed to ship the backend/frontend changes (the Supabase data is already live).
+
+--------------------------------------------------------------------------------
+USER:
+/save-chat-history
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked the timestamp (2910261215) and the existing chat_history format, then wrote
+this export. Did NOT touch as_built.txt or CLAUDE.md as part of this command and did
+NOT commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================

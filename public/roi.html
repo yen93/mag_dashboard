@@ -109,16 +109,16 @@
       var row = currentRow();
       var meta = ROI.rows.meta;
 
-      // Cards: Total revenue (Xero) · Total ad spend (Xero) · Deals won (AC)
+      // Cards: Total revenue (Xero) · Total spend (Xero) · Deals won (AC)
       var revSub = row.roi != null ? ('ROI ' + row.roi.toFixed(2) + '×') :
-        (row.hasRevenue ? null : 'No Xero invoice data for this FY');
+        (row.hasRevenue ? null : 'No Xero P&L for this FY (pre-FY24)');
       renderKpis('kpis', [
         { label: 'Total revenue (Xero)',
           metric: { value: row.hasRevenue ? row.revenue : null, unit: 'currency', meta: meta },
           sub: revSub },
         { label: 'Total spend (Xero)',
-          metric: { value: row.totalSpend, unit: 'currency' },
-          sub: 'All expenses + cost of sales' },
+          metric: { value: row.hasSpend ? row.totalSpend : null, unit: 'currency' },
+          sub: row.hasSpend ? 'All expenses + cost of sales' : 'No Xero P&L for this FY (pre-FY24)' },
         { label: 'Deals won (AC)',
           metric: { value: row.dealsWon, unit: 'count' },
           sub: row.dealsOpen + ' open · ' + row.dealsLost + ' lost' },
@@ -139,7 +139,8 @@
         { key: 'fy', label: 'FY' },
         { key: 'revenue', label: 'Revenue (Xero)', unit: 'currency',
           render: function (v, r) { return r.hasRevenue ? fmt(v, 'currency') : '<span class="muted">—</span>'; } },
-        { key: 'totalSpend', label: 'Total spend', unit: 'currency' },
+        { key: 'totalSpend', label: 'Total spend', unit: 'currency',
+          render: function (v, r) { return r.hasSpend ? fmt(v, 'currency') : '<span class="muted">—</span>'; } },
         { key: 'dealsWon', label: 'Deals won', unit: 'count' },
         { key: 'dealsOpen', label: 'Open', unit: 'count' },
         { key: 'dealsLost', label: 'Lost', unit: 'count' },

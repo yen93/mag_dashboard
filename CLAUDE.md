@@ -50,19 +50,27 @@ Cloud Run.
   `initPage('marketing')` with no renderFn + `renderMarketingSidebar('roi')` + its own
   `fetchJSON`). LIVE, computed at request time from Supabase, framed by Australian FY (Jul–Jun,
   END-year) with an FY filter bar (default = current FY). Unlike ROAS it is **WHOLE-BUSINESS,
-  NOT ad-attributed**: revenue = ALL Xero invoices (`invoice_tracking.amount_total` incl GST, by
-  `invoice_date`); **total spend = ALL Xero expenses across every dept = operating expenses + cost
-  of sales, from the new table `public.xero_expenses_monthly`** (seeded 2026-10-28 from the Xero
-  P&L via MCP, FY25–FY27 monthly; STATIC — refresh routine pending; NOT the ad-spend tables);
-  deals = ALL `activecampaign_deals` (status 1/2/0 by `cdate`, won value via `public.ac_value_aud`),
-  also split **per pipeline** (`"group"` → name map in `marketing-roi.js`). FY axis =
-  FYs with Xero expenses OR Xero revenue (≈ FY25–FY27). **Caveat:** `invoice_tracking` is 2026+
-  only, so revenue exists FY26/FY27 and reads **blank (null, not $0)** for earlier FYs; FY26 revenue
-  is partial (Jan–Jun 2026) so its ROI reads low vs full-year spend — surfaced on the page. 3 cards
-  (Total revenue / **Total spend** / Deals won) + 2 charts (revenue-vs-spend by month as a 2-line
-  SHARED-$-axis chart — **not** dual-axis; **AC pipeline Won/Open/Lost per pipeline** as horizontal
-  stacked bars) + an ROI-by-FY table, all re-rendered client-side on FY change. The 6 other
-  Marketing pages' `app.js` was bumped to `?v=7` so the ROI link shows.
+  NOT ad-attributed**. **BOTH revenue AND spend now come from the Xero P&L (as of 2026-10-29),
+  read from `public.xero_expenses_monthly`:** revenue = `total_income` (Xero P&L "Total Income",
+  **ex-GST, accrual** — new column added 2026-10-29; **REPLACED the old `invoice_tracking`
+  incl-GST source**, which was 2026+ only); **total spend = operating_expenses + cost_of_sales**
+  (`total_spend` is a GENERATED column = op_ex + cos — don't INSERT it). The table is a STATIC
+  Xero-P&L load via MCP (refresh routine pending), now covering **FY24–FY27 monthly** (Jul 2023–
+  current; re-seeded 2026-10-29). deals = ALL `activecampaign_deals` (status 1/2/0 by `cdate`,
+  won value via `public.ac_value_aud`), also split **per pipeline** (`"group"` → name map in
+  `marketing-roi.js`). **FY axis = FYs with Xero P&L (revenue/spend) UNION FYs with AC deals.**
+  **Xero's API only exposes the current + 3 prior FYs**, so the P&L reaches back to **FY24** only,
+  while deals reach **FY22** — so **FY22/FY23 appear with deal counts but blank (null, not $0)
+  revenue/spend/ROI** (tracked via `hasRevenue`/`hasSpend`; surfaced on the page). The current FY
+  is partial (YTD) so its spend is below a full year. 3 cards (Total revenue / **Total spend** /
+  Deals won) + 2 charts (**revenue-vs-spend by month** = a **DUAL-AXIS combo chart** as of
+  2026-10-29: green **spend bars** on the left $ axis, blue **revenue line** on the right $ axis —
+  self-rendered by `renderMonthChart()` in `roi.html`, **no longer** the shared-axis `lineChart`;
+  **AC pipeline Won/Open/Lost per pipeline** as horizontal stacked bars, with a **"Won only"
+  toggle** `#pipeWonToggle` that drops Open/Lost and re-sorts by won) + an ROI-by-FY table, all
+  re-rendered client-side on FY change. Note: raw monthly P&L carries year-end accrual reversals,
+  so a few months (e.g. Jun 2024) show a **negative spend bar** — kept as-is (annual FY totals net
+  correctly). The 6 other Marketing pages' `app.js` was bumped to `?v=7` so the ROI link shows.
   **Operations left sidebar (as of 2026-10-22):** `mag_buyer_sheet.html` (nav "Buyer Analysis" —
   in-page `<h3>`/`<title>` still read "Buyer Sheet") and `invoice_tracking.html` ("Invoices")
   are **no longer top tabs** either — they moved UNDER **Operations**, reached via an

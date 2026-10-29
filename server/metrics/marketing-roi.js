@@ -3,10 +3,10 @@
 // ROAS tab uses. LIVE, computed at request time from Supabase.
 //
 // WHOLE-BUSINESS (not ad-attributed like ROAS):
-//   • Revenue    → ALL Xero sales invoices, public.invoice_tracking, bucketed by invoice_date
-//                  (sum of amount_total, incl GST). invoice_tracking is scoped 2026 ONWARDS, so
-//                  revenue only exists for FY26 (partial, Jan–Jun 2026) and FY27 (Jul 2026+);
-//                  earlier FYs read null revenue (a blank, not a $0). The page flags this.
+//   • Revenue    → Xero P&L "Total Income" per month, public.xero_expenses_monthly.total_income
+//                  (ex-GST, accrual). Sourced from the same monthly P&L as spend, so revenue and
+//                  spend are apples-to-apples. (This REPLACED the old invoice_tracking source,
+//                  which was 2026+ only and incl-GST — see git history / CLAUDE.md.)
 //   • Total spend → ALL Xero expenses across every dept = operating_expenses + cost_of_sales,
 //                  public.xero_expenses_monthly (seeded from the Xero P&L; see that table's
 //                  comment). This REPLACED the old ad-only spend (google/bing/simple_digital).
@@ -15,22 +15,25 @@
 //                  Also broken down PER PIPELINE (activecampaign_deals."group") for the pipeline
 //                  chart — group→name map below (from AC dealGroups).
 //
-// FY axis = FYs that have Xero expenses OR Xero revenue (≈ FY25–FY27). The frontend filters the
-// returned per-FY rows + monthly series client-side via an FY bar (default = current FY).
+// FY axis = FYs that have Xero P&L (revenue/spend) OR ActiveCampaign deals. Xero's API only
+// exposes the current + 3 prior financial years, so P&L reaches back to FY24 only; deals reach
+// FY22. So FY22/FY23 appear with deal counts but BLANK revenue/spend/ROI (null, not $0) — the
+// page flags this. The frontend filters the returned per-FY rows + monthly series client-side
+// via an FY bar (default = current FY).
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { section } from '../lib/metric.js';
 
 const SRC =
-  'Live (Supabase): revenue from invoice_tracking (Xero, 2026+); total spend from ' +
-  'xero_expenses_monthly (Xero P&L: operating expenses + cost of sales); deals from activecampaign_deals';
+  'Live (Supabase): revenue + total spend from xero_expenses_monthly (Xero P&L: total income, ' +
+  'operating expenses, cost of sales); deals from activecampaign_deals';
 
 // AU financial-year END year from a date column: calendar year + 1 if month >= July.
 const FY = (col) =>
   `extract(year FROM ${col})::int + CASE WHEN extract(month FROM ${col}) >= 7 THEN 1 ELSE 0 END`;
 
-// Only months from FY25 start onward feed the monthly chart.
-const MONTH_FLOOR = '2024-07-01';
+// Earliest month fed to the monthly chart = FY24 start (the oldest Xero P&L we can pull).
+const MONTH_FLOOR = '2023-07-01';
 
 // AC deal pipeline (dealGroups) id → display name. Static (from list_deal_pipelines);
 // activecampaign_deals."group" holds the id. Unknown ids fall back to "Pipeline <id>".
@@ -48,13 +51,12 @@ const PIPELINES = {
 const pipelineName = (g) => PIPELINES[String(g)] || `Pipeline ${g}`;
 
 const BY_FY = `
-  WITH rev AS (
-    SELECT ${FY('invoice_date')} AS fy_end, sum(amount_total) AS revenue
-    FROM public.invoice_tracking WHERE invoice_date IS NOT NULL GROUP BY 1
-  ),
-  spend AS (
+  WITH pnl AS (
     SELECT ${FY('month')} AS fy_end,
-      sum(operating_expenses) AS op_ex, sum(cost_of_sales) AS cos, sum(total_spend) AS total
+      sum(total_income)      AS revenue,
+      sum(operating_expenses) AS op_ex,
+      sum(cost_of_sales)      AS cos,
+      sum(total_spend)        AS total
     FROM public.xero_expenses_monthly GROUP BY 1
   ),
   d AS (
@@ -66,40 +68,32 @@ const BY_FY = `
     FROM public.activecampaign_deals WHERE cdate IS NOT NULL GROUP BY 1
   ),
   axis AS (
-    SELECT fy_end FROM spend
+    SELECT fy_end FROM pnl
     UNION
-    SELECT fy_end FROM rev WHERE revenue IS NOT NULL
+    SELECT fy_end FROM d
   )
   SELECT
     a.fy_end                              AS "fyEnd",
     'FY' || right(a.fy_end::text, 2)      AS "fy",
-    round(rev.revenue)::numeric           AS "revenue",      -- null for pre-2026 FYs
-    round(coalesce(s.op_ex, 0))::numeric  AS "opEx",
-    round(coalesce(s.cos, 0))::numeric    AS "cos",
-    round(coalesce(s.total, 0))::numeric  AS "totalSpend",
+    round(p.revenue)::numeric             AS "revenue",     -- null for FYs with no Xero P&L (FY22/FY23)
+    round(p.op_ex)::numeric               AS "opEx",
+    round(p.cos)::numeric                 AS "cos",
+    round(p.total)::numeric               AS "totalSpend",  -- null for FYs with no Xero P&L
     coalesce(d.won, 0)                    AS "dealsWon",
     coalesce(d.open, 0)                   AS "dealsOpen",
     coalesce(d.lost, 0)                   AS "dealsLost",
     coalesce(d.won_value, 0)::numeric     AS "wonValue"
   FROM axis a
-  LEFT JOIN rev   ON rev.fy_end = a.fy_end
-  LEFT JOIN spend s ON s.fy_end = a.fy_end
+  LEFT JOIN pnl p ON p.fy_end = a.fy_end
   LEFT JOIN d     ON d.fy_end = a.fy_end
   ORDER BY a.fy_end`;
 
 const BY_MONTH = `
-  WITH rev AS (
-    SELECT to_char(date_trunc('month', invoice_date), 'YYYY-MM') AS month, sum(amount_total) AS revenue
-    FROM public.invoice_tracking WHERE invoice_date >= '${MONTH_FLOOR}' GROUP BY 1
-  ),
-  spend AS (
-    SELECT to_char(date_trunc('month', month), 'YYYY-MM') AS month, sum(total_spend) AS spend
-    FROM public.xero_expenses_monthly WHERE month >= '${MONTH_FLOOR}' GROUP BY 1
-  )
-  SELECT coalesce(rev.month, spend.month)   AS "month",
-         round(coalesce(rev.revenue, 0))::numeric AS "revenue",
-         round(coalesce(spend.spend, 0))::numeric AS "spend"
-  FROM rev FULL OUTER JOIN spend ON rev.month = spend.month
+  SELECT to_char(date_trunc('month', month), 'YYYY-MM') AS "month",
+         round(coalesce(total_income, 0))::numeric AS "revenue",
+         round(coalesce(total_spend, 0))::numeric  AS "spend"
+  FROM public.xero_expenses_monthly
+  WHERE month >= '${MONTH_FLOOR}'
   ORDER BY 1`;
 
 // Per-pipeline deal counts by FY (for the "AC pipeline" chart, one bar per pipeline).
@@ -121,16 +115,17 @@ function fyEndOfMonth(ym) {
 }
 
 function shape(r) {
-  const revenue = num(r.revenue); // null = no Xero invoice history for this FY (pre-2026)
-  const totalSpend = num(r.totalSpend) || 0;
+  const revenue = num(r.revenue);       // null = no Xero P&L for this FY (FY22/FY23)
+  const totalSpend = num(r.totalSpend); // null = no Xero P&L for this FY (FY22/FY23)
   return {
     fy: r.fy,
     fyEnd: num(r.fyEnd),
     revenue,
     hasRevenue: revenue !== null,
-    opEx: num(r.opEx) || 0,
-    cos: num(r.cos) || 0,
+    opEx: num(r.opEx),
+    cos: num(r.cos),
     totalSpend,
+    hasSpend: totalSpend !== null,
     dealsWon: num(r.dealsWon) || 0,
     dealsOpen: num(r.dealsOpen) || 0,
     dealsLost: num(r.dealsLost) || 0,
@@ -143,8 +138,9 @@ function shape(r) {
 function totalRow(rows) {
   const sum = (k) => rows.reduce((a, r) => a + (r[k] || 0), 0);
   const anyRevenue = rows.some((r) => r.hasRevenue);
+  const anySpend = rows.some((r) => r.hasSpend);
   const revenue = anyRevenue ? sum('revenue') : null;
-  const totalSpend = sum('totalSpend');
+  const totalSpend = anySpend ? sum('totalSpend') : null;
   return {
     fy: 'All',
     fyEnd: null,
@@ -153,6 +149,7 @@ function totalRow(rows) {
     opEx: sum('opEx'),
     cos: sum('cos'),
     totalSpend,
+    hasSpend: anySpend,
     dealsWon: sum('dealsWon'),
     dealsOpen: sum('dealsOpen'),
     dealsLost: sum('dealsLost'),
@@ -178,7 +175,7 @@ export async function getMarketingRoi() {
   const rows = fyRows.map(shape);
 
   if (!rows.length) {
-    const note = 'No Xero expenses or revenue found — seed xero_expenses_monthly / invoice_tracking.';
+    const note = 'No Xero P&L found — seed xero_expenses_monthly (total_income/expenses/cost_of_sales).';
     const pend = { source: SRC, status: 'pending', note };
     return {
       asOf: new Date().toISOString(),
@@ -221,11 +218,12 @@ export async function getMarketingRoi() {
   const firstRev = rows.find((r) => r.hasRevenue);
   const note =
     `${rows.length} FY(s) (${rows[0].fy}–${rows[rows.length - 1].fy}). ` +
-    `Revenue = all Xero invoices (incl GST); total spend = all Xero expenses (operating + cost of ` +
+    `Revenue = Xero P&L total income (ex-GST); total spend = all Xero expenses (operating + cost of ` +
     `sales) across every dept; deals = all ActiveCampaign deals by created date. ` +
-    `Xero invoice history starts Jan 2026, so revenue exists only from ${firstRev ? firstRev.fy : 'FY26'} onward ` +
-    `(earlier FYs show spend/deals but no revenue, and FY26 revenue is partial — Jan–Jun 2026 only — so its ` +
-    `ROI is understated against a full year of spend). Expenses are a static Xero P&L load (refresh pending).`;
+    `Xero only exposes the last 4 financial years, so revenue/spend reach back to ${firstRev ? firstRev.fy : 'FY24'} ` +
+    `only — earlier FYs (${rows[0].fy}+) show deal counts but blank revenue/spend/ROI. The current FY is ` +
+    `partial (year-to-date), so its spend is below a full year. Expenses/revenue are a static Xero P&L load ` +
+    `(refresh pending).`;
 
   return {
     asOf: new Date().toISOString(),
