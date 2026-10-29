@@ -382,8 +382,8 @@
     var C_SD   = '#e0922f';   // Simple Digital
 
     var _audWhole = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 0, maximumFractionDigits: 0 });
-    function money(v) { return (v === null || v === undefined) ? '—' : _audWhole.format(Number(v) || 0); }
-    function moneyShort(v) { v = Number(v) || 0; if (Math.abs(v) >= 1000) return '$' + Math.round(v / 1000) + 'k'; return '$' + Math.round(v); }
+    function money(v) { return (v === null || v === undefined) ? '—' : _aud2.format(Number(v) || 0); }
+    function moneyShort(v) { v = Number(v) || 0; if (Math.abs(v) >= 1000) return '$' + (v / 1000).toFixed(2) + 'k'; return '$' + v.toFixed(2); }
     var _aud2 = new Intl.NumberFormat('en-AU', { style: 'currency', currency: 'AUD', minimumFractionDigits: 2, maximumFractionDigits: 2 });
     function money2(v) { return (v === null || v === undefined) ? '—' : _aud2.format(Number(v) || 0); }
 
@@ -446,7 +446,7 @@
         openInvoice(key, d);
       });
     })();
-    function pct(ratio) { return (ratio === null || ratio === undefined) ? '—' : (Number(ratio) * 100).toFixed(1) + '%'; }
+    function pct(ratio) { return (ratio === null || ratio === undefined) ? '—' : (Number(ratio) * 100).toFixed(2) + '%'; }
     function roasFmt(v) { return (v === null || v === undefined) ? '—' : Number(v).toFixed(2) + '×'; }
 
     var ROAS_DATA = null, DEALS_DATA = null;   // cached payloads for theme re-render
@@ -486,7 +486,7 @@
       host.innerHTML =
         kpi('ROAS', roasFmt(roas),
             '<span class="pill ' + (pass ? 'roas-pass' : 'roas-fail') + '">' + (pass ? 'clears' : 'below') + ' ' + roasFmt(target) + '</span>',
-            '', 'Won revenue ÷ ' + costLabel().toLowerCase() + ' for ' + r.fy + '. Target ' + roasFmt(target) + ' ($' + target.toFixed(0) + ' won per $1 spent).') +
+            '', 'Won revenue ÷ ' + costLabel().toLowerCase() + ' for ' + r.fy + '. Target ' + roasFmt(target) + ' ($' + target.toFixed(2) + ' won per $1 spent).') +
         kpi(costLabel(), money(cost),
             SEL.basis === 'google' ? 'Google Ads only' : ('Google ' + moneyShort(r.googleSpend) + ' · Bing ' + moneyShort(r.bingSpend) + ' · SD ' + moneyShort(r.sdFee)),
             '', 'Paid-search cost for ' + r.fy + '. Google Ads = billed Xero charges (all FYs)' + ((r.bingSpend || r.sdFee) ? ' + Bing + Simple Digital' : '') + '.') +
@@ -553,7 +553,7 @@
           onClick: function (e, els) { if (els && els.length) setFy(rows[els[0].index].fy); },
           scales: {
             x: { ticks: { color: tc.muted }, grid: { display: false } },
-            y: { ticks: { color: tc.muted, callback: function (v) { return Number(v).toFixed(1) + '×'; } }, grid: { color: tc.grid }, beginAtZero: true },
+            y: { ticks: { color: tc.muted, callback: function (v) { return Number(v).toFixed(2) + '×'; } }, grid: { color: tc.grid }, beginAtZero: true },
           },
         },
         plugins: [targetLinePlugin(tc, target), barLabelPlugin(tc)],
