@@ -489,7 +489,7 @@
             '', 'Won revenue ÷ ' + costLabel().toLowerCase() + ' for ' + r.fy + '. Target ' + roasFmt(target) + ' ($' + target.toFixed(0) + ' won per $1 spent).') +
         kpi(costLabel(), money(cost),
             SEL.basis === 'google' ? 'Google Ads only' : ('Google ' + moneyShort(r.googleSpend) + ' · Bing ' + moneyShort(r.bingSpend) + ' · SD ' + moneyShort(r.sdFee)),
-            '', 'Paid-search cost for ' + r.fy + '. FY22–24 = Niki\'s per-lead cost; FY25+ = live Google Ads' + ((r.bingSpend || r.sdFee) ? ' + Bing + Simple Digital' : '') + '.') +
+            '', 'Paid-search cost for ' + r.fy + '. Google Ads = billed Xero charges (all FYs)' + ((r.bingSpend || r.sdFee) ? ' + Bing + Simple Digital' : '') + '.') +
         kpi('Won revenue from ads', money(r.wonRevenue), (r.won || 0) + ' won deals', 'pos',
             'Won revenue credited to Google Ads in ' + r.fy + ' — the billed Xero engagement fee where the deal is invoiced, else the contracted value. FY22–24 from Niki\'s log; FY25+ = audit final_gads_tag=Yes ∪ GA4 cpc.') +
         kpi('Won', String(r.won || 0), (r.winRate == null ? 'No closed deals' : pct(r.winRate) + ' win rate'), (r.winRate >= 0.5 ? 'pos' : ''),

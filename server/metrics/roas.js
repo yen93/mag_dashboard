@@ -9,12 +9,14 @@
 // contact cdate + activecampaign_deals value via ac_value_aud), deduped by deal_id with clover
 // prevailing. This file only GROUPs that view by FY for the counts; it does NOT re-derive the set.
 //
-// AD SPEND (unchanged, NOT from the view):
-//   • FY22–24  →  Google spend = sum(cpc) over every Niki lead row (per-lead click cost; incl.
-//                 Unidentified/N/A rows — they aren't counted deals but their cpc is real spend).
-//   • FY25+    →  Google = sum(cost) public.google_ads_campaign_monthly; Bing = sum(cost)
-//                 public.bing_ads_campaign_monthly; Simple Digital = sum(paid_search_fee)
-//                 public.simple_digital_fees_monthly (both live from Xero via xero-ad-spend-sync).
+// AD SPEND (NOT from the view):
+//   • Google (ALL FYs) →  sum(cost) public.google_ads_xero_monthly — Xero billed charges
+//                 (account 302 "Advertising", ex-GST), filled by xero-ad-spend-sync. This
+//                 REPLACED the old split (Niki per-lead cpc FY22–24 + google_ads_campaign_monthly
+//                 / Google Ads API FY25+): all Google Ads cost now comes from Xero.
+//   • Bing / Simple Digital (All-in basis) →  sum(cost) public.bing_ads_campaign_monthly;
+//                 sum(paid_search_fee) public.simple_digital_fees_monthly (both live from Xero
+//                 via xero-ad-spend-sync too).
 //
 // Two cost bases are returned per row (Google-only and All-in = Google+Bing+SD); the
 // frontend toggles between them client-side. Only FYs that have ad spend are shown.
@@ -27,8 +29,9 @@ import { section } from '../lib/metric.js';
 
 const SRC =
   'Live (Supabase): deal counts + won$/open$ from the public.roas_counted_deals view ' +
-  '(FY22–24 niki_ad_leads_tracking; FY25+ clover_audited_deals Yes ∪ JC ∪ ga4 cpc); ' +
-  'spend from niki cpc (FY22–24) + google/bing/simple_digital monthly (FY25+)';
+  '(FY22–24 niki_ad_leads_tracking; FY25+ clover_audited_deals Yes ∪ ga4 cpc); ' +
+  'Google Ads spend (all FYs) from Xero (public.google_ads_xero_monthly); ' +
+  'Bing + Simple Digital from bing_ads_campaign_monthly / simple_digital_fees_monthly (Xero)';
 const TARGET_ROAS = 2;
 
 const SELECT = `
@@ -50,23 +53,17 @@ const SELECT = `
     FROM public.roas_counted_deals
     GROUP BY fy_end
   ),
-  niki_spend AS (
-    -- FY22–24 Google spend = sum(cpc) over ALL Niki lead rows (per-lead click cost).
-    SELECT year + CASE WHEN extract(month FROM to_date(btrim(month), 'Month')) >= 7 THEN 1 ELSE 0 END AS fy_end,
-      round(sum(cpc))::numeric AS google_spend,
-      count(DISTINCT extract(month FROM to_date(btrim(month), 'Month'))) AS months
-    FROM public.niki_ad_leads_tracking
-    WHERE lower(coalesce(company, '')) NOT LIKE 'uniting%'
-    GROUP BY 1
-  ),
-  gads AS (
-    -- FY25+ Google spend (live account).
+  gads_xero AS (
+    -- Google Ads spend for EVERY FY = Xero billed charges (account 302, ex-GST),
+    -- from public.google_ads_xero_monthly (xero-ad-spend-sync). This REPLACES the
+    -- old split (Niki's per-lead cpc FY22–24 + google_ads_campaign_monthly /
+    -- Google Ads API FY25+) — all Google cost now comes from Xero.
     SELECT extract(year FROM month)::int + CASE WHEN extract(month FROM month) >= 7 THEN 1 ELSE 0 END AS fy_end,
       round(sum(cost))::numeric       AS google_spend,
       count(DISTINCT month)           AS months,
       to_char(min(month), 'Mon')      AS first_month,
       to_char(max(month), 'Mon YYYY') AS last_month
-    FROM public.google_ads_campaign_monthly
+    FROM public.google_ads_xero_monthly
     GROUP BY 1
   ),
   bing AS (
@@ -85,15 +82,13 @@ const SELECT = `
     GROUP BY 1
   ),
   fy_axis AS (
-    -- Only FYs that have ad spend are shown (FY22–24 keyed off Niki cpc, FY25+ off Google Ads).
-    SELECT fy_end FROM niki_spend WHERE fy_end <= 2024 AND google_spend > 0
-    UNION
-    SELECT fy_end FROM gads WHERE fy_end >= 2025
+    -- Only FYs with Google Ads spend (from Xero) are shown.
+    SELECT fy_end FROM gads_xero WHERE google_spend > 0
   )
   SELECT
     a.fy_end                                                           AS "fyEnd",
     'FY' || right(a.fy_end::text, 2)                                   AS "fy",
-    (CASE WHEN a.fy_end <= 2024 THEN n.google_spend ELSE g.google_spend END) AS "googleSpend",
+    g.google_spend                                                    AS "googleSpend",
     coalesce(b.bing_spend, 0)                                          AS "bingSpend",
     coalesce(s.sd_fee, 0)                                              AS "sdFee",
     coalesce(s.sd_seo, 0)                                              AS "sdSeo",
@@ -103,16 +98,15 @@ const SELECT = `
     coalesce(d.leads, 0)                                               AS "leads",
     coalesce(d.won_rev, 0)                                             AS "wonRevenue",
     coalesce(d.open_val, 0)                                            AS "openValue",
-    (CASE WHEN a.fy_end <= 2024 THEN n.months ELSE g.months END)       AS "spendMonths",
-    (CASE WHEN a.fy_end <= 2024 THEN NULL ELSE g.first_month END)      AS "firstSpendMonth",
-    (CASE WHEN a.fy_end <= 2024 THEN NULL ELSE g.last_month END)       AS "lastSpendMonth",
+    g.months                                                          AS "spendMonths",
+    g.first_month                                                     AS "firstSpendMonth",
+    g.last_month                                                      AS "lastSpendMonth",
     (CASE WHEN a.fy_end <= 2024 THEN 'niki' ELSE 'clover+ga4' END)     AS "sourceKind"
   FROM fy_axis a
-  LEFT JOIN deals d      ON d.fy_end = a.fy_end
-  LEFT JOIN niki_spend n ON n.fy_end = a.fy_end
-  LEFT JOIN gads g       ON g.fy_end = a.fy_end
-  LEFT JOIN bing b       ON b.fy_end = a.fy_end
-  LEFT JOIN sd   s       ON s.fy_end = a.fy_end
+  LEFT JOIN deals d     ON d.fy_end = a.fy_end
+  LEFT JOIN gads_xero g ON g.fy_end = a.fy_end
+  LEFT JOIN bing b      ON b.fy_end = a.fy_end
+  LEFT JOIN sd   s      ON s.fy_end = a.fy_end
   ORDER BY a.fy_end`;
 
 const num = (v) => (v === null || v === undefined ? null : Number(v));
@@ -135,13 +129,17 @@ function shape(r) {
   const spendMonths = num(r.spendMonths) || 0;
   const partial = spendMonths > 0 && spendMonths < 12;
   const periodLabel = partial ? `${r.fy} · ${spendMonths} mo` : r.fy;
-  const countedMethod =
+  // Cost is always Xero billed Google Ads (acct 302); the deal-count source still
+  // differs by era (Niki's log FY22–24, audit∪GA4-cpc FY25+).
+  const costText =
+    `Cost = Google Ads billed via Xero${bingSpend ? ' + Bing' : ''}${sdFee ? ' + Simple Digital' : ''} ` +
+    `(${spendMonths} mo${partial ? ', partial' : ''}` +
+    `${r.firstSpendMonth && r.lastSpendMonth ? `, ${r.firstSpendMonth}–${r.lastSpendMonth}` : ''}).`;
+  const dealText =
     r.sourceKind === 'niki'
-      ? `Niki's Google Ads log. Google spend = summed per-lead cost (cpc); Won/Lost/Open + ` +
-        `won revenue from logged deals. ${partial ? `Partial year (${spendMonths} mo of data). ` : ''}`
-      : `Won/Lost/Open = audited deals tagged Google Ads (final_gads_tag=Yes) plus GA4 cpc-channel ` +
-        `deals. Cost = Google Ads${bingSpend ? ' + Bing' : ''}${sdFee ? ' + Simple Digital' : ''} ` +
-        `(${spendMonths} mo${r.firstSpendMonth && r.lastSpendMonth ? `, ${r.firstSpendMonth}–${r.lastSpendMonth}` : ''}).`;
+      ? `Won/Lost/Open + won revenue from Niki's Google Ads log.`
+      : `Won/Lost/Open = audited deals tagged Google Ads (final_gads_tag=Yes) plus GA4 cpc-channel deals.`;
+  const countedMethod = `${costText} ${dealText}`;
   return {
     fy: r.fy,
     fyEnd,
@@ -226,7 +224,7 @@ export async function getRoas() {
       rows: section([], {
         source: SRC,
         status: 'pending',
-        note: 'No ad spend found — populate niki_ad_leads_tracking (FY22–24) or google_ads_campaign_monthly (FY25+).',
+        note: 'No Google Ads spend found — populate public.google_ads_xero_monthly (run xero-ad-spend-sync).',
       }),
     };
   }
@@ -238,7 +236,8 @@ export async function getRoas() {
     `${rows.length} FY(s) with ad spend (${rows[0].fy}–${rows[rows.length - 1].fy}). ` +
     `All-years ROAS: Google ${total.roasGoogle ? total.roasGoogle.toFixed(2) : '—'}× · ` +
     `All-in ${total.roasAllin ? total.roasAllin.toFixed(2) : '—'}× vs ${TARGET_ROAS.toFixed(2)}× target. ` +
-    `FY22–24 from Niki's log; FY25+ Won/Lost/Open = audit final_gads_tag=Yes ∪ GA4 cpc. ` +
+    `Google Ads cost (all FYs) = Xero billed charges. Deal counts: FY22–24 from Niki's log; ` +
+    `FY25+ = audit final_gads_tag=Yes ∪ GA4 cpc. ` +
     (anyBing ? '' : 'Bing spend not yet connected (reads $0). ') +
     (anySd ? '' : 'Simple Digital fee not yet connected (reads $0). ') +
     `Won revenue = billed Xero engagement fee where invoiced, else contracted value. ` +

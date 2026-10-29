@@ -119,26 +119,40 @@ Cloud Run.
     "ROAS by FY" bar+target chart, a "What we spent vs what we won" stacked-cost-vs-won
     chart, a wide "ROAS by FY" table, and a per-FY **deals table**). LIVE, computed at
     request time from Supabase — NOT a cache, NOT the Google Sheet.
-    **FY SOURCING (matches the artifact):**
-    • **FY22–FY24** → **Google** from `public.niki_ad_leads_tracking` (Niki's Google Ads lead log):
-      Google spend = `sum(cpc)` over every lead row in the FY (per-lead click cost);
-      Won/Lost/Open counts + won revenue (`deal_value`) from rows with those statuses
-      (status `Unidentified`/`N/A` excluded from counts but their cpc still counts as
-      spend). FY derived in SQL from `year`+`month` (no stored FY/day); FY22 is partial
-      (data starts May 2022). `company LIKE 'uniting%'` excluded (referrals).
+    **GOOGLE ADS COST — ALL FYs now come from XERO (as of 2026-10-29).** `roas.js`'s
+    Google spend for EVERY financial year = `sum(cost)` over the new table
+    **`public.google_ads_xero_monthly`** (ex-GST, one row per month), via a single `gads_xero`
+    CTE. This **replaced the old split** — Niki's per-lead `cpc` (FY22–24) and
+    `public.google_ads_campaign_monthly` / the Google Ads API (FY25+) are **no longer the ROAS
+    Google-cost source** (the `niki_spend` and `gads` CTEs are gone; the `fy_axis` is now just
+    `gads_xero WHERE google_spend>0`). `google_ads_xero_monthly` is filled by the
+    **`xero-ad-spend-sync`** edge fn (Google section — see that paragraph below): billed
+    card/direct-debit SPEND bank txns coded to **account 302 "Advertising"**, EX-GST, summed
+    across **two Xero contacts** — `"Google"` (`20732f2e…`, throughout) + `"Google Ads"`
+    (`81b826a5…`, a May-2023→Feb-2024 window where billing was renamed); 302-only because the
+    `"Google"` contact also has non-ad Google charges on other accounts. Per-FY (ex-GST, as
+    seeded): FY22 $1,091 (2 mo, partial) · FY23 $22,132 · FY24 $33,098 · FY25 $27,610 ·
+    FY26 $37,197 · FY27 $9,249 (4 mo, current). `google_ads_campaign_monthly` + its
+    `google-ads-campaign-monthly-sync` cron still run but are now **unused by ROAS**.
+    **DEAL COUNTS are UNCHANGED by this** — still the `roas_counted_deals` view (niki FY22–24;
+    clover/ga4 FY25+). Only the Google **cost denominator** moved to Xero.
+    **FY SOURCING (deal counts; cost is Xero per above):**
+    • **FY22–FY24 deal side** → `public.niki_ad_leads_tracking` (Niki's Google Ads lead log):
+      Won/Lost/Open counts + won revenue (`deal_value`) from rows with those statuses (via the
+      `roas_counted_deals` view). FY22 is partial (data starts May 2022). `company LIKE
+      'uniting%'` excluded (referrals). **(Niki's `cpc` is NO LONGER summed as spend — Xero
+      replaced it.)**
       **Simple Digital is ALSO counted into the FY22–24 All-in cost** (as of 2026-10-26) —
       `sd_fee` from `public.simple_digital_fees_monthly`, same LEFT JOIN as FY25+ (SD history
       runs back to Mar 2022 in Xero: FY22 $3,680 / FY23 $11,040 / FY24 $11,540). **Bing is $0
       for FY22–24** — MAG didn't run Microsoft/Bing Ads until mid-FY25 (earliest Xero charge
-      Jun 2025), so there's nothing to count. So FY22–24 is a **mixed basis**: Niki per-lead
-      cpc for Google + Xero-billed Simple Digital. (This replaced the old hard-coded
-      `bingSpend`/`sdFee`=0 for `fy_end<=2024` in `roas.js`; those are now plain
-      `coalesce(...,0)` like FY25+.)
-    • **FY25+** → **SPEND** from monthly tables: Google = `sum(cost)`
-      `public.google_ads_campaign_monthly`; **Bing = `sum(cost)`
+      Jun 2025), so there's nothing to count. So FY22–24 All-in = **Xero Google + Xero Simple
+      Digital** (Bing $0).
+    • **FY25+** → **Bing = `sum(cost)`
       `public.bing_ads_campaign_monthly`** and **Simple Digital = `sum(paid_search_fee)`
-      `public.simple_digital_fees_monthly`** — both now **LIVE from Xero** via the
+      `public.simple_digital_fees_monthly`** — both **LIVE from Xero** via the
       `xero-ad-spend-sync` edge fn (see the "Bing + Simple Digital" paragraph below).
+      (Google cost for FY25+ is ALSO Xero now — see GOOGLE ADS COST above.)
       Simple Digital's `seo_component` (the $600/mo SEO carve-out, **excluded** from the
       ROAS cost) is **NOT** in the cost — but as of 2026-10-28 `roas.js`'s `sd` CTE also
       sums it as `sd_seo` → `sdSeo`, surfaced as a **display-only "SEO (excluded)" column**
@@ -237,24 +251,33 @@ Cloud Run.
     `public.bing_ads_campaign_monthly` (migration `20261022090000`, mirrors the Google table)
     and `public.simple_digital_fees_monthly` (migration `20261022091000`), both read by
     `roas.js` via LEFT JOIN.
-    **LIVE FROM XERO (2026-10-23) — the active source for BOTH:** the
+    **LIVE FROM XERO (2026-10-23) — the active source for BING, SIMPLE DIGITAL, and (as of
+    2026-10-29) GOOGLE ADS:** the
     **`xero-ad-spend-sync` edge function** (`--no-verify-jwt`; `supabase/functions/xero-ad-spend-sync/`)
     reads reconciled **SPEND bank transactions** for the Xero contacts **Microsoft Ads**
-    (`5ea7b8c8-…`) and **Simple Digital** (`fc88729b-…`), both coded to **account 302
+    (`5ea7b8c8-…`), **Simple Digital** (`fc88729b-…`), and **Google** (`20732f2e-…`) + **Google
+    Ads** (`81b826a5-…`), all coded to **account 302
     "Advertising and marketing"** (these are card/direct-debit charges, NOT AP bills, so
     `get_bills`/Invoices and the claude.ai Xero MCP — unreconciled-only — can't see them; only
-    the REST `BankTransactions` endpoint can). It buckets **ex-GST (SubTotal)** by month and
+    the REST `BankTransactions` endpoint can). It buckets **ex-GST** by month and
     REWRITES `bing_ads_campaign_monthly` (sentinel `campaign_id=0, campaign_name='__xero_msads__'`,
     `cost`=month total) + `simple_digital_fees_monthly` (`invoice='xero'`, `paid_search_fee`=ex-GST
     **less $600 SEO from 2026-03** — the debit went $1320→$1920 then, the +$600 is SEO;
-    `seo_component=600`; configurable `XERO_SD_SEO_FROM`/`XERO_SD_SEO_MONTHLY`). `roas.js` already
-    sums both, so **no dashboard redeploy** is needed to pick up the data.
+    `seo_component=600`; configurable `XERO_SD_SEO_FROM`/`XERO_SD_SEO_MONTHLY`) **+
+    `google_ads_xero_monthly`** (one row/month, `cost`=ex-GST). **Bing/SD use the whole-txn
+    `SubTotal` (ex-GST); GOOGLE must NOT** — the `"Google"` contact mixes non-ad charges on other
+    accounts, so Google sums only the **account-302 LINE ITEMS**, ex-GST = `LineAmount −
+    TaxAmount` (these bank txns are tax-**Inclusive**, so `LineAmount` carries GST); both Google
+    contacts are merged (`XERO_GOOGLE_CONTACT_IDS`, `XERO_AD_ACCOUNT=302`). `roas.js` already
+    sums all three tables, so **no dashboard redeploy** is needed to pick up refreshed *data*
+    (but the roas.js rewire to READ `google_ads_xero_monthly` instead of niki/the Google Ads API
+    IS a dashboard redeploy).
     **FETCH WINDOW (as of 2026-10-26): `SINCE` default is `2021-07-01` (FY22 start), not the old
     `2024-07-01`** — so the All-in cost basis now covers FY22–24 too (Simple Digital has Xero
     history back to Mar 2022; Bing only from Jun 2025). Override via the `XERO_SPEND_SINCE` secret.
-    **Keep this a full-history floor** — both writes wipe-then-reinsert the whole window (SD deletes
-    EVERY row; Bing deletes all `campaign_id=0`), so narrowing `SINCE` on a later cron run would
-    DELETE the FY22–24 rows. (Note: picking up FY22–24 on the DASHBOARD also required removing the
+    **Keep this a full-history floor** — all three writes wipe-then-reinsert the whole window (SD +
+    Google delete EVERY row; Bing deletes all `campaign_id=0`), so narrowing `SINCE` on a later
+    cron run would DELETE the FY22–24 rows. (Note: picking up FY22–24 on the DASHBOARD also required removing the
     old `fy_end<=2024 THEN 0` gate on `bingSpend`/`sdFee` in `roas.js` — that IS a dashboard
     redeploy; the "no redeploy" line above only covers the data itself.)
     **AUTH = a FREE standard Xero "Web app"** (OAuth2 auth-code + refresh-token rotation, NOT a

@@ -15,6 +15,15 @@
 //   • Simple Digital → public.simple_digital_fees_monthly (one row per month;
 //                      paid_search_fee = ex-GST). Replaces the sheet load and
 //                      supersedes the simple-digital-fees-sync Gmail routine.
+//   • Google Ads     → public.google_ads_xero_monthly (one row per month;
+//                      cost = ex-GST). The ROAS page's Google cost for ALL
+//                      financial years now comes from here (replacing Niki's
+//                      per-lead cpc for FY22-24 and the Google Ads API /
+//                      google_ads_campaign_monthly for FY25+). Unlike MS Ads /
+//                      SD, the "Google" contact also has NON-ad charges on other
+//                      accounts, so Google is summed from the EX-GST of the
+//                      account-302 LINE ITEMS only (not the whole-txn SubTotal),
+//                      across both the "Google" and "Google Ads" contacts.
 // roas.js already SUMs cost / paid_search_fee over these tables, so no dashboard
 // redeploy is needed — only the data changes.
 //
@@ -61,6 +70,15 @@ const SD_SEO_MONTHLY = Number(Deno.env.get("XERO_SD_SEO_MONTHLY") ?? "600");
 // Xero contacts (from get_contacts on the MyAdventure Group org).
 const MS_ADS_CONTACT_ID = Deno.env.get("XERO_MSADS_CONTACT_ID") ?? "5ea7b8c8-f858-413d-94c7-a70319948f64"; // "Microsoft Ads"
 const SD_CONTACT_ID = Deno.env.get("XERO_SD_CONTACT_ID") ?? "fc88729b-8b63-4590-8d18-4c61eb2bea94"; // "Simple Digital"
+// Google Ads is billed under TWO contacts over time ("Google" throughout, and
+// "Google Ads" for a May-2023→Feb-2024 window) — both summed, 302-only. Override
+// with a comma-separated XERO_GOOGLE_CONTACT_IDS.
+const GOOGLE_CONTACT_IDS = (Deno.env.get("XERO_GOOGLE_CONTACT_IDS") ??
+  "20732f2e-e12b-4f5d-9dfb-1bde837145aa,81b826a5-4fa1-498e-9078-c7de5f8c499b") // "Google", "Google Ads"
+  .split(",").map((s) => s.trim()).filter(Boolean);
+// The "Google" contact mixes ad spend (acct 302) with non-ad Google charges on
+// other accounts — only account 302 line items are Google Ads spend.
+const AD_ACCOUNT = Deno.env.get("XERO_AD_ACCOUNT") ?? "302"; // Advertising and marketing
 
 const TOKEN_PROVIDER = "xero";
 const XERO_TOKEN_URL = "https://identity.xero.com/connect/token";
@@ -90,7 +108,7 @@ function dateOnly(v: unknown): string | null {
 }
 const monthOf = (d: string | null): string | null => (d ? d.slice(0, 7) + "-01" : null);
 
-interface XeroLine { AccountCode?: string | null; Description?: string | null }
+interface XeroLine { AccountCode?: string | null; Description?: string | null; LineAmount?: unknown; TaxAmount?: unknown }
 interface XeroBankTxn {
   BankTransactionID: string;
   Type?: string | null;
@@ -99,6 +117,7 @@ interface XeroBankTxn {
   Date?: string | null;
   DateString?: string | null;
   Reference?: string | null;
+  LineAmountTypes?: string | null; // "Exclusive" | "Inclusive" | "NoTax"
   SubTotal?: unknown; // ex-GST
   TotalTax?: unknown;
   Total?: unknown; // inc-GST
@@ -189,10 +208,41 @@ function aggregateByMonth(txns: XeroBankTxn[]): { months: MonthAgg[]; accountCod
   return { months, accountCodes: [...codes].sort() };
 }
 
+// Google-specific: the "Google" contact mixes ad spend with non-ad Google
+// charges, so bucket the EX-GST of the account-302 LINE ITEMS only, across all
+// supplied txns (both Google contacts). Ex-GST per line = LineAmount, minus
+// TaxAmount when the txn is tax-Inclusive (these bank charges are Inclusive, so
+// LineAmount carries GST). Whole-txn SubTotal can't be used because it spans the
+// non-302 lines too.
+function aggregateGoogleAdMonths(txns: XeroBankTxn[]): MonthAgg[] {
+  const map = new Map<string, MonthAgg>();
+  for (const t of txns) {
+    const d = dateOnly(t.DateString ?? t.Date);
+    const m = monthOf(d);
+    if (!m) continue;
+    const inclusive = String(t.LineAmountTypes ?? "") === "Inclusive";
+    let ad = 0;
+    for (const li of t.LineItems ?? []) {
+      if (String(li.AccountCode ?? "") !== AD_ACCOUNT) continue;
+      ad += numOf(li.LineAmount) - (inclusive ? numOf(li.TaxAmount) : 0);
+    }
+    if (ad === 0) continue; // no Google Ads (acct 302) line on this txn
+    const cur = map.get(m) ?? { month: m, incGst: 0, exGst: 0, txns: 0, lastDate: null };
+    cur.exGst += ad;
+    cur.txns += 1;
+    if (!cur.lastDate || (d && d > cur.lastDate)) cur.lastDate = d;
+    map.set(m, cur);
+  }
+  const months = [...map.values()].sort((a, b) => a.month.localeCompare(b.month));
+  for (const mo of months) mo.exGst = round2(mo.exGst);
+  return months;
+}
+
 type Summary = {
   fn: string; mode: string; since: string; tenant: string | null;
   bing: { months: MonthAgg[]; totalExGst: number; txns: number; accountCodes: string[]; rowsWritten: number };
   sd: { months: MonthAgg[]; totalExGst: number; txns: number; accountCodes: string[]; rowsWritten: number };
+  google: { months: MonthAgg[]; totalExGst: number; txns: number; rowsWritten: number };
   errors: string[];
 };
 
@@ -202,6 +252,7 @@ async function run(dry: boolean): Promise<Summary> {
     fn: "xero-ad-spend-sync", mode: dry ? "dry" : "write", since: SINCE, tenant: null,
     bing: { months: [], totalExGst: 0, txns: 0, accountCodes: [], rowsWritten: 0 },
     sd: { months: [], totalExGst: 0, txns: 0, accountCodes: [], rowsWritten: 0 },
+    google: { months: [], totalExGst: 0, txns: 0, rowsWritten: 0 },
     errors: [],
   };
 
@@ -237,6 +288,16 @@ async function run(dry: boolean): Promise<Summary> {
     s.sd.totalExGst = round2(months.reduce((a, m) => a + m.exGst, 0));
   } catch (err) { s.errors.push(`simpledigital fetch: ${err instanceof Error ? err.message : String(err)}`); }
 
+  // --- Google Ads (both contacts, account 302 line items, ex-GST) ---
+  try {
+    const all: XeroBankTxn[] = [];
+    for (const cid of GOOGLE_CONTACT_IDS) all.push(...await bankTxnsForContact(access, tenantId, cid));
+    const months = aggregateGoogleAdMonths(all);
+    s.google.months = months;
+    s.google.txns = months.reduce((a, m) => a + m.txns, 0);
+    s.google.totalExGst = round2(months.reduce((a, m) => a + m.exGst, 0));
+  } catch (err) { s.errors.push(`google fetch: ${err instanceof Error ? err.message : String(err)}`); }
+
   if (dry || s.errors.length) return s;
 
   // Bing: replace the campaign_id=0 sentinel (the temp sheet load) with Xero totals.
@@ -269,7 +330,20 @@ async function run(dry: boolean): Promise<Summary> {
     else s.sd.rowsWritten = rows.length;
   }
 
-  console.log("xero-ad-spend-sync summary:", JSON.stringify({ ...s, bing: { ...s.bing, months: s.bing.months.length }, sd: { ...s.sd, months: s.sd.months.length } }));
+  // Google Ads: Xero is the sole source → wipe-then-reinsert the whole window
+  // (full-history floor, same contract as SINCE and the SD write above).
+  if (s.google.months.length) {
+    const del = await db.from("google_ads_xero_monthly").delete().gte("month", "1900-01-01");
+    if (del.error) s.errors.push(`google delete: ${del.error.message}`);
+    const rows = s.google.months.map((m) => ({
+      month: m.month, cost: m.exGst, currency: "AUD", txns: m.txns, updated_at: now,
+    }));
+    const ins = await db.from("google_ads_xero_monthly").insert(rows);
+    if (ins.error) s.errors.push(`google insert: ${ins.error.message}`);
+    else s.google.rowsWritten = rows.length;
+  }
+
+  console.log("xero-ad-spend-sync summary:", JSON.stringify({ ...s, bing: { ...s.bing, months: s.bing.months.length }, sd: { ...s.sd, months: s.sd.months.length }, google: { ...s.google, months: s.google.months.length } }));
   return s;
 }
 

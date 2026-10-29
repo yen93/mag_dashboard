@@ -1,0 +1,102 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-29
+Session: Changed the ROAS page's Google Ads COST source to Xero for ALL financial
+years (not just FY22–24). Previously Google cost was Niki's per-lead cpc (FY22–24)
++ the Google Ads API / google_ads_campaign_monthly (FY25+); now all FYs read a new
+google_ads_xero_monthly table filled from Xero billed bank charges. Deal counts
+left unchanged. Ends with this /dcp.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted or printed. Only non-secret
+identifiers appeared (Supabase project ref aivitcomiywiysrfwqxt; Xero org id
+2cc630e1-…; Xero contact ids for Google/Google Ads/Microsoft Ads/Simple Digital)
+and aggregate business figures (monthly/FY ad spend, won revenue).
+
+--------------------------------------------------------------------------------
+USER:
+"Change Google Ads Cost Values Source from Niki Sheet to Xero. for fy 22-24" —
+then, mid-turn, "in roas.html". When asked whether only spend or also deal counts
+should move, and which Xero contact to use, the owner clarified: "wait, all FY
+Google Ads costs/charges should come from xero. not niki's, not ads platform. all
+from xero" (so the scope widened from FY22–24 to ALL FYs), and "check prev ans"
+(i.e. proceed with extending the existing Xero sync).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the current sourcing: read server/metrics/roas.js (FY22–24 Google
+spend = sum(cpc) over niki_ad_leads_tracking; FY25+ = sum(cost) over
+google_ads_campaign_monthly; deal counts/won$/open$ from the roas_counted_deals
+view) and the xero-ad-spend-sync edge fn (which already pulls Microsoft Ads +
+Simple Digital from Xero reconciled SPEND bank transactions, account 302).
+
+Key constraint found + surfaced to the owner: the claude.ai Xero MCP only returns
+UNRECONCILED bank transactions (confirmed from its tool schema), so the reconciled
+Google Ads card charges are invisible to it — the REST BankTransactions path (what
+the edge fn uses) is the only way to read them. Xero also has several "Google"
+contacts (clean "Google Ads", plain "Google", plus noise like GOOGLE*TV).
+
+Asked two scoping questions; owner widened scope to ALL FYs from Xero.
+
+VERIFICATION (read-only): deployed a temporary probe edge fn xero-google-ads-probe
+(reused xero-ad-spend-sync's auth/pagination, no writes, no cron) to pull both
+candidate Google contacts and break down by month + FY. Findings:
+ • "Google" (20732f2e) spans FY22→FY27 continuously but has MIXED account codes
+   (302 ad + 331/332/764 non-ad), so must be filtered to account 302.
+ • "Google Ads" (81b826a5) is 302-only but covers just May-2023→Feb-2024 — exactly
+   where "Google" goes quiet → the two are the same spend under a renamed contact
+   over disjoint periods; summing both (302-only) reconstructs full history (only
+   Feb-2024 overlaps, two distinct charges, correctly summed, not a duplicate).
+ • Caught a GST bug: per-line LineAmount came back tax-INCLUSIVE (these txns are
+   LineAmountTypes=Inclusive). Fixed the ex-GST formula to LineAmount − TaxAmount;
+   re-verified (Google Ads contact total then matched the whole-txn SubTotal sum,
+   confirming correctness). Final ex-GST per FY: FY22 $1,091 (2mo) · FY23 $22,132 ·
+   FY24 $33,098 · FY25 $27,610 · FY26 $37,197 · FY27 $9,249 (4mo); total $130,376.
+
+IMPLEMENTATION:
+ • Migration 20261029090000_google_ads_xero_monthly.sql — new table
+   public.google_ads_xero_monthly (month PK, cost ex-GST, currency, txns,
+   updated_at). Applied via Supabase MCP.
+ • Extended supabase/functions/xero-ad-spend-sync/index.ts: added GOOGLE_CONTACT_IDS
+   (both contacts, env-overridable) + AD_ACCOUNT=302; new aggregateGoogleAdMonths()
+   that sums account-302 line items ex-GST (LineAmount − TaxAmount when Inclusive);
+   fetches both contacts, wipe-then-reinserts google_ads_xero_monthly (full-history
+   floor, same contract as the SD write). Added google to the Summary type + header
+   comment. Deployed (v10, verify_jwt:false). Dry-run matched the probe exactly
+   (no errors; Bing/SD unaffected), then ?sync=1 wrote 54 months; verified the
+   per-FY rollup via SQL.
+ • Rewrote server/metrics/roas.js: dropped the niki_spend (cpc) and gads
+   (google_ads_campaign_monthly) CTEs; added a single gads_xero CTE reading the new
+   table; googleSpend/spendMonths/first+lastSpendMonth now from it for ALL FYs;
+   fy_axis = gads_xero WHERE google_spend>0; countedMethod/SRC/note text reworded
+   ("Google Ads = billed Xero charges, all FYs"); deal counts untouched (still the
+   roas_counted_deals view). node --check passed; ran the full rewired query via
+   Supabase MCP → clean FY22–FY27 rows, deal counts unchanged (6/11/15/9/7/1 won).
+ • public/roas.html: updated the cost KPI tooltip to say Google Ads = billed Xero
+   charges (all FYs). Left the deals-table "FY22–FY24 come from Niki's log" note
+   (still true — that's the deal source).
+ • Cleanup: removed the local probe dir; redeployed xero-google-ads-probe as a
+   disabled 410 stub with verify_jwt back on (this MCP has no delete tool), so it
+   no longer exposes financial data.
+ • Docs/memory: updated CLAUDE.md (ROAS FY-sourcing block + the xero-ad-spend-sync
+   paragraph + full-history-floor note), the xero-ad-spend-sync memory + MEMORY.md
+   index.
+
+Noted that google_ads_campaign_monthly + its google-ads-campaign-monthly-sync cron
+still run but are now UNUSED by ROAS (left in place; offered to disable on request),
+and that a manual Cloud Run redeploy is required to pick up the roas.js/roas.html
+changes (per project rule, Claude does not deploy the dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the /dcp skill: saved this chat history, updated as_built.txt (new
+google_ads_xero_monthly table + xero-ad-spend-sync Google section), updated
+CLAUDE.md (already done in-session), and checked .gitignore. Did NOT run any git
+commands.
+
+================================================================================
+END OF EXPORT
+================================================================================
