@@ -44,7 +44,6 @@
     <div class="toolbar">
       <strong>ROI — revenue vs spend</strong>
       <div class="spacer"></div>
-      <label style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-right:14px"><input type="checkbox" id="exclOwnerToggle" style="margin:0" checked>Exclude owner wages</label>
       <span class="muted" style="font-size:13px">Financial year</span>
       <div class="segmented" id="fyBar"></div>
     </div>
@@ -93,7 +92,7 @@
     var ROI = null;    // full API payload
     var SEL = null;    // selected fy_end (number) or 'all'
     var PIPE_WON_ONLY = false;   // pipeline chart: show only the Won count per pipeline
-    var EXCL_OWNER = true;       // subtract owner/director wages+super from spend & ROI
+    var EXCL_OWNER = true;       // ALWAYS exclude owner/director wages+super from spend & ROI (toggle removed 2026-10-30)
 
     // Effective spend/ROI for a FY row, honouring the "exclude owner wages" toggle.
     function effSpend(row) {
@@ -471,10 +470,6 @@
     document.getElementById('pipeWonToggle').addEventListener('change', function () {
       PIPE_WON_ONLY = this.checked;
       if (ROI) renderPipeline();
-    });
-    document.getElementById('exclOwnerToggle').addEventListener('change', function () {
-      EXCL_OWNER = this.checked;
-      if (ROI) render();
     });
     document.querySelectorAll('#channelDimBar button').forEach(function (b) {
       b.addEventListener('click', function () { setChannelDim(b.getAttribute('data-dim')); });

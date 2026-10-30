@@ -1,0 +1,59 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-30
+Session: Removed the "Exclude owner wages" toggle from the Marketing → ROI page
+(public/roi.html). The page now ALWAYS excludes owner/director wages+super from
+every money figure (Marketing spend, Net ROI, CAC, the FY table's Total spend/ROI
+columns, the revenue-vs-spend-by-month spend bars, and the "Where the spend goes"
+category chart). Frontend-only change; no DB, no git. Needs a manual Cloud Run
+redeploy to go live.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. Credentials were not involved in this session.
+
+--------------------------------------------------------------------------------
+USER:
+update roi.html. remove exclude owner toggle. values should now always Exclude
+Owner Wages.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read public/roi.html to understand the toggle. Found the implementation had three
+touch points:
+  1. The checkbox markup in the sticky FY toolbar — a <label> wrapping
+     <input type="checkbox" id="exclOwnerToggle" ... checked>Exclude owner wages.
+  2. A module-level flag `var EXCL_OWNER = true;` consumed throughout — by
+     effSpend()/effRoi()/effMonthSpend(), the Marketing-spend/Net-ROI/CAC KPI
+     cards, the spend subtext, the month-chart "Spend (excl. owner wages)" dataset
+     label + bar data, the "Where the spend goes" category filter (drops
+     isOwnerWage rows), and the ROI-by-FY table's Total spend / ROI columns.
+  3. A change listener (`exclOwnerToggle` → sets EXCL_OWNER = this.checked →
+     re-render) wired up near the bottom alongside the pipe/channel listeners.
+
+Made three minimal edits rather than ripping EXCL_OWNER out of every branch:
+  - Deleted the checkbox <label> from the toolbar.
+  - Kept `var EXCL_OWNER = true;` as a fixed constant (comment updated to note the
+    toggle was removed 2026-10-30), so all the effSpend/effRoi/subtext/chart/table
+    code paths keep working and always resolve to the exclude-owner-wages result.
+    Labels like "excl. owner wages" and the "Spend (excl. owner wages)" chart
+    series now show unconditionally, correctly communicating the fixed behavior.
+  - Removed the exclOwnerToggle change listener.
+
+Reported that the change is frontend-only and a manual Cloud Run redeploy is needed
+(per CLAUDE.md, Claude never deploys the dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history, update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps. Saved this transcript. Reviewed as_built.txt and CLAUDE.md
+for whether the toggle removal changed anything documented there, updated the ROI
+descriptions to drop the toggle, and confirmed .gitignore already covers all
+sensitive patterns (no change needed). No git commands run — user commits/pushes
+themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

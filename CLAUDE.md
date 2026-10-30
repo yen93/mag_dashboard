@@ -71,23 +71,24 @@ Cloud Run.
   is EXCLUDED**, matching FY24+). `marketing-roi.js` **`MONTH_FLOOR` was lowered `2023-07-01` →
   `2021-07-01`** so the by-month chart now covers FY22+ (a dashboard redeploy). **GOTCHA: Xero books
   owner Wages+Super as a single JUNE journal each year**, so `owner_wages` lands entirely in June —
-  with "exclude owner wages" ON (default) the FY22/FY23 **June spend bar can read NEGATIVE** (June's
+  and the page ALWAYS excludes owner wages, so the FY22/FY23 **June spend bar can read NEGATIVE** (June's
   owner comp > its other spend); real, nets out at FY level. Jun-2023 `total_income` is also negative
   (year-end accrual reversal). To add/refresh FY22/FY23, re-export monthly from Xero and re-run the
   seed (the API can't reach them). The current FY is partial (YTD) so its spend is below a full year.
   **NB FY22 has 162 "won" AC deals (COVID-era, many small/virtual), so its CAC/avg-rev-per-client
-  read low — a deal-count denominator artifact, not a data error; the Xero revenue/spend are solid.** **"Exclude owner wages" toggle
-  (`#exclOwnerToggle`, DEFAULT ON, 2026-10-29):** subtracts director wages+super (Xero accounts
-  *Wages/Super – James & Mia*, stored monthly in the new `xero_expenses_monthly.owner_wages`
+  read low — a deal-count denominator artifact, not a data error; the Xero revenue/spend are solid.** **Owner wages ALWAYS EXCLUDED
+  (as of 2026-10-30 the `#exclOwnerToggle` checkbox + its listener were REMOVED; `EXCL_OWNER` is now
+  a fixed `true` constant in `roi.html`):** the page always subtracts director wages+super (Xero accounts
+  *Wages/Super – James & Mia*, stored monthly in the `xero_expenses_monthly.owner_wages`
   column — a subset of `operating_expenses`, don't double-count) from Total spend and recomputes
-  ROI **client-side** (`effSpend()`/`effRoi()`/`effMonthSpend()` in `roi.html`); backend returns
+  ROI **client-side** (`effSpend()`/`effRoi()`/`effMonthSpend()` in `roi.html`); backend still returns
   `ownerWages` per FY + per month. WITH owner comp in, the business runs ~breakeven (ROI ~0.96–0.99
-  = Xero's own net profit); excluding it, ROI ≈ 1.2–1.45 (operating profit before director pay).
+  = Xero's own net profit); excluding it (the page's view), ROI ≈ 1.2–1.45 (operating profit before director pay).
   **7 cards as of 2026-10-30** (Total revenue / **Marketing spend** / Return on spend `x.xx×` /
   **Net ROI** `±%` / Clients won / **Cost per client (CAC)** / Avg revenue per client) — all
   computed **client-side** in `render()` from the existing `/api/marketing/roi` payload (no backend
   change), null-guarded: `cac = effSpend÷dealsWon`, `avgRev = revenue÷dealsWon`,
-  `netRoi = (roi−1)×100`; the money cards honour the exclude-owner-wages toggle via `effSpend()`.
+  `netRoi = (roi−1)×100`; the money cards always exclude owner wages via `effSpend()`.
   (NB the cards' "Marketing spend"/CAC/ROI are really **whole-business** figures, not ad spend —
   the sub-text says so.) Plus 2 charts (**revenue-vs-spend by month** =
   a **DUAL-AXIS combo chart** as of
