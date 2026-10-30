@@ -106,6 +106,12 @@ supabase/functions/**/.env.*
 **/.netrc
 **/.pgpass
 
+# ── Raw financial exports (source docs; the aggregates the app uses are already ──
+#    seeded into Supabase via migrations, so these full account-level P&L files
+#    don't belong in the repo). Un-ignore deliberately if you want them tracked.
+FY22 - FY23 PNL/
+**/*Profit_and_Loss*.xlsx
+
 # ── Scratch / throwaway files ───────────────────────────────
 scratch_*
 scratch/

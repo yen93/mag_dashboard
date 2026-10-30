@@ -1,0 +1,127 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-30
+Session: ROI tab — backfill FY22 & FY23 whole-business P&L into the Marketing ROI
+tiles from manual Xero UI exports (Xero's P&L API can't reach pre-FY24). Two
+data-only Supabase migrations; no code change (the page already renders any FY
+that has P&L rows). Continues the same roi.html work as 3010260934_chat_history.txt.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/key was pasted or printed. Only
+non-secret identifiers appeared — Supabase project ref aivitcomiywiysrfwqxt, Xero
+tenant id 2cc630e1-…, Xero account/contact codes — plus aggregate business P&L
+figures (annual revenue/expense totals). No connection strings or credentials.
+
+--------------------------------------------------------------------------------
+USER:
+"fix fy22-23 tile values in roi.html"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated. Read roi.html's render()/KPI code and server/metrics/marketing-roi.js
+and confirmed the frontend ALREADY guards FY22/FY23 correctly — every money tile
+shows "—" (fmt(null,...) returns "—"), no $0/NaN bug. The blanks exist because
+public.xero_expenses_monthly only holds FY24+ (Xero's P&L report API is limited to
+the current + 3 prior FYs). Verified against the DB: FY22/FY23 have AC deal counts
+(FY22 won=162 / $1.36M won-value; FY23 won=73 / $659k) but null revenue/spend. The
+deal counts are legitimately in those FYs (cdate ranges check out), not a bug.
+Confirmed Xero genuinely can't serve the data: get_profit_and_loss for FY23 on BOTH
+accrual and cash basis returned "Start date is out of range. Only dates within the
+last 3 financial years are supported." So "fix" had to mean FILLING the blanks.
+Asked the user (AskUserQuestion) whether to (A) fill revenue from AC won value,
+(B) keep blank, or (C) hide FY22/FY23.
+
+--------------------------------------------------------------------------------
+USER:
+Answered: "fetch 22-23 values from xero".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Flagged the hard constraint: the P&L *report* API refuses pre-FY24, but the raw
+BankTransactions API reaches back to 2021 (that's why google_ads_xero_monthly has
+May-2022 data). However a bank-txn reconstruction would be cash-basis (inconsistent
+with the FY24+ accrual rows) AND would badly understate revenue (MAG bills via
+invoices, which don't appear as RECEIVE bank txns, and the Xero app scope lacks the
+invoices permission → 401). Offered two real paths: (A) seed from a manual Xero UI
+P&L export (the web Reports page has full history even though the API doesn't) —
+accurate + matches FY24+; or (B) reconstruct expenses-only from bank txns now
+(approximate). Recommended A.
+
+--------------------------------------------------------------------------------
+USER:
+"Seed from a Xero UI export: walk me thru this"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Gave step-by-step Xero instructions: Accounting > Reports > Profit and Loss; date
+range 1 Jul 2021–30 Jun 2023; monthly columns; ACCRUAL basis; accounts expanded;
+export to Excel; share via Google Drive link or upload. Listed exactly what I'd pull
+per month (Total Trading Income → total_income; Total Cost of Sales → cost_of_sales;
+Total Operating Expenses → operating_expenses; Wages+Super – James & Mia →
+owner_wages) and that I'd seed xero_expenses_monthly (+ xero_pnl_accounts_fy for the
+category chart). Noted the tab still needs a manual Cloud Run redeploy to go live
+generally, but the seed itself is pure data.
+
+--------------------------------------------------------------------------------
+USER:
+Provided a local folder: "C:\claude_code\dashboard\FY22 - FY23 PNL" containing two
+Excel files — "Ditch_Investments_Pty_Ltd_-_Profit_and_Loss FY22.xlsx" and "… FY23.xlsx".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Parsed both with openpyxl (scratchpad scripts). KEY FINDING: the file labelled "FY22"
+was actually FY24 data — its sheet header read "year ended 30 June 2024" and its
+section totals matched the DB's existing FY24 rows TO THE CENT (revenue $807,380.90 /
+spend $812,207.53), which also validated my section-grouping method. The "FY23" file
+was genuine FY23 (header "30 June 2023", matched no existing FY): total_income
+$1,074,456.87, cost_of_sales $290,969.83, operating_expenses $791,788.12, owner_wages
+$265,200, total_spend $1,082,757.95. Methodology confirmed: total_income = Total
+TRADING Income only (Other Income excluded, matching how FY24+ was built). Seeded FY23
+as ONE annual row dated 2023-06-01 (BY_FY groups it into FY23; it sits below the
+by-month chart floor 2023-07-01 so no lumpy single bar) via migration
+20261030140000_seed_fy23_xero_pnl.sql, plus the top-12 FY23 accounts into
+xero_pnl_accounts_fy (kind = cost_of_sales | expense, same shape as FY24). Verified the
+computed FY23 tiles (excl owner wages): revenue $1,074,457 · spend $817,558 · 1.31× ·
++31% · 73 won · CAC $11,199 · avg rev/client $14,719. Told the user the "FY22" file was
+really FY24 and they needed to re-export FY22 (1 Jul 2021–30 Jun 2022); also noted the
+entity is "Ditch Investments Pty Ltd" (MAG's legal trading entity — account names match,
+FY24 reconciled exactly).
+
+--------------------------------------------------------------------------------
+USER:
+Re-exported FY22 to the same path:
+"C:\…\FY22 - FY23 PNL\Ditch_Investments_Pty_Ltd_-_Profit_and_Loss FY22.xlsx"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Re-parsed — now correct (header "year ended 30 June 2022", matches no existing FY):
+total_income $427,600.39, cost_of_sales $29,828.40, operating_expenses $381,152.61,
+owner_wages $126,500, total_spend $410,981.01 (Other Income = a $38,303 NSW COVID
+relief grant, excluded to match FY24+). Caught a diagnostic discrepancy: my category
+helper's startswith('Account') filter was wrongly dropping the "Accountancy…" line
+($6,154) from its *total* print — but that line is too small for the top-12 and the
+AUTHORITATIVE seed figures came from totals.py (no such filter, validated against FY24
+to the cent), so the seed was unaffected. Seeded FY22 as one annual row dated
+2022-06-01 via migration 20261030150000_seed_fy22_xero_pnl.sql + top-12 FY22 accounts.
+Verified the full FY22→FY27 series computes cleanly; FY22 tiles (excl owner wages):
+revenue $427,600 · spend $284,481 · 1.50× · +50% · 162 won · CAC $1,756 · avg
+rev/client $2,640. Flagged that FY22's low CAC/avg-rev is a denominator artifact (162
+"won" AC deals, many small/virtual-workshop COVID-era), not a bug — the Xero
+revenue/spend are solid. Reminded: both FY22/FY23 are annual single rows so the
+by-month chart stays empty for them (tiles/table/category chart all work); and the
+tab still needs a manual Cloud Run redeploy to be visible generally.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (this invocation.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp: wrote this chat-history file; updated as_built.txt (FY22/FY23 P&L seed
+migrations + the now full FY22–FY27 coverage of xero_expenses_monthly /
+xero_pnl_accounts_fy) and CLAUDE.md (ROI tab now covers FY22–FY27, with FY22/FY23
+being manual annual Xero-UI-export seeds, not API-sourced); confirmed .gitignore
+coverage. Did NOT commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================

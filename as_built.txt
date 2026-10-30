@@ -192,16 +192,19 @@ SCRIPTS / APP CODE
     does not react to the FY bar), and an ROI-by-FY table; an FY filter bar (All + each FY,
     default = current FY) re-renders client-side. The page is FULL-WIDTH (.content
     max-width:none, like sales_overview) and the FY toolbar is STICKY (position:sticky
-    top:var(--topbar-h,58px)) so it freezes under the top bar on scroll. Revenue = all Xero invoices
-    (invoice_tracking.amount_total incl GST, by invoice_date — 2026+ ONLY, so revenue
-    exists FY26 (partial Jan–Jun 2026)/FY27, blank before); TOTAL SPEND = ALL Xero
-    expenses across every dept (operating expenses + cost of sales) from the new
-    public.xero_expenses_monthly table (see DATA STORES); deals = ALL activecampaign_deals
+    top:var(--topbar-h,58px)) so it freezes under the top bar on scroll. Revenue = Xero
+    P&L Total (Trading) Income ex-GST accrual (public.xero_expenses_monthly.total_income);
+    TOTAL SPEND = ALL Xero expenses across every dept (operating_expenses + cost_of_sales)
+    from public.xero_expenses_monthly (see DATA STORES); deals = ALL activecampaign_deals
     (status 1/2/0 by cdate, won value via public.ac_value_aud), also split per pipeline
-    (activecampaign_deals."group"). FY axis = FYs with Xero expenses OR Xero revenue
-    (FY25–FY27). NB because FY26 revenue is half-year vs full-year spend, FY26 ROI reads
-    low (~0.41) — a known, page-noted artifact. The 6 other Marketing pages' app.js was
-    bumped to ?v=7 so the ROI link shows. Needs a Cloud Run redeploy to ship.
+    (activecampaign_deals."group"). FY coverage = FY22–FY27 (as of 2026-10-30). Xero's P&L
+    API only serves the current + 3 prior FYs, so FY24–FY27 are API-sourced; FY22 & FY23
+    are MANUAL annual seeds from Xero-UI P&L exports (entity "Ditch Investments Pty Ltd",
+    migrations 20261030140000/150000 — one annual row each at 2022-06-01 / 2023-06-01, so
+    their tiles+table+category chart work but the by-month chart is empty for them). An
+    "exclude owner wages" toggle (default ON) subtracts Wages+Super – James & Mia
+    (owner_wages col) from spend/ROI. The 6 other Marketing pages' app.js was bumped to
+    ?v=7 so the ROI link shows. Needs a Cloud Run redeploy to ship.
   - roas.html is a self-rendering page (reads /api/operations/roas + /roas/deals;
     app.js?v=7; does not use the generic chart helpers). Rebuilt 2026-10-22 to mirror
     the "MAG paid search ROAS" artifact, by Australian FINANCIAL YEAR: a top control bar
@@ -491,15 +494,23 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     the +$600 is SEO, not paid search). This REPLACED the one-time sheet load and SUPERSEDES
     the simple-digital-fees-sync Gmail routine. 56 rows, Mar 2022–Oct 2026 (as of 2026-10-26
     the fetch window was extended back to FY22 — see xero-ad-spend-sync in AUTOMATIONS).
-  - public.xero_expenses_monthly (NEW 2026-10-28) — whole-business monthly expenses from the
-    Xero P&L, backing the Marketing ROI tab's "Total spend" (all costs across every dept).
-    PK month (date); cols operating_expenses (P&L Total Expenses), cost_of_sales (COGS),
-    total_spend (GENERATED = operating_expenses + cost_of_sales), synced_at. STATIC one-time
-    load seeded from the Xero MCP get_profit_and_loss for FY25–FY27 (28 months, 2024-07…
-    2026-10) — migration create_xero_expenses_monthly. Read by server/metrics/marketing-roi.js
-    (sum per FY + per month). NOT yet auto-refreshed — a refresh routine/edge fn is pending
-    (reload monthly P&L totals; current + 3 prior FYs are available from Xero). FY27 is
-    partial (to the seed date). NOT the same as the ad-spend tables (those stay ad-only for ROAS).
+  - public.xero_expenses_monthly (NEW 2026-10-28) — whole-business monthly Xero P&L, backing the
+    Marketing ROI tab's revenue + "Total spend" (all costs across every dept). PK month (date);
+    cols total_income (P&L Total Trading Income ex-GST accrual — added 2026-10-29), operating_expenses,
+    cost_of_sales (COGS), total_spend (GENERATED = operating_expenses + cost_of_sales), owner_wages
+    (Wages+Super – James & Mia, subset of op-ex), synced_at. STATIC load, read by
+    server/metrics/marketing-roi.js (sum per FY + per month). COVERAGE FY24–FY27 API-sourced via
+    Xero MCP get_profit_and_loss (40 months, 2023-07…2026-10) PLUS FY22 & FY23 MANUAL seeds (as of
+    2026-10-30) from Xero-UI P&L exports — ONE annual row each (month 2022-06-01 / 2023-06-01;
+    migrations seed_fy22_xero_pnl / seed_fy23_xero_pnl). Xero's P&L API only serves current + 3 prior
+    FYs, which is why FY22/FY23 had to be hand-exported from the Xero web Reports page (entity "Ditch
+    Investments Pty Ltd" = MAG's legal entity; FY24 export reconciled to the cent, validating the
+    grouping). FY27 partial. NOT yet auto-refreshed — a refresh routine/edge fn is pending. NOT the
+    ad-spend tables (those stay ad-only for ROAS).
+  - public.xero_pnl_accounts_fy — per-FY top-12 Xero P&L spend accounts behind the ROI tab's "Where
+    the spend goes" chart. Cols fy_end, account_name, kind ('cost_of_sales' | 'expense'), amount,
+    synced_at. Seeded alongside xero_expenses_monthly; FY22 & FY23 top-12 rows added 2026-10-30 by
+    the same two seed migrations.
   - public.marketing_channel_monthly + public.marketing_channel_vendor_map — NEW 2026-10-30
     (migrations marketing_channel_summary_tables + seed_marketing_channel_vendor_map). Back the
     ROI tab's LIVE "Channel Summary" chart. marketing_channel_monthly = ex-GST marketing spend

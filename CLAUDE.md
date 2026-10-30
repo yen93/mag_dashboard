@@ -55,14 +55,26 @@ Cloud Run.
   **ex-GST, accrual** — new column added 2026-10-29; **REPLACED the old `invoice_tracking`
   incl-GST source**, which was 2026+ only); **total spend = operating_expenses + cost_of_sales**
   (`total_spend` is a GENERATED column = op_ex + cos — don't INSERT it). The table is a STATIC
-  Xero-P&L load via MCP (refresh routine pending), now covering **FY24–FY27 monthly** (Jul 2023–
-  current; re-seeded 2026-10-29). deals = ALL `activecampaign_deals` (status 1/2/0 by `cdate`,
-  won value via `public.ac_value_aud`), also split **per pipeline** (`"group"` → name map in
-  `marketing-roi.js`). **FY axis = FYs with Xero P&L (revenue/spend) UNION FYs with AC deals.**
-  **Xero's API only exposes the current + 3 prior FYs**, so the P&L reaches back to **FY24** only,
-  while deals reach **FY22** — so **FY22/FY23 appear with deal counts but blank (null, not $0)
-  revenue/spend/ROI** (tracked via `hasRevenue`/`hasSpend`; surfaced on the page). The current FY
-  is partial (YTD) so its spend is below a full year. **"Exclude owner wages" toggle
+  Xero-P&L load via MCP (refresh routine pending), covering **FY24–FY27 monthly** (Jul 2023–
+  current; re-seeded 2026-10-29) **PLUS FY22 & FY23 as MANUAL annual seeds (2026-10-30)**. deals =
+  ALL `activecampaign_deals` (status 1/2/0 by `cdate`, won value via `public.ac_value_aud`), also
+  split **per pipeline** (`"group"` → name map in `marketing-roi.js`). **FY axis = FYs with Xero
+  P&L (revenue/spend) UNION FYs with AC deals.**
+  **Xero's P&L *API* only exposes the current + 3 prior FYs** (FY24–FY27), so **FY22 & FY23 were
+  hand-exported from the Xero *web* Reports P&L** (which keeps full history) and seeded via
+  migrations `20261030140000_seed_fy23_xero_pnl.sql` / `20261030150000_seed_fy22_xero_pnl.sql`.
+  Entity on those exports is **"Ditch Investments Pty Ltd"** = MAG's legal trading entity (the FY24
+  export reconciled to the cent against the API-sourced FY24 rows, validating the Trading-Income /
+  Cost-of-Sales / Operating-Expenses grouping; **`total_income` = Total *Trading* Income only —
+  Other Income like interest/COVID grants is EXCLUDED**, matching FY24+). The exports are
+  **annual-only**, so FY22/FY23 are **ONE row each** at `month = 2022-06-01` / `2023-06-01` (BY_FY
+  groups them into the right FY; both sit below the by-month floor `2023-07-01`, so the **by-month
+  chart is empty for FY22/FY23** — tiles, ROI-by-FY table, and the category chart all work). Each
+  seed also writes the FY's **top-12 accounts** into `public.xero_pnl_accounts_fy` for the "Where
+  the spend goes" chart. To add/refresh FY22/FY23, re-export from Xero and re-run the seed (the
+  API can't reach them). The current FY is partial (YTD) so its spend is below a full year.
+  **NB FY22 has 162 "won" AC deals (COVID-era, many small/virtual), so its CAC/avg-rev-per-client
+  read low — a deal-count denominator artifact, not a data error; the Xero revenue/spend are solid.** **"Exclude owner wages" toggle
   (`#exclOwnerToggle`, DEFAULT ON, 2026-10-29):** subtracts director wages+super (Xero accounts
   *Wages/Super – James & Mia*, stored monthly in the new `xero_expenses_monthly.owner_wages`
   column — a subset of `operating_expenses`, don't double-count) from Total spend and recomputes
