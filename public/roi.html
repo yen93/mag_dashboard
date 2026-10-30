@@ -19,9 +19,6 @@
       border-bottom: 1px solid var(--border);
       box-shadow: var(--shadow);
     }
-    /* Merged Channel Summary table — grouped sections (By Type / Platform / Month). */
-    #roiChannelSummary tr.grp td { font-weight: 700; background: var(--surface-2); padding-top: 11px; }
-    #roiChannelSummary tr.sub td { font-weight: 700; border-top: 1px solid var(--border); }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -74,9 +71,12 @@
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>Channel Summary</h3><span class="chip src">Marketing ROI tracker (FY25–26)</span></div>
-        <p class="muted" style="font-size:12px;margin:-6px 0 8px">FY25–26 marketing spend broken down three ways — by type, by platform and by month — merged into one table. Static load from the Marketing ROI tracker workbook (not auto-updated from Xero).</p>
-        <div id="roiChannelSummary"></div>
+        <div class="card-head"><h3>Channel Summary</h3>
+          <div class="segmented" id="channelDimBar" style="margin-left:6px"><button data-dim="type">By type</button><button data-dim="platform">By platform</button></div>
+          <span class="chips" id="channelChips" style="margin-left:auto"></span>
+        </div>
+        <p class="muted" style="font-size:12px;margin:-6px 0 8px">Marketing spend by month, stacked by category (or by ad platform). Live from Xero, refreshed monthly. Vendors on the ad accounts not yet categorised show as “Uncategorized”.</p>
+        <div class="chart-box" id="roi-channel-chart" style="height:380px"><canvas id="roiChannelCanvas"></canvas></div>
       </div>
 
       <div class="card col-12">
@@ -315,38 +315,61 @@
       if (el) _pipeChart = new Chart(el.getContext('2d'), cfg);
     }
 
-    // Channel Summary — FY25–26, merged from the Marketing ROI tracker's three
-    // breakdowns (By Type / By Platform / By Month) into one grouped table. STATIC:
-    // these numbers (esp. the Type/Platform taxonomy) have no live Xero equivalent.
-    // Note each group carries its own subtotal — "By Platform" only tags ad-platform
-    // spend, so its total is a subset of the By Type / By Month totals.
-    var CHANNEL_SUMMARY = [
-      { name: 'By Type', rows: [
-        ['Agency', 44134.04], ['Digital Ads', 48615.54], ['Tools', 4254.33],
-        ['Printed Collaterals', 1032.14], ['Wages', 29285.45], ['Software', 2919.47],
-      ], total: 130240.97 },
-      { name: 'By Platform', rows: [
-        ['Google', 35330.93], ['Meta', 46], ['LinkedIn', 1199.89],
-        ['Bing', 12038.72], ['Website', 3772.74],
-      ], total: 52388.28 },
-      { name: 'By Month', rows: [
-        ['Jul-2025', 15723.42], ['Aug-2025', 14447.36], ['Sep-2025', 10144.64],
-        ['Oct-2025', 11141.24], ['Nov-2025', 13477.67], ['Dec-2025', 9464.86],
-        ['Jan-2026', 9002.09], ['Feb-2026', 9786.96], ['Mar-2026', 11669.44],
-        ['Apr-2026', 15858.86], ['May-2026', 9537.33], ['Jun-2026', 1920],
-      ], total: 132173.87 },
-    ];
-    function renderChannelSummary() {
-      var head = '<tr><th>Category</th><th class="num">Total Cost (AUD)</th></tr>';
-      var body = CHANNEL_SUMMARY.map(function (g) {
-        var rows = g.rows.map(function (r) {
-          return '<tr><td>' + esc(r[0]) + '</td><td class="num">' + fmt(r[1], 'currency') + '</td></tr>';
-        }).join('');
-        return '<tr class="grp"><td colspan="2">' + esc(g.name) + '</td></tr>' + rows +
-          '<tr class="sub"><td>Subtotal</td><td class="num">' + fmt(g.total, 'currency') + '</td></tr>';
-      }).join('');
-      var el = document.getElementById('roiChannelSummary');
-      if (el) el.innerHTML = '<table class="data"><thead>' + head + '</thead><tbody>' + body + '</tbody></table>';
+    // Channel Summary — marketing spend BY MONTH (x axis), stacked by each Type
+    // category or each ad Platform (toggle). LIVE from Xero via /api/marketing/channel-summary
+    // (public.marketing_channel_monthly × marketing_channel_vendor_map, refreshed monthly
+    // by the xero-channel-summary-sync edge function). The Type stack covers ALL kept
+    // spend (unmapped vendors on the ad accounts roll up as "Uncategorized"); the Platform
+    // stack covers only the ad platforms (Google/Bing/Website/LinkedIn/Meta).
+    var CHANNEL_MONTHLY = { months: [], type: [], platform: [] };
+    var CHANNEL_DIM = 'type';   // 'type' | 'platform'
+    var CHANNEL_PALETTE = ['#3b6ef0','#17a673','#f0a63b','#7c5cff','#e2483d','#14b8c4','#9aa4b2','#e879a6'];
+    var _channelChart = null;
+
+    function loadChannelSummary() {
+      fetchJSON('/api/marketing/channel-summary')
+        .then(function (data) {
+          CHANNEL_MONTHLY = { months: data.months || [], type: data.type || [], platform: data.platform || [] };
+          setChips('channelChips', data.meta);
+          setChannelDim(CHANNEL_DIM);
+        })
+        .catch(function (err) { console.error('channel-summary', err); });
+    }
+
+    function renderChannelChart() {
+      var src = CHANNEL_MONTHLY[CHANNEL_DIM] || [];
+      var tc = themeColors();
+      var datasets = src.map(function (s, i) {
+        return { label: s.name, data: s.data, stack: 'spend',
+          backgroundColor: CHANNEL_PALETTE[i % CHANNEL_PALETTE.length], borderRadius: 3, maxBarThickness: 40 };
+      });
+      var cfg = {
+        type: 'bar',
+        data: { labels: CHANNEL_MONTHLY.months, datasets: datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: true, position: 'top', labels: { color: tc.text, usePointStyle: true, boxWidth: 8, padding: 12 } },
+            tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + fmt(ctx.parsed.y, 'currency'); } } },
+          },
+          scales: {
+            x: { stacked: true, ticks: { color: tc.muted }, grid: { display: false } },
+            y: { stacked: true, beginAtZero: true, ticks: { color: tc.muted, callback: compactAud }, grid: { color: tc.grid } },
+          },
+        },
+      };
+      if (_channelChart) _channelChart.destroy();
+      var el = document.getElementById('roiChannelCanvas');
+      if (el) _channelChart = new Chart(el.getContext('2d'), cfg);
+    }
+
+    function setChannelDim(dim) {
+      CHANNEL_DIM = dim;
+      document.querySelectorAll('#channelDimBar button').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-dim') === dim);
+      });
+      renderChannelChart();
     }
 
     var _catChart = null;
@@ -438,7 +461,6 @@
           SEL = data.defaultFy != null ? data.defaultFy : 'all';
           buildFyBar();
           syncFyBar();
-          renderChannelSummary();   // static FY25–26 table, independent of the FY bar
           render();
         })
         .catch(function (err) { console.error(err); });
@@ -454,8 +476,11 @@
       EXCL_OWNER = this.checked;
       if (ROI) render();
     });
-    window.onThemeChange = function () { if (ROI) render(); };
-    if (currentUser()) loadRoi();
+    document.querySelectorAll('#channelDimBar button').forEach(function (b) {
+      b.addEventListener('click', function () { setChannelDim(b.getAttribute('data-dim')); });
+    });
+    window.onThemeChange = function () { if (ROI) render(); renderChannelChart(); };
+    if (currentUser()) { loadRoi(); loadChannelSummary(); }
   </script>
 </body>
 </html>

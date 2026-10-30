@@ -81,13 +81,23 @@ Cloud Run.
   self-rendered by `renderMonthChart()` in `roi.html`, **no longer** the shared-axis `lineChart`;
   **AC pipeline Won/Open/Lost per pipeline** as horizontal stacked bars, with a **"Won only"
   toggle** `#pipeWonToggle` that drops Open/Lost and re-sorts by won), a "Where the spend goes"
-  category chart, a **STATIC "Channel Summary" table (as of 2026-10-30)** — `renderChannelSummary()`
-  + a hard-coded `CHANNEL_SUMMARY` const in `roi.html` that merges the FY25-26 **"MAG: MKTG ROI
-  Report FY 25-26.xlsx"** tracker workbook's three breakdowns (**By Type / By Platform / By Month**,
-  each with its own subtotal) into ONE grouped `table.data` (group-header `.grp` + subtotal `.sub`
-  rows). It is **NOT live** (no Xero/Supabase equivalent for the Type/Platform taxonomy; the three
-  subtotals deliberately don't reconcile — By Platform is an ad-only subset), rendered once in
-  `loadRoi()` and does **not** react to the FY bar — and an ROI-by-FY table, all
+  category chart, a **LIVE "Channel Summary" chart (as of 2026-10-30)** — a monthly **STACKED bar
+  chart** (months on the x axis) with a **By type / By platform** toggle (`#channelDimBar`),
+  self-rendered by `renderChannelChart()` in `roi.html`. `loadChannelSummary()` fetches
+  **`/api/marketing/channel-summary`** (`server/metrics/marketing-channel-summary.js`), which is
+  backed by the **live-from-Xero channel pipeline**: the **`xero-channel-summary-sync` edge fn**
+  (reuses the `xero-ad-spend-sync` Xero OAuth) pulls **SPEND bank transactions** on the marketing
+  accounts (**302 Advertising, 475 Website = OPEN; 332 Software, 411 Printing, 377 WrkPod Staff =
+  SHARED**), buckets ex-GST by (month, contact, account) into **`public.marketing_channel_monthly`**,
+  and the API joins **`public.marketing_channel_vendor_map`** (contact_id → type/platform, 34 seeded
+  vendors) for the Type/Platform. **Key rule:** a line is kept if its contact is MAPPED **or** it's
+  on an OPEN account (302/475, where unmapped vendors roll up as **"Uncategorized"**); unmapped
+  vendors on SHARED accounts (which also hold non-marketing spend — Netflix, staff wages) are
+  **dropped**. So to categorise a new/Uncategorized vendor, **insert a row into
+  `marketing_channel_vendor_map`** — no Xero re-pull (Type/Platform are joined at query time, not
+  stored). Refreshed **monthly** by cron `xero-channel-summary-sync-monthly` (`0 22 2 * *`). AP bills
+  are fetched best-effort but 401 (the Xero app scope lacks invoices) — non-fatal, since the spend is
+  all in bank txns. The chart is loaded once (independent of the FY bar). — and an ROI-by-FY table, all
   re-rendered client-side on FY change. The page is **full-width** (`.content { max-width: none }`,
   like `sales_overview`) and its FY toolbar is **sticky** (`position:sticky; top:var(--topbar-h,58px)`)
   so it freezes under the top bar on scroll. Note: raw monthly P&L carries year-end accrual reversals,

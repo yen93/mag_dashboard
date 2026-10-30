@@ -1,0 +1,161 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-30
+Session: Marketing ROI tab (roi.html) — KPI cards reworked 3→7 (incl. Net ROI %),
+full-width layout + sticky FY toolbar, and the big piece: the "Channel Summary"
+chart rebuilt from a static workbook load into a LIVE monthly-from-Xero pipeline
+(new edge function + 2 Supabase tables + 34-vendor map + monthly cron + API route).
+(Continues the same session as 3010260845_chat_history.txt, which covered the first
+half; repeated here in brief for completeness, with the new Xero work in full.)
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/key was pasted or printed. Only
+non-secret identifiers appeared — Supabase project ref aivitcomiywiysrfwqxt, Xero
+tenant id 2cc630e1-…, Xero contact GUIDs, account codes — plus aggregate business
+spend figures. The edge function reads secrets (XERO_CLIENT_SECRET etc.) from env
+only; none were echoed.
+
+--------------------------------------------------------------------------------
+USER:
+"roi tab cards should be:" Total revenue / Marketing spend / Return on spend /
+Clients won / Cost per client (CAC) / Avg revenue / client.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed all computable client-side from the existing /api/marketing/roi payload.
+Replaced the 3-card block in render() (public/roi.html) with 6 cards: Total revenue,
+Marketing spend (effSpend, honours exclude-owner-wages), Return on spend (roi as
+"x.xx×"), Clients won, CAC (spend/dealsWon), Avg revenue/client (revenue/dealsWon),
+all null-guarded. Updated the pending branch too. Flagged that the page's spend is
+whole-business, not ad spend. (cm → feat(roi) commit line.)
+
+--------------------------------------------------------------------------------
+USER:
+"fix responsive design so it is stretched to the entire screen like the
+sales_overview.html"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added a <style> override `.content { max-width: none; }` to roi.html's head (same
+technique sales_overview uses), removing app.css's 1200px cap so the page fills the
+width beside the sidebar.
+
+--------------------------------------------------------------------------------
+USER:
+"make the top per fy toggle freeze on top even when i scroll down"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Made `.toolbar` sticky in roi.html's style block (position:sticky; top:var(--topbar-h,
+58px); negative margins to bleed to content edges; bg + border + shadow), mirroring
+the Sales tab — the FY bar + exclude-owner-wages toggle now freeze under the top bar.
+
+--------------------------------------------------------------------------------
+USER:
+"add 1 more card: net ROI with percentage in a card"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added a 7th card "Net ROI" after "Return on spend": value = (roi−1)×100 shown as a
+signed percent (1.23× → "+23%"), unit text, null-guarded. Updated the pending branch.
+
+--------------------------------------------------------------------------------
+USER:
+"create a channel summary table. merge these 3 tables here into 1: <Google Sheets
+link gid=1919757511>"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+The link's id was an uploaded .xlsx ("MAG: MKTG ROI Report FY 25-26.xlsx"), not a
+native Sheet. Downloaded + parsed with openpyxl. The "Channel Summary" sheet held
+three stacked aggregate tables (By Type / By Platform / By Month) of the same FY25-26
+marketing spend. Added a static "Channel Summary" col-12 card to roi.html merging them
+into ONE grouped table (CHANNEL_SUMMARY const + renderChannelSummary()), labelled as a
+static workbook load. Flagged no live Xero equivalent existed for the Type/Platform
+taxonomy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (first dcp of the session — produced 3010260845_chat_history.txt + doc updates.)
+
+--------------------------------------------------------------------------------
+USER:
+"in Channel Summary by month should be in the x axis"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Split By Month out of the table into a bar chart (months on x axis), kept By Type +
+By Platform in the merged table (renderChannelMonthChart()).
+
+--------------------------------------------------------------------------------
+USER:
+"Channel Summary design is great. but data should be from xero and should auto update
+once a month"  →  then (after investigation) "by month should not be separate, it
+should be by month value of each categ and each Platform"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+[First the chart rework] Pivoted the workbook's Transaction Log (209 rows) into
+month×Type and month×Platform and rebuilt the Channel Summary as ONE monthly STACKED
+bar chart with a By type / By platform toggle (#channelDimBar). Platform reconciled
+exactly with the sheet ($52,388 ad total); noted the sheet's By-Type "Software" is
+~$1,933 lower than the raw log (a sheet formula quirk) — used the raw log.
+
+[Then the live-from-Xero pipeline] Investigated how the workbook derives its
+categories and found they are PER-VENDOR manual tags spanning multiple Xero accounts
+(not a clean account rule), that shared accounts (WrkPod Staff 377, Software subs 332)
+hold non-marketing spend, and that reconciled card/direct-debit ad charges are only
+visible via the REST BankTransactions endpoint (not the Xero MCP). Asked the user two
+questions; they chose SEED-MAP-+-FLAG-UNKNOWNS and BUILD-THE-WHOLE-PIPELINE.
+
+Built end-to-end (Supabase project aivitcomiywiysrfwqxt / MAGTestProject):
+• Resolved Xero account codes via get_chart_of_accounts: 302 Advertising, 475 Website
+  expenses, 332 Software subs, 411 Printing, 377 WrkPod Staff.
+• Migration marketing_channel_summary_tables: two tables — marketing_channel_monthly
+  (ex-GST spend per month×contact×account; Type/Platform NOT stored, joined from the
+  map at query time so recategorising needs no Xero re-pull) and
+  marketing_channel_vendor_map (contact_id → type/platform/include).
+• Edge function supabase/functions/xero-channel-summary-sync/index.ts — reuses the
+  existing Xero web-app OAuth (oauth_token_store provider='xero') + tenant resolution
+  from xero-ad-spend-sync; pulls SPEND bank txns (+ best-effort ACCPAY bills) since
+  2025-07-01, keeps marketing-account lines, buckets ex-GST by month×contact×account.
+  Keeps a line if the contact is MAPPED or the line is on an OPEN account (302/475,
+  where unmapped vendors become "Uncategorized"); drops unmapped vendors on SHARED
+  accounts (332/411/377). Modes: ?discover=1 / ?dry=1 / ?sync=1. Deployed verify_jwt:
+  false (v2). Bills returned Xero 401 (app scope lacks invoices) — made NON-FATAL
+  (warning, not error), since all the marketing spend is in bank txns anyway.
+• discover run → 2,900 bank txns / 89 contacts. Confirmed shared accounts are noisy
+  (332 has Netflix/Disney/Doordash; 377 has all staff). Seeded the vendor map with 34
+  marketing vendors matched to real Xero contact ids (migrations
+  20261030121000_seed_marketing_channel_vendor_map.sql).
+• sync run → wrote 201 rows, total $176.7k over 16 months (Jul2025–Oct2026). FY25-26
+  window reconciled closely with the workbook: Agency 44,406 vs 44,134; Wages 28,538
+  vs 29,285; Tools 4,284 vs 4,254; Printed Collaterals 1,032 vs 1,032; Digital Ads
+  51,764 vs 48,616 (Microsoft's software-acct charges now count as ads). Two NEW
+  vendors surfaced as Uncategorized (Media Management $2,800, OKGA $118) — the
+  flag-unknowns mechanism working; left for the user to categorise.
+• API: server/metrics/marketing-channel-summary.js + route GET
+  /api/marketing/channel-summary (cached 10 min) in server/index.js. Returns
+  {months, type:[{name,data}], platform:[{name,data}], meta} — same shape the chart
+  expects; Type covers all kept spend (Uncategorized rolls up), Platform is ad-only.
+• roi.html: replaced the hard-coded CHANNEL_MONTHLY with loadChannelSummary() fetching
+  the endpoint; card now shows live source chips (#channelChips) + "Live from Xero,
+  refreshed monthly" subtitle; loads independently of the FY/ROI data.
+• Monthly cron xero-channel-summary-sync-monthly ('0 22 2 * *' = 3rd 06:00 PH),
+  migration 20261030130000, applied + saved.
+node --check passed on the new module + index.js. Told the user it needs a manual
+Cloud Run redeploy to expose the new route (Supabase side is all live), and offered to
+categorise the 2 Uncategorized vendors.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (this invocation.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp: wrote this chat-history file; updated as_built.txt (new tables, edge function,
+cron, API route) and CLAUDE.md (Channel Summary now live-from-Xero); confirmed
+.gitignore already covers everything. Did NOT commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================

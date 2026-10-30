@@ -19,6 +19,7 @@ import { getRoas } from './metrics/roas.js';
 import { getRoasDeals } from './metrics/roas-deals.js';
 import { getRoasCounted } from './metrics/roas-counted.js';
 import { getMarketingRoi } from './metrics/marketing-roi.js';
+import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
 import { cached, clearCache } from './lib/cache.js';
@@ -305,6 +306,18 @@ marketing.get('/roi', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:roi]', err);
     res.status(502).json({ error: 'Failed to load marketing ROI from data source.', detail: err.message });
+  }
+});
+// Channel Summary — monthly marketing spend stacked by Type/Platform, live from Xero
+// (public.marketing_channel_monthly × marketing_channel_vendor_map). See
+// server/metrics/marketing-channel-summary.js. Cached briefly.
+marketing.get('/channel-summary', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:channel-summary', getMarketingChannelSummary, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:channel-summary]', err);
+    res.status(502).json({ error: 'Failed to load channel summary from data source.', detail: err.message });
   }
 });
 app.use('/api/marketing', marketing);
