@@ -69,13 +69,28 @@ Cloud Run.
   ROI **client-side** (`effSpend()`/`effRoi()`/`effMonthSpend()` in `roi.html`); backend returns
   `ownerWages` per FY + per month. WITH owner comp in, the business runs ~breakeven (ROI ~0.96–0.99
   = Xero's own net profit); excluding it, ROI ≈ 1.2–1.45 (operating profit before director pay).
-  3 cards (Total revenue / **Total spend** / Deals won) + 2 charts (**revenue-vs-spend by month** =
+  **7 cards as of 2026-10-30** (Total revenue / **Marketing spend** / Return on spend `x.xx×` /
+  **Net ROI** `±%` / Clients won / **Cost per client (CAC)** / Avg revenue per client) — all
+  computed **client-side** in `render()` from the existing `/api/marketing/roi` payload (no backend
+  change), null-guarded: `cac = effSpend÷dealsWon`, `avgRev = revenue÷dealsWon`,
+  `netRoi = (roi−1)×100`; the money cards honour the exclude-owner-wages toggle via `effSpend()`.
+  (NB the cards' "Marketing spend"/CAC/ROI are really **whole-business** figures, not ad spend —
+  the sub-text says so.) Plus 2 charts (**revenue-vs-spend by month** =
   a **DUAL-AXIS combo chart** as of
   2026-10-29: green **spend bars** on the left $ axis, blue **revenue line** on the right $ axis —
   self-rendered by `renderMonthChart()` in `roi.html`, **no longer** the shared-axis `lineChart`;
   **AC pipeline Won/Open/Lost per pipeline** as horizontal stacked bars, with a **"Won only"
-  toggle** `#pipeWonToggle` that drops Open/Lost and re-sorts by won) + an ROI-by-FY table, all
-  re-rendered client-side on FY change. Note: raw monthly P&L carries year-end accrual reversals,
+  toggle** `#pipeWonToggle` that drops Open/Lost and re-sorts by won), a "Where the spend goes"
+  category chart, a **STATIC "Channel Summary" table (as of 2026-10-30)** — `renderChannelSummary()`
+  + a hard-coded `CHANNEL_SUMMARY` const in `roi.html` that merges the FY25-26 **"MAG: MKTG ROI
+  Report FY 25-26.xlsx"** tracker workbook's three breakdowns (**By Type / By Platform / By Month**,
+  each with its own subtotal) into ONE grouped `table.data` (group-header `.grp` + subtotal `.sub`
+  rows). It is **NOT live** (no Xero/Supabase equivalent for the Type/Platform taxonomy; the three
+  subtotals deliberately don't reconcile — By Platform is an ad-only subset), rendered once in
+  `loadRoi()` and does **not** react to the FY bar — and an ROI-by-FY table, all
+  re-rendered client-side on FY change. The page is **full-width** (`.content { max-width: none }`,
+  like `sales_overview`) and its FY toolbar is **sticky** (`position:sticky; top:var(--topbar-h,58px)`)
+  so it freezes under the top bar on scroll. Note: raw monthly P&L carries year-end accrual reversals,
   so a few months (e.g. Jun 2024) show a **negative spend bar** — kept as-is (annual FY totals net
   correctly). The 6 other Marketing pages' `app.js` was bumped to `?v=7` so the ROI link shows.
   **Operations left sidebar (as of 2026-10-22):** `mag_buyer_sheet.html` (nav "Buyer Analysis" —

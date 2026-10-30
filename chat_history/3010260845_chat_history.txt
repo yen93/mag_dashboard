@@ -1,0 +1,139 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-30
+Session: Marketing ROI tab (roi.html) frontend polish — reworked the KPI cards
+(from 3 to 7), made the page full-width, pinned the FY toolbar as a sticky/frozen
+row, and added a static "Channel Summary" table merged from the FY25-26 Marketing
+ROI tracker workbook's three breakdowns (By Type / By Platform / By Month).
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret, credential, or token was pasted or
+printed this session. Only a Google Drive file ID (the ROI tracker workbook,
+1oZVcdoh3_Ok-WOfwxoBwa287TRfnLOOW) and aggregate business figures (FY marketing
+spend by category/platform/month) appeared — none sensitive.
+
+--------------------------------------------------------------------------------
+USER:
+"roi tab cards should be:" — Total revenue / Marketing spend / Return on spend /
+Clients won / Cost per client (CAC) / Avg revenue / client (a 6-card list, pasted).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read public/roi.html and server/metrics/marketing-roi.js to confirm all six could
+be computed client-side from the existing /api/marketing/roi payload — they could,
+so no backend change. Checked app.js renderKpis()/fmt() (fmt supports unit 'text'
+for the ROI multiple; kpi-grid is auto-fit minmax(180px,1fr) so it reflows to 6).
+Replaced the 3-card block in render() with 6 cards:
+- Total revenue → row.revenue (currency)
+- Marketing spend → effSpend(row) (honours the exclude-owner-wages toggle); kept a
+  sub-text "All expenses + cost of sales..." so the whole-business figure isn't
+  misread as literal marketing spend.
+- Return on spend → effRoi(row) shown as "1.23×" (unit text)
+- Clients won → row.dealsWon (open/lost in sub)
+- Cost per client (CAC) → spend / dealsWon, null-guarded
+- Avg revenue / client → revenue / dealsWon, null-guarded
+Updated the pending/empty branch in loadRoi() to the same 6 labels. Flagged that
+this page's spend is WHOLE-BUSINESS (all Xero expenses + cost of sales), not ad
+spend, so the labels are loosely whole-business; offered to wire real marketing/ad
+spend if wanted. Noted a manual Cloud Run redeploy is needed.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — compose a one-line git commit for the current changes.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran git status/diff (only public/roi.html modified, unstaged). Output a single
+Conventional Commits line:
+  feat(roi): expand ROI tab to six KPI cards - add return on spend, cost per client
+  (CAC) and avg revenue/client; rename to Total revenue and Marketing spend
+
+--------------------------------------------------------------------------------
+USER:
+"fix responsive design so it is stretched to the entire screen like the
+sales_overview.html"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Compared sales_overview.html (which overrides `.content { max-width: none; }`) vs
+roi.html. Found app.css caps `.content` at max-width 1200px even inside the flex
+`.marketing-layout`. Added a `<style>` block to roi.html's head with
+`.content { max-width: none; }` (same technique as the Sales tab) so the content
+area fills the full width beside the sidebar. Frontend-only; redeploy noted.
+
+--------------------------------------------------------------------------------
+USER:
+"make the top per fy toggle freeze on top even when i scroll down"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked app.css: `.topbar` is sticky top:0 z-index:10; `.toolbar` was static. Mirrored
+the Sales tab's sticky pattern — added to roi.html's `<style>`:
+  .toolbar { position: sticky; top: var(--topbar-h, 58px); z-index: 9;
+             margin: 0 -24px 16px -24px; padding: 12px 24px;
+             background: var(--bg); border-bottom: 1px solid var(--border);
+             box-shadow: var(--shadow); }
+So the FY segmented bar + "Exclude owner wages" toggle freeze just under the top bar
+when scrolling (negative margins bleed it to the content edges; bg covers content
+scrolling under it). Redeploy noted.
+
+--------------------------------------------------------------------------------
+USER:
+"add 1 more card: net ROI with percentage in a card"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added a 7th card, "Net ROI", right after "Return on spend". Value = (roi - 1) × 100,
+rounded, shown as a signed percent (e.g. 1.23× → "+23%"; 0.98× → "−2%"), unit text,
+sub "Profit ÷ spend". Null-guarded like the rest. Updated the pending branch too.
+Explained the two cards are complementary: Return on spend = revenue÷spend (gross
+multiple), Net ROI = profit÷spend (net %). Redeploy noted.
+
+--------------------------------------------------------------------------------
+USER:
+"create a channel summary table. merge these 3 tables here into 1: <Google Sheets
+link to gid=1919757511>"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+The link's ID (1oZVcdoh3_Ok-WOfwxoBwa287TRfnLOOW) was an uploaded .xlsx, not a native
+Google Sheet (get_spreadsheet failed). Pulled metadata via Drive ("MAG: MKTG ROI
+Report FY 25-26.xlsx"), then downloaded the binary and parsed it with openpyxl.
+Sheets: READ ME, ROI Summary, Transaction Log, Channel Summary, Email Campaign
+Tracker, Assumptions. Dumped the "Channel Summary" sheet — it holds THREE stacked
+tables, each a different breakdown of the same FY25-26 marketing spend:
+- By Type: Agency 44134.04 · Digital Ads 48615.54 · Tools 4254.33 · Printed
+  Collaterals 1032.14 · Wages 29285.45 · Software 2919.47 — TOTAL 130240.97
+- By Platform: Google 35330.93 · Meta 46 · LinkedIn 1199.89 · Bing 12038.72 ·
+  Website 3772.74 — TOTAL 52388.28 (subset: only ad-platform spend)
+- By Month: Jul-2025…Jun-2026 — TOTAL 132173.87
+
+Decided (and flagged to the user) that these figures — especially the Type/Platform
+taxonomy — have NO live equivalent in the dashboard's Xero/Supabase model, so added
+it as a STATIC FY25-26 table rather than a new data pipeline. Implemented in roi.html:
+- A new "Channel Summary" col-12 card between "Where the spend goes" and "ROI by
+  financial year", with a "Marketing ROI tracker (FY25–26)" source chip + a
+  "static, not auto-updated" note.
+- A JS constant CHANNEL_SUMMARY (the three groups, hard-coded) + renderChannelSummary()
+  that emits ONE table.data with grouped section-header rows (.grp) and per-group
+  Subtotal rows (.sub); columns Category | Total Cost (AUD).
+- Scoped CSS for tr.grp / tr.sub in the head style block.
+- Called renderChannelSummary() once in loadRoi() success (static, independent of the
+  FY bar) — so it does NOT react to the FY filter, unlike the rest of the page.
+Kept each group's own subtotal exactly as the sheet (the three deliberately don't
+reconcile — By Platform is a subset). Offered to wire it live if the Transaction Log
+is ever categorised into Supabase. Redeploy noted.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat and update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file, reviewed as_built.txt / CLAUDE.md /
+.gitignore for needed updates, and reported back. (All changes this session were
+frontend-only edits to public/roi.html; no new scripts, integrations, data stores,
+secrets, or automations.)
+
+================================================================================
+END OF EXPORT
+================================================================================
