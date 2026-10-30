@@ -129,23 +129,34 @@
       var row = currentRow();
       var meta = ROI.rows.meta;
 
-      // Cards: Total revenue (Xero) · Total spend (Xero) · Deals won (AC)
+      // Cards: Total revenue · Marketing spend · Return on spend · Clients won ·
+      //        Cost per client (CAC) · Avg revenue / client
       var spend = effSpend(row);           // honours the "exclude owner wages" toggle
       var roi = effRoi(row);
       var spendSub = !row.hasSpend ? 'No Xero P&L for this FY (pre-FY24)' :
-        (EXCL_OWNER ? 'Expenses + cost of sales, excl. owner wages' : 'All expenses + cost of sales');
-      var revSub = roi != null ? ('ROI ' + roi.toFixed(2) + '×') :
-        (row.hasRevenue ? null : 'No Xero P&L for this FY (pre-FY24)');
+        (EXCL_OWNER ? 'All expenses + cost of sales, excl. owner wages' : 'All expenses + cost of sales');
+      // Per-client economics — guard on having spend/revenue AND at least one won deal.
+      var cac = (row.hasSpend && spend != null && row.dealsWon) ? spend / row.dealsWon : null;
+      var avgRev = (row.hasRevenue && row.dealsWon) ? row.revenue / row.dealsWon : null;
       renderKpis('kpis', [
-        { label: 'Total revenue (Xero)',
+        { label: 'Total revenue',
           metric: { value: row.hasRevenue ? row.revenue : null, unit: 'currency', meta: meta },
-          sub: revSub },
-        { label: 'Total spend (Xero)',
+          sub: row.hasRevenue ? null : 'No Xero P&L for this FY (pre-FY24)' },
+        { label: 'Marketing spend',
           metric: { value: row.hasSpend ? spend : null, unit: 'currency' },
           sub: spendSub },
-        { label: 'Deals won (AC)',
+        { label: 'Return on spend',
+          metric: { value: roi != null ? roi.toFixed(2) + '×' : null, unit: 'text' },
+          sub: roi != null ? 'Revenue ÷ spend' : null },
+        { label: 'Clients won',
           metric: { value: row.dealsWon, unit: 'count' },
           sub: row.dealsOpen + ' open · ' + row.dealsLost + ' lost' },
+        { label: 'Cost per client (CAC)',
+          metric: { value: cac, unit: 'currency' },
+          sub: cac != null ? 'Spend ÷ clients won' : null },
+        { label: 'Avg revenue / client',
+          metric: { value: avgRev, unit: 'currency' },
+          sub: avgRev != null ? 'Revenue ÷ clients won' : null },
       ]);
 
       // Revenue vs spend by month — spend as green bars (left $ axis), revenue as a
@@ -351,9 +362,12 @@
             setChips('pipeChips', data.rows.meta);
             setChips('catChips', data.rows.meta);
             renderKpis('kpis', [
-              { label: 'Total revenue (Xero)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
-              { label: 'Total spend (Xero)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
-              { label: 'Deals won (AC)', metric: { value: null, unit: 'count', meta: data.rows.meta } },
+              { label: 'Total revenue', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
+              { label: 'Marketing spend', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
+              { label: 'Return on spend', metric: { value: null, unit: 'text', meta: data.rows.meta } },
+              { label: 'Clients won', metric: { value: null, unit: 'count', meta: data.rows.meta } },
+              { label: 'Cost per client (CAC)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
+              { label: 'Avg revenue / client', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
             ]);
             return;
           }
