@@ -197,14 +197,16 @@ SCRIPTS / APP CODE
     TOTAL SPEND = ALL Xero expenses across every dept (operating_expenses + cost_of_sales)
     from public.xero_expenses_monthly (see DATA STORES); deals = ALL activecampaign_deals
     (status 1/2/0 by cdate, won value via public.ac_value_aud), also split per pipeline
-    (activecampaign_deals."group"). FY coverage = FY22–FY27 (as of 2026-10-30). Xero's P&L
-    API only serves the current + 3 prior FYs, so FY24–FY27 are API-sourced; FY22 & FY23
-    are MANUAL annual seeds from Xero-UI P&L exports (entity "Ditch Investments Pty Ltd",
-    migrations 20261030140000/150000 — one annual row each at 2022-06-01 / 2023-06-01, so
-    their tiles+table+category chart work but the by-month chart is empty for them). An
-    "exclude owner wages" toggle (default ON) subtracts Wages+Super – James & Mia
-    (owner_wages col) from spend/ROI. The 6 other Marketing pages' app.js was bumped to
-    ?v=7 so the ROI link shows. Needs a Cloud Run redeploy to ship.
+    (activecampaign_deals."group"). FY coverage = FY22–FY27 MONTHLY (as of 2026-10-30). Xero's
+    P&L API only serves the current + 3 prior FYs, so FY24–FY27 are API-sourced; FY22 & FY23
+    are MANUAL monthly seeds from Xero-UI P&L exports (entity "Ditch Investments Pty Ltd",
+    migration 20261030160000 — 24 monthly rows, superseding the annual seeds 140000/150000).
+    marketing-roi.js MONTH_FLOOR = 2021-07-01, so the revenue-vs-spend-by-month chart now
+    covers FY22+. An "exclude owner wages" toggle (default ON) subtracts Wages+Super – James &
+    Mia (owner_wages col) from spend/ROI — NB Xero books owner comp as a single JUNE journal/yr,
+    so with the toggle on, FY22/FY23 June spend bars can read negative (real, nets out at FY
+    level). The 6 other Marketing pages' app.js was bumped to ?v=7 so the ROI link shows. Needs
+    a Cloud Run redeploy to ship.
   - roas.html is a self-rendering page (reads /api/operations/roas + /roas/deals;
     app.js?v=7; does not use the generic chart helpers). Rebuilt 2026-10-22 to mirror
     the "MAG paid search ROAS" artifact, by Australian FINANCIAL YEAR: a top control bar
@@ -499,13 +501,17 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     cols total_income (P&L Total Trading Income ex-GST accrual — added 2026-10-29), operating_expenses,
     cost_of_sales (COGS), total_spend (GENERATED = operating_expenses + cost_of_sales), owner_wages
     (Wages+Super – James & Mia, subset of op-ex), synced_at. STATIC load, read by
-    server/metrics/marketing-roi.js (sum per FY + per month). COVERAGE FY24–FY27 API-sourced via
-    Xero MCP get_profit_and_loss (40 months, 2023-07…2026-10) PLUS FY22 & FY23 MANUAL seeds (as of
-    2026-10-30) from Xero-UI P&L exports — ONE annual row each (month 2022-06-01 / 2023-06-01;
-    migrations seed_fy22_xero_pnl / seed_fy23_xero_pnl). Xero's P&L API only serves current + 3 prior
-    FYs, which is why FY22/FY23 had to be hand-exported from the Xero web Reports page (entity "Ditch
-    Investments Pty Ltd" = MAG's legal entity; FY24 export reconciled to the cent, validating the
-    grouping). FY27 partial. NOT yet auto-refreshed — a refresh routine/edge fn is pending. NOT the
+    server/metrics/marketing-roi.js (sum per FY + per month). COVERAGE FY22–FY27 MONTHLY. FY24–FY27
+    API-sourced via Xero MCP get_profit_and_loss (40 months, 2023-07…2026-10); FY22 & FY23 (24 months,
+    2021-07…2023-06) are MANUAL seeds (2026-10-30) from Xero-UI MONTHLY P&L exports — migration
+    seed_fy22_fy23_monthly_pnl (20261030160000), which SUPERSEDED the earlier annual single-row seeds
+    (seed_fy22/fy23_xero_pnl, 140000/150000 — those still seed xero_pnl_accounts_fy). Xero's P&L API
+    only serves current + 3 prior FYs, which is why FY22/FY23 had to be hand-exported from the Xero web
+    Reports page (entity "Ditch Investments Pty Ltd" = MAG's legal entity; monthly sums reconcile to the
+    cent with the FY totals; FY24 export reconciled against the API rows, validating the grouping).
+    GOTCHA: Xero books owner Wages+Super as a single JUNE journal/yr, so owner_wages lands entirely in
+    June — with "exclude owner wages" on, the by-month chart's June spend bar can go negative (correct
+    at FY level). FY27 partial. NOT yet auto-refreshed — a refresh routine/edge fn is pending. NOT the
     ad-spend tables (those stay ad-only for ROAS).
   - public.xero_pnl_accounts_fy — per-FY top-12 Xero P&L spend accounts behind the ROI tab's "Where
     the spend goes" chart. Cols fy_end, account_name, kind ('cost_of_sales' | 'expense'), amount,

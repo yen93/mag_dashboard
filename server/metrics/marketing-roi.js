@@ -32,8 +32,9 @@ const SRC =
 const FY = (col) =>
   `extract(year FROM ${col})::int + CASE WHEN extract(month FROM ${col}) >= 7 THEN 1 ELSE 0 END`;
 
-// Earliest month fed to the monthly chart = FY24 start (the oldest Xero P&L we can pull).
-const MONTH_FLOOR = '2023-07-01';
+// Earliest month fed to the monthly chart = FY22 start. FY24+ is API-sourced; FY22/FY23 are
+// manual monthly seeds (migrations 2026103014/15/160000), so the by-month chart covers FY22+.
+const MONTH_FLOOR = '2021-07-01';
 
 // AC deal pipeline (dealGroups) id → display name. Static (from list_deal_pipelines);
 // activecampaign_deals."group" holds the id. Unknown ids fall back to "Pipeline <id>".

@@ -1,0 +1,85 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-10-30
+Session: ROI tab — backfill FY22 & FY23 whole-business P&L from manual Xero-UI
+exports. Part 1 (annual seeds + first /dcp + /cm) is in 3010261124_chat_history.txt;
+this file continues it: filling the revenue-vs-spend-BY-MONTH chart for FY22/FY23
+from monthly P&L exports (24 monthly rows + a MONTH_FLOOR code change), then /dcp.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/key was pasted or printed. Only
+non-secret identifiers (Supabase project ref aivitcomiywiysrfwqxt, Xero account
+codes) and aggregate/monthly P&L figures appeared.
+
+--------------------------------------------------------------------------------
+RECAP OF PART 1 (detail in 3010261124_chat_history.txt):
+User asked to "fix fy22-23 tile values in roi.html". Established the money tiles
+were blank because xero_expenses_monthly only held FY24+ (Xero's P&L API serves
+only the current + 3 prior FYs — verified FY23 rejected on accrual AND cash). Chose
+to seed from manual Xero-UI P&L exports. User supplied two xlsx files; found the
+first "FY22" file was actually FY24 (reconciled to the cent vs the DB), got a
+corrected FY22 re-export, and seeded FY22 + FY23 as ANNUAL single rows (migrations
+20261030140000 / 150000) into xero_expenses_monthly + top-12 accounts into
+xero_pnl_accounts_fy. All FY22–FY27 tiles then populated. Ran /dcp (wrote
+3010261124_chat_history.txt, updated as_built.txt + CLAUDE.md, gitignored the raw
+P&L export folder) and /cm (gave a feat(roi) commit line). No git run by Claude.
+
+--------------------------------------------------------------------------------
+USER:
+"Revenue vs spend by month for 22 and 23 is empty. can i export this data as well?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained the chart was empty for two reasons: (1) the Part-1 exports were ANNUAL
+(one total column), stored as single lump rows — no monthly detail; (2) even with
+monthly data, marketing-roi.js's BY_MONTH query floors at 2023-07-01 (MONTH_FLOOR),
+so FY22/FY23 months would still be hidden — a one-line code change on my side. Gave
+a walkthrough to export MONTHLY columns from Xero (Accounting > Reports > Profit and
+Loss, accrual, date range per FY, turn on monthly breakdown / Compare periods =
+Monthly so 12 month columns show, export Excel, one per FY). Noted the code change
+needs a manual Cloud Run redeploy, and warned about year-end accrual swings
+(possible negative bars).
+
+--------------------------------------------------------------------------------
+USER:
+Pointed to the monthly files in "C:\…\dashboard\FY22 - FY23 PNL":
+"Ditch_Investments_Pty_Ltd_-_Current_financial_year_by_month fy22.xlsx" and "… fy23.xlsx".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Parsed both (openpyxl). Each had 12 month columns (Jul→Jun) + a "Year to date"
+column. Wrote a parser summing each P&L section per month into (month, operating_
+expenses, cost_of_sales, total_income, owner_wages), total_income = Trading Income
+only (Other Income excluded, matching Part 1). First pass was short on op-ex by
+~$6,154/yr — the SAME startswith('Account') filter bug swallowing the "Accountancy"
+line; removed the 'Account' filter token and re-ran. All 24 months then reconciled
+TO THE CENT with the annual seeds (FY22 income 427,600.39 / spend 410,981.01; FY23
+1,074,456.87 / 1,082,757.95; owner 126,500 / 265,200).
+
+Applied migration 20261030160000_seed_fy22_fy23_monthly_pnl.sql — upserts the 24
+monthly rows into xero_expenses_monthly (the two June rows overwrite the prior annual
+lump rows at 2022-06-01 / 2023-06-01; total_spend is GENERATED, not inserted). Then
+lowered MONTH_FLOOR in server/metrics/marketing-roi.js from '2023-07-01' to
+'2021-07-01' so the by-month chart includes FY22/FY23. Verified: DB now has 12 months
+each for FY22/FY23, FY totals intact; node --check on marketing-roi.js passed.
+
+Flagged two faithful-to-Xero quirks: (1) Xero books owner Wages+Super as a single
+JUNE journal each year, so with "exclude owner wages" on (default) the June spend bar
+can go NEGATIVE (owner comp > June's other spend); (2) Jun-2023 income is negative
+(year-end accrual reversal). FY totals net correctly. Offered to spread owner wages
+evenly across months for charting if the June dip is unwanted (not done — kept real
+figures). Reminded the MONTH_FLOOR change ships with a manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (this invocation.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp: wrote this chat-history file; updated as_built.txt + CLAUDE.md (FY22/FY23
+now MONTHLY in xero_expenses_monthly, marketing-roi.js MONTH_FLOOR = 2021-07-01, the
+by-month chart covers FY22+, the June owner-wage negative-bar caveat); confirmed
+.gitignore already covers the raw P&L export folder. Did NOT commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================
