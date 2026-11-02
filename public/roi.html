@@ -61,6 +61,14 @@
     /* Info icons that tuck a description away (reuse the global .src-info/.src-tip look). */
     .head-info { display: inline-flex; align-items: center; margin-left: 6px; }
     .kpi .label .src-info { margin-left: 5px; }
+    /* The toolbar heading sits under the sticky bar, so flip its tooltip to open
+       BELOW the icon (and left-align it) — opening upward gets clipped by the bar. */
+    #roiNoteInfo .src-tip { top: calc(100% + 8px); bottom: auto; left: 0;
+      transform: translateX(-4px) translateY(-4px); }
+    #roiNoteInfo .src-info:hover .src-tip, #roiNoteInfo .src-info:focus .src-tip,
+    #roiNoteInfo .src-info:focus-visible .src-tip { transform: translateX(-4px) translateY(0); }
+    #roiNoteInfo .src-tip::after { top: auto; bottom: 100%; left: 12px; transform: none;
+      border-top-color: transparent; border-bottom-color: var(--border); }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -94,7 +102,7 @@
 
     <div class="grid">
       <div class="card col-12">
-        <div class="card-head"><h3>Revenue vs spend by month</h3><span class="head-info" data-info="The payoff over time — spend bars, revenue line"></span><span class="chips" id="monthChips"></span></div>
+        <div class="card-head"><h3>Revenue vs spend by month</h3><span class="head-info" id="monthInfo" data-info="The payoff over time — spend bars, revenue line"></span><span class="chips" id="monthChips"></span></div>
         <div class="chart-box" id="roi-month-chart"><canvas id="roiMonthCanvas"></canvas></div>
       </div>
       <div class="card col-12">
@@ -103,12 +111,12 @@
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>Where the spend goes</h3><span class="head-info" data-info="Marketing spend by Xero account (Advertising, Website, Software, Printing, WrkPod Staff) for the selected FY."></span><span class="chips" id="catChips"></span></div>
+        <div class="card-head"><h3>Where the spend goes</h3><span class="head-info" id="catInfo" data-info="Marketing spend by Xero account (Advertising, Website, Software, Printing, WrkPod Staff) for the selected FY."></span><span class="chips" id="catChips"></span></div>
         <div class="chart-box" id="roi-cat-chart" style="height:360px"><canvas id="roiCatCanvas"></canvas></div>
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>Channel Summary</h3><span class="head-info" data-info="Marketing spend by month, stacked by category (or by ad platform). Live from Xero, refreshed monthly. Vendors on the ad accounts not yet categorised show as &quot;Uncategorized&quot;."></span>
+        <div class="card-head"><h3>Channel Summary</h3><span class="head-info" id="channelInfo" data-info="Marketing spend by month, stacked by category (or by ad platform). Live from Xero, refreshed monthly. Vendors on the ad accounts not yet categorised show as &quot;Uncategorized&quot;."></span>
           <div class="segmented" id="channelDimBar" style="margin-left:6px"><button data-dim="type">By type</button><button data-dim="platform">By platform</button><button data-dim="account">By account</button></div>
           <span class="chips" id="channelChips" style="margin-left:auto"></span>
         </div>
@@ -130,38 +138,63 @@
     var SEL = null;    // selected fy_end (number) or 'all'
     var PIPE_WON_ONLY = false;   // pipeline chart: show only the Won count per pipeline
 
-    // Descriptions on this tab are tucked behind a small ⓘ info icon (hover/focus to
-    // reveal) — same look as the data-source icon (reuses the global .src-info/.src-tip
-    // CSS). infoTip() builds one carrying any text (no "Source" label).
-    function infoTip(text) {
-      if (!text) return '';
-      var s = esc(text);
-      return '<span class="src-info" tabindex="0" role="button" aria-label="' + s + '">' +
+    // Each widget on this tab shows ONE small ⓘ info icon (hover/focus to reveal) that
+    // carries BOTH its description and its data source — same look as the shared source
+    // icon (reuses the global .src-info/.src-tip CSS). infoTip(desc, source) builds it;
+    // either part may be empty.
+    function infoTip(desc, source) {
+      desc = desc || ''; source = source || '';
+      if (!desc && !source) return '';
+      var tip = desc ? esc(desc) : '';
+      if (source) {
+        tip += '<span class="src-tip-label"' + (desc ? ' style="margin-top:6px"' : '') +
+          '>Source</span>' + esc(source);
+      }
+      var aria = desc || ('Data source: ' + source);
+      return '<span class="src-info" tabindex="0" role="button" aria-label="' + esc(aria) + '">' +
         '<svg class="src-info-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">' +
         '<circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
         '<rect x="7.15" y="6.7" width="1.7" height="5" rx="0.85" fill="currentColor"/>' +
         '<circle cx="8" cy="4.2" r="1.05" fill="currentColor"/></svg>' +
-        '<span class="src-tip">' + s + '</span></span>';
+        '<span class="src-tip">' + tip + '</span></span>';
     }
 
-    // Fill every static-description placeholder (<span class="head-info" data-info="…">).
+    // The readiness chip (needs setup / partial) WITHOUT the source icon — the source
+    // now rides inside the widget's single info icon, so we don't double it up here.
+    function statusChipHtml(meta) {
+      if (!meta) return '';
+      if (meta.status === 'pending') return '<span class="chip warn" title="' + esc(meta.note || '') + '">needs setup</span>';
+      if (meta.status === 'partial') return '<span class="chip partial" title="' + esc(meta.note || '') + '">partial</span>';
+      return '';
+    }
+
+    // Fill the static-description placeholders once (description only; the source is
+    // folded in later by setChips when the payload arrives).
     function fillHeadInfo() {
       document.querySelectorAll('.head-info[data-info]').forEach(function (el) {
-        el.innerHTML = infoTip(el.getAttribute('data-info'));
+        el.innerHTML = infoTip(el.getAttribute('data-info'), '');
       });
     }
 
-    // After renderKpis(), move each card's description from a visible sub-line into an
-    // ⓘ icon next to the card label (ROI tab only — the shared renderKpis is untouched).
+    // After renderKpis(), collapse each card to a SINGLE info icon next to its label
+    // carrying the description (the sub-line) + the data source (pulled out of the
+    // bottom chips so the card isn't showing two icons). ROI tab only — renderKpis
+    // itself (shared) is untouched.
     function tuckKpiSubs() {
       document.querySelectorAll('#kpis .kpi').forEach(function (card) {
         var sub = card.querySelector(':scope > .muted');
-        if (!sub) return;
-        var label = card.querySelector('.label');
-        if (label && !label.querySelector('.src-info')) {
-          label.insertAdjacentHTML('beforeend', infoTip(sub.textContent));
+        var desc = sub ? sub.textContent : '';
+        if (sub) sub.remove();
+        var source = '';
+        var srcIcon = card.querySelector('.chips .src-info');
+        if (srcIcon) {
+          source = (srcIcon.getAttribute('aria-label') || '').replace(/^Data source:\s*/, '');
+          srcIcon.remove();           // drop the duplicate source icon
         }
-        sub.remove();
+        var label = card.querySelector('.label');
+        if (label && !label.querySelector('.src-info') && (desc || source)) {
+          label.insertAdjacentHTML('beforeend', infoTip(desc, source));
+        }
       });
     }
 
@@ -174,7 +207,22 @@
     }
     function effMonthSpend(m) { return m.spend; }
 
-    function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+    // Charts that carry a description show ONE icon (in the head) with description +
+    // source; their chips span then holds only the readiness chip. Charts without a
+    // description (pipeline, FY table) keep the plain single source icon via metaChips.
+    var CHIP_TO_INFO = { monthChips: 'monthInfo', catChips: 'catInfo', channelChips: 'channelInfo' };
+    function setChips(id, meta) {
+      var infoId = CHIP_TO_INFO[id];
+      if (infoId) {
+        var info = document.getElementById(infoId);
+        if (info) info.innerHTML = infoTip(info.getAttribute('data-info'), meta && meta.source);
+        var el = document.getElementById(id);
+        if (el) el.innerHTML = statusChipHtml(meta);
+      } else {
+        var el2 = document.getElementById(id);
+        if (el2) el2.innerHTML = metaChips(meta);
+      }
+    }
 
     // The row to show for the current selection ('all' -> the summed total row).
     function currentRow() {
@@ -508,7 +556,8 @@
         .then(function (data) {
           ROI = data;
           document.getElementById('roiNoteInfo').innerHTML =
-            infoTip((data.rows.meta && data.rows.meta.note) || '');
+            infoTip((data.rows.meta && data.rows.meta.note) || '',
+                    data.rows.meta && data.rows.meta.source);
           if (!data.rows.data || !data.rows.data.length) {
             // Pending / empty — show source chips + a needs-setup note, no charts.
             setChips('monthChips', data.rows.meta);
@@ -523,6 +572,7 @@
               { label: 'Cost per client (CAC)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Avg revenue / client', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
             ]);
+            tuckKpiSubs();
             return;
           }
           SEL = data.defaultFy != null ? data.defaultFy : 'all';
