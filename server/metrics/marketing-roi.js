@@ -121,7 +121,7 @@ const BY_MONTH = `
   LEFT JOIN sp  ON sp.m  = mo.m
   ORDER BY 1`;
 
-// Per-pipeline deal counts by FY (for the "AC pipeline" chart, one bar per pipeline).
+// Per-pipeline deal counts by FY (kept for the ROI assistant snapshot).
 const PIPELINE_SQL = `
   SELECT ${FY('cdate')} AS "fyEnd", "group" AS "group",
     count(*) FILTER (WHERE status = 1) AS "won",
@@ -130,6 +130,19 @@ const PIPELINE_SQL = `
   FROM public.activecampaign_deals
   WHERE cdate IS NOT NULL AND "group" IS NOT NULL
   GROUP BY 1, 2`;
+
+// Deal counts BY MONTH (for the "AC pipeline" chart — months on the x axis, stacked
+// Won/Open/Lost, same monthly design as Channel Summary). Bounded to MONTH_FLOOR so the
+// axis lines up with the other monthly charts; FY-filtered client-side via each month's FY.
+const PIPELINE_MONTH_SQL = `
+  SELECT to_char(date_trunc('month', cdate), 'YYYY-MM') AS "month",
+    count(*) FILTER (WHERE status = 1) AS "won",
+    count(*) FILTER (WHERE status = 0) AS "open",
+    count(*) FILTER (WHERE status = 2) AS "lost"
+  FROM public.activecampaign_deals
+  WHERE cdate IS NOT NULL AND cdate >= '${MONTH_FLOOR}'
+  GROUP BY 1
+  ORDER BY 1`;
 
 // Marketing spend by Xero account, per FY (for the "Where the spend goes" chart).
 const CATEGORIES_SQL = `
@@ -197,12 +210,13 @@ export async function getMarketingRoi() {
       rows: section([], pend),
       byMonth: section([], pend),
       pipelines: section([], pend),
+      pipelineMonths: section([], pend),
       categories: section([], pend),
     };
   }
 
-  const [fyRows, monthRows, pipeRows, catRows] = await Promise.all([
-    q(BY_FY), q(BY_MONTH), q(PIPELINE_SQL), q(CATEGORIES_SQL),
+  const [fyRows, monthRows, pipeRows, pipeMonthRows, catRows] = await Promise.all([
+    q(BY_FY), q(BY_MONTH), q(PIPELINE_SQL), q(PIPELINE_MONTH_SQL), q(CATEGORIES_SQL),
   ]);
   const rows = fyRows.map(shape);
 
@@ -216,6 +230,7 @@ export async function getMarketingRoi() {
       rows: section([], pend),
       byMonth: section([], pend),
       pipelines: section([], pend),
+      pipelineMonths: section([], pend),
       categories: section([], pend),
     };
   }
@@ -240,6 +255,15 @@ export async function getMarketingRoi() {
       open: num(p.open) || 0,
       lost: num(p.lost) || 0,
     }));
+
+  // Deal counts by month (for the "AC pipeline" monthly chart); FY-filtered client-side.
+  const pipelineMonths = pipeMonthRows.map((m) => ({
+    month: m.month,
+    fyEnd: fyEndOfMonth(m.month),
+    won: num(m.won) || 0,
+    open: num(m.open) || 0,
+    lost: num(m.lost) || 0,
+  }));
 
   // Marketing spend by account, per FY (for "Where the spend goes").
   const categories = catRows.map((c) => ({
@@ -273,6 +297,7 @@ export async function getMarketingRoi() {
     rows: section(rows, { source: SRC, status: 'live', note }),
     byMonth: section(months, { source: SRC, status: 'live', note: null }),
     pipelines: section(pipelines, { source: SRC, status: 'live', note: null }),
+    pipelineMonths: section(pipelineMonths, { source: SRC, status: 'live', note: null }),
     categories: section(categories, { source: SRC, status: 'live', note: null }),
   };
 }

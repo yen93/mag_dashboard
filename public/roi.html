@@ -211,7 +211,7 @@
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by pipeline</h3><label class="pipe-toggle" style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-left:10px"><input type="checkbox" id="pipeWonToggle" style="margin:0">Won only</label><span class="chips" id="pipeChips"></span></div>
+        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by month</h3><label class="pipe-toggle" style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-left:10px"><input type="checkbox" id="pipeWonToggle" style="margin:0">Won only</label><span class="chips" id="pipeChips"></span></div>
         <div class="chart-box" id="roi-pipe-chart" style="height:380px"><canvas id="roiPipelineCanvas"></canvas></div>
       </div>
 
@@ -231,7 +231,7 @@
   <script>
     var ROI = null;    // full API payload
     var SEL = null;    // selected fy_end (number) or 'all'
-    var PIPE_WON_ONLY = false;   // pipeline chart: show only the Won count per pipeline
+    var PIPE_WON_ONLY = false;   // pipeline chart: show only the Won count per month
 
     // Each widget on this tab shows ONE small ⓘ info icon (hover/focus to reveal) that
     // carries BOTH its description and its data source — same look as the shared source
@@ -404,8 +404,8 @@
       setChips('monthChips', ROI.byMonth.meta);
       renderMonthChart();
 
-      // AC pipeline — Won / Open / Lost per pipeline for the selection.
-      setChips('pipeChips', ROI.pipelines.meta);
+      // AC pipeline — Won / Open / Lost by month, filtered to the selection.
+      setChips('pipeChips', (ROI.pipelineMonths || ROI.pipelines).meta);
       renderPipeline();
 
       // Where the spend goes — top expense categories + Other for the selection.
@@ -514,49 +514,41 @@
       if (el) _monthChart = new Chart(el.getContext('2d'), cfg);
     }
 
-    // AC pipeline chart — one horizontal stacked bar per pipeline (Won/Open/Lost),
-    // filtered to the selected FY (or aggregated across all FYs for "All").
+    // AC pipeline chart — deal counts BY MONTH (x axis), vertical stacked bars of
+    // Won/Open/Lost, filtered to the active FY (same monthly design as Channel Summary).
+    // The "Won only" toggle drops Open/Lost. 'All' shows every month.
     var _pipeChart = null;
     function renderPipeline() {
-      var src = (ROI.pipelines && ROI.pipelines.data) || [];
-      var rows;
-      if (SEL === 'all') {
-        var byGroup = {};
-        src.forEach(function (p) {
-          if (!byGroup[p.group]) byGroup[p.group] = { pipeline: p.pipeline, won: 0, open: 0, lost: 0 };
-          byGroup[p.group].won += p.won; byGroup[p.group].open += p.open; byGroup[p.group].lost += p.lost;
-        });
-        rows = Object.keys(byGroup).map(function (k) { return byGroup[k]; });
-      } else {
-        rows = src.filter(function (p) { return p.fyEnd === SEL; });
-      }
-      // Sort: by won count when showing won only, else by total deal count. Largest first.
-      rows.sort(function (a, b) {
-        if (PIPE_WON_ONLY) return b.won - a.won;
-        return (b.won + b.open + b.lost) - (a.won + a.open + a.lost);
-      });
+      var all = (ROI.pipelineMonths && ROI.pipelineMonths.data) || [];
+      var rows = (SEL != null && SEL !== 'all')
+        ? all.filter(function (m) { return m.fyEnd === SEL; })
+        : all.slice();
 
       var datasets = PIPE_WON_ONLY
-        ? [{ label: 'Won', data: rows.map(function (r) { return r.won; }), backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 26 }]
+        ? [{ label: 'Won', data: rows.map(function (r) { return r.won; }), backgroundColor: '#17a673', borderRadius: 3, maxBarThickness: 40, stack: 'deals' }]
         : [
-            { label: 'Won',  data: rows.map(function (r) { return r.won; }),  backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 26 },
-            { label: 'Open', data: rows.map(function (r) { return r.open; }), backgroundColor: '#3b6ef0', borderRadius: 4, maxBarThickness: 26 },
-            { label: 'Lost', data: rows.map(function (r) { return r.lost; }), backgroundColor: '#e2483d', borderRadius: 4, maxBarThickness: 26 },
+            { label: 'Won',  data: rows.map(function (r) { return r.won; }),  backgroundColor: '#17a673', borderRadius: 3, maxBarThickness: 40, stack: 'deals' },
+            { label: 'Open', data: rows.map(function (r) { return r.open; }), backgroundColor: '#3b6ef0', borderRadius: 3, maxBarThickness: 40, stack: 'deals' },
+            { label: 'Lost', data: rows.map(function (r) { return r.lost; }), backgroundColor: '#e2483d', borderRadius: 3, maxBarThickness: 40, stack: 'deals' },
           ];
 
       var tc = themeColors();
       var cfg = {
         type: 'bar',
         data: {
-          labels: rows.map(function (r) { return r.pipeline; }),
+          labels: rows.map(function (r) { return ymSpanLabel(r.month); }),
           datasets: datasets,
         },
         options: {
-          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-          plugins: { legend: { display: true, position: 'top', labels: { color: tc.text, usePointStyle: true, boxWidth: 8, padding: 12 } } },
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          plugins: {
+            legend: { display: true, position: 'top', labels: { color: tc.text, usePointStyle: true, boxWidth: 8, padding: 12 } },
+            tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y; } } },
+          },
           scales: {
-            x: { stacked: true, beginAtZero: true, ticks: { color: tc.muted, precision: 0 }, grid: { color: tc.grid } },
-            y: { stacked: true, ticks: { color: tc.muted }, grid: { display: false } },
+            x: { stacked: true, ticks: { color: tc.muted }, grid: { display: false } },
+            y: { stacked: true, beginAtZero: true, ticks: { color: tc.muted, precision: 0 }, grid: { color: tc.grid } },
           },
         },
       };
