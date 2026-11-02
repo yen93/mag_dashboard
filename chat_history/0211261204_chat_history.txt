@@ -1,0 +1,73 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-02
+Session: Hide the always-on "Source" chips behind a small info (ⓘ) icon across
+         every dashboard tab, done via the shared metaChips() helper, plus the
+         supporting CSS and an app.js cache-buster bump on all pages.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"update all Source chips across all tabs. hide them behind an info tool"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated how Source chips are produced. Found the single source of truth is
+metaChips() in public/app.js, which every page calls (via each page's setChips()
+helper, via renderKpis(), and directly on roas.html's #roasChips / roi.html).
+Grep confirmed 15+ pages route through it and no page emits a source chip by
+hand. The old implementation rendered:
+    <span class="chip src">SOURCE</span>
+as a loud, always-visible chip, while "needs setup"/"partial" chips already used
+title-attribute tooltips.
+
+CSS check: app.css had only .chip.src / .chip.warn / .chip.partial (no base
+.chip rule); .kpi cards have no overflow:hidden, so an absolutely-positioned
+tooltip won't be clipped.
+
+Made three changes, all in the shared layer so every tab updates at once:
+
+1. public/app.js — Replaced the inline source chip with a new srcInfo(source)
+   helper that renders a small circular ⓘ info icon (inline SVG) with an
+   accessible wrapper (tabindex=0, role="button", aria-label="Data source: …").
+   The source name lives in a hover/focus-revealed <span class="src-tip"> with a
+   "SOURCE" label. metaChips() now calls srcInfo(meta.source); the warn/partial
+   chips are unchanged.
+
+2. public/app.css — Replaced the .chip.src rule with:
+   - .src-info (the 18px circular icon button; accent-soft bg, inverts to solid
+     accent on hover/focus; flex:none so it doesn't stretch in inline-flex rows)
+   - .src-info-icon, .src-tip (the pop-up: positioned above the icon, themed via
+     surface/border/shadow tokens, hidden by default, shown on hover/focus,
+     max-width 260px, with a little downward arrow via ::after)
+   - .src-tip-label (the small uppercase "SOURCE" caption)
+   Works in light and dark via existing CSS variables.
+
+3. All 17 HTML pages — bumped the app.js cache-buster to ?v=8 (versions were
+   mixed at v2/v3/v7) with a single sed pass, so browsers fetch the new helper
+   after deploy. Verified every page now reads app.js?v=8.
+
+Verification: grepped for leftover "chip src" literals (none remained) and
+confirmed srcInfo/src-info references exist only in app.js + app.css.
+
+No DB, server, or route changes — purely static frontend (app.js/app.css/HTML).
+Told the user a manual Cloud Run redeploy is needed to publish (per project
+policy Claude never deploys), and noted that a local `npm run dev` without
+SUPABASE_DB_URL shows most metrics as pending (no source set), so the icon only
+appears where a source exists.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat, update as_built.txt / CLAUDE.md / .gitignore (no git
+commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp routine: wrote this chat-history file, refreshed the metaChips /
+provenance-chip description in as_built.txt and CLAUDE.md to reflect the new
+info-icon behavior and the app.js?v=8 bump, and checked .gitignore (no new
+sensitive files introduced this session). Did NOT run any git command — the user
+commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

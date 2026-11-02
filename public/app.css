@@ -252,9 +252,37 @@ table.data tr.acs-fee-review td:first-child { box-shadow: inset 3px 0 0 #e0556b;
 [hidden] { display: none !important; }
 
 /* provenance / readiness chips */
-.chip.src {
-  background: var(--accent-soft, var(--surface-2)); color: var(--accent);
-  border: 1px solid transparent; font-size: 11px; padding: 2px 8px;
+/* Data source — tucked behind a small info icon; reveal on hover/focus. */
+.src-info {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%; vertical-align: middle; cursor: help;
+  color: var(--accent); background: var(--accent-soft, var(--surface-2));
+  border: 1px solid transparent; outline: none; flex: none;
+  transition: background .12s ease, color .12s ease;
+}
+.src-info:hover, .src-info:focus-visible { color: #fff; background: var(--accent); }
+.src-info-icon { display: block; }
+.src-tip {
+  position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  z-index: 60; width: max-content; max-width: 260px;
+  padding: 7px 10px; border-radius: 8px; text-align: left;
+  font-size: 12px; line-height: 1.35; font-weight: 500; white-space: normal;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--border); box-shadow: var(--shadow);
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transition: opacity .12s ease, transform .12s ease;
+}
+.src-info:hover .src-tip, .src-info:focus .src-tip, .src-info:focus-visible .src-tip {
+  opacity: 1; visibility: visible; transform: translateX(-50%) translateY(0);
+}
+.src-tip::after {
+  content: ''; position: absolute; top: 100%; left: 50%; transform: translateX(-50%);
+  border: 5px solid transparent; border-top-color: var(--border);
+}
+.src-tip-label {
+  display: block; margin-bottom: 2px; font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
 }
 .chip.warn { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); border: none; font-size: 11px; padding: 2px 8px; cursor: help; }
 .chip.partial { background: color-mix(in srgb, #f0a63b 18%, transparent); color: #b9791d; border: none; font-size: 11px; padding: 2px 8px; cursor: help; }

@@ -160,10 +160,24 @@ function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function 
   return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
 
 // Small chips describing a metric/section's provenance and readiness.
+// The data source is tucked behind a small info icon (hover/focus to reveal)
+// instead of a loud always-on chip.
+function srcInfo(source) {
+  if (!source) return '';
+  var s = esc(source);
+  return '<span class="src-info" tabindex="0" role="button" aria-label="Data source: ' + s + '">' +
+    '<svg class="src-info-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">' +
+    '<circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
+    '<rect x="7.15" y="6.7" width="1.7" height="5" rx="0.85" fill="currentColor"/>' +
+    '<circle cx="8" cy="4.2" r="1.05" fill="currentColor"/></svg>' +
+    '<span class="src-tip"><span class="src-tip-label">Source</span>' + s + '</span>' +
+    '</span>';
+}
+
 function metaChips(meta) {
   if (!meta) return '';
   var out = '';
-  if (meta.source) out += '<span class="chip src">' + esc(meta.source) + '</span>';
+  if (meta.source) out += srcInfo(meta.source);
   if (meta.status === 'pending') out += '<span class="chip warn" title="' + esc(meta.note) + '">needs setup</span>';
   else if (meta.status === 'partial') out += '<span class="chip partial" title="' + esc(meta.note) + '">partial</span>';
   return out;

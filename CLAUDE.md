@@ -144,8 +144,17 @@ Cloud Run.
   charts/tables. **Do not add a bundler** — the point is hand-editability.
 - **Charts:** Chart.js, vendored locally at `public/vendor/chart.umd.min.js`.
   `app.js` exposes `lineChart`/`barChart`/`pieChart`/`renderKpis`/`renderTable`
-  plus `metaChips()`/`renderPendingBody()` for the source-chip / "needs setup"
-  badges every metric can carry. `monthLabel()`/`weekLabel()` format the
+  plus `metaChips()`/`renderPendingBody()` for the source / "needs setup"
+  badges every metric can carry. **As of 2026-11-02 the data SOURCE is hidden
+  behind a small ⓘ info icon, not a loud always-on chip:** `metaChips()` calls a
+  new `srcInfo(source)` helper (small circular SVG info icon, accessible via
+  `tabindex`/`role`/`aria-label`; hover/focus reveals the source in a `.src-tip`
+  tooltip). CSS `.src-info`/`.src-tip`/`.src-tip-label` in `app.css` **replaced
+  `.chip.src`** (the `needs setup`/`partial` chips are unchanged). `metaChips()`
+  is the **single source of truth** for every tab (called via each page's
+  `setChips`, via `renderKpis`, and directly on `roas.html`/`roi.html`), so this
+  one change updates all Source chips at once — **all 17 pages' `app.js?v=` were
+  bumped to `?v=8`** to force the new helper. `monthLabel()`/`weekLabel()` format the
   month/week-bucketed x-axes the live data uses (date range is now month-window
   based: `3m`/`6m`/`12m`/`ytd`, default `12m` — not the old daily `7d`/`30d`).
 - **ESM on the server** (`"type":"module"` in package.json) — use `import`.
