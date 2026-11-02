@@ -459,13 +459,30 @@
       if (n >= 1e3) return '$' + (v / 1e3).toFixed(n % 1e3 ? 1 : 0) + 'k';
       return '$' + Math.round(v);
     }
+
+    // X-axis labels: the full calendar-month span "Mon 1-<last day>" (e.g. Jul 1-31,
+    // Feb 1-28) — each bar covers the 1st to the last day of that month.
+    var MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function monthSpanLabel(year, m1) {          // m1 = 1..12
+      var last = new Date(Date.UTC(year, m1, 0)).getUTCDate();   // day 0 of next month = last day
+      return MON_ABBR[m1 - 1] + ' 1-' + last;
+    }
+    function ymSpanLabel(ym) {                    // 'YYYY-MM'
+      var p = String(ym).split('-');
+      return monthSpanLabel(+p[0], +p[1]);
+    }
+    function channelSpanLabel(label) {           // 'Mon-YYYY'
+      var p = String(label).split('-'), m = MON_IDX[p[0]];
+      return m ? monthSpanLabel(+p[1], m) : label;
+    }
+
     function renderMonthChart() {
       var months = currentMonths();
       var tc = themeColors();
       var cfg = {
         type: 'bar',
         data: {
-          labels: months.map(function (m) { return monthLabel(m.month); }),
+          labels: months.map(function (m) { return ymSpanLabel(m.month); }),
           datasets: [
             { type: 'bar', label: 'Marketing spend', order: 2, yAxisID: 'ySpend',
               data: months.map(function (m) { return effMonthSpend(m); }),
@@ -594,7 +611,7 @@
       if (SEL != null && SEL !== 'all') {
         idxs = idxs.filter(function (i) { return channelMonthFyEnd(allMonths[i]) === SEL; });
       }
-      var months = idxs.map(function (i) { return allMonths[i]; });
+      var months = idxs.map(function (i) { return channelSpanLabel(allMonths[i]); });
       // Colour by each series' stable position in src so a given category/platform keeps
       // its colour no matter which FY is selected.
       var datasets = src.map(function (s, i) {
