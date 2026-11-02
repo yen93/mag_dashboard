@@ -736,12 +736,23 @@ before changing them).
   same as Supabase. Without them the server still boots and logs codes to the
   console (dev), but no real emails go out.
 - **`OPENAI_API_KEY`** (+ optional **`OPENAI_MODEL`**, default `gpt-4o-mini`) —
-  powers the ROAS tab's **read-only chat assistant** (`server/roasAssistant.js`,
-  `POST /api/roas-assistant`; widget bottom-right on `roas.html`). The endpoint
-  context-stuffs the ROAS data (`getRoas`+`getRoasDeals`) + a primer and makes ONE
-  OpenAI Chat Completions call (system prompt = first message) — **no DB, no tools,
-  so it's read-only by construction**; the key stays server-side. Without it the route
-  returns 503 and the widget shows it gracefully. **GOTCHA:** this is the **Cloud Run
+  powers **TWO read-only chat assistants**, one per tab, built on the SAME pattern
+  and sharing this one key: the ROAS tab (`server/roasAssistant.js`,
+  `POST /api/roas-assistant`; widget bottom-right on `roas.html`) and the **ROI tab**
+  (`server/roiAssistant.js`, `POST /api/roi-assistant`; widget bottom-right on
+  `roi.html`, **added 2026-11-02**). Each endpoint context-stuffs its own tab's data +
+  a primer and makes ONE OpenAI Chat Completions call (system prompt = first message)
+  — **no DB, no tools, so it's read-only by construction**; the key stays server-side.
+  The ROI one snapshots `getMarketingRoi()` (per-FY rows with the **owner-wages-excluded**
+  headline spend/ROI + the incl-owner figures, CAC, avg-rev/client, deals, pipelines,
+  spend categories) plus a **best-effort** `getMarketingChannelSummary()` (wrapped in
+  try/catch so a channel outage can't break the assistant). The front-end widgets are
+  clones: the ROI one reuses the ROAS `.asst-*` CSS/markup/JS with `--roi-accent*`
+  (same blue→purple) and `postJSON('/api/roi-assistant', …)` — no `app.js` bump
+  (`postJSON`/`currentUser` already present). Adding the ROI assistant needs **NO new
+  secret** (it reuses the key already on the service) but DOES need a **dashboard
+  redeploy** (new `server/roiAssistant.js` + `roi.html`). Without the key both routes
+  return 503 and the widgets show it gracefully. **GOTCHA:** this is the **Cloud Run
   service's own env var** — the OpenAI key that already exists as a **Supabase edge
   secret** (used by `buyer-sheet-sync`) is NOT visible to the dashboard; it must be set
   on the Cloud Run service too. **Attach ADDITIVELY on redeploy:** `gcloud run services

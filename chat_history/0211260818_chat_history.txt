@@ -1,0 +1,134 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-02
+Session: Two tasks on the Marketing → ROI tab. (1) Built a LOCAL iMAG-themed HTML
+guide page documenting the ROI tab (imag_page_local skill) with two embedded
+diagrams. (2) Built an ROI read-only chat assistant mirroring the ROAS assistant
+(new server/roiAssistant.js + /api/roi-assistant route + bottom-right widget on
+public/roi.html). No git. The assistant needs a Cloud Run redeploy to go live.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string/API key was
+pasted into this chat. The OpenAI key is only referred to by env-var NAME
+(OPENAI_API_KEY) — its value never appeared.
+
+--------------------------------------------------------------------------------
+USER:
+/imag_page_local for the roi tab only — create a single self-contained iMAG-themed
+HTML page (local file, no cloud routine, no Drive copy) documenting the ROI tab.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Followed the imag_page_local skill. Read the bundled template.html and diagrams.py
+(Pillow helper) from the skill folder, and grounded the content in
+server/metrics/marketing-roi.js plus the extensive ROI detail already in CLAUDE.md.
+
+Created two PNG diagrams with the diagrams.py primitives (iMAG slate/grey palette)
+via a scratch script, writing them next to the eventual HTML in the project root:
+  - roi-guide-dataflow.png — a 4-column L→R flow: source systems (Xero P&L /
+    ActiveCampaign / Xero bank txns) → Supabase tables (xero_expenses_monthly /
+    activecampaign_deals / marketing_channel_monthly) → API routes
+    (/api/marketing/roi and channel-summary) → roi.html.
+  - roi-guide-sourcemap.png — three source header boxes each over a bullets panel
+    listing which cards/charts that source feeds.
+Read both PNGs back to check for clipping/overflow. Found one issue: the "▸"
+glyph in "Marketing ▸ ROI" rendered as a tofu box (Arial lacked it); replaced it
+with ">" and re-rendered. Both clean after that.
+
+Built the page with a second scratch script: embedded both PNGs as base64 data
+URIs (keeping the .html self-contained), filled the template tokens (title
+"Marketing ROI Dashboard", subtitle, intro band, UPDATED_BY=Julienne,
+LAST_UPDATE="2 November 2026"), and wrote six sections written for a non-engineer:
+  1. What the page shows (the 7 cards + the charts).
+  2. How to read it (AU FY end-year convention, owner-wages-always-excluded,
+     the toggles).
+  3. Where the numbers come from (3 sources) — with the source-map diagram.
+  4. Key things to know (whole-business ≠ ad spend, partial current FY, negative
+     monthly bars, FY22 low-CAC artifact).
+  5. How it's built — architecture pipeline + tech stack — with the data-flow
+     diagram.
+  6. (Closing band with Updated-by / Last-Update.)
+Kept the fixed divider + button sections verbatim per the theme rules.
+
+Output: public-root file marketing-roi-dashboard-guide.html, plus the two loose
+PNGs. Grep-verified no leftover {{tokens}} and that the figure captions/closing
+band rendered. Flagged to the user that the 3 new files sit in the project root
+and will show in git status.
+
+--------------------------------------------------------------------------------
+USER:
+create a chat assistant. use the roas assistant as reference. mirror the ROAS tab
+look and feel.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Studied the ROAS assistant end-to-end first:
+  - server/roasAssistant.js — Router gated by requireAuth; read-only BY
+    CONSTRUCTION (context-stuffs data server-side, ONE OpenAI Chat Completions
+    call, no DB/tools, key stays server-side); 503 if !hasSource('openai');
+    sanitizeMessages() supports messages[] or {question}; PRIMER + DATA SNAPSHOT
+    as the system message.
+  - server/index.js — import + app.use('/api/roas-assistant', …).
+  - server/config.js — config.openai {apiKey:OPENAI_API_KEY, model:OPENAI_MODEL||
+    'gpt-4o-mini'}; hasSource('openai').
+  - public/roas.html — bottom-right #asstLauncher → #asstPanel widget, .asst-*
+    CSS using --roas-accent/--roas-accent-2/--roas-accent-soft (blue→purple),
+    posts history to /api/roas-assistant via postJSON(); mounts only for
+    currentUser().
+Confirmed public/roi.html already loads app.js?v=7 (postJSON + currentUser
+available) and that /api/marketing/roi is cached ~10 min (lib/cache.js). Checked
+getMarketingChannelSummary()'s return shape — it is { months, type, platform,
+meta }, NOT { data }.
+
+Built three pieces:
+
+1) server/roiAssistant.js (NEW, mirrors roasAssistant.js):
+   - POST /api/roi-assistant, requireAuth, 503 without OPENAI_API_KEY.
+   - buildContext() from getMarketingRoi(): per-FY rows shaped with owner-wages-
+     EXCLUDED headline (spendExclOwner/roiExclOwner) AND the incl-owner figures
+     (totalSpend/roiInclOwner), plus netRoiPct, CAC, avgRevPerClient, deal counts;
+     the all-years total; deals_by_pipeline; spend_categories; and a best-effort
+     channel_summary (last 12 months + per-channel totals by type/platform) wrapped
+     in try/catch so a channel outage can't break the assistant.
+   - ROI-specific PRIMER: whole-business (NOT ad-attributed like ROAS), AU FY
+     end-year convention, owner-wages-always-excluded with the ~0.96–0.99× (incl)
+     vs ~1.2–1.45× (excl) framing, the card definitions, the "looks odd but
+     correct" cases (negative monthly bars, FY22 low CAC), and the refresh cadence
+     (Xero P&L static load, channel monthly cron, AC deals daily). Same
+     refusal/grounding/untrusted-snapshot guardrails as ROAS.
+
+2) server/index.js: imported roiAssistantRouter and mounted it at
+   /api/roi-assistant (right after the ROAS mount), with a comment noting it reuses
+   the same OPENAI_API_KEY.
+
+3) public/roi.html: added --roi-accent/--roi-accent-2/--roi-accent-soft (same
+   blue→purple as ROAS, light+dark) + the full .asst-* widget CSS, the
+   launcher/panel markup ("ROI assistant · Read-only"), and the widget JS (ROI
+   greeting/placeholder, posts to /api/roi-assistant). No app.js bump needed
+   (postJSON already present at ?v=7).
+
+Verified: node --check passed on roiAssistant.js and index.js; booted the server
+on PORT 8099 and POST /api/roi-assistant returned 401 unauthenticated — confirming
+the route is mounted behind requireAuth. Could not do a full end-to-end LLM test
+(no OPENAI_API_KEY / SUPABASE_DB_URL locally), but the pattern mirrors the proven
+ROAS assistant exactly.
+
+Told the user it reuses the existing OPENAI_API_KEY already on Cloud Run (no new
+secret), degrades to 503 gracefully without it, and needs a manual dashboard
+redeploy (new server file + roi.html changes). Did not touch CLAUDE.md/as_built at
+that point; offered /dcp.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill (no git). Saved this chat-history file; updated as_built.txt (new
+server/roiAssistant.js SCRIPTS entry + OpenAI integration note extended to cover
+the ROI assistant; bumped Last updated); updated CLAUDE.md (noted the ROI chat
+assistant mirroring ROAS); confirmed .gitignore already covers secrets. Reminded
+the user that nothing was committed or pushed.
+
+================================================================================
+END OF EXPORT
+================================================================================

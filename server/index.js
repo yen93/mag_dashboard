@@ -22,6 +22,7 @@ import { getMarketingRoi } from './metrics/marketing-roi.js';
 import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
+import { roiAssistantRouter } from './roiAssistant.js';
 import { cached, clearCache } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
 import { canReviewJc } from './users.js';
@@ -328,6 +329,10 @@ app.use('/api/ga4-agent', ga4AgentRouter);
 // ROAS tab read-only chat assistant (context-stuffed OpenAI call; no DB tools). See
 // server/roasAssistant.js. Needs OPENAI_API_KEY.
 app.use('/api/roas-assistant', roasAssistantRouter);
+
+// ROI tab read-only chat assistant (context-stuffed OpenAI call; no DB tools). See
+// server/roiAssistant.js. Needs OPENAI_API_KEY (same key as the ROAS assistant).
+app.use('/api/roi-assistant', roiAssistantRouter);
 
 // Serve the plain HTML/CSS/JS pages from public/.
 const publicDir = path.join(__dirname, '..', 'public');
