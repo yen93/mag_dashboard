@@ -1,0 +1,12 @@
+**marketing_expenses:** 
+"C:\Users\Cloverly\claude_code\dashboard\Marketing Expenses - Xero Account - Description.md"
+
+**widgets_affected:**
+1. all cards affected
+2. Revenue vs spend by month
+3. Channel Summary
+
+## main_task:
+1. ROI tab expenses should only come from marketing_expenses
+2. update all widgets_affected data/numbers
+3. update Channel Summary graph so it has a new tab for all Xero Account in marketing_expenses

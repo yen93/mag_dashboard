@@ -5,9 +5,10 @@
 // that was hard-coded in roi.html from the "MAG: MKTG ROI Report" workbook.
 //
 // Shape returned matches what roi.html's renderChannelChart() expects:
-//   { months:['Jul-2025',…], type:[{name,data:[…]}], platform:[{name,data:[…]}], meta }
-// `type` covers ALL kept spend (unmapped vendors on the open accounts 302/475 roll up as
-// 'Uncategorized'); `platform` covers only the ad platforms (Google/Bing/Website/…).
+//   { months:['Jul-2025',…], type:[…], platform:[…], account:[…], meta } (each […] = [{name,data}])
+// `type` covers ALL kept spend (unmapped vendors on the open account 302 roll up as
+// 'Uncategorized'); `platform` covers only the ad platforms (Google/Bing/Website/…);
+// `account` splits by the Xero marketing account (Advertising / Website / Software / …).
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { section } from '../lib/metric.js';
@@ -37,6 +38,22 @@ const BY_PLATFORM = `
   FROM public.marketing_channel_monthly c
   JOIN public.marketing_channel_vendor_map m ON m.contact_id = c.contact_id
   WHERE m.platform IS NOT NULL
+  GROUP BY 1, 2`;
+
+// By Xero marketing account (the "Marketing Expenses - Xero Account" view). Covers ALL kept
+// spend, same scope as BY_TYPE — just bucketed by the account the line was coded to.
+const BY_ACCOUNT = `
+  SELECT to_char(c.month, 'YYYY-MM-01') AS month,
+         CASE c.account_code
+           WHEN '302' THEN 'Advertising and marketing'
+           WHEN '475' THEN 'Website Expenses'
+           WHEN '332' THEN 'Software subscriptions'
+           WHEN '411' THEN 'Printing, stationery & postage'
+           WHEN '377' THEN 'WrkPod Staff'
+           ELSE 'Account ' || c.account_code
+         END AS bucket,
+         round(sum(c.amount))::numeric AS amount
+  FROM public.marketing_channel_monthly c
   GROUP BY 1, 2`;
 
 // Pivot [{month, bucket, amount}] → { months:[…], series:[{name,data:[…]}] }.
@@ -70,16 +87,18 @@ export async function getMarketingChannelSummary() {
       months: [],
       type: section([], { source: SRC, status: 'pending', note: 'Supabase not configured.' }).data,
       platform: [],
+      account: [],
       meta: { source: SRC, status: 'pending', note: 'Supabase not configured (set SUPABASE_DB_URL).' },
     };
   }
 
-  const [typeRows, platRows] = await Promise.all([q(BY_TYPE), q(BY_PLATFORM)]);
+  const [typeRows, platRows, acctRows] = await Promise.all([q(BY_TYPE), q(BY_PLATFORM), q(BY_ACCOUNT)]);
   const t = pivot(typeRows);
   const p = pivot(platRows);
+  const a = pivot(acctRows);
 
-  // Both breakdowns share the same month axis (the union of months seen).
-  const months = [...new Set([...t.months, ...p.months])].sort();
+  // All breakdowns share the same month axis (the union of months seen).
+  const months = [...new Set([...t.months, ...p.months, ...a.months])].sort();
   const reindex = (series, srcMonths) => series.map((s) => {
     const byMonth = new Map(srcMonths.map((mo, i) => [mo, s.data[i]]));
     return { name: s.name, data: months.map((mo) => byMonth.get(mo) || 0) };
@@ -88,8 +107,8 @@ export async function getMarketingChannelSummary() {
   const note = months.length
     ? `${months.length} month(s) (${monLabel(months[0])}–${monLabel(months[months.length - 1])}). ` +
       `Live Xero marketing spend (bank transactions on accounts 302/475/332/411/377), categorised by ` +
-      `vendor. Refreshed monthly by xero-channel-summary-sync. Unmapped vendors on the ad accounts ` +
-      `(302/475) show as "Uncategorized".`
+      `vendor. Refreshed monthly by xero-channel-summary-sync. Unmapped vendors on the open ad account ` +
+      `(302) show as "Uncategorized".`
     : 'No channel-summary rows yet — run the xero-channel-summary-sync edge function.';
 
   return {
@@ -97,6 +116,7 @@ export async function getMarketingChannelSummary() {
     months: months.map(monLabel),
     type: reindex(t.series, t.months),
     platform: reindex(p.series, p.months),
+    account: reindex(a.series, a.months),
     meta: { source: SRC, status: months.length ? 'live' : 'pending', note },
   };
 }

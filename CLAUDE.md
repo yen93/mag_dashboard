@@ -49,12 +49,16 @@ Cloud Run.
   `server/metrics/marketing-roi.js`)** is a self-rendering page (same pattern as `roas.html`:
   `initPage('marketing')` with no renderFn + `renderMarketingSidebar('roi')` + its own
   `fetchJSON`). LIVE, computed at request time from Supabase, framed by Australian FY (Jul–Jun,
-  END-year) with an FY filter bar (default = current FY). Unlike ROAS it is **WHOLE-BUSINESS,
-  NOT ad-attributed**. **BOTH revenue AND spend now come from the Xero P&L (as of 2026-10-29),
-  read from `public.xero_expenses_monthly`:** revenue = `total_income` (Xero P&L "Total Income",
-  **ex-GST, accrual** — new column added 2026-10-29; **REPLACED the old `invoice_tracking`
-  incl-GST source**, which was 2026+ only); **total spend = operating_expenses + cost_of_sales**
-  (`total_spend` is a GENERATED column = op_ex + cos — don't INSERT it). The table is a STATIC
+  END-year) with an FY filter bar (default = current FY). Unlike ROAS it is **NOT ad-attributed**.
+  **As of 2026-11-02 the ROI tab's SPEND is MARKETING-ONLY** (revenue stays whole-business), so the
+  page is a **return on MARKETING investment**, not a whole-business margin. **Revenue** = `total_income`
+  from `public.xero_expenses_monthly` (Xero P&L "Total Income", **ex-GST, accrual**; REPLACED the old
+  `invoice_tracking` incl-GST source). **Marketing spend** now = **`public.marketing_channel_monthly`**
+  (the SAME live-from-Xero marketing pipeline that backs the Channel Summary — see below), summed by
+  month/FY in `marketing-roi.js`, matching `Marketing Expenses - Xero Account - Description.md` exactly.
+  This **REPLACED** the old whole-business spend (`operating_expenses + cost_of_sales`); ROI now reads
+  `xero_expenses_monthly` for **revenue only** (its `total_spend`/`owner_wages` columns are no longer
+  read here). The revenue table is a STATIC
   Xero-P&L load via MCP (refresh routine pending), covering **FY22–FY27 MONTHLY** (Jul 2021–
   current; FY24–FY27 re-seeded 2026-10-29, **FY22 & FY23 manual monthly seeds 2026-10-30**). deals =
   ALL `activecampaign_deals` (status 1/2/0 by `cdate`, won value via `public.ac_value_aud`), also
@@ -69,54 +73,59 @@ Cloud Run.
   cent** with the FY totals, and the FY24 export reconciled against the API rows, validating the
   grouping (**`total_income` = Total *Trading* Income only — Other Income like interest/COVID grants
   is EXCLUDED**, matching FY24+). `marketing-roi.js` **`MONTH_FLOOR` was lowered `2023-07-01` →
-  `2021-07-01`** so the by-month chart now covers FY22+ (a dashboard redeploy). **GOTCHA: Xero books
-  owner Wages+Super as a single JUNE journal each year**, so `owner_wages` lands entirely in June —
-  and the page ALWAYS excludes owner wages, so the FY22/FY23 **June spend bar can read NEGATIVE** (June's
-  owner comp > its other spend); real, nets out at FY level. Jun-2023 `total_income` is also negative
-  (year-end accrual reversal). To add/refresh FY22/FY23, re-export monthly from Xero and re-run the
-  seed (the API can't reach them). The current FY is partial (YTD) so its spend is below a full year.
-  **NB FY22 has 162 "won" AC deals (COVID-era, many small/virtual), so its CAC/avg-rev-per-client
-  read low — a deal-count denominator artifact, not a data error; the Xero revenue/spend are solid.** **Owner wages ALWAYS EXCLUDED
-  (as of 2026-10-30 the `#exclOwnerToggle` checkbox + its listener were REMOVED; `EXCL_OWNER` is now
-  a fixed `true` constant in `roi.html`):** the page always subtracts director wages+super (Xero accounts
-  *Wages/Super – James & Mia*, stored monthly in the `xero_expenses_monthly.owner_wages`
-  column — a subset of `operating_expenses`, don't double-count) from Total spend and recomputes
-  ROI **client-side** (`effSpend()`/`effRoi()`/`effMonthSpend()` in `roi.html`); backend still returns
-  `ownerWages` per FY + per month. WITH owner comp in, the business runs ~breakeven (ROI ~0.96–0.99
-  = Xero's own net profit); excluding it (the page's view), ROI ≈ 1.2–1.45 (operating profit before director pay).
+  `2021-07-01`** so the by-month revenue series covers FY22+. (The marketing-spend series covers FY22+
+  too — see the Channel Summary paragraph; its Xero pull floor was lowered to `2021-07-01` on 2026-11-02.)
+  The current FY and FY22 are partial (YTD / Xero bank-txn history begins ~early 2022), so their spend is
+  below a full year. Jun-2023 `total_income` is negative (year-end accrual reversal). To add/refresh the
+  FY22/FY23 *revenue* seed, re-export monthly from Xero and re-run the seed (the API can't reach them).
+  **NB FY22 has 162 "won" AC deals (COVID-era, many small/virtual), so its CAC/avg-rev reads low — a
+  deal-count artifact, not an error.** **Owner/director wages are NO LONGER RELEVANT here (as of
+  2026-11-02):** marketing spend excludes all wages except the listed WrkPod marketing team, so the old
+  `#exclOwnerToggle` / `EXCL_OWNER` / `owner_wages` machinery was removed from `roi.html` — `effSpend()`/
+  `effRoi()`/`effMonthSpend()` now just pass the marketing spend through. Typical **return on marketing
+  spend ≈ 7–20× per FY** (whole-business revenue ÷ marketing spend; e.g. FY26 ≈ $1.15M ÷ $140k ≈ 8.2×).
   **7 cards as of 2026-10-30** (Total revenue / **Marketing spend** / Return on spend `x.xx×` /
   **Net ROI** `±%` / Clients won / **Cost per client (CAC)** / Avg revenue per client) — all
   computed **client-side** in `render()` from the existing `/api/marketing/roi` payload (no backend
   change), null-guarded: `cac = effSpend÷dealsWon`, `avgRev = revenue÷dealsWon`,
-  `netRoi = (roi−1)×100`; the money cards always exclude owner wages via `effSpend()`.
-  (NB the cards' "Marketing spend"/CAC/ROI are really **whole-business** figures, not ad spend —
-  the sub-text says so.) Plus 2 charts (**revenue-vs-spend by month** =
+  `netRoi = (roi−1)×100`; spend comes straight from the marketing-spend payload (`effSpend()` is a
+  pass-through now). The cards' "Marketing spend"/CAC/ROI are genuinely **MARKETING** figures (revenue
+  whole-business ÷ marketing-only spend). Plus 2 charts (**revenue-vs-spend by month** =
   a **DUAL-AXIS combo chart** as of
   2026-10-29: green **spend bars** on the left $ axis, blue **revenue line** on the right $ axis —
   self-rendered by `renderMonthChart()` in `roi.html`, **no longer** the shared-axis `lineChart`;
   **AC pipeline Won/Open/Lost per pipeline** as horizontal stacked bars, with a **"Won only"
   toggle** `#pipeWonToggle` that drops Open/Lost and re-sorts by won), a "Where the spend goes"
-  category chart, a **LIVE "Channel Summary" chart (as of 2026-10-30)** — a monthly **STACKED bar
-  chart** (months on the x axis) with a **By type / By platform** toggle (`#channelDimBar`),
+  category chart (**as of 2026-11-02 = marketing spend by Xero account** for the selected FY —
+  `CATEGORIES_SQL` groups `marketing_channel_monthly` by `account_code`; was whole-business P&L
+  accounts), a **LIVE "Channel Summary" chart (as of 2026-10-30)** — a monthly **STACKED bar
+  chart** (months on the x axis) with a **By type / By platform / By account** toggle (`#channelDimBar`;
+  **"By account" added 2026-11-02** = split by Xero marketing account),
   self-rendered by `renderChannelChart()` in `roi.html`. `loadChannelSummary()` fetches
   **`/api/marketing/channel-summary`** (`server/metrics/marketing-channel-summary.js`), which is
   backed by the **live-from-Xero channel pipeline**: the **`xero-channel-summary-sync` edge fn**
-  (reuses the `xero-ad-spend-sync` Xero OAuth) pulls **SPEND bank transactions** on the marketing
-  accounts (**302 Advertising, 475 Website = OPEN; 332 Software, 411 Printing, 377 WrkPod Staff =
-  SHARED**), buckets ex-GST by (month, contact, account) into **`public.marketing_channel_monthly`**,
-  and the API joins **`public.marketing_channel_vendor_map`** (contact_id → type/platform, 34 seeded
-  vendors) for the Type/Platform. **Key rule:** a line is kept if its contact is MAPPED **or** it's
-  on an OPEN account (302/475, where unmapped vendors roll up as **"Uncategorized"**); unmapped
-  vendors on SHARED accounts (which also hold non-marketing spend — Netflix, staff wages) are
-  **dropped**. So to categorise a new/Uncategorized vendor, **insert a row into
+  (reuses the `xero-ad-spend-sync` Xero OAuth) pulls **SPEND bank transactions** since the pull floor
+  (`XERO_CHANNEL_SINCE`, default **`2021-07-01`** = FY22 as of 2026-11-02; was 2025-07-01) on the
+  marketing accounts (**302 Advertising = OPEN; 475 Website, 332 Software, 411 Printing, 377 WrkPod
+  Staff = SHARED** — only 302 is OPEN as of 2026-11-02, matching the spec's "ALL DESCRIPTIONS" for
+  302 and listed-vendors-only for the rest; **475 moved OPEN→SHARED then**), buckets ex-GST by
+  (month, contact, account) into **`public.marketing_channel_monthly`**, and the API joins
+  **`public.marketing_channel_vendor_map`** (contact_id → type/platform, ~38 seeded vendors) for the
+  Type/Platform. **Key rule:** a line is kept if its contact is MAPPED **or** it's on the OPEN account
+  (302, where unmapped vendors roll up as **"Uncategorized"**); unmapped vendors on the SHARED accounts
+  (475/332/411/377, which also hold non-marketing spend — Netflix, non-marketing staff wages) are
+  **dropped**. So to categorise/include a new vendor, **insert a row into
   `marketing_channel_vendor_map`** — no Xero re-pull (Type/Platform are joined at query time, not
-  stored). Refreshed **monthly** by cron `xero-channel-summary-sync-monthly` (`0 22 2 * *`). AP bills
+  stored). **The deployed defaults (`SINCE`/`OPEN_ACCOUNTS=302`/`SHARED_ACCOUNTS=475,332,411,377`) live
+  in the edge fn's `index.ts`** (env secrets can override). Since the sync WIPES-then-reinserts the whole
+  window, keep `SINCE` a stable FY22 floor (narrowing it deletes history). Refreshed **monthly** by cron
+  `xero-channel-summary-sync-monthly` (`0 22 2 * *`). AP bills
   are fetched best-effort but 401 (the Xero app scope lacks invoices) — non-fatal, since the spend is
   all in bank txns. The chart is loaded once (independent of the FY bar). — and an ROI-by-FY table, all
   re-rendered client-side on FY change. The page is **full-width** (`.content { max-width: none }`,
   like `sales_overview`) and its FY toolbar is **sticky** (`position:sticky; top:var(--topbar-h,58px)`)
-  so it freezes under the top bar on scroll. Note: raw monthly P&L carries year-end accrual reversals,
-  so a few months (e.g. Jun 2024) show a **negative spend bar** — kept as-is (annual FY totals net
+  so it freezes under the top bar on scroll. Note: a Xero year-end accrual reversal can occasionally make
+  a single month's marketing-spend bar read slightly **negative** — kept as-is (annual FY totals net
   correctly). The 6 other Marketing pages' `app.js` was bumped to `?v=7` so the ROI link shows.
   **Operations left sidebar (as of 2026-10-22):** `mag_buyer_sheet.html` (nav "Buyer Analysis" —
   in-page `<h3>`/`<title>` still read "Buyer Sheet") and `invoice_tracking.html` ("Invoices")

@@ -1,39 +1,41 @@
-// Marketing ROI — whole-business revenue vs TOTAL SPEND, by AUSTRALIAN FINANCIAL YEAR
+// Marketing ROI — whole-business revenue vs MARKETING SPEND, by AUSTRALIAN FINANCIAL YEAR
 // (Jul–Jun, END-year convention: FY27 = Jul 2026–Jun 2027), the same FY framing the
 // ROAS tab uses. LIVE, computed at request time from Supabase.
 //
-// WHOLE-BUSINESS (not ad-attributed like ROAS):
-//   • Revenue    → Xero P&L "Total Income" per month, public.xero_expenses_monthly.total_income
-//                  (ex-GST, accrual). Sourced from the same monthly P&L as spend, so revenue and
-//                  spend are apples-to-apples. (This REPLACED the old invoice_tracking source,
-//                  which was 2026+ only and incl-GST — see git history / CLAUDE.md.)
-//   • Total spend → ALL Xero expenses across every dept = operating_expenses + cost_of_sales,
-//                  public.xero_expenses_monthly (seeded from the Xero P&L; see that table's
-//                  comment). This REPLACED the old ad-only spend (google/bing/simple_digital).
-//   • Deals      → ALL ActiveCampaign deals, public.activecampaign_deals, bucketed by cdate.
-//                  status 1=won, 2=lost, 0=open. Won value via public.ac_value_aud (cents→AUD).
-//                  Also broken down PER PIPELINE (activecampaign_deals."group") for the pipeline
-//                  chart — group→name map below (from AC dealGroups).
+// Revenue is WHOLE-BUSINESS; spend is MARKETING-ONLY (return on marketing investment):
+//   • Revenue      → Xero P&L "Total Income" per month, public.xero_expenses_monthly.total_income
+//                    (ex-GST, accrual).
+//   • Marketing spend → public.marketing_channel_monthly (the SAME live-from-Xero marketing
+//                    pipeline that backs the Channel Summary chart), summed by month/FY. This is
+//                    EXACTLY the "Marketing Expenses - Xero Account - Description.md" scope: Xero
+//                    accounts 302 Advertising (ALL vendors) + 475 Website / 332 Software /
+//                    411 Printing / 377 WrkPod-Staff (listed vendors only, via
+//                    marketing_channel_vendor_map). ex-GST. (REPLACED the old whole-business
+//                    spend = operating_expenses + cost_of_sales on 2026-11-02 — so owner/director
+//                    wages no longer figure here at all.)
+//   • Deals        → ALL ActiveCampaign deals, public.activecampaign_deals, bucketed by cdate.
+//                    status 1=won, 2=lost, 0=open. Won value via public.ac_value_aud (cents→AUD).
+//                    Also broken down PER PIPELINE (activecampaign_deals."group") for the pipeline
+//                    chart — group→name map below (from AC dealGroups).
 //
-// FY axis = FYs that have Xero P&L (revenue/spend) OR ActiveCampaign deals. Xero's API only
-// exposes the current + 3 prior financial years, so P&L reaches back to FY24 only; deals reach
-// FY22. So FY22/FY23 appear with deal counts but BLANK revenue/spend/ROI (null, not $0) — the
-// page flags this. The frontend filters the returned per-FY rows + monthly series client-side
-// via an FY bar (default = current FY).
+// FY axis = FYs that have Xero P&L (revenue) OR marketing spend OR ActiveCampaign deals. The
+// marketing-spend pipeline and the revenue P&L both reach back to FY22 (FY22 is partial — Xero
+// bank-txn history begins ~early 2022). The frontend filters the returned per-FY rows + monthly
+// series client-side via an FY bar (default = current FY).
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { section } from '../lib/metric.js';
 
 const SRC =
-  'Live (Supabase): revenue + total spend from xero_expenses_monthly (Xero P&L: total income, ' +
-  'operating expenses, cost of sales); deals from activecampaign_deals';
+  'Live (Supabase): revenue from xero_expenses_monthly (Xero P&L total income); marketing spend ' +
+  'from marketing_channel_monthly (Xero marketing accounts 302/475/332/411/377); deals from ' +
+  'activecampaign_deals';
 
 // AU financial-year END year from a date column: calendar year + 1 if month >= July.
 const FY = (col) =>
   `extract(year FROM ${col})::int + CASE WHEN extract(month FROM ${col}) >= 7 THEN 1 ELSE 0 END`;
 
-// Earliest month fed to the monthly chart = FY22 start. FY24+ is API-sourced; FY22/FY23 are
-// manual monthly seeds (migrations 2026103014/15/160000), so the by-month chart covers FY22+.
+// Earliest month fed to the monthly chart = FY22 start.
 const MONTH_FLOOR = '2021-07-01';
 
 // AC deal pipeline (dealGroups) id → display name. Static (from list_deal_pipelines);
@@ -51,15 +53,25 @@ const PIPELINES = {
 };
 const pipelineName = (g) => PIPELINES[String(g)] || `Pipeline ${g}`;
 
+// Xero marketing account code → display name (the five accounts the marketing-spend pipeline
+// covers; see marketing_channel_monthly / the xero-channel-summary-sync edge function).
+const ACCOUNT_NAMES = {
+  '302': 'Advertising and marketing',
+  '475': 'Website Expenses',
+  '332': 'Software subscriptions',
+  '411': 'Printing, stationery & postage',
+  '377': 'WrkPod Staff',
+};
+const accountName = (code) => ACCOUNT_NAMES[String(code)] || `Account ${code}`;
+
 const BY_FY = `
   WITH pnl AS (
-    SELECT ${FY('month')} AS fy_end,
-      sum(total_income)      AS revenue,
-      sum(operating_expenses) AS op_ex,
-      sum(cost_of_sales)      AS cos,
-      sum(total_spend)        AS total,
-      sum(coalesce(owner_wages, 0)) AS owner_wages
+    SELECT ${FY('month')} AS fy_end, sum(total_income) AS revenue
     FROM public.xero_expenses_monthly GROUP BY 1
+  ),
+  mkt AS (
+    SELECT ${FY('month')} AS fy_end, sum(amount) AS spend
+    FROM public.marketing_channel_monthly GROUP BY 1
   ),
   d AS (
     SELECT ${FY('cdate')} AS fy_end,
@@ -71,33 +83,42 @@ const BY_FY = `
   ),
   axis AS (
     SELECT fy_end FROM pnl
-    UNION
-    SELECT fy_end FROM d
+    UNION SELECT fy_end FROM mkt
+    UNION SELECT fy_end FROM d
   )
   SELECT
     a.fy_end                              AS "fyEnd",
     'FY' || right(a.fy_end::text, 2)      AS "fy",
-    round(p.revenue)::numeric             AS "revenue",     -- null for FYs with no Xero P&L (FY22/FY23)
-    round(p.op_ex)::numeric               AS "opEx",
-    round(p.cos)::numeric                 AS "cos",
-    round(p.total)::numeric               AS "totalSpend",  -- null for FYs with no Xero P&L
-    round(p.owner_wages)::numeric         AS "ownerWages",  -- owner/director wages+super (subset of opEx)
+    round(p.revenue)::numeric             AS "revenue",     -- null for FYs with no Xero P&L
+    round(mk.spend)::numeric              AS "totalSpend",  -- marketing spend; null for FYs with none
     coalesce(d.won, 0)                    AS "dealsWon",
     coalesce(d.open, 0)                   AS "dealsOpen",
     coalesce(d.lost, 0)                   AS "dealsLost",
     coalesce(d.won_value, 0)::numeric     AS "wonValue"
   FROM axis a
-  LEFT JOIN pnl p ON p.fy_end = a.fy_end
-  LEFT JOIN d     ON d.fy_end = a.fy_end
+  LEFT JOIN pnl p  ON p.fy_end = a.fy_end
+  LEFT JOIN mkt mk ON mk.fy_end = a.fy_end
+  LEFT JOIN d      ON d.fy_end  = a.fy_end
   ORDER BY a.fy_end`;
 
+// Revenue (whole-business P&L) vs marketing spend, per month, over the union of months either
+// source has. Months missing from one side read 0 there.
 const BY_MONTH = `
-  SELECT to_char(date_trunc('month', month), 'YYYY-MM') AS "month",
-         round(coalesce(total_income, 0))::numeric AS "revenue",
-         round(coalesce(total_spend, 0))::numeric  AS "spend",
-         round(coalesce(owner_wages, 0))::numeric  AS "ownerWages"
-  FROM public.xero_expenses_monthly
-  WHERE month >= '${MONTH_FLOOR}'
+  WITH rev AS (
+    SELECT date_trunc('month', month)::date AS m, sum(total_income) AS revenue
+    FROM public.xero_expenses_monthly WHERE month >= '${MONTH_FLOOR}' GROUP BY 1
+  ),
+  sp AS (
+    SELECT date_trunc('month', month)::date AS m, sum(amount) AS spend
+    FROM public.marketing_channel_monthly WHERE month >= '${MONTH_FLOOR}' GROUP BY 1
+  ),
+  months AS (SELECT m FROM rev UNION SELECT m FROM sp)
+  SELECT to_char(mo.m, 'YYYY-MM')              AS "month",
+         round(coalesce(rev.revenue, 0))::numeric AS "revenue",
+         round(coalesce(sp.spend, 0))::numeric    AS "spend"
+  FROM months mo
+  LEFT JOIN rev ON rev.m = mo.m
+  LEFT JOIN sp  ON sp.m  = mo.m
   ORDER BY 1`;
 
 // Per-pipeline deal counts by FY (for the "AC pipeline" chart, one bar per pipeline).
@@ -110,12 +131,13 @@ const PIPELINE_SQL = `
   WHERE cdate IS NOT NULL AND "group" IS NOT NULL
   GROUP BY 1, 2`;
 
-// Per-FY Xero P&L spend accounts (for the "Where the spend goes" chart).
+// Marketing spend by Xero account, per FY (for the "Where the spend goes" chart).
 const CATEGORIES_SQL = `
-  SELECT fy_end AS "fyEnd", account_name AS "account", kind AS "kind",
-         round(amount)::numeric AS "amount"
-  FROM public.xero_pnl_accounts_fy
-  ORDER BY fy_end, amount DESC`;
+  SELECT ${FY('month')} AS "fyEnd", account_code AS "code",
+         round(sum(amount))::numeric AS "amount"
+  FROM public.marketing_channel_monthly
+  GROUP BY 1, 2
+  ORDER BY 1, 3 DESC`;
 
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
@@ -126,18 +148,15 @@ function fyEndOfMonth(ym) {
 }
 
 function shape(r) {
-  const revenue = num(r.revenue);       // null = no Xero P&L for this FY (FY22/FY23)
-  const totalSpend = num(r.totalSpend); // null = no Xero P&L for this FY (FY22/FY23)
+  const revenue = num(r.revenue);       // null = no Xero P&L for this FY
+  const totalSpend = num(r.totalSpend); // null = no marketing spend for this FY
   return {
     fy: r.fy,
     fyEnd: num(r.fyEnd),
     revenue,
     hasRevenue: revenue !== null,
-    opEx: num(r.opEx),
-    cos: num(r.cos),
     totalSpend,
     hasSpend: totalSpend !== null,
-    ownerWages: num(r.ownerWages) || 0, // owner/director wages+super (subset of totalSpend)
     dealsWon: num(r.dealsWon) || 0,
     dealsOpen: num(r.dealsOpen) || 0,
     dealsLost: num(r.dealsLost) || 0,
@@ -158,11 +177,8 @@ function totalRow(rows) {
     fyEnd: null,
     revenue,
     hasRevenue: anyRevenue,
-    opEx: sum('opEx'),
-    cos: sum('cos'),
     totalSpend,
     hasSpend: anySpend,
-    ownerWages: sum('ownerWages'),
     dealsWon: sum('dealsWon'),
     dealsOpen: sum('dealsOpen'),
     dealsLost: sum('dealsLost'),
@@ -191,7 +207,7 @@ export async function getMarketingRoi() {
   const rows = fyRows.map(shape);
 
   if (!rows.length) {
-    const note = 'No Xero P&L found — seed xero_expenses_monthly (total_income/expenses/cost_of_sales).';
+    const note = 'No data — seed xero_expenses_monthly (revenue) and run xero-channel-summary-sync (marketing spend).';
     const pend = { source: SRC, status: 'pending', note };
     return {
       asOf: new Date().toISOString(),
@@ -211,7 +227,6 @@ export async function getMarketingRoi() {
     fyEnd: fyEndOfMonth(m.month),
     revenue: num(m.revenue) || 0,
     spend: num(m.spend) || 0,
-    ownerWages: num(m.ownerWages) || 0,
   }));
 
   // Per-pipeline counts, scoped to the FY axis (so the chart matches the shown FYs).
@@ -226,13 +241,13 @@ export async function getMarketingRoi() {
       lost: num(p.lost) || 0,
     }));
 
-  const OWNER_WAGE_ACCOUNTS = new Set(['Wages - James & Mia', 'Super - James & Mia']);
+  // Marketing spend by account, per FY (for "Where the spend goes").
   const categories = catRows.map((c) => ({
     fyEnd: num(c.fyEnd),
-    account: c.account,
-    kind: c.kind,
+    account: accountName(c.code),
+    code: String(c.code),
+    kind: 'marketing',
     amount: num(c.amount) || 0,
-    isOwnerWage: OWNER_WAGE_ACCOUNTS.has(c.account),
   }));
 
   const total = totalRow(rows);
@@ -242,16 +257,14 @@ export async function getMarketingRoi() {
   const curFy = now.getUTCFullYear() + (now.getUTCMonth() + 1 >= 7 ? 1 : 0);
   const defaultFy = fyEnds.includes(curFy) ? curFy : fyEnds[fyEnds.length - 1];
 
-  const firstRev = rows.find((r) => r.hasRevenue);
   const note =
     `${rows.length} FY(s) (${rows[0].fy}–${rows[rows.length - 1].fy}). ` +
-    `Revenue = Xero P&L total income (ex-GST); total spend = all Xero expenses (operating + cost of ` +
-    `sales) across every dept; deals = all ActiveCampaign deals by created date. ` +
-    `Xero only exposes the last 4 financial years, so revenue/spend reach back to ${firstRev ? firstRev.fy : 'FY24'} ` +
-    `only — earlier FYs (${rows[0].fy}+) show deal counts but blank revenue/spend/ROI. The current FY is ` +
-    `partial (year-to-date), so its spend is below a full year. The "excl. owner wages" toggle removes ` +
-    `director wages+super (Wages/Super – James & Mia) from spend/ROI — the business runs near-breakeven ` +
-    `with them in. Expenses/revenue are a static Xero P&L load (refresh pending).`;
+    `Revenue = Xero P&L total income (ex-GST, whole business); spend = MARKETING expenses only ` +
+    `(Xero accounts: Advertising — all vendors — plus the listed Website / Software / Printing / ` +
+    `WrkPod-Staff vendors), ex-GST, live from Xero bank transactions and refreshed monthly; ` +
+    `deals = all ActiveCampaign deals by created date. So "Return on spend" is return on MARKETING ` +
+    `investment (whole-business revenue ÷ marketing spend), not a whole-business margin. FY22 and the ` +
+    `current FY are partial, so their spend is below a full year — compare full years to full years.`;
 
   return {
     asOf: new Date().toISOString(),

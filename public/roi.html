@@ -103,13 +103,13 @@
 
       <div class="card col-12">
         <div class="card-head"><h3>Where the spend goes</h3><span class="chips" id="catChips"></span></div>
-        <p class="muted" style="font-size:12px;margin:-6px 0 8px">Top expense categories (Xero P&amp;L accounts) for the selected FY — the rest grouped as “Other”.</p>
+        <p class="muted" style="font-size:12px;margin:-6px 0 8px">Marketing spend by Xero account (Advertising, Website, Software, Printing, WrkPod Staff) for the selected FY.</p>
         <div class="chart-box" id="roi-cat-chart" style="height:360px"><canvas id="roiCatCanvas"></canvas></div>
       </div>
 
       <div class="card col-12">
         <div class="card-head"><h3>Channel Summary</h3>
-          <div class="segmented" id="channelDimBar" style="margin-left:6px"><button data-dim="type">By type</button><button data-dim="platform">By platform</button></div>
+          <div class="segmented" id="channelDimBar" style="margin-left:6px"><button data-dim="type">By type</button><button data-dim="platform">By platform</button><button data-dim="account">By account</button></div>
           <span class="chips" id="channelChips" style="margin-left:auto"></span>
         </div>
         <p class="muted" style="font-size:12px;margin:-6px 0 8px">Marketing spend by month, stacked by category (or by ad platform). Live from Xero, refreshed monthly. Vendors on the ad accounts not yet categorised show as “Uncategorized”.</p>
@@ -130,19 +130,15 @@
     var ROI = null;    // full API payload
     var SEL = null;    // selected fy_end (number) or 'all'
     var PIPE_WON_ONLY = false;   // pipeline chart: show only the Won count per pipeline
-    var EXCL_OWNER = true;       // ALWAYS exclude owner/director wages+super from spend & ROI (toggle removed 2026-10-30)
 
-    // Effective spend/ROI for a FY row, honouring the "exclude owner wages" toggle.
-    function effSpend(row) {
-      if (!row || !row.hasSpend) return null;
-      return row.totalSpend - (EXCL_OWNER ? (row.ownerWages || 0) : 0);
-    }
+    // Spend here is MARKETING spend (Xero marketing accounts, ex-GST) — no owner/director wages
+    // to subtract, so these are plain pass-throughs (the old "exclude owner wages" toggle is gone).
+    function effSpend(row) { return (row && row.hasSpend) ? row.totalSpend : null; }
     function effRoi(row) {
       var s = effSpend(row);
       return (row && row.hasRevenue && s) ? row.revenue / s : null;
     }
-    // Effective monthly spend (for the month chart bars).
-    function effMonthSpend(m) { return m.spend - (EXCL_OWNER ? (m.ownerWages || 0) : 0); }
+    function effMonthSpend(m) { return m.spend; }
 
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
 
@@ -192,10 +188,10 @@
 
       // Cards: Total revenue · Marketing spend · Return on spend · Clients won ·
       //        Cost per client (CAC) · Avg revenue / client
-      var spend = effSpend(row);           // honours the "exclude owner wages" toggle
+      var spend = effSpend(row);           // marketing spend (Xero marketing accounts, ex-GST)
       var roi = effRoi(row);
-      var spendSub = !row.hasSpend ? 'No Xero P&L for this FY (pre-FY24)' :
-        (EXCL_OWNER ? 'All expenses + cost of sales, excl. owner wages' : 'All expenses + cost of sales');
+      var spendSub = !row.hasSpend ? 'No marketing spend recorded for this FY' :
+        'Marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST';
       // Net ROI % = profit ÷ spend = (return on spend − 1) × 100 (e.g. 1.23× → +23%).
       var netRoi = roi != null ? Math.round((roi - 1) * 100) : null;
       // Per-client economics — guard on having spend/revenue AND at least one won deal.
@@ -204,22 +200,22 @@
       renderKpis('kpis', [
         { label: 'Total revenue',
           metric: { value: row.hasRevenue ? row.revenue : null, unit: 'currency', meta: meta },
-          sub: row.hasRevenue ? null : 'No Xero P&L for this FY (pre-FY24)' },
+          sub: row.hasRevenue ? 'Xero P&L total income (whole business)' : 'No revenue recorded for this FY' },
         { label: 'Marketing spend',
           metric: { value: row.hasSpend ? spend : null, unit: 'currency' },
           sub: spendSub },
         { label: 'Return on spend',
           metric: { value: roi != null ? roi.toFixed(2) + '×' : null, unit: 'text' },
-          sub: roi != null ? 'Revenue ÷ spend' : null },
+          sub: roi != null ? 'Revenue ÷ marketing spend' : null },
         { label: 'Net ROI',
           metric: { value: netRoi != null ? (netRoi > 0 ? '+' : '') + netRoi + '%' : null, unit: 'text' },
-          sub: netRoi != null ? 'Profit ÷ spend' : null },
+          sub: netRoi != null ? '(Return on spend − 1)' : null },
         { label: 'Clients won',
           metric: { value: row.dealsWon, unit: 'count' },
           sub: row.dealsOpen + ' open · ' + row.dealsLost + ' lost' },
         { label: 'Cost per client (CAC)',
           metric: { value: cac, unit: 'currency' },
-          sub: cac != null ? 'Spend ÷ clients won' : null },
+          sub: cac != null ? 'Marketing spend ÷ clients won' : null },
         { label: 'Avg revenue / client',
           metric: { value: avgRev, unit: 'currency' },
           sub: avgRev != null ? 'Revenue ÷ clients won' : null },
@@ -271,7 +267,7 @@
         data: {
           labels: months.map(function (m) { return monthLabel(m.month); }),
           datasets: [
-            { type: 'bar', label: EXCL_OWNER ? 'Spend (excl. owner wages)' : 'Spend', order: 2, yAxisID: 'ySpend',
+            { type: 'bar', label: 'Marketing spend', order: 2, yAxisID: 'ySpend',
               data: months.map(function (m) { return effMonthSpend(m); }),
               backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 34 },
             { type: 'line', label: 'Revenue', order: 1, yAxisID: 'yRevenue',
@@ -358,15 +354,15 @@
     // by the xero-channel-summary-sync edge function). The Type stack covers ALL kept
     // spend (unmapped vendors on the ad accounts roll up as "Uncategorized"); the Platform
     // stack covers only the ad platforms (Google/Bing/Website/LinkedIn/Meta).
-    var CHANNEL_MONTHLY = { months: [], type: [], platform: [] };
-    var CHANNEL_DIM = 'type';   // 'type' | 'platform'
+    var CHANNEL_MONTHLY = { months: [], type: [], platform: [], account: [] };
+    var CHANNEL_DIM = 'type';   // 'type' | 'platform' | 'account'
     var CHANNEL_PALETTE = ['#3b6ef0','#17a673','#f0a63b','#7c5cff','#e2483d','#14b8c4','#9aa4b2','#e879a6'];
     var _channelChart = null;
 
     function loadChannelSummary() {
       fetchJSON('/api/marketing/channel-summary')
         .then(function (data) {
-          CHANNEL_MONTHLY = { months: data.months || [], type: data.type || [], platform: data.platform || [] };
+          CHANNEL_MONTHLY = { months: data.months || [], type: data.type || [], platform: data.platform || [], account: data.account || [] };
           setChips('channelChips', data.meta);
           setChannelDim(CHANNEL_DIM);
         })
@@ -420,16 +416,14 @@
         // Sum each account across all FYs.
         var byAcct = {};
         src.forEach(function (c) {
-          if (!byAcct[c.account]) byAcct[c.account] = { account: c.account, amount: 0, isOwnerWage: c.isOwnerWage };
+          if (!byAcct[c.account]) byAcct[c.account] = { account: c.account, amount: 0 };
           byAcct[c.account].amount += c.amount;
         });
         rows = Object.keys(byAcct).map(function (k) { return byAcct[k]; });
       } else {
         rows = src.filter(function (c) { return c.fyEnd === SEL; })
-                  .map(function (c) { return { account: c.account, amount: c.amount, isOwnerWage: c.isOwnerWage }; });
+                  .map(function (c) { return { account: c.account, amount: c.amount }; });
       }
-      // Honour the "exclude owner wages" toggle: drop those categories.
-      if (EXCL_OWNER) rows = rows.filter(function (r) { return !r.isOwnerWage; });
       rows.sort(function (a, b) { return b.amount - a.amount; });
 
       // If there's no spend data for this FY (FY22/FY23), clear the chart.
@@ -438,7 +432,7 @@
 
       // Top N + "Other" reconciled to the authoritative total spend on the page.
       var top = rows.slice(0, CAT_TOP_N);
-      var authTotal = EXCL_OWNER ? effSpend(row) : row.totalSpend; // see roi.html helpers
+      var authTotal = effSpend(row); // marketing spend total for the FY (reconciles with the accounts)
       var shownSum = top.reduce(function (a, r) { return a + r.amount; }, 0);
       var other = Math.max(0, Math.round(authTotal - shownSum));
       var labels = top.map(function (r) { return r.account; });
@@ -567,7 +561,7 @@
         panel.classList.add('open'); panel.hidden = false; launcher.hidden = true;
         if (!greeted) {
           greeted = true;
-          hint('Ask me about the ROI figures on this tab — e.g. “Which FY had the best return on spend?”, “What was revenue vs spend in FY26?”, or “Why can a monthly spend bar go negative?”. I’m read-only.');
+          hint('Ask me about the ROI figures on this tab — e.g. “Which FY had the best return on marketing spend?”, “What was revenue vs marketing spend in FY26?”, or “Which marketing account costs the most?”. I’m read-only.');
         }
         setTimeout(function () { input.focus(); }, 50);
       }

@@ -6,9 +6,13 @@
 // WHAT IT PULLS: every reconciled SPEND bank transaction (card/direct-debit) AND
 // every accounts-payable bill (ACCPAY invoice) since SINCE, then keeps only the
 // LINE ITEMS coded to the marketing accounts:
-//   302 Advertising and marketing  | 475 Website expenses           (OPEN accounts)
-//   332 Software subscriptions      | 411 Printing, stationery…      (SHARED accounts)
-//   377 WrkPod Staff                                                 (SHARED account)
+//   302 Advertising and marketing                                   (OPEN account)
+//   475 Website expenses            | 332 Software subscriptions     (SHARED accounts)
+//   411 Printing, stationery…       | 377 WrkPod Staff              (SHARED accounts)
+// This mirrors "Marketing Expenses - Xero Account - Description.md": account 302 counts
+// in FULL ("ALL DESCRIPTIONS"), the other four count only their LISTED vendors — so only
+// 302 is OPEN; 475/332/411/377 are SHARED (mapped vendors only). (475 was OPEN until
+// 2026-11-02; moved to SHARED so non-marketing Website-expense vendors are excluded.)
 // Bank txns are invisible to the Invoices API / the claude.ai Xero MCP (they're not
 // bills), so only the REST BankTransactions endpoint sees the ad spend — same reason
 // xero-ad-spend-sync exists.
@@ -17,9 +21,9 @@
 // account, ex-GST amount); the ROI API joins public.marketing_channel_vendor_map by
 // contact_id to get Type/Platform. So re-categorising a vendor is a map edit, no
 // Xero re-pull. A line is STORED when the contact is in the map (include=true) OR the
-// line is on an OPEN account (302/475) — there an unmapped contact is a genuinely new
+// line is on an OPEN account (302) — there an unmapped contact is a genuinely new
 // marketing vendor, surfaced as "Uncategorized" on the chart. Unmapped contacts on the
-// SHARED accounts (332/411/377, which also hold non-marketing spend) are dropped.
+// SHARED accounts (475/332/411/377, which also hold non-marketing spend) are dropped.
 //
 // ex-GST per line = LineAmount − (TaxAmount when the doc is tax-Inclusive). Bank card
 // charges are Inclusive; bills are usually Exclusive (TaxAmount then already excluded).
@@ -47,14 +51,17 @@ const XERO_CLIENT_ID = Deno.env.get("XERO_CLIENT_ID") ?? "";
 const XERO_CLIENT_SECRET = Deno.env.get("XERO_CLIENT_SECRET") ?? "";
 const XERO_REFRESH_SEED = Deno.env.get("XERO_REFRESH_TOKEN") ?? "";
 const PREFERRED_TENANT = Deno.env.get("XERO_TENANT_ID") ?? "2cc630e1-5f48-4cc7-b6ba-1d3cc0baf035";
-// FY25-26 (the workbook's window) starts Jul 2025. Wipe-then-reinsert covers the whole
-// window each run, so keep this a stable floor (narrowing it on a later run deletes history).
-const SINCE = Deno.env.get("XERO_CHANNEL_SINCE") ?? "2025-07-01";
+// FY22 start (2021-07-01) so the ROI tab's marketing-spend series covers every FY it shows
+// (FY22 is partial — Xero bank-txn history begins ~early 2022, like xero-ad-spend-sync).
+// Wipe-then-reinsert covers the whole window each run, so keep this a stable floor
+// (narrowing it on a later run deletes history). Was 2025-07-01 until 2026-11-02.
+const SINCE = Deno.env.get("XERO_CHANNEL_SINCE") ?? "2021-07-01";
 
 // Marketing account codes. OPEN = purely-marketing, unmapped vendors flagged as
 // "Uncategorized". SHARED = also hold non-marketing, so only mapped vendors are kept.
-const OPEN_ACCOUNTS = new Set((Deno.env.get("XERO_CHANNEL_OPEN_ACCOUNTS") ?? "302,475").split(",").map((s) => s.trim()));
-const SHARED_ACCOUNTS = new Set((Deno.env.get("XERO_CHANNEL_SHARED_ACCOUNTS") ?? "332,411,377").split(",").map((s) => s.trim()));
+// Only 302 is OPEN ("ALL DESCRIPTIONS"); 475/332/411/377 keep their listed vendors only.
+const OPEN_ACCOUNTS = new Set((Deno.env.get("XERO_CHANNEL_OPEN_ACCOUNTS") ?? "302").split(",").map((s) => s.trim()));
+const SHARED_ACCOUNTS = new Set((Deno.env.get("XERO_CHANNEL_SHARED_ACCOUNTS") ?? "475,332,411,377").split(",").map((s) => s.trim()));
 const MKT_ACCOUNTS = new Set([...OPEN_ACCOUNTS, ...SHARED_ACCOUNTS]);
 
 const TOKEN_PROVIDER = "xero";

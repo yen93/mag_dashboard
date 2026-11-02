@@ -1,0 +1,118 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-02
+Session: Switch the Marketing ROI tab's spend to MARKETING-ONLY (per the
+         "Marketing Expenses - Xero Account - Description.md" spec), backfill the
+         marketing-spend pipeline to FY22, and add a "By account" tab to the
+         Channel Summary chart.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Provided prompt file prompts/021126_roi.txt. Task:
+  1. ROI tab expenses should ONLY come from "marketing_expenses" (defined in
+     "Marketing Expenses - Xero Account - Description.md").
+  2. Update all affected widgets' data/numbers: all cards, "Revenue vs spend by
+     month", "Channel Summary".
+  3. Update the Channel Summary graph to add a new tab for all Xero accounts in
+     marketing_expenses (a "By account" view).
+
+The marketing_expenses spec = Xero account "Advertising and marketing" (ALL
+DESCRIPTIONS) + specific listed vendors on Website Expenses, Software
+subscriptions, Printing/stationery/postage, and WrkPod Staff.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the prompt + spec, then the current implementation (server/metrics/
+marketing-roi.js, marketing-channel-summary.js, public/roi.html, and the
+xero-channel-summary-sync edge function). Established that:
+- ROI "spend" was whole-business (operating_expenses + cost_of_sales from
+  xero_expenses_monthly); revenue = whole-business Xero total_income.
+- public.marketing_channel_monthly (filled by the xero-channel-summary-sync edge
+  fn) already holds exactly the marketing accounts (302/475/332/411/377),
+  bucketed ex-GST by (month, contact, account) and categorised via
+  marketing_channel_vendor_map — i.e. it is the natural single source for the
+  marketing_expenses scope.
+- BUT it only covered FY26–FY27 (Jul 2025+), while the ROI tab spans FY22+.
+
+Queried the live DB (project aivitcomiywiysrfwqxt / MAGTestProject): confirmed
+channel coverage, vendor map (34 vendors, all include=true), and that the Xero
+OAuth token was fresh (refreshed by the weekly cron 2026-11-01), so a backfill
+was feasible.
+
+Asked the user two scoping questions:
+  • FY coverage → "Backfill to FY22 (Recommended)".
+  • "Where the spend goes" chart → "Repoint to marketing accounts (Recommended)".
+
+Noted a spec refinement: the spec lists ALL descriptions only for 302, and
+specific vendors for the other four accounts — so only 302 should be "open";
+475/332/411/377 should keep listed vendors only (previously 475 was also open).
+
+EDGE FUNCTION + DATA (done directly in Supabase, live now):
+- Edited supabase/functions/xero-channel-summary-sync/index.ts: SINCE default
+  2025-07-01 → 2021-07-01; OPEN_ACCOUNTS "302,475" → "302"; SHARED_ACCOUNTS
+  "332,411,377" → "475,332,411,377"; updated header comments. Redeployed via
+  Supabase MCP with verify_jwt:false (preserving the no-auth cron path).
+- Ran ?discover=1 at the wide window: 9,593 bank txns, 192 contacts. Found the
+  only missing spec vendor was "Cloverly Yadao" (377), plus two Xero name-variant
+  duplicates of listed 475 vendors ("sites at scalesites at" = sites at scale;
+  "ITGENIUS AUSTRALIA" = IT GENIUS). Confirmed the many other 377 people (Marielle
+  Buscato, WRKPOD, Cara, Frank, Eyo, …) are correctly DROPPED (non-marketing
+  staff, unmapped on a SHARED account) — exactly why 377 is SHARED not open.
+- Applied migration channel_vendor_map_add_spec_vendors (Cloverly Yadao + the two
+  475 dupes). Ran ?sync=1 → 579 rows, $497,929, FY22–FY27, no errors (one
+  non-fatal 401 on AP bills, as expected). Then mapped "Google Ads" (81b826a5, the
+  May-2023→Feb-2024 Google billing-rename contact, $25k) to Digital Ads/Google via
+  migration channel_vendor_map_add_google_ads_alias (categorisation is joined at
+  query time, so no re-sync needed).
+- Verified per-FY marketing spend (FY22 $21.6k partial · FY23 $63.9k · FY24
+  $95.2k · FY25 $132.0k · FY26 $140.5k · FY27 $44.8k partial) and that revenue
+  exists for all FY22+ (the FY22/FY23 manual seeds). ROI ≈ 7–20× per FY; CAC
+  $133–$3,202.
+
+CODE (needs a manual Cloud Run redeploy to ship):
+- server/metrics/marketing-roi.js: spend now from marketing_channel_monthly
+  (BY_FY mkt CTE, BY_MONTH rev+sp CTEs); revenue still from xero_expenses_monthly;
+  CATEGORIES_SQL repointed to marketing spend by account_code (with an account-name
+  map); removed opEx/cos/ownerWages from the shape; FY axis = revenue ∪ marketing
+  spend ∪ deals; note text rewritten.
+- server/metrics/marketing-channel-summary.js: added BY_ACCOUNT breakdown (CASE on
+  account_code → account name) and `account` series in the returned payload
+  (+ pending branch).
+- public/roi.html: added "By account" toggle to #channelDimBar; store
+  CHANNEL_MONTHLY.account; removed the EXCL_OWNER/owner-wage machinery (effSpend/
+  effRoi/effMonthSpend are now pass-throughs); updated card sub-texts, month-chart
+  label ("Marketing spend"), "Where the spend goes" subtitle + render (dropped the
+  owner-wage filter; authTotal = marketing spend); updated the assistant greeting.
+- server/roiAssistant.js: rewrote the PRIMER (return on MARKETING spend, not
+  whole-business; no owner wages), shapeFy (marketingSpend/roi), and the context
+  (spend_basis flag; categories without isOwnerWage).
+
+VALIDATION: node --check on all three server files (OK); SQL for BY_FY, per-account
+and BY_ACCOUNT run against the live DB and reconcile ($497,929 both ways); local
+server boots and routes mount (401 behind requireAuth as expected). Killed the dev
+server to avoid Windows file locks.
+
+Flagged judgment calls to the user: 302 = ALL per the spec literally includes some
+oddly-coded items (Belle Property, aliexpress, Hoyts); the three added map vendors
+are name-variants/missing-staff, not new categories. FY22 is partial (Xero
+bank-txn history starts ~early 2022).
+
+DOCS: updated CLAUDE.md (ROI + Channel Summary paragraphs), the roi-tab-feature
+memory + MEMORY.md index.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt and CLAUDE.md and .gitignore;
+no git commands.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file; refreshed as_built.txt (ROI
+spend source, channel pipeline window/accounts, By-account tab); CLAUDE.md was
+already updated earlier this session; verified .gitignore still covers the
+untracked raw Xero export (*.md export + prompts/ are not secrets). Did NOT run
+any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================
