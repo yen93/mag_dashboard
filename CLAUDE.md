@@ -94,8 +94,13 @@ Cloud Run.
   a **DUAL-AXIS combo chart** as of
   2026-10-29: green **spend bars** on the left $ axis, blue **revenue line** on the right $ axis —
   self-rendered by `renderMonthChart()` in `roi.html`, **no longer** the shared-axis `lineChart`;
-  **AC pipeline Won/Open/Lost per pipeline** as horizontal stacked bars, with a **"Won only"
-  toggle** `#pipeWonToggle` that drops Open/Lost and re-sorts by won), a "Where the spend goes"
+  **AC pipeline Won/Open/Lost** — **as of 2026-11-02 PER MONTH** (vertical stacked bars, FY-filtered,
+  **same monthly design as Channel Summary**; was per-pipeline horizontal bars). Backed by a new
+  **`pipelineMonths`** payload section in `marketing-roi.js` (`PIPELINE_MONTH_SQL` counts status
+  1/0/2 by `date_trunc('month', cdate)` from `MONTH_FLOOR`); the per-FY **`pipelines`** section is
+  **kept** (used by the ROI chat assistant snapshot). Its **"Won only"** control is now an **All /
+  Won-only SEGMENTED toggle** `#pipeWonSeg` (matching the FY toggle) via `setPipeWon()` — the old
+  `#pipeWonToggle` checkbox is gone; "Won only" drops Open/Lost), a "Where the spend goes"
   category chart (**as of 2026-11-02 = marketing spend by Xero account** for the selected FY —
   `CATEGORIES_SQL` groups `marketing_channel_monthly` by `account_code`; was whole-business P&L
   accounts), a **LIVE "Channel Summary" chart (as of 2026-10-30)** — a monthly **STACKED bar
@@ -121,8 +126,20 @@ Cloud Run.
   window, keep `SINCE` a stable FY22 floor (narrowing it deletes history). Refreshed **monthly** by cron
   `xero-channel-summary-sync-monthly` (`0 22 2 * *`). AP bills
   are fetched best-effort but 401 (the Xero app scope lacks invoices) — non-fatal, since the spend is
-  all in bank txns. The chart is loaded once (independent of the FY bar). — and an ROI-by-FY table, all
-  re-rendered client-side on FY change. The page is **full-width** (`.content { max-width: none }`,
+  all in bank txns. **As of 2026-11-02 the Channel Summary IS FILTERED to the active FY's calendar
+  months** (via `channelMonthFyEnd()` in `roi.html`, and `renderChannelChart()` is now called from
+  `render()` so it re-renders on FY change) — it is **no longer** loaded once independent of the FY bar.
+  — and an **ROI-by-FY table (as of 2026-11-02 each row is CLICKABLE** to filter the whole page to that
+  FY, ROAS-style: `clickrow`/`rowsel` highlight + an **"All years" total row** selecting `all`;
+  `renderTable()`'s output is post-processed in `render()`), all re-rendered client-side on FY change.
+  **Both monthly charts** (revenue-vs-spend, Channel Summary, AC pipeline) label each bar with the
+  **full calendar-month span `"Mon 1-<last day>"`** via `monthSpanLabel`/`ymSpanLabel`/`channelSpanLabel`
+  helpers in `roi.html`. **As of 2026-11-02 the whole ROI tab's look/feel + hover animations +
+  active-toggle colour MIRROR the ROAS tab** (bespoke inline CSS in `roi.html`: `--roi-shadow`/`-lift`
+  tokens, card + KPI hover-lift + gradient accent bars, gradient active-pill `.segmented` toggles,
+  aurora backdrop — but **deliberately NOT `overflow:hidden`** on cards/KPIs unlike ROAS, because the
+  tab's `.src-tip` info-icon tooltips live inside card heads/KPI labels and would be clipped; the accent
+  bars are rounded to the card radius instead). The page is **full-width** (`.content { max-width: none }`,
   like `sales_overview`) and its FY toolbar is **sticky** (`position:sticky; top:var(--topbar-h,58px)`)
   so it freezes under the top bar on scroll. Note: a Xero year-end accrual reversal can occasionally make
   a single month's marketing-spend bar read slightly **negative** — kept as-is (annual FY totals net

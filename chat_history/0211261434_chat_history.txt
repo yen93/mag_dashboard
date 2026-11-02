@@ -1,0 +1,170 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-02
+Session: ROI tab (Marketing → roi.html) polish pass — made the Channel Summary
+chart FY-aware, matched the ROI tab's look/feel + hover animations + active-toggle
+colour to the ROAS tab, made the "ROI by FY" table rows clickable (ROAS-style),
+relabelled both monthly charts with full calendar-month spans ("Mon 1-<lastDay>"),
+converted the "AC pipeline" chart from per-pipeline horizontal bars to a per-MONTH
+stacked chart (new backend pipelineMonths series), turned its "Won only" checkbox
+into a segmented toggle matching the FY toggle, and (read-only /q) verified all deal
+counts are bucketed by deal creation date (cdate). Frontend + one server metric file
+touched; needs a manual Cloud Run redeploy. No git run by Claude.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. The only identifier shown was the Supabase project ref
+(aivitcomiywiysrfwqxt), which is a non-secret project id already documented in
+CLAUDE.md, used for a read-only information_schema SELECT.
+
+--------------------------------------------------------------------------------
+USER:
+"Channel Summary" should show per month (1st-last day).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated public/roi.html (renderChannelChart / loadChannelSummary) and
+server/metrics/marketing-channel-summary.js. Found the Channel Summary already
+plots months on the x-axis (labels like "Jul-2025" from the backend's monLabel),
+so the literal "per month" was already true. Awaited the user's clarification
+(next turn) rather than guess at the intent.
+
+--------------------------------------------------------------------------------
+USER:
+It should update based on the clicked/active FY.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Now clear: the Channel Summary loaded once and ignored the FY bar; the user wants
+it to filter to the active FY's months. Made it FY-aware, frontend-only:
+  - Added channelMonthFyEnd(label) — maps "Jul-2025" to its AU FY-end year (Jul–Jun,
+    END-year), via a new MON_IDX map.
+  - Rewrote renderChannelChart() to keep only the active FY's months (SEL), re-index
+    each series to the kept months, drop all-zero series so the legend stays clean,
+    and colour series by their stable src index so colours don't shift across FYs.
+    'All' / pre-ROI-load still shows every month.
+  - Wired renderChannelChart() into render() so it re-renders on FY change; kept the
+    independent loadChannelSummary() path.
+  - Updated the heading ⓘ tooltip + section comment to say "per calendar month for
+    the selected FY". Flagged FY22/FY23 sparseness as expected. Frontend-only;
+    manual redeploy needed.
+Then produced a one-line conventional-commit command via /cm.
+
+--------------------------------------------------------------------------------
+USER:
+Update the look and feel of the ROI tab: same look/feel + same hover animations for
+all widgets; "ROI by financial year" should be clickable per row like the ROAS
+"ROAS by FY" design; active buttons/toggles should have the same colour.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Studied roas.html's bespoke CSS layer (card shadows + hover lift + gradient accent
+top bar, KPI tile styling, segmented active gradient pill, aurora backdrop, clickrow
+/rowsel table rows) and its renderTable row-click wiring. Ported it to roi.html with
+--roi-accent / --roi-accent-2 and new --roi-shadow / --roi-shadow-lift tokens (light
++ dark):
+  - Cards: 16px radius, soft shadow, hover translateY(-3px) + stronger shadow, a
+    blue→purple gradient accent bar that fades in on hover; card-head h3 gradient tick.
+  - KPIs: same shadow/hover/accent bar; larger tabular value; first tile (Total
+    revenue) emphasised with a tinted gradient + accent value.
+  - Segmented toggles: ROAS's blue→purple gradient active pill (so FY bar + By
+    type/platform/account match).
+  - Aurora backdrop on body.
+  Key nuance: deliberately did NOT set overflow:hidden on cards/KPIs (unlike ROAS),
+  because ROI's info-icon .src-tip tooltips live inside card heads and KPI labels and
+  would be clipped — instead rounded the ::before/::after accent bars to the card
+  radius.
+  - ROI-by-FY table: made each row clickable to filter the whole page to that FY
+    (clickrow cursor, accent hover tint, rowsel highlight + left accent bar on the
+    active FY), added an "All years" total row (selects 'all') built from ROI.total,
+    a "Click a row to filter the page to that FY." note, and a fy-column render that
+    prints "All years" for the total. Post-processed renderTable()'s output to attach
+    classes + click handlers (rows align to ROI.rows.data order + the appended total).
+  Frontend-only; no app.js change (so no ?v= bump); manual redeploy. /cm commit line.
+
+--------------------------------------------------------------------------------
+USER:
+Update "Revenue vs spend by month" so each bar is labeled "[MONTH] 1-[LAST DAY]", and
+update "Channel Summary" the same.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added label helpers in roi.html: MON_ABBR + monthSpanLabel(year, m1) → "Mon 1-<last
+day>" (last day via Date.UTC(year, m1, 0).getUTCDate(), so 28/29/30/31 correct),
+ymSpanLabel('YYYY-MM') for the month series, and channelSpanLabel('Mon-YYYY') reusing
+MON_IDX. Applied ymSpanLabel to the Revenue-vs-spend month chart and channelSpanLabel
+to the Channel Summary x-axis. Flagged that labels no longer carry the year, so the
+"All" view repeats month names (inherent to the requested format; Channel Summary is
+FY-filtered so months stay unique within a FY). Frontend-only; /cm line.
+
+--------------------------------------------------------------------------------
+USER:
+Update "AC pipeline — Won / Open / Lost by pipeline" to show per month; use the
+Channel Summary graph design as reference.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+The pipeline data was per-FY only, so added a monthly breakdown end-to-end.
+  Backend (server/metrics/marketing-roi.js):
+   - New PIPELINE_MONTH_SQL: count(*) FILTER by status (1=won,0=open,2=lost) grouped
+     by date_trunc('month', cdate), bounded to MONTH_FLOOR (2021-07-01 = FY22) so the
+     axis lines up with the other monthly charts.
+   - Added it to Promise.all; built pipelineMonths = [{month, fyEnd, won, open, lost}]
+     (FY via existing fyEndOfMonth); exposed as a new `pipelineMonths` section in the
+     live payload and both pending/empty branches. Kept the per-FY `pipelines` section
+     unchanged (the ROI chat assistant still snapshots it).
+  Frontend (public/roi.html):
+   - Rewrote renderPipeline() to mirror renderChannelChart(): months on the x-axis
+     (ymSpanLabel), vertical stacked bars Won(green)/Open(blue)/Lost(red), index-mode
+     tooltips, FY-filtered to SEL ('All' shows every month). "Won only" still drops
+     Open/Lost.
+   - Renamed the card heading to "…by month", updated comments, pointed pipeChips at
+     pipelineMonths.meta.
+  Ran `node --check` on marketing-roi.js (passed). Touches server + static, so a
+  manual redeploy is required. /cm line.
+
+--------------------------------------------------------------------------------
+USER:
+"Won only" should be a toggle that looks just like the "Financial year" toggle.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Replaced the pipeline "Won only" checkbox+label with a segmented toggle
+<div class="segmented" id="pipeWonSeg"> containing "All" (default active) and "Won
+only" buttons, so it inherits the same gradient active-pill styling. Added
+setPipeWon(wonOnly) (mirrors setChannelDim) to set PIPE_WON_ONLY, toggle the active
+class, and re-render; wired both buttons at init (replacing the old change listener).
+Behaviour unchanged. Frontend-only; /cm line.
+
+--------------------------------------------------------------------------------
+USER:
+/q (read-only): double-check the deal counts are counted based on deal creation date.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read-only verification. Confirmed every ROI deal count is bucketed by cdate (creation
+date), via the FY(col) helper (extract year/month) applied to `cdate` in all three
+queries: BY_FY (KPI won/open/lost), PIPELINE_SQL (per-FY), and PIPELINE_MONTH_SQL
+(date_trunc('month', cdate)). Ran a SELECT on information_schema.columns for
+activecampaign_deals — confirmed cdate/edate/mdate exist as timestamptz; only cdate is
+referenced in the ROI metrics. Flagged the behavioural implication: all statuses
+(incl. won) are bucketed by CREATION date, so a deal created in FY25 but won in FY26
+counts in FY25's "won" — consistent across cards/pipeline/monthly chart, so they
+reconcile. Noted that counting "won" by won-date would need a reliable close-date
+column (edate is the stage/event date, not reliably the won date) and would break the
+single shared date basis. No changes made (/q).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history; update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps: saved this transcript; updated as_built.txt + CLAUDE.md to
+reflect the ROI tab's FY-aware Channel Summary, the monthly AC-pipeline chart + new
+pipelineMonths backend series, the month-span bar labels, the ROAS-matched look/feel +
+clickable FY table, and the segmented "Won only" toggle; confirmed .gitignore already
+covers all sensitive patterns. No git commands run — user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

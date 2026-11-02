@@ -400,7 +400,7 @@
       tuckKpiSubs();   // hide each card's description behind an ⓘ next to its label
 
       // Revenue vs spend by month — spend as green bars (left $ axis), revenue as a
-      // blue line (right $ axis). Dual axis so spend reads clearly against much larger revenue.
+      // blue line (right $ axis). Both axes share ONE scale so their tick levels match.
       setChips('monthChips', ROI.byMonth.meta);
       renderMonthChart();
 
@@ -451,13 +451,23 @@
     }
 
     // Revenue vs spend by month — combo chart: green spend bars on the left $ axis,
-    // blue revenue line on the right $ axis (dual axis).
+    // blue revenue line on the right $ axis. Both $ axes share ONE [0, sharedMax] scale
+    // (titled per series) so the left and right tick levels show the same figures.
     var _monthChart = null;
     function compactAud(v) {
       var n = Math.abs(v);
       if (n >= 1e6) return '$' + (v / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'm';
       if (n >= 1e3) return '$' + (v / 1e3).toFixed(n % 1e3 ? 1 : 0) + 'k';
       return '$' + Math.round(v);
+    }
+    // Round a value up to a "nice" axis ceiling (1/2/2.5/5/10 × a power of ten) so both
+    // $ axes can share one max and their tick levels line up.
+    function niceCeil(v) {
+      if (!v || v <= 0) return 10;
+      var mag = Math.pow(10, Math.floor(Math.log10(v)));
+      var n = v / mag;
+      var step = n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10;
+      return step * mag;
     }
 
     // X-axis labels: the full calendar-month span "Mon 1-<last day>" (e.g. Jul 1-31,
@@ -479,6 +489,12 @@
     function renderMonthChart() {
       var months = currentMonths();
       var tc = themeColors();
+      // Both $ axes SHARE one scale so the left (spend) and right (revenue) tick levels
+      // match — the same figure sits at the same gridline height on both sides.
+      var spendVals = months.map(function (m) { return effMonthSpend(m); });
+      var revVals = months.map(function (m) { return m.revenue; });
+      var allVals = spendVals.concat(revVals).filter(function (v) { return typeof v === 'number' && isFinite(v); });
+      var sharedMax = niceCeil(allVals.length ? Math.max.apply(null, allVals) : 0);
       var cfg = {
         type: 'bar',
         data: {
@@ -502,9 +518,13 @@
           },
           scales: {
             x: { ticks: { color: tc.muted }, grid: { display: false } },
-            ySpend: { position: 'left', beginAtZero: true,
-              ticks: { color: tc.muted, callback: compactAud }, grid: { color: tc.grid } },
-            yRevenue: { position: 'right', beginAtZero: true,
+            // Left axis = Marketing spend (green). Shared [0, sharedMax] range.
+            ySpend: { position: 'left', min: 0, max: sharedMax,
+              title: { display: true, text: 'Marketing spend', color: '#17a673' },
+              ticks: { color: '#17a673', callback: compactAud }, grid: { color: tc.grid } },
+            // Right axis = Revenue (blue). SAME [0, sharedMax] range → tick levels line up.
+            yRevenue: { position: 'right', min: 0, max: sharedMax,
+              title: { display: true, text: 'Revenue', color: '#3b6ef0' },
               ticks: { color: '#3b6ef0', callback: compactAud }, grid: { drawOnChartArea: false } },
           },
         },

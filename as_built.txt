@@ -1,6 +1,18 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-02 (ROI TAB DESCRIPTIONS → INFO ICONS — public/roi.html only:
+Last updated: 2026-11-02 (ROI TAB POLISH PASS — public/roi.html + server/metrics/
+marketing-roi.js: (1) Channel Summary is now FILTERED to the active FY's months
+(channelMonthFyEnd + renderChannelChart in render()); (2) ROI tab look/feel + hover
+animations + active-toggle colour now MIRROR the ROAS tab (bespoke inline CSS, no
+overflow:hidden so .src-tip tooltips aren't clipped); (3) "ROI by FY" rows are CLICKABLE
+to filter the page (ROAS-style clickrow/rowsel + "All years" total row); (4) both monthly
+charts label bars with the full calendar-month span "Mon 1-<last day>"; (5) the AC-pipeline
+chart is now PER MONTH (vertical stacked Won/Open/Lost, FY-filtered, Channel-Summary design)
+backed by a new `pipelineMonths` backend series (PIPELINE_MONTH_SQL, by date_trunc(month,
+cdate)); the per-FY `pipelines` kept for the assistant; (6) its "Won only" checkbox is now a
+segmented All/Won-only toggle matching the FY toggle. All deal counts remain bucketed by
+cdate (deal creation date) — verified. Touches a server metric file + static, so a manual
+Cloud Run redeploy is needed; no app.js bump. Previously same day: ROI TAB DESCRIPTIONS → INFO ICONS — public/roi.html only:
 the FY note, all 7 KPI card sub-lines, and the three chart captions (month / "Where
 the spend goes" / Channel Summary) are now tucked behind small ⓘ info icons
 (hover/focus to reveal) instead of visible captions, via ROI-only inline helpers
@@ -195,13 +207,28 @@ SCRIPTS / APP CODE
     marketing spend÷dealsWon) / Avg revenue per client (revenue÷dealsWon) — computed
     CLIENT-SIDE from /api/marketing/roi, null-guarded), a revenue-vs-spend-by-month
     DUAL-AXIS combo chart (green marketing-spend bars / blue revenue line), an
-    AC-pipeline Won/Open/Lost chart broken down PER PIPELINE (horizontal stacked bars),
+    AC-pipeline Won/Open/Lost chart (as of 2026-11-02 broken down PER MONTH — vertical
+    stacked bars, FY-filtered, SAME design as Channel Summary; was per-pipeline horizontal
+    bars. Backed by a new `pipelineMonths` section in marketing-roi.js = PIPELINE_MONTH_SQL
+    counting status 1/0/2 by date_trunc('month', cdate) from MONTH_FLOOR; the per-FY
+    `pipelines` section is kept for the ROI assistant snapshot. Has an "All / Won only"
+    SEGMENTED toggle #pipeWonSeg matching the FY toggle, via setPipeWon()),
     a "Where the spend goes" chart (marketing spend by Xero account for the selected FY),
     a LIVE "Channel Summary" STACKED bar chart (months on x axis, By type / By platform /
     By account toggle — "By account" added 2026-11-02; roi.html loadChannelSummary() →
     GET /api/marketing/channel-summary, backed by the LIVE Xero channel-summary pipeline
-    (see DATA STORES + AUTOMATIONS); does not react to the FY bar), and an ROI-by-FY table;
-    an FY filter bar (All + each FY, default = current FY) re-renders client-side. The page
+    (see DATA STORES + AUTOMATIONS); as of 2026-11-02 it IS FILTERED to the active FY's
+    calendar months via channelMonthFyEnd() + renderChannelChart() in render() — no longer
+    FY-independent), and an ROI-by-FY table (as of 2026-11-02 each row is CLICKABLE to filter
+    the page to that FY, ROAS-style: clickrow/rowsel highlight + an "All years" total row;
+    renderTable() output post-processed in render()). Both monthly charts (revenue-vs-spend +
+    Channel Summary + AC pipeline) label each bar with the full calendar-month SPAN
+    "Mon 1-<last day>" (monthSpanLabel/ymSpanLabel/channelSpanLabel helpers). As of 2026-11-02
+    the whole tab's look/feel + hover animations + active-toggle colour MIRROR the ROAS tab
+    (bespoke inline CSS in roi.html: --roi-shadow/-lift tokens, card + KPI hover-lift + gradient
+    accent bars, gradient active-pill segmented toggles, aurora backdrop; NOT overflow:hidden —
+    the accent bars are rounded instead so the .src-tip info tooltips aren't clipped).
+    An FY filter bar (All + each FY, default = current FY) re-renders client-side. The page
     is FULL-WIDTH (.content max-width:none) and the FY toolbar is STICKY. Revenue = Xero P&L
     Total (Trading) Income ex-GST accrual (public.xero_expenses_monthly.total_income,
     whole-business). SPEND (as of 2026-11-02) = MARKETING-ONLY, from
