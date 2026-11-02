@@ -105,18 +105,9 @@
         <div class="card-head"><h3>Revenue vs spend by month</h3><span class="head-info" id="monthInfo" data-info="The payoff over time — spend bars, revenue line"></span><span class="chips" id="monthChips"></span></div>
         <div class="chart-box" id="roi-month-chart"><canvas id="roiMonthCanvas"></canvas></div>
       </div>
-      <div class="card col-12">
-        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by pipeline</h3><label class="pipe-toggle" style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-left:10px"><input type="checkbox" id="pipeWonToggle" style="margin:0">Won only</label><span class="chips" id="pipeChips"></span></div>
-        <div class="chart-box" id="roi-pipe-chart" style="height:380px"><canvas id="roiPipelineCanvas"></canvas></div>
-      </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>Where the spend goes</h3><span class="head-info" id="catInfo" data-info="Marketing spend by Xero account (Advertising, Website, Software, Printing, WrkPod Staff) for the selected FY."></span><span class="chips" id="catChips"></span></div>
-        <div class="chart-box" id="roi-cat-chart" style="height:360px"><canvas id="roiCatCanvas"></canvas></div>
-      </div>
-
-      <div class="card col-12">
-        <div class="card-head"><h3>Channel Summary</h3><span class="head-info" id="channelInfo" data-info="Marketing spend by month, stacked by category (or by ad platform). Live from Xero, refreshed monthly. Vendors on the ad accounts not yet categorised show as &quot;Uncategorized&quot;."></span>
+        <div class="card-head"><h3>Channel Summary</h3><span class="head-info" id="channelInfo" data-info="Marketing spend per calendar month for the selected FY, stacked by category (or by ad platform). Live from Xero, refreshed monthly. Vendors on the ad accounts not yet categorised show as &quot;Uncategorized&quot;."></span>
           <div class="segmented" id="channelDimBar" style="margin-left:6px"><button data-dim="type">By type</button><button data-dim="platform">By platform</button><button data-dim="account">By account</button></div>
           <span class="chips" id="channelChips" style="margin-left:auto"></span>
         </div>
@@ -127,6 +118,19 @@
         <div class="card-head"><h3>ROI by financial year</h3><span class="chips" id="fyTableChips"></span></div>
         <div id="roiFyTable"></div>
       </div>
+
+      <div class="card col-12">
+        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by pipeline</h3><label class="pipe-toggle" style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-left:10px"><input type="checkbox" id="pipeWonToggle" style="margin:0">Won only</label><span class="chips" id="pipeChips"></span></div>
+        <div class="chart-box" id="roi-pipe-chart" style="height:380px"><canvas id="roiPipelineCanvas"></canvas></div>
+      </div>
+
+      <!-- <div class="card col-12">
+        <div class="card-head"><h3>Where the spend goes</h3><span class="head-info" id="catInfo" data-info="Marketing spend by Xero account (Advertising, Website, Software, Printing, WrkPod Staff) for the selected FY."></span><span class="chips" id="catChips"></span></div>
+        <div class="chart-box" id="roi-cat-chart" style="height:360px"><canvas id="roiCatCanvas"></canvas></div>
+      </div> -->
+
+      
+
     </div>
   </main>
   </div>
@@ -317,6 +321,9 @@
       setChips('catChips', ROI.categories.meta);
       renderCategories();
 
+      // Channel Summary — monthly stacked spend, filtered to the active FY's months.
+      renderChannelChart();
+
       // ROI by FY table (always the full per-FY list, regardless of selection).
       setChips('fyTableChips', meta);
       renderTable('roiFyTable', ROI.rows.data, [
@@ -432,7 +439,9 @@
     }
 
     // Channel Summary — marketing spend BY MONTH (x axis), stacked by each Type
-    // category or each ad Platform (toggle). LIVE from Xero via /api/marketing/channel-summary
+    // category or each ad Platform (toggle), FILTERED to the active FY's calendar months
+    // (1st–last day of each month in that FY; 'All' shows every month).
+    // LIVE from Xero via /api/marketing/channel-summary
     // (public.marketing_channel_monthly × marketing_channel_vendor_map, refreshed monthly
     // by the xero-channel-summary-sync edge function). The Type stack covers ALL kept
     // spend (unmapped vendors on the ad accounts roll up as "Uncategorized"); the Platform
@@ -441,6 +450,16 @@
     var CHANNEL_DIM = 'type';   // 'type' | 'platform' | 'account'
     var CHANNEL_PALETTE = ['#3b6ef0','#17a673','#f0a63b','#7c5cff','#e2483d','#14b8c4','#9aa4b2','#e879a6'];
     var _channelChart = null;
+
+    // Month label ('Jul-2025') → Australian FY-end year (Jul–Jun, END-year), so the chart
+    // can be filtered to the active FY. e.g. Jul-2025..Jun-2026 → 2026.
+    var MON_IDX = { Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12 };
+    function channelMonthFyEnd(label) {
+      var parts = String(label).split('-');
+      var m = MON_IDX[parts[0]], y = Number(parts[1]);
+      if (!m || !y) return null;
+      return m >= 7 ? y + 1 : y;
+    }
 
     function loadChannelSummary() {
       fetchJSON('/api/marketing/channel-summary')
@@ -453,15 +472,30 @@
     }
 
     function renderChannelChart() {
+      var allMonths = CHANNEL_MONTHLY.months || [];
       var src = CHANNEL_MONTHLY[CHANNEL_DIM] || [];
       var tc = themeColors();
+
+      // Restrict to the active FY's calendar months (1st–last day of each month in that
+      // FY); 'all' (or no selection yet) shows every month. Each series is re-indexed to
+      // the kept months, and series that are all-zero within the FY are dropped so the
+      // legend stays clean.
+      var idxs = allMonths.map(function (_, i) { return i; });
+      if (SEL != null && SEL !== 'all') {
+        idxs = idxs.filter(function (i) { return channelMonthFyEnd(allMonths[i]) === SEL; });
+      }
+      var months = idxs.map(function (i) { return allMonths[i]; });
+      // Colour by each series' stable position in src so a given category/platform keeps
+      // its colour no matter which FY is selected.
       var datasets = src.map(function (s, i) {
-        return { label: s.name, data: s.data, stack: 'spend',
+        var data = idxs.map(function (j) { return s.data[j] || 0; });
+        return { label: s.name, data: data, stack: 'spend',
           backgroundColor: CHANNEL_PALETTE[i % CHANNEL_PALETTE.length], borderRadius: 3, maxBarThickness: 40 };
-      });
+      }).filter(function (d) { return d.data.some(function (v) { return v; }); });
+
       var cfg = {
         type: 'bar',
-        data: { labels: CHANNEL_MONTHLY.months, datasets: datasets },
+        data: { labels: months, datasets: datasets },
         options: {
           responsive: true, maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
