@@ -20,9 +20,100 @@
       box-shadow: var(--shadow);
     }
 
-    /* ---- ROI accent (mirrors the ROAS tab's blue→purple gradient) ---- */
-    :root { --roi-accent: var(--accent); --roi-accent-2: #6a4bf5; --roi-accent-soft: #eef2fe; }
-    :root[data-theme="dark"] { --roi-accent-2: #9b7dff; --roi-accent-soft: #1b2440; }
+    /* ---- ROI accent + depth tokens (mirrors the ROAS tab's blue→purple gradient) ---- */
+    :root {
+      --roi-accent: var(--accent); --roi-accent-2: #6a4bf5; --roi-accent-soft: #eef2fe;
+      --roi-shadow: 0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --roi-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+    }
+    :root[data-theme="dark"] {
+      --roi-accent-2: #9b7dff; --roi-accent-soft: #1b2440;
+      --roi-shadow: 0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --roi-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+    }
+
+    /* ============================================================
+       Bespoke visual layer — same look, feel & hover animations as
+       the ROAS tab. DESIGN ONLY: every id/class/behaviour is unchanged.
+       NOTE: unlike ROAS we do NOT set overflow:hidden on cards/KPIs,
+       because ROI's info-icon (.src-tip) tooltips live inside the card
+       heads and KPI labels and would get clipped. The gradient accent
+       bars are rounded to the card radius instead.
+       ============================================================ */
+
+    /* Soft aurora backdrop behind the whole tab. */
+    body {
+      background:
+        radial-gradient(1100px 400px at 100% -8%, color-mix(in srgb, var(--roi-accent) 11%, transparent), transparent 60%),
+        radial-gradient(820px 340px at -6% 2%, color-mix(in srgb, var(--roi-accent-2) 9%, transparent), transparent 56%),
+        var(--bg);
+      background-attachment: fixed;
+    }
+
+    /* Cards — soft shadow, hover lift, gradient accent top border. */
+    .card {
+      border-radius: 16px; box-shadow: var(--roi-shadow);
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+    }
+    .grid .card { position: relative; }
+    .grid .card::before {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: 16px 16px 0 0;
+      background: linear-gradient(90deg, var(--roi-accent), var(--roi-accent-2));
+      opacity: 0; transition: opacity .25s ease; pointer-events: none;
+    }
+    .grid .card:hover { transform: translateY(-3px); box-shadow: var(--roi-shadow-lift); }
+    .grid .card:hover::before { opacity: .95; }
+    .card-head h3 {
+      font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .card-head h3::before {
+      content: ""; width: 4px; height: 17px; border-radius: 3px; flex: none;
+      background: linear-gradient(var(--roi-accent), var(--roi-accent-2));
+    }
+
+    /* KPI tiles — shadow + hover lift + accent bar on hover. */
+    .kpi {
+      position: relative; border-radius: 16px;
+      box-shadow: var(--roi-shadow);
+      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .kpi::after {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: 16px 16px 0 0;
+      background: linear-gradient(90deg, var(--roi-accent), var(--roi-accent-2));
+      opacity: 0; transition: opacity .2s ease; pointer-events: none;
+    }
+    .kpi:hover { transform: translateY(-3px); box-shadow: var(--roi-shadow-lift); }
+    .kpi:hover::after { opacity: .9; }
+    .kpi .value { font-size: 29px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+    /* Emphasise the first tile (Total revenue headline). */
+    .kpi-grid .kpi:first-child {
+      background: linear-gradient(140deg, color-mix(in srgb, var(--roi-accent) 13%, var(--surface)), var(--surface) 70%);
+      border-color: color-mix(in srgb, var(--roi-accent) 32%, var(--border));
+    }
+    .kpi-grid .kpi:first-child .value { color: var(--roi-accent); }
+
+    /* Segmented toggles — gradient active pill (same colour as ROAS). */
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: linear-gradient(135deg, var(--roi-accent), var(--roi-accent-2));
+      color: #fff;
+      box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--roi-accent) 60%, transparent);
+    }
+
+    /* ROI by FY table — clickable rows (mirrors the ROAS "ROAS by FY" table). */
+    #roiFyTable table.data tbody tr { transition: background .14s ease; }
+    #roiFyTable table.data tbody tr.clickrow { cursor: pointer; }
+    #roiFyTable table.data tbody tr.clickrow:hover { background: color-mix(in srgb, var(--roi-accent) 8%, transparent); }
+    #roiFyTable table.data tbody tr.rowsel { background: color-mix(in srgb, var(--roi-accent) 13%, transparent); }
+    #roiFyTable table.data tbody tr.rowsel td:first-child { box-shadow: inset 3px 0 0 var(--roi-accent); }
+    #roiFyTable table.data tbody tr.total td { border-top: 2px solid var(--border); font-weight: 700; background: var(--surface-2); }
+    #roiFyTable table.data tbody tr.total.rowsel td { background: color-mix(in srgb, var(--roi-accent) 13%, transparent); }
+    #roiFyNote { font-size: 12px; }
 
     /* ---- ROI chat assistant (read-only), bottom-right (mirrors roas.html) ---- */
     #asstLauncher { position: fixed; right: 20px; bottom: 20px; z-index: 50; border: none;
@@ -115,7 +206,7 @@
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>ROI by financial year</h3><span class="chips" id="fyTableChips"></span></div>
+        <div class="card-head"><h3>ROI by financial year</h3><div class="spacer"></div><span class="muted" id="roiFyNote">Click a row to filter the page to that FY.</span><span class="chips" id="fyTableChips"></span></div>
         <div id="roiFyTable"></div>
       </div>
 
@@ -324,10 +415,13 @@
       // Channel Summary — monthly stacked spend, filtered to the active FY's months.
       renderChannelChart();
 
-      // ROI by FY table (always the full per-FY list, regardless of selection).
+      // ROI by FY table — the full per-FY list plus an "All years" total row, each row
+      // clickable to filter the whole page to that FY (mirrors the ROAS "ROAS by FY" table).
       setChips('fyTableChips', meta);
-      renderTable('roiFyTable', ROI.rows.data, [
-        { key: 'fy', label: 'FY' },
+      var fyRows = (ROI.rows.data || []).concat(ROI.total ? [ROI.total] : []);
+      renderTable('roiFyTable', fyRows, [
+        { key: 'fy', label: 'FY',
+          render: function (v, r) { return r.fyEnd == null ? '<strong>All years</strong>' : esc(v); } },
         { key: 'revenue', label: 'Revenue (Xero)', unit: 'currency',
           render: function (v, r) { return r.hasRevenue ? fmt(v, 'currency') : '<span class="muted">—</span>'; } },
         { key: 'totalSpend', label: 'Total spend', unit: 'currency',
@@ -338,6 +432,22 @@
         { key: 'roi', label: 'ROI', unit: 'text',
           render: function (v, r) { var x = effRoi(r); return x != null ? x.toFixed(2) + '×' : '<span class="muted">—</span>'; } },
       ]);
+      // Make each row clickable → select that FY ('all' for the total row), with the
+      // active selection highlighted.
+      var fyTb = document.querySelector('#roiFyTable tbody');
+      if (fyTb) {
+        var trs = fyTb.querySelectorAll('tr');
+        fyRows.forEach(function (r, i) {
+          var tr = trs[i];
+          if (!tr) return;
+          var isTotal = r.fyEnd == null;
+          tr.classList.add('clickrow');
+          if (isTotal) tr.classList.add('total');
+          var selected = isTotal ? (SEL === 'all') : (SEL !== 'all' && r.fyEnd === SEL);
+          if (selected) tr.classList.add('rowsel');
+          tr.addEventListener('click', function () { setFy(isTotal ? 'all' : r.fyEnd); });
+        });
+      }
     }
 
     // Revenue vs spend by month — combo chart: green spend bars on the left $ axis,
