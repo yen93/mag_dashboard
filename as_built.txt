@@ -1,6 +1,12 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-02 (SOURCE CHIPS → INFO ICON — the always-on "Source" chip
+Last updated: 2026-11-02 (ROI TAB DESCRIPTIONS → INFO ICONS — public/roi.html only:
+the FY note, all 7 KPI card sub-lines, and the three chart captions (month / "Where
+the spend goes" / Channel Summary) are now tucked behind small ⓘ info icons
+(hover/focus to reveal) instead of visible captions, via ROI-only inline helpers
+infoTip()/fillHeadInfo()/tuckKpiSubs() reusing the global .src-info/.src-tip CSS;
+the shared app.js srcInfo/renderKpis were NOT changed (no app.js bump). Frontend-only,
+needs a Cloud Run redeploy. Previously same day: SOURCE CHIPS → INFO ICON — the always-on "Source" chip
 is gone; metaChips() in app.js now hides each metric's data source behind a small
 circular ⓘ info icon (new srcInfo() helper; hover/focus reveals the source in a
 tooltip), with new .src-info/.src-tip/.src-tip-label CSS in app.css replacing
@@ -208,7 +214,15 @@ SCRIPTS / APP CODE
     activecampaign_deals (status 1/2/0 by cdate, won value via public.ac_value_aud), split per
     pipeline. FY coverage = FY22–FY27 (revenue AND marketing spend both reach FY22; FY22 +
     current FY are partial). Return on marketing spend ≈ 7–20× per FY. The 6 other Marketing
-    pages' app.js is at ?v=7. Needs a Cloud Run redeploy to ship.
+    pages' app.js is at ?v=7. As of 2026-11-02 every DESCRIPTION on this tab is tucked behind
+    a small ⓘ info icon (hover/focus to reveal) instead of a visible caption: the FY note
+    (#roiNoteInfo next to the heading), all 7 KPI card sub-lines (moved next to each card's
+    label), and the three chart captions (month / "Where the spend goes" / Channel Summary).
+    ROI-ONLY inline helpers in roi.html — infoTip(text) (mirrors app.js srcInfo but with
+    arbitrary text, reuses the global .src-info/.src-tip CSS), fillHeadInfo() (fills the
+    static <span class="head-info" data-info="…"> placeholders once), and tuckKpiSubs()
+    (post-processes renderKpis output each render); the shared app.js srcInfo/renderKpis were
+    NOT changed, so no app.js bump. Needs a Cloud Run redeploy to ship.
   - roas.html is a self-rendering page (reads /api/operations/roas + /roas/deals;
     app.js?v=7; does not use the generic chart helpers). Rebuilt 2026-10-22 to mirror
     the "MAG paid search ROAS" artifact, by Australian FINANCIAL YEAR: a top control bar

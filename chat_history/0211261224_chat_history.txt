@@ -1,0 +1,74 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-02
+Session: Hide the ROI tab's descriptive captions behind small ⓘ info icons
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"update roi tab only: C:\Users\Cloverly\claude_code\dashboard\prompts\021126_info_tool.txt"
+
+The prompt file (021126_info_tool.txt) listed, under "to_be_hidden", five pieces
+of descriptive text on the ROI tab:
+  1. ROI — revenue vs spend: the FY note ("6 FY(s) (FY22–FY27). Revenue = Xero
+     P&L total income (ex-GST…").
+  2. All card descriptions (the 7 KPI card sub-lines).
+  3. "Revenue vs spend by month": "The payoff over time — spend bars, revenue line".
+  4. "Where the spend goes": "Marketing spend by Xero account … for the selected FY."
+  5. "Channel Summary": "Marketing spend by month, stacked by category (or by ad …".
+And under "main_task": "also hide all to_be_hidden behind info tools" — i.e. tuck
+each description behind an info icon, matching the small ⓘ data-source icon the
+previous session had just rolled out across all tabs.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read prompts/021126_info_tool.txt and public/roi.html to map the five description
+locations. Then read the existing ⓘ pattern to reuse it exactly: app.js srcInfo()
+(lines ~165-175) and its .src-info/.src-tip CSS in app.css (lines ~256-286), plus
+renderKpis() (app.js ~197-211) to see how KPI card `sub` text is rendered. Decided
+to keep ALL changes inside roi.html (the user said "roi tab only"), reusing the
+global .src-info/.src-tip CSS and the global esc() helper, and NOT touching the
+shared srcInfo/renderKpis in app.js — so no app.js?v= bump was needed.
+
+Edits made to public/roi.html:
+  - Added a tiny inline <style> block: `.head-info` (inline-flex, margin-left:6px)
+    and `.kpi .label .src-info { margin-left:5px }`.
+  - Toolbar: replaced the visible `<p id="roiNote">` paragraph with a
+    `<span class="head-info" id="roiNoteInfo">` next to the "ROI — revenue vs
+    spend" heading (the FY note is dynamic, so it's filled in loadRoi()).
+  - Three chart card-heads ("Revenue vs spend by month", "Where the spend goes",
+    "Channel Summary"): removed each `<p class="muted">` caption and added a
+    `<span class="head-info" data-info="…">` right after the <h3> carrying the same
+    text (the Channel one's inner quotes encoded as &quot;). The AC-pipeline card
+    has no caption, so it was left alone (not in the hide list).
+  - Inline JS: added infoTip(text) (same SVG/markup as srcInfo but with arbitrary
+    text and no "Source" label), fillHeadInfo() (fills every
+    `.head-info[data-info]` once at init), and tuckKpiSubs() (after renderKpis,
+    moves each `.kpi > .muted` sub-line into an ⓘ next to that card's `.label`,
+    via `:scope > .muted`).
+  - Wired them up: fillHeadInfo() called once after renderMarketingSidebar('roi');
+    tuckKpiSubs() called right after the renderKpis() in render() so it re-runs on
+    every FY change; loadRoi() now sets `#roiNoteInfo`.innerHTML = infoTip(note)
+    instead of the removed `#roiNote`.textContent.
+
+Verified with a grep that no stale `#roiNote` references remained and that all new
+identifiers (head-info/infoTip/fillHeadInfo/tuckKpiSubs/roiNoteInfo) were
+consistent. Confirmed the change is frontend-only (static public/ file), with no
+API/server change and no app.js bump, and told the user a manual Cloud Run
+redeploy is needed to push it live (per CLAUDE.md, Claude never deploys the
+dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history; update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps. Saved this transcript. Reviewed as_built.txt and CLAUDE.md
+against this session's change (the ROI info-icon tuck) and updated the ROI/
+metaChips notes to reflect that descriptions on the ROI tab now live behind ⓘ
+icons. Confirmed .gitignore already covers all sensitive patterns — no change
+needed. No git commands run — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

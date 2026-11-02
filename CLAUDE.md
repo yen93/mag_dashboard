@@ -127,6 +127,16 @@ Cloud Run.
   so it freezes under the top bar on scroll. Note: a Xero year-end accrual reversal can occasionally make
   a single month's marketing-spend bar read slightly **negative** — kept as-is (annual FY totals net
   correctly). The 6 other Marketing pages' `app.js` was bumped to `?v=7` so the ROI link shows.
+  **As of 2026-11-02 every DESCRIPTION on the ROI page is tucked behind a small ⓘ info icon**
+  (hover/focus to reveal), not a visible caption: the FY note (`#roiNoteInfo` next to the heading,
+  set in `loadRoi()`), all 7 KPI card sub-lines (moved next to each card's `.label`), and the three
+  chart captions (`Revenue vs spend by month` / `Where the spend goes` / `Channel Summary`). Done
+  **ROI-only in `roi.html`** via inline helpers — `infoTip(text)` (mirrors `app.js srcInfo` but
+  carries arbitrary text and no "Source" label, reusing the global `.src-info`/`.src-tip` CSS),
+  `fillHeadInfo()` (fills the static `<span class="head-info" data-info="…">` placeholders once at
+  init), and `tuckKpiSubs()` (post-processes `renderKpis` output on every `render()`, selecting each
+  card's `:scope > .muted` sub). The shared `app.js` `srcInfo`/`renderKpis` were **NOT** changed, so
+  **no `app.js?v=` bump**. Frontend-only; needs a Cloud Run redeploy.
   **Operations left sidebar (as of 2026-10-22):** `mag_buyer_sheet.html` (nav "Buyer Analysis" —
   in-page `<h3>`/`<title>` still read "Buyer Sheet") and `invoice_tracking.html` ("Invoices")
   are **no longer top tabs** either — they moved UNDER **Operations**, reached via an

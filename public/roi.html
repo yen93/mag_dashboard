@@ -57,6 +57,10 @@
     .asst-form button { border: none; border-radius: 10px; padding: 0 14px; font: inherit; font-weight: 600;
       cursor: pointer; background: linear-gradient(135deg, var(--roi-accent), var(--roi-accent-2)); color: #fff; }
     .asst-form button:disabled { opacity: .5; cursor: default; }
+
+    /* Info icons that tuck a description away (reuse the global .src-info/.src-tip look). */
+    .head-info { display: inline-flex; align-items: center; margin-left: 6px; }
+    .kpi .label .src-info { margin-left: 5px; }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -80,20 +84,17 @@
     <aside class="subnav" id="marketingNav"></aside>
   <main class="content">
     <div class="toolbar">
-      <strong>ROI — revenue vs spend</strong>
+      <strong>ROI — revenue vs spend</strong><span class="head-info" id="roiNoteInfo"></span>
       <div class="spacer"></div>
       <span class="muted" style="font-size:13px">Financial year</span>
       <div class="segmented" id="fyBar"></div>
     </div>
 
-    <p class="muted" id="roiNote" style="font-size:12px;margin:-4px 0 16px"></p>
-
     <div class="kpi-grid" id="kpis"></div>
 
     <div class="grid">
       <div class="card col-12">
-        <div class="card-head"><h3>Revenue vs spend by month</h3><span class="chips" id="monthChips"></span></div>
-        <p class="muted" style="font-size:12px;margin:-6px 0 8px">The payoff over time — spend bars, revenue line</p>
+        <div class="card-head"><h3>Revenue vs spend by month</h3><span class="head-info" data-info="The payoff over time — spend bars, revenue line"></span><span class="chips" id="monthChips"></span></div>
         <div class="chart-box" id="roi-month-chart"><canvas id="roiMonthCanvas"></canvas></div>
       </div>
       <div class="card col-12">
@@ -102,17 +103,15 @@
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>Where the spend goes</h3><span class="chips" id="catChips"></span></div>
-        <p class="muted" style="font-size:12px;margin:-6px 0 8px">Marketing spend by Xero account (Advertising, Website, Software, Printing, WrkPod Staff) for the selected FY.</p>
+        <div class="card-head"><h3>Where the spend goes</h3><span class="head-info" data-info="Marketing spend by Xero account (Advertising, Website, Software, Printing, WrkPod Staff) for the selected FY."></span><span class="chips" id="catChips"></span></div>
         <div class="chart-box" id="roi-cat-chart" style="height:360px"><canvas id="roiCatCanvas"></canvas></div>
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>Channel Summary</h3>
+        <div class="card-head"><h3>Channel Summary</h3><span class="head-info" data-info="Marketing spend by month, stacked by category (or by ad platform). Live from Xero, refreshed monthly. Vendors on the ad accounts not yet categorised show as &quot;Uncategorized&quot;."></span>
           <div class="segmented" id="channelDimBar" style="margin-left:6px"><button data-dim="type">By type</button><button data-dim="platform">By platform</button><button data-dim="account">By account</button></div>
           <span class="chips" id="channelChips" style="margin-left:auto"></span>
         </div>
-        <p class="muted" style="font-size:12px;margin:-6px 0 8px">Marketing spend by month, stacked by category (or by ad platform). Live from Xero, refreshed monthly. Vendors on the ad accounts not yet categorised show as “Uncategorized”.</p>
         <div class="chart-box" id="roi-channel-chart" style="height:380px"><canvas id="roiChannelCanvas"></canvas></div>
       </div>
 
@@ -130,6 +129,41 @@
     var ROI = null;    // full API payload
     var SEL = null;    // selected fy_end (number) or 'all'
     var PIPE_WON_ONLY = false;   // pipeline chart: show only the Won count per pipeline
+
+    // Descriptions on this tab are tucked behind a small ⓘ info icon (hover/focus to
+    // reveal) — same look as the data-source icon (reuses the global .src-info/.src-tip
+    // CSS). infoTip() builds one carrying any text (no "Source" label).
+    function infoTip(text) {
+      if (!text) return '';
+      var s = esc(text);
+      return '<span class="src-info" tabindex="0" role="button" aria-label="' + s + '">' +
+        '<svg class="src-info-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">' +
+        '<circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
+        '<rect x="7.15" y="6.7" width="1.7" height="5" rx="0.85" fill="currentColor"/>' +
+        '<circle cx="8" cy="4.2" r="1.05" fill="currentColor"/></svg>' +
+        '<span class="src-tip">' + s + '</span></span>';
+    }
+
+    // Fill every static-description placeholder (<span class="head-info" data-info="…">).
+    function fillHeadInfo() {
+      document.querySelectorAll('.head-info[data-info]').forEach(function (el) {
+        el.innerHTML = infoTip(el.getAttribute('data-info'));
+      });
+    }
+
+    // After renderKpis(), move each card's description from a visible sub-line into an
+    // ⓘ icon next to the card label (ROI tab only — the shared renderKpis is untouched).
+    function tuckKpiSubs() {
+      document.querySelectorAll('#kpis .kpi').forEach(function (card) {
+        var sub = card.querySelector(':scope > .muted');
+        if (!sub) return;
+        var label = card.querySelector('.label');
+        if (label && !label.querySelector('.src-info')) {
+          label.insertAdjacentHTML('beforeend', infoTip(sub.textContent));
+        }
+        sub.remove();
+      });
+    }
 
     // Spend here is MARKETING spend (Xero marketing accounts, ex-GST) — no owner/director wages
     // to subtract, so these are plain pass-throughs (the old "exclude owner wages" toggle is gone).
@@ -220,6 +254,7 @@
           metric: { value: avgRev, unit: 'currency' },
           sub: avgRev != null ? 'Revenue ÷ clients won' : null },
       ]);
+      tuckKpiSubs();   // hide each card's description behind an ⓘ next to its label
 
       // Revenue vs spend by month — spend as green bars (left $ axis), revenue as a
       // blue line (right $ axis). Dual axis so spend reads clearly against much larger revenue.
@@ -472,7 +507,8 @@
       fetchJSON('/api/marketing/roi')
         .then(function (data) {
           ROI = data;
-          document.getElementById('roiNote').textContent = (data.rows.meta && data.rows.meta.note) || '';
+          document.getElementById('roiNoteInfo').innerHTML =
+            infoTip((data.rows.meta && data.rows.meta.note) || '');
           if (!data.rows.data || !data.rows.data.length) {
             // Pending / empty — show source chips + a needs-setup note, no charts.
             setChips('monthChips', data.rows.meta);
@@ -499,6 +535,7 @@
 
     initPage('marketing');               // login / top bar / theme only (no auto-fetch)
     renderMarketingSidebar('roi');
+    fillHeadInfo();                      // tuck the static chart descriptions behind ⓘ icons
     document.getElementById('pipeWonToggle').addEventListener('change', function () {
       PIPE_WON_ONLY = this.checked;
       if (ROI) renderPipeline();

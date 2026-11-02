@@ -1,0 +1,9 @@
+## to_be_hidden:
+**1. ROI — revenue vs spend:** "6 FY(s) (FY22–FY27). Revenue = Xero P&L total income (ex-GST..."
+**2. all card descriptions below**
+**3. Revenue vs spend by month:** "The payoff over time — spend bars, revenue line"
+**4. Where the spend goes:** "Marketing spend by Xero account (Advertising, Website, Software, Printing, WrkPod Staff) for the selected FY."
+**5. Channel Summary:** "Marketing spend by month, stacked by category (or by ad ..."
+
+## main_task:
+also hide all to_be_hidden behind info tools
