@@ -211,7 +211,7 @@
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by month</h3><label class="pipe-toggle" style="font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-left:10px"><input type="checkbox" id="pipeWonToggle" style="margin:0">Won only</label><span class="chips" id="pipeChips"></span></div>
+        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by month</h3><div class="segmented" id="pipeWonSeg" style="margin-left:10px"><button data-won="all" class="active">All</button><button data-won="won">Won only</button></div><span class="chips" id="pipeChips"></span></div>
         <div class="chart-box" id="roi-pipe-chart" style="height:380px"><canvas id="roiPipelineCanvas"></canvas></div>
       </div>
 
@@ -557,6 +557,15 @@
       if (el) _pipeChart = new Chart(el.getContext('2d'), cfg);
     }
 
+    // "Won only" segmented toggle (same look as the Financial-year toggle).
+    function setPipeWon(wonOnly) {
+      PIPE_WON_ONLY = wonOnly;
+      document.querySelectorAll('#pipeWonSeg button').forEach(function (b) {
+        b.classList.toggle('active', (b.getAttribute('data-won') === 'won') === wonOnly);
+      });
+      if (ROI) renderPipeline();
+    }
+
     // Channel Summary — marketing spend BY MONTH (x axis), stacked by each Type
     // category or each ad Platform (toggle), FILTERED to the active FY's calendar months
     // (1st–last day of each month in that FY; 'All' shows every month).
@@ -739,9 +748,8 @@
     initPage('marketing');               // login / top bar / theme only (no auto-fetch)
     renderMarketingSidebar('roi');
     fillHeadInfo();                      // tuck the static chart descriptions behind ⓘ icons
-    document.getElementById('pipeWonToggle').addEventListener('change', function () {
-      PIPE_WON_ONLY = this.checked;
-      if (ROI) renderPipeline();
+    document.querySelectorAll('#pipeWonSeg button').forEach(function (b) {
+      b.addEventListener('click', function () { setPipeWon(b.getAttribute('data-won') === 'won'); });
     });
     document.querySelectorAll('#channelDimBar button').forEach(function (b) {
       b.addEventListener('click', function () { setChannelDim(b.getAttribute('data-dim')); });
