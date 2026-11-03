@@ -91,9 +91,14 @@ Cloud Run.
   `netRoi = (roi−1)×100`; spend comes straight from the marketing-spend payload (`effSpend()` is a
   pass-through now). The cards' "Marketing spend"/CAC/ROI are genuinely **MARKETING** figures (revenue
   whole-business ÷ marketing-only spend). Plus 2 charts (**revenue-vs-spend by month** =
-  a **DUAL-AXIS combo chart** as of
+  a **two-axis combo chart** as of
   2026-10-29: green **spend bars** on the left $ axis, blue **revenue line** on the right $ axis —
-  self-rendered by `renderMonthChart()` in `roi.html`, **no longer** the shared-axis `lineChart`;
+  self-rendered by `renderMonthChart()` in `roi.html`, **no longer** the shared-axis `lineChart`.
+  **As of 2026-11-02 BOTH $ axes share ONE `[0, niceCeil(max)]` scale** (same `compactAud` ticks;
+  `niceCeil()` rounds the shared max to 1/2/2.5/5/10×10ⁿ) so the **left and right tick levels show
+  the same figures**, and each axis carries a **title** = its series ("Marketing spend" green /
+  "Revenue" blue). Tradeoff: on the shared scale the small monthly spend bars read much smaller than
+  monthly revenue — intentional, it's what makes the levels line up;
   **AC pipeline Won/Open/Lost** — **as of 2026-11-02 PER MONTH** (vertical stacked bars, FY-filtered,
   **same monthly design as Channel Summary**; was per-pipeline horizontal bars). Backed by a new
   **`pipelineMonths`** payload section in `marketing-roi.js` (`PIPELINE_MONTH_SQL` counts status

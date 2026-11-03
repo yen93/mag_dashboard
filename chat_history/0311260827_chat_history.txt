@@ -1,0 +1,167 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-03
+Session: Three read-only (/q) investigations into the Marketing dashboard —
+(1) whether the ROI "Channel Summary" By-type data is scoped to the spec file,
+(2) which DB table backs new_paid_leads_tracking.html and its "landing page"
+column, (3) why yadao.cloverly@gmail.com showed the wrong channel and why
+alex@donedigital.au didn't show — followed by a DB fix for #3: reconcile the
+Calendly bookings' channel to AC's authoritative lead source, daily.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. Query results contained contact emails and AC custom-field
+values (business data, not secrets) only.
+
+--------------------------------------------------------------------------------
+USER:
+/q — In the ROI "Channel Summary" graph, does the "By type" toggle data stay only
+within the expenses specified in "Marketing Expenses - Xero Account - Description.md"?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the spec file, server/metrics/marketing-channel-summary.js, and the
+xero-channel-summary-sync edge function, then verified against live Supabase.
+
+Answer: mostly yes at the ACCOUNT level, with one caveat. The By-type query
+(BY_TYPE) is a GROUP BY type over public.marketing_channel_monthly, which the edge
+fn populates per the spec: account 302 (Advertising) is OPEN = kept in full ("ALL
+DESCRIPTIONS", unmapped vendors roll up as "Uncategorized"); 475/332/411/377 are
+SHARED = only vendors present in marketing_channel_vendor_map are kept. Live counts
+confirmed enforcement: 302 had 44 vendors (29 unmapped→Uncategorized); 332/377/
+411/475 had 0 unmapped vendors each.
+
+Caveat flagged: the edge fn's keep-rule is per-VENDOR ("is this contact mapped
+anywhere?"), not per account+vendor. So a vendor listed under one account also gets
+kept when it appears on a different SHARED account. On 332 (Software) three vendors
+appear that the spec doesn't itemize there: IT GENIUS (~$3,788, spec lists it only
+under 475), Microsoft/Bing (~$1,849) and Google (~$144) — ~$5.8k of 332's ~$15.5k.
+Microsoft/Google are genuine ad vendors so arguably fine; IT GENIUS is the clearer
+leak. Noted that a literal fix would require the vendor map to carry which
+account(s) each vendor is valid for. No changes made (/q).
+
+--------------------------------------------------------------------------------
+USER:
+/q — Which DB table does new_paid_leads_tracking.html come from?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Traced the page → fetchJSON('/api/operations/new-paid-leads') → server/index.js
+:224 getNewPaidLeads → server/metrics/new-paid-leads.js.
+
+Answer: two Supabase tables. Spine = public.calendly_src_sync_bookings b (one row
+per Calendly booking, unique by email), LEFT JOINed to public.ac_new_leads a on
+contact_id for the AC "Src-*" enrichment columns (utm_*, gclid, landing page,
+first-touch, cdate/udate). Both are pre-computed caches (no live AC/Calendly calls
+at request time): ac_new_leads filled by new-paid-leads-sync; bookings by
+calendly-source-sync (Mon–Fri 06:00 PH). Page title reads "Calendly-AC Sync".
+
+--------------------------------------------------------------------------------
+USER:
+Which table has the landing page column? /q
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+The landingPage column = a.src_landing_page from public.ac_new_leads (new-paid-leads
+.js:45; alias a = ac_new_leads). Stored as src_landing_page. Null for any booking
+whose contact predates the 5-Oct-2026 cutoff (that table only holds AC contacts
+created/updated on/after then), so the LEFT join leaves it blank.
+
+--------------------------------------------------------------------------------
+USER:
+/q — Why is yadao.cloverly@gmail.com showing "Google Ads" in the dashboard channel
+when it's actually "Organic Search" in the db, and why is alex@donedigital.au not
+showing?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated live. Findings:
+
+yadao (contact 19583): calendly_src_sync_bookings.channel = "Google Ads" (what the
+page shows — the SELECT uses b.channel), stamped 2026-10-07 with action "skipped –
+already had source". But AC contact field 77 (src_lead_channel, mirrored into
+ac_new_leads.src_lead_channel) = "Organic Search", last updated in AC 2026-10-26.
+Confirmed field 77="Organic Search" directly via the ActiveCampaign MCP. Root
+cause: the bookings-table channel is derived from the Calendly booking's own
+tracking (deriveChannel) and is a point-in-time snapshot — it never reads back from,
+or re-syncs to, AC. AC was corrected later; the snapshot wasn't. The two values come
+from different capture points and nothing reconciled them.
+
+alex@donedigital.au (contact 19776): no row in calendly_src_sync_bookings (the page
+spine), so it can never appear. It exists in ac_new_leads / ga4_ac_contact_source
+but only as TEST data (utm_source "lm_test_source", gclid "test_gclid_001") and has
+no Calendly booking.
+
+No changes made (/q).
+
+--------------------------------------------------------------------------------
+USER:
+So calendly_src_sync_bookings is never synced??? Please fix it — this should sync
+daily. [follow-up] never truncate, just upsert.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the full mechanism before changing anything. Found the
+calendly-source-sync edge function (id 8ead81f7, verify_jwt:false; not in the local
+repo) via the Supabase MCP and read its deployed source: it looks back 3 days of
+Calendly bookings, derives channel from the booking's tracking, writes AC field 77
+only when empty (never overwrites → "skipped – already had source"), and UPSERTS the
+bookings table on email (already never truncates). pg_cron job 10
+(calendly-source-sync-daily) ran "0 22 * * 0-4" = Mon–Fri 06:00 PH. Also confirmed
+ac_new_leads.src_lead_channel="Organic Search" for yadao, and that new-paid-leads
+-sync (job 9) fills that mirror.
+
+Flagged that "sync daily + upsert" ALONE wouldn't fix yadao (out of the 3-day
+window, and the derivation would re-write "Google Ads"), so the channel must also
+come from AC. Asked two clarifying questions:
+  1. Channel source of truth → user chose "AC wins when set" (store AC field 77 /
+     src_lead_channel when set; Calendly-derived only as fallback; backfill existing).
+  2. Non-booking AC leads (the alex case, test data) → user chose "Bookings only
+     (leave as-is)".
+
+Assessed backfill impact (read-only): 12 booking rows total, all 12 have an AC
+channel in the mirror, exactly 2 would change, 0 unmatched. The 2: yadao
+(Google Ads→Organic Search) and michelle.hall@eroad.com (Direct→Organic social) —
+both legitimate corrections toward AC.
+
+Implemented (lower-risk approach — did NOT redeploy the AC-writing edge function):
+  • apply_migration "reconcile_calendly_booking_channels" — created SQL function
+    public.reconcile_calendly_booking_channels() (SECURITY DEFINER, search_path=
+    public): in-place UPDATE ... FROM ac_new_leads setting b.channel =
+    a.src_lead_channel where AC has a non-empty value and it differs; Calendly-
+    derived kept as fallback. Idempotent, never truncates. Returns rows changed.
+  • Ran it now → 2 rows corrected (backfill). Verified: yadao="Organic Search",
+    michelle="Organic social".
+  • cron.schedule "calendly-booking-channel-reconcile-daily" (new jobid 25) at
+    "15 22 * * *" = 06:15 PH — daily self-heal so late AC corrections (the exact
+    yadao case) propagate automatically.
+  • cron.alter_job(10, ...) → changed calendly-source-sync from "0 22 * * 0-4"
+    (Mon–Fri) to "0 22 * * *" (every day), as requested. Verified both jobs active.
+
+Noted: no dashboard redeploy needed (page reads b.channel, 10-min API cache); the
+edge fn itself was deliberately left untouched to avoid risk to its AC contact-
+creation/write paths, so a brand-new in-window booking may briefly show the
+Calendly-derived channel until the next reconcile; reconcile only covers contacts
+present in ac_new_leads (post-5-Oct-2026 — all 12 current rows). Offered to make the
+surgical edge-fn change too if zero-latency is wanted.
+
+Saved a project memory (calendly-booking-channel-reconcile.md) and added it to the
+memory index.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history; update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps. Saved this transcript. Updated as_built.txt (new reconcile
+function + the new daily reconcile cron + the calendly-source-sync schedule change
+Mon–Fri→daily). Reviewed CLAUDE.md — the Calendly decoupling note is unchanged, but
+this session's change is a data-freshness/cron fix not covered by its existing
+prose; left CLAUDE.md as-is (the per-contact-sources data-pipeline details there
+remain accurate; the reconcile is captured in as_built.txt + memory). Confirmed
+.gitignore already covers all sensitive patterns — no change. No git commands run —
+the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

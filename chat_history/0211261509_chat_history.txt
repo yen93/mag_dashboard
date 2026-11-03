@@ -1,0 +1,152 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-02
+Session: ROI tab (Marketing → roi.html) polish pass — FY-aware Channel Summary,
+ROAS-matched look/feel + hover animations + active-toggle colour, clickable "ROI by
+FY" rows, full-month-span bar labels on both monthly charts, per-MONTH AC-pipeline
+chart (new pipelineMonths backend series), segmented "Won only" toggle, read-only
+verification that deal counts bucket by creation date (cdate), and finally a
+shared-scale revenue-vs-spend chart (both $ axes share one [0, niceCeil] range so
+left/right tick levels match, each axis titled by its series). Frontend + one server
+metric file (marketing-roi.js); needs a manual Cloud Run redeploy. No git run by Claude.
+(This file supersedes 0211261434_chat_history.txt from earlier in the same session —
+it adds the shared-axis change + this second /dcp.)
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. The only identifier shown was the Supabase project ref
+(aivitcomiywiysrfwqxt), a non-secret project id already documented in CLAUDE.md, used
+for a single read-only information_schema SELECT.
+
+--------------------------------------------------------------------------------
+USER:
+"Channel Summary" should show per month (1st-last day).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated roi.html (renderChannelChart/loadChannelSummary) and
+marketing-channel-summary.js. The chart already plotted months on the x-axis, so the
+literal request was already met; awaited clarification.
+
+--------------------------------------------------------------------------------
+USER:
+It should update based on the clicked/active FY.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Made the Channel Summary FY-aware (frontend-only): added channelMonthFyEnd(label)
+(+MON_IDX) mapping "Jul-2025"→AU FY-end; rewrote renderChannelChart() to keep only
+the active FY's months (SEL), re-index each series, drop all-zero series, colour by
+stable src index; wired renderChannelChart() into render() so it re-renders on FY
+change; 'All'/pre-load shows all months. Updated the heading tooltip/comment. /cm line.
+
+--------------------------------------------------------------------------------
+USER:
+Update ROI tab look/feel: same look+hover animations for all widgets; "ROI by FY"
+clickable per row like ROAS; active buttons/toggles same colour.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ported ROAS's bespoke CSS to roi.html with --roi-accent/-2 + new --roi-shadow/-lift
+tokens: card + KPI hover-lift + gradient accent bars, card-head h3 gradient tick,
+first-KPI emphasis, gradient active-pill .segmented toggles, aurora backdrop. Key
+nuance: did NOT use overflow:hidden (unlike ROAS) because ROI's .src-tip info tooltips
+live in card heads/KPI labels and would clip — rounded the accent bars instead. Made
+the ROI-by-FY table rows clickable (clickrow/rowsel, "All years" total row selecting
+'all', fy render "All years") by post-processing renderTable() output in render(),
+plus a "Click a row…" note. No app.js change. /cm line.
+
+--------------------------------------------------------------------------------
+USER:
+Label each bar "[MONTH] 1-[LAST DAY]" on "Revenue vs spend by month" and "Channel
+Summary".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added MON_ABBR + monthSpanLabel(year,m1)→"Mon 1-<last day>" (leap-aware via
+Date.UTC(year,m1,0)), ymSpanLabel('YYYY-MM'), channelSpanLabel('Mon-YYYY'); applied to
+the month chart and Channel Summary x-axes. Flagged that labels drop the year so "All"
+repeats month names (inherent to the format; Channel Summary is FY-filtered). /cm line.
+
+--------------------------------------------------------------------------------
+USER:
+Update "AC pipeline — Won/Open/Lost by pipeline" to show per month; use the Channel
+Summary design as reference.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Backend (marketing-roi.js): added PIPELINE_MONTH_SQL (status 1/0/2 counts by
+date_trunc('month',cdate) from MONTH_FLOOR), built pipelineMonths=[{month,fyEnd,won,
+open,lost}] and exposed a new pipelineMonths section (live + pending branches); kept
+per-FY pipelines for the assistant snapshot. Frontend: rewrote renderPipeline() to
+mirror renderChannelChart() — months x-axis (ymSpanLabel), vertical stacked
+Won/Open/Lost, FY-filtered, index tooltips; renamed heading to "…by month"; pointed
+pipeChips at pipelineMonths.meta. node --check passed. Touches server + static. /cm line.
+
+--------------------------------------------------------------------------------
+USER:
+"Won only" should be a toggle that looks just like the "Financial year" toggle.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Replaced the pipeline "Won only" checkbox with a segmented toggle #pipeWonSeg (All
+[default active] / Won only) that inherits the gradient active-pill styling; added
+setPipeWon(wonOnly) (mirrors setChannelDim) + init wiring. Behaviour unchanged. /cm line.
+
+--------------------------------------------------------------------------------
+USER:
+/q (read-only): double-check deal counts are based on deal creation date.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed all ROI deal counts bucket by cdate: the FY(col) helper applied to `cdate`
+in BY_FY (KPI won/open/lost) + PIPELINE_SQL, and date_trunc('month',cdate) in
+PIPELINE_MONTH_SQL. Ran a read-only information_schema SELECT on activecampaign_deals
+(cdate/edate/mdate are timestamptz; only cdate referenced). Flagged the implication:
+all statuses bucket by CREATION date (a deal created FY25, won FY26 counts in FY25's
+won) — consistent across cards/pipeline/monthly chart. Counting won by won-date would
+need a reliable close-date column (edate isn't it). No changes (/q).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (first invocation this session).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved chat_history/0211261434_chat_history.txt; updated as_built.txt + CLAUDE.md for
+the FY-aware Channel Summary, monthly AC-pipeline chart + pipelineMonths series,
+month-span labels, ROAS-matched look/feel + clickable FY table, segmented Won-only
+toggle; confirmed .gitignore covers everything. No git run.
+
+--------------------------------------------------------------------------------
+USER:
+Update "Revenue vs spend by month": move "revenue" and "marketing spend" to their
+corresponding graph number lines; the figures on each line should be the same per
+level (if 200k is the highest on the right, it should be the same on the left).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Made both $ axes share one scale so left/right tick levels match. Added niceCeil(v)
+(rounds up to 1/2/2.5/5/10 × a power of ten); in renderMonthChart() computed sharedMax
+= niceCeil(max of all visible spend+revenue values); set both ySpend (left) and
+yRevenue (right) to {min:0, max:sharedMax} with the same compactAud formatter so each
+gridline shows identical figures on both sides. Titled the left axis "Marketing spend"
+(green, matching the bars) and the right "Revenue" (blue, matching the line), and made
+the left ticks green. Updated the two stale "dual axis" comments. Flagged the tradeoff:
+on a shared scale the small monthly spend bars read much smaller than monthly revenue
+(the inherent consequence of matching tick levels); offered to revert/toggle if too
+small. Frontend-only; manual redeploy. /cm line.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (this invocation).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps: wrote this full-session transcript (superseding the earlier
+0211261434 file); updated as_built.txt + CLAUDE.md to note the shared-axis
+revenue-vs-spend chart (both axes one [0,niceCeil] scale, titled per series); confirmed
+.gitignore needs no change. No git commands run — user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

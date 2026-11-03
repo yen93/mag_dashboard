@@ -1,7 +1,25 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-02 (ROI TAB POLISH PASS — public/roi.html + server/metrics/
-marketing-roi.js: (1) Channel Summary is now FILTERED to the active FY's months
+Last updated: 2026-11-03 (CALENDLY BOOKINGS CHANNEL now reconciled to AC daily — new SQL
+fn public.reconcile_calendly_booking_channels() re-aligns calendly_src_sync_bookings.channel
+(what new_paid_leads_tracking.html shows via b.channel) to AC's authoritative lead source
+(contact field 77 → public.ac_new_leads.src_lead_channel) WHEN AC has one, else keeps the
+Calendly-tracking-DERIVED value as fallback; in-place UPDATE, never truncates, idempotent.
+Root cause fixed: calendly-source-sync only ever stored a Calendly-derived channel snapshot and
+never read back from / re-synced to AC, so a later AC correction (e.g. yadao, corrected weeks after
+booking, outside the 3-day sync window) never reached the page. Backfilled now (2 rows: yadao
+Google Ads→Organic Search, michelle.hall@eroad.com Direct→Organic social) and scheduled daily via
+NEW pg_cron jobid 25 'calendly-booking-channel-reconcile-daily' ('15 22 * * *' = 06:15 PH). Also
+changed the calendly-source-sync cron (jobid 10) from Mon–Fri '0 22 * * 0-4' to EVERY DAY
+'0 22 * * *'. Migration reconcile_calendly_booking_channels. The calendly-source-sync edge fn
+itself was NOT redeployed (it still writes a Calendly-derived channel on first insert; the reconcile
+owns channel correctness), so a brand-new in-window booking may briefly show the Calendly-derived
+value until the next reconcile; reconcile only covers contacts present in ac_new_leads (post-5-Oct-
+2026 — all 12 current booking rows). NO dashboard redeploy needed (page reads channel live, 10-min
+cache). Previously 2026-11-02: ROI TAB POLISH PASS — public/roi.html + server/metrics/
+marketing-roi.js: (0) revenue-vs-spend-by-month chart now has BOTH $ axes on ONE
+[0, niceCeil(max)] scale (titled per series) so the left/right tick levels show the same
+figures; (1) Channel Summary is now FILTERED to the active FY's months
 (channelMonthFyEnd + renderChannelChart in render()); (2) ROI tab look/feel + hover
 animations + active-toggle colour now MIRROR the ROAS tab (bespoke inline CSS, no
 overflow:hidden so .src-tip tooltips aren't clipped); (3) "ROI by FY" rows are CLICKABLE
@@ -206,7 +224,10 @@ SCRIPTS / APP CODE
     Return on spend (x.xx×) / Net ROI (±%) / Clients won / Cost per client (CAC =
     marketing spend÷dealsWon) / Avg revenue per client (revenue÷dealsWon) — computed
     CLIENT-SIDE from /api/marketing/roi, null-guarded), a revenue-vs-spend-by-month
-    DUAL-AXIS combo chart (green marketing-spend bars / blue revenue line), an
+    two-axis combo chart (green marketing-spend bars on the left axis / blue revenue line
+    on the right; as of 2026-11-02 BOTH axes SHARE one [0, niceCeil(max)] scale so the
+    left/right tick levels match, and each axis is titled by its series — renderMonthChart()
+    in roi.html), an
     AC-pipeline Won/Open/Lost chart (as of 2026-11-02 broken down PER MONTH — vertical
     stacked bars, FY-filtered, SAME design as Channel Summary; was per-pipeline horizontal
     bars. Backed by a new `pipelineMonths` section in marketing-roi.js = PIPELINE_MONTH_SQL
@@ -1058,6 +1079,28 @@ AUTOMATIONS / ROUTINES
   (fy/cal_yr/jc_manual_tag), 20261020070000_contact_source_xero_fee_columns.sql (fee
   columns + extended trigger) and 20261020080000_contact_source_fy_short_label.sql
   (shortened the fy label to "FY26"; drops+recreates the generated fy column to recompute).
+- calendly-source-sync (Supabase EDGE FUNCTION, verify_jwt:false; pg_cron jobid 10
+  `calendly-source-sync-daily`) — reads the last 3 days of Calendly bookings, derives a
+  lead `channel` from each booking's own tracking (UTM/gclid), writes the source onto the
+  matched AC contact's "Src - *" fields (field 77 ONLY when empty — never overwrites), creates
+  the contact if missing, tags it, and UPSERTS public.calendly_src_sync_bookings ON email
+  (never truncates) + logs public.calendly_src_sync_runs. Backs new_paid_leads_tracking.html
+  (spine) + ac_new_leads enrichment. Schedule CHANGED 2026-11-03 from Mon–Fri '0 22 * * 0-4'
+  to EVERY DAY '0 22 * * *' (06:00 PH). Secrets CALENDLY_PAT, AC_API_URL/AC_API_TOKEN,
+  SUPABASE_*. The deployed source is the source of truth (local repo copy may be absent); read
+  it via the Supabase MCP get_edge_function if editing.
+- calendly-booking-channel-reconcile-daily (pg_cron jobid 25, '15 22 * * *' = 06:15 PH, NEW
+  2026-11-03) — runs public.reconcile_calendly_booking_channels(), an in-place UPDATE that
+  re-aligns calendly_src_sync_bookings.channel to AC's authoritative lead source
+  (ac_new_leads.src_lead_channel = AC field 77) WHENEVER AC has a non-empty value and it differs;
+  the Calendly-tracking-derived channel is kept only as a fallback. Idempotent, never truncates,
+  returns rows changed. Purpose: the bookings table's channel is a point-in-time Calendly-derived
+  snapshot that otherwise never reflects a later AC correction — this self-heals those daily
+  (runs 15 min after the 06:00 syncs so the ac_new_leads mirror is fresh). Migration
+  reconcile_calendly_booking_channels. "AC wins when set"; the calendly-source-sync edge fn was
+  deliberately left unchanged so this cron owns channel correctness. Only covers bookings whose
+  contact is in ac_new_leads (post-5-Oct-2026). See also the memory note
+  calendly-booking-channel-reconcile.md.
 - MAG's own lead-gen/outreach automations (LinkedIn scraping, cold-lead
   sequencing, proposal routing) write into the Supabase tables this dashboard
   reads; they are external to this repo.
