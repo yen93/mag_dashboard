@@ -36,15 +36,38 @@ Cloud Run.
   shared layout rules in `app.css`. `sales.html` keeps its `<title>`/heading "Conferences".
   **Marketing left sidebar (as of 2026-10-22; +`roi.html` 2026-10-28):** five former top
   tabs plus the new **ROI** page live UNDER Marketing, reached via a left sidebar
-  (`<aside class="subnav" id="marketingNav">`) shown on **7 pages** — `marketing.html`
-  (Overview), **`roi.html` (ROI, new 2026-10-28)**, `roas.html`, `ac_contact_sources.html`,
+  (`<aside class="subnav" id="marketingNav">`) shown on **8 pages** — `marketing.html`
+  (Overview), **`roi.html` (ROI, new 2026-10-28)**, `roas.html`, **`ad_platforms.html`
+  ("Ad Platforms", new 2026-11-03)**, `ac_contact_sources.html`,
   `new_paid_leads_tracking.html`, `ga4_agent.html`, `historical_paid_leads.html`. The sidebar
   link list is built by ONE helper `renderMarketingSidebar(active)` in `app.js` (single source
-  of truth — **don't hand-duplicate it**); each of the 7 pages wraps its `<main>` in
+  of truth — **don't hand-duplicate it**); each of the 8 pages wraps its `<main>` in
   `<div class="marketing-layout">` + the aside, keeps **Marketing** as the active top tab, and
   calls `renderMarketingSidebar('<key>')` right after `initPage`. CSS `.marketing-layout`/
   `.subnav`/`.subnav-link` lives in `app.css` (sticky on desktop, horizontal scroll under 860px).
   So those are **no longer (or never were) top tabs** — to re-point one, edit the helper, not the tabbar.
+  **Ad Platforms page (`ad_platforms.html` = Marketing sidebar "Ad Platforms", new 2026-11-03,
+  `/api/marketing/ad-platforms`, `server/metrics/ad-platforms.js`):** a self-rendering page
+  (`initPage('marketing')` with no renderFn + `renderMarketingSidebar('adplatforms')` + its own
+  `fetchJSON`) that shows **raw per-platform performance** with a **3-way source toggle**
+  (segmented `#srcSeg`, same style as the ROAS FY/basis toggles): **GA4 / Google Ads / Bing Ads**.
+  The table (shared `renderSortableTable`, `ac_contact_sources`-style) AND the KPI cards both swap
+  with the toggle; KPIs are recomputed **client-side from the active source's filtered rows** (via
+  `renderSortableTable`'s `onFilter`), so they track in-table filtering/search. Per source: **GA4** =
+  `public.ga4_events_staging` (website events by date/source/medium/campaign/page + event_count;
+  rolling **~60-day** window, truncate-reloaded from GA4 by the GA4 events sync; KPIs: total events /
+  event types / sources / campaigns / pages); **Google Ads** = `public.google_ads_campaign_monthly`
+  (campaign-monthly, **straight from the Google Ads API** — the PLATFORM figure, distinct from the
+  Xero-billed `google_ads_xero_monthly` the ROAS cost uses); **Bing Ads** =
+  `public.bing_ads_campaign_monthly_raw` (campaign-monthly, straight from the Microsoft Advertising
+  API via the **standalone** `bing_ads_reporting` project — NOT the dashboard's
+  `bing_ads_campaign_monthly` sentinel). Google/Bing share one campaign-monthly shape (month/campaign/
+  channel/impr/clicks/cost/conv/conv-value + computed CTR/CPC/cost-per-conv; KPIs: spend/impr/clicks/
+  conv/avg-CPC/conv-value). **ONE endpoint returns all three** (each read independently, degrading to
+  a `pending` section on empty/error so one missing table can't fail the tab); the page toggles
+  client-side with **no refetch**. **Read-only**, cached briefly. Frontend + 1 new route/metrics
+  module → needs a **Cloud Run redeploy**. The 7 other Marketing pages' `app.js` was bumped to
+  **`?v=9`** (all 18 pages, actually) so the new sidebar link shows.
   **ROI page (`roi.html` = Marketing sidebar "ROI", `/api/marketing/roi`,
   `server/metrics/marketing-roi.js`)** is a self-rendering page (same pattern as `roas.html`:
   `initPage('marketing')` with no renderFn + `renderMarketingSidebar('roi')` + its own

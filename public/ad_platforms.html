@@ -1,0 +1,215 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ad Platforms — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* Wide table — use the full screen width (still scrolls on narrow screens). */
+    .content { max-width: none; }
+    .ap-toolbar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 12px; }
+    .ap-toolbar .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    /* Source toggle — accent-filled active pill (mirrors the ROAS FY/basis toggles). */
+    #srcSeg button.active { background: var(--accent); color: #fff; box-shadow: none; }
+    #apNote { font-size: 12.5px; color: var(--text-muted); margin: 0 0 14px; line-height: 1.5; max-width: 900px; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab active" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+  </nav>
+
+  <div class="marketing-layout">
+    <aside class="subnav" id="marketingNav"></aside>
+    <main class="content">
+      <!-- KPI cards — recomputed from the active source's (filtered) rows -->
+      <div class="kpi-grid" id="apKpis"></div>
+
+      <div class="grid">
+        <div class="card col-12">
+          <div class="card-head">
+            <h3>Ad Platforms</h3>
+            <span class="chips" id="apChips"></span>
+            <div class="spacer"></div>
+            <span class="muted" id="apCount" style="font-size:13px"></span>
+          </div>
+
+          <!-- Source toggle: GA4 / Google Ads / Bing Ads. Switches the table's data,
+               columns and KPI cards client-side (all three datasets ship in one payload). -->
+          <div class="ap-toolbar">
+            <span class="ctl-label">Source</span>
+            <div class="segmented" id="srcSeg">
+              <button type="button" data-src="ga4" class="active">GA4</button>
+              <button type="button" data-src="google">Google Ads</button>
+              <button type="button" data-src="bing">Bing Ads</button>
+            </div>
+          </div>
+          <p id="apNote"></p>
+
+          <div id="apTable"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js?v=9"></script>
+  <script>
+    // Self-rendering page (no /api/metrics payload): initPage just does login / top-bar /
+    // theme; this script fetches /api/marketing/ad-platforms and renders its own table + KPIs.
+    initPage('marketing');
+    renderMarketingSidebar('adplatforms');
+
+    var DATA = null;            // payload.sources = { ga4, google, bing }
+    var SRC = 'ga4';            // active source (default = first toggle)
+    var STATE = { ga4: {}, google: {}, bing: {} }; // per-source table state (sort/filter/search persist)
+
+    var LABEL = { ga4: 'GA4', google: 'Google Ads', bing: 'Bing Ads' };
+    var NOTE = {
+      ga4: 'GA4 website events straight from GA4 — events by source / medium / campaign / page. ' +
+           'Rolling ~60-day window (the staging table is truncate-reloaded from GA4 on each sync).',
+      google: 'Google Ads campaign performance by month, straight from the Google Ads API ' +
+              '(the platform figure — distinct from the Xero-billed cost the ROAS tab uses).',
+      bing: 'Microsoft / Bing Ads campaign performance by month, straight from the Microsoft ' +
+            'Advertising Reporting API (the standalone Bing sync).',
+    };
+
+    // ---- money / number formatting for KPI cards (currency honours cents when asked) ----
+    function money(v, dec) {
+      if (v == null || isNaN(v)) return '—';
+      return '$' + Number(v).toLocaleString('en-AU', { minimumFractionDigits: dec, maximumFractionDigits: dec });
+    }
+    function numfmt(v) { return (v == null || isNaN(v)) ? '—' : Number(v).toLocaleString('en-AU'); }
+    function kpiDisplay(c) {
+      if (c.unit === 'currency') return money(c.value, c.dec == null ? 0 : c.dec);
+      return numfmt(c.value);
+    }
+
+    // ---- per-source table columns ----
+    function colsFor(src) {
+      if (src === 'ga4') {
+        return [
+          { key: 'eventTime', label: 'Date', unit: 'date' },
+          { key: 'eventName', label: 'Event' },
+          { key: 'source', label: 'Source' },
+          { key: 'medium', label: 'Medium' },
+          { key: 'campaign', label: 'Campaign' },
+          { key: 'pagePath', label: 'Page' },
+          { key: 'eventCount', label: 'Events', unit: 'number' },
+        ];
+      }
+      // google + bing share one shape (campaign-monthly performance)
+      var money2 = function (v) { return v == null ? '—' : '$' + Number(v).toFixed(2); };
+      return [
+        { key: 'month', label: 'Month', unit: 'date',
+          render: function (v) { return v ? monthLabel(String(v).slice(0, 7)) : '—'; } },
+        { key: 'campaignName', label: 'Campaign' },
+        { key: 'channelType', label: 'Channel' },
+        { key: 'impressions', label: 'Impressions', unit: 'number' },
+        { key: 'clicks', label: 'Clicks', unit: 'number' },
+        { key: 'cost', label: 'Cost', unit: 'currency' },
+        { key: 'conversions', label: 'Conv.', unit: 'number' },
+        { key: 'convValue', label: 'Conv. value', unit: 'currency' },
+        { key: 'ctr', label: 'CTR %', unit: 'percent' },
+        { key: 'cpc', label: 'Avg CPC', unit: 'currency', render: money2 },
+        { key: 'costPerConv', label: 'Cost/conv', unit: 'currency', render: money2 },
+      ];
+    }
+
+    // ---- per-source KPI cards, computed from the currently-shown (filtered) rows ----
+    function kpisFor(src, list) {
+      if (src === 'ga4') {
+        var totalEvents = 0, names = {}, sources = {}, campaigns = {}, pages = {};
+        list.forEach(function (r) {
+          totalEvents += Number(r.eventCount) || 0;
+          if (r.eventName) names[r.eventName] = 1;
+          if (r.source) sources[r.source] = 1;
+          if (r.campaign) campaigns[r.campaign] = 1;
+          if (r.pagePath) pages[r.pagePath] = 1;
+        });
+        return [
+          { label: 'Total events', value: totalEvents, unit: 'number' },
+          { label: 'Event types', value: Object.keys(names).length, unit: 'number' },
+          { label: 'Sources', value: Object.keys(sources).length, unit: 'number' },
+          { label: 'Campaigns', value: Object.keys(campaigns).length, unit: 'number' },
+          { label: 'Pages', value: Object.keys(pages).length, unit: 'number' },
+        ];
+      }
+      var cost = 0, impr = 0, clicks = 0, conv = 0, cval = 0;
+      list.forEach(function (r) {
+        cost += Number(r.cost) || 0;
+        impr += Number(r.impressions) || 0;
+        clicks += Number(r.clicks) || 0;
+        conv += Number(r.conversions) || 0;
+        cval += Number(r.convValue) || 0;
+      });
+      var cpc = clicks > 0 ? cost / clicks : null;
+      return [
+        { label: 'Total spend', value: cost, unit: 'currency' },
+        { label: 'Impressions', value: impr, unit: 'number' },
+        { label: 'Clicks', value: clicks, unit: 'number' },
+        { label: 'Conversions', value: Math.round(conv * 10) / 10, unit: 'number' },
+        { label: 'Avg CPC', value: cpc, unit: 'currency', dec: 2 },
+        { label: 'Conv. value', value: cval, unit: 'currency' },
+      ];
+    }
+
+    function renderKpiCards(cards) {
+      document.getElementById('apKpis').innerHTML = cards.map(function (c) {
+        return '<div class="kpi"><div class="label">' + esc(c.label) + '</div>' +
+          '<div class="value">' + kpiDisplay(c) + '</div></div>';
+      }).join('');
+    }
+
+    function setSrc(src) {
+      SRC = src;
+      document.querySelectorAll('#srcSeg button').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-src') === src);
+      });
+      var s = (DATA && DATA[src]) || { rows: [], meta: {} };
+      document.getElementById('apChips').innerHTML = metaChips(s.meta);
+      document.getElementById('apNote').textContent = NOTE[src] || '';
+
+      renderSortableTable('apTable', s.rows, colsFor(src), {
+        stateStore: STATE[src],
+        searchPlaceholder: 'Search ' + (LABEL[src] || '') + '…',
+        emptyText: (s.meta && s.meta.note) || 'No rows.',
+        sortKey: src === 'ga4' ? 'eventTime' : 'month',
+        sortDir: 'desc',
+        // KPIs track the table: recomputed on every draw (initial, sort, filter, search).
+        onFilter: function (list) { renderKpiCards(kpisFor(src, list)); },
+        onCount: function (shown, total) {
+          document.getElementById('apCount').textContent =
+            shown === total ? (total + ' rows') : (shown + ' of ' + total + ' rows');
+        },
+      });
+    }
+
+    document.getElementById('srcSeg').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-src]');
+      if (b) setSrc(b.getAttribute('data-src'));
+    });
+
+    fetchJSON('/api/marketing/ad-platforms')
+      .then(function (data) { DATA = data.sources || {}; setSrc(SRC); })
+      .catch(function (err) {
+        console.error(err);
+        document.getElementById('apTable').innerHTML =
+          '<p class="muted">Could not load ad platform data: ' + esc(err.message) + '</p>';
+      });
+  </script>
+</body>
+</html>

@@ -1,0 +1,199 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-03
+Session: Started as a /q question about the GA4 / Google Ads / Bing Ads syncs and
+their cadence; became (1) a diagnosis + fix of the standalone Bing Ads sync (its
+weekly cron had silently stopped writing because its single-use Microsoft refresh
+token lapsed) — re-consented, re-seeded the token, switched the cron to daily, kept
+the table upsert-only; and (2) a new Marketing "Ad Platforms" tab on the dashboard
+with a GA4 / Google Ads / Bing Ads toggle driving both a table and KPI cards.
+NOTE: the Bing fix touched a SEPARATE repo (C:/Users/Cloverly/claude_code/Marketing/
+bing_ads_reporting); the new tab is in THIS repo (dashboard). This export lives in
+the dashboard repo but covers the whole session.
+================================================================================
+
+NOTE ON REDACTIONS: The user pasted a Microsoft OAuth **authorization code** (the
+?code= from the Bing re-consent redirect) into the chat — it is single-use and was
+consumed during this session, but it is replaced here with [REDACTED_OAUTH_CODE].
+Supabase cron-job definitions read from the DB (cron.job) embed anon/service_role
+bearer JWTs in their commands; those token values are NOT reproduced here. A
+Supabase anon JWT was used as a curl Authorization header to call an edge function;
+its value is replaced with [REDACTED_ANON_JWT]. No client secret or refresh-token
+value was ever printed in the chat (the exchange helper returned only a token
+LENGTH), so none appears here.
+
+--------------------------------------------------------------------------------
+USER:
+(/q — read-only) "so there is a sync for ga4, google ads, and bing ads right? they
+run daily?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Queried cron.job on the Supabase project (aivitcomiywiysrfwqxt). Answered: only GA4
+is daily. Breakdown, verified against the live cron table:
+  - GA4: contact-sources-sync-daily (jobid 17), '0 22 * * *' = 06:00 PH DAILY (the
+    orchestrator that fills ga4_ac_contact_source / ac_google_ads_deals), plus the
+    daily deals/contacts syncs feeding it.
+  - Google Ads: google-ads-campaign-monthly-sync-weekly (jobid 21), '0 22 * * 0' =
+    Mon 06:00 PH WEEKLY — and per CLAUDE.md it no longer feeds ROAS (ROAS reads
+    Google cost from Xero via xero-ad-spend-sync-weekly, jobid 22, also weekly).
+  - Bing Ads: bing-ads-campaign-monthly-sync-weekly (jobid 23), '0 22 * * 0' WEEKLY.
+Initially (incorrectly) added a caveat that the Bing function was "blocked" (reading
+the dashboard's CLAUDE.md, which only documents the dashboard's OLD Bing function).
+
+--------------------------------------------------------------------------------
+USER:
+"bing ads was already working perfectly last time: C:\Users\Cloverly\claude_code\
+Marketing\bing_ads_reporting"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Corrected myself. Read the standalone project (bing_ads_reporting): its edge function
+writes to public.bing_ads_campaign_monthly_raw (deliberately separate from the
+dashboard's bing_ads_campaign_monthly so ROAS never double-counts); it was unblocked
+2026-10-27 via a Universal dev token + a clean @outlook.com user. Verified in the DB:
+  - bing_ads_campaign_monthly_raw = 146 rows, 15 campaigns, Jun 2025→Oct 2026, ~$17,426,
+    but last_updated STUCK at 2026-10-27 03:39 (the manual backfill).
+  - The weekly cron fired 2026-11-01 and cron.job_run_details says "succeeded" — but
+    that only reflects pg_net enqueuing the POST (80 ms end_time), not the function.
+Flagged that the weekly refresh looked like it wasn't actually writing.
+
+--------------------------------------------------------------------------------
+USER:
+"dig into why the Nov 1 run didn't write"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Diagnosed it conclusively (all read-only):
+  - Confirmed the edge function has verify_jwt=false (version 7) via the Supabase MCP,
+    so the gateway is NOT blocking the cron POST — the function body genuinely runs.
+  - The function persists its rotated refresh token into oauth_token_store(provider=
+    'bing_ads') IMMEDIATELY after minting an access token (index.ts:277, right after
+    the mint at :269), BEFORE pulling any report. That token row's updated_at is ALSO
+    frozen at 2026-10-27 03:39 → the Nov 1 run threw at/before the OAuth mint, so it
+    never reached the report/upsert.
+  - Only one run has ever fired since the cron was created (migration dated Oct 27), so
+    nothing consumed the token in between; Nov 1 was the token's first use.
+Root cause: the single-use MSA refresh token lapsed between the Oct 27 seeding and the
+Nov 1 run (weekly cadence too slow for a single-use/rotating personal-account token);
+the Nov 1 mint failed and the run exited before writing. The Nov 1 HTTP response body
+was already purged from net._http_response (short retention), and the MCP edge-log
+query doesn't reach back that far — but the frozen token timestamp is conclusive.
+Offered to (a) surface the exact AADSTS error or (b) walk the re-consent/re-seed; held
+off on any mutation under /q.
+
+--------------------------------------------------------------------------------
+USER:
+"walk through the re-consent/re-seed steps"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the function's OAuth params + README/credentials.example.txt and gave a precise
+walkthrough: (1) open the authorize URL in incognito, sign in as the clean @outlook.com
+Standard user (Gmail-linked → Code 126); (2) exchange the ?code= via authorization_code
+grant (needs BING_ADS_CLIENT_SECRET; redirect_uri + scope must match); (3) set the new
+refresh token as the BING_ADS_REFRESH_TOKEN seed secret (no redeploy — edge secrets read
+at invocation); (4) delete the stale oauth_token_store row to re-seed; (5) run the sync
+manually; (6) verify both timestamps bump; (7) stop it recurring (tighten cadence or add
+a keep-alive). Noted that an expired Azure client secret would present identically and
+would surface as invalid_client at the exchange step.
+
+--------------------------------------------------------------------------------
+USER:
+(Pasted the Bing re-consent redirect URL)
+https://login.microsoftonline.com/common/oauth2/nativeclient?code=[REDACTED_OAUTH_CODE]&state=mag
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Completed the re-seed (user had handed over the code, cancelling /q for this step). Since
+BING_ADS_CLIENT_SECRET can't be read out of Supabase (edge secrets are write-only), I kept
+the secret server-side by deploying a tiny one-shot helper edge function (bing-oauth-exchange,
+verify_jwt=true) that does the authorization_code exchange INSIDE the edge runtime and writes
+the fresh refresh token straight into oauth_token_store. Steps run:
+  1. Deployed bing-oauth-exchange (reads BING_ADS_CLIENT_ID/SECRET from env; exchanges the
+     code with redirect_uri=.../nativeclient + scope "msads.manage offline_access"; upserts
+     the refresh_token via the service role key; returns only ok + token length).
+  2. Wrote the code to a scratchpad JSON file (to avoid shell-mangling its *,!,$$ chars) and
+     curled the helper with an anon bearer [REDACTED_ANON_JWT]. Result: {"ok":true,
+     "refresh_len":501,"access_present":true} → confirmed the client secret is VALID (so the
+     root cause really was the dead token, not the secret).
+  3. Ran the real sync (bing-ads-campaign-monthly-sync?sync=1): {"ok":true, upserted:150,
+     distinct_months:18, first_month:2025-06-01, last_month:2026-11-01, total_cost:17550}.
+  4. Verified: oauth_token_store(bing_ads).updated_at AND bing_ads_campaign_monthly_raw
+     max(updated_at) both now 2026-11-03 07:39; max_month=2026-11-01. Fix confirmed.
+  5. Cleanup: redeployed the helper as an inert 410 stub (the MCP has no delete_edge_function),
+     deleted the scratchpad code file, and told the user to hard-delete the helper via CLI/
+     dashboard when convenient.
+
+--------------------------------------------------------------------------------
+USER:
+"yes, make it daily. make sure table of data is never truncated. we just upsert"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(In the bing_ads_reporting repo.) Confirmed the function's ONLY write is .upsert(onConflict
+'month,campaign_id') — no truncate/delete anywhere — so daily is safe; it just refreshes
+recent months in place. Switched the cron to daily:
+  - Wrote + applied migration 20261103000000_bing_ads_sync_daily.sql: unscheduled
+    bing-ads-campaign-monthly-sync-weekly, scheduled bing-ads-campaign-monthly-sync-daily
+    '0 22 * * *' (06:00 PH daily), ?sync=1, 150s pg_net timeout. Verified: jobid 26,
+    schedule '0 22 * * *', active; weekly job gone.
+  - Updated that repo's docs (CLAUDE.md, README.md, as_built.txt) to reflect daily + the
+    token-lapse fix + the upsert-only/never-truncated guarantee.
+
+--------------------------------------------------------------------------------
+USER:
+"great, now create a new tab under marketing to display tables of GA4, Google Ads platform
+(one directly from Google Ads platform), Bing Ads. table design/structure same as
+ac_contact_sources.html. there should be a toggle switcher like the Financial year toggle in
+roas.html so we can switch data either ga4, google, bing. there should also be kpi cards that
+change just as table data changes based on the toggle."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(In the dashboard repo.) Investigated the three data sources, then confirmed one ambiguity
+with the user via a single question: for GA4 the user chose "GA4 website events"
+(public.ga4_events_staging) — ga4_conversion_events is empty and ga4_ac_contact_source already
+has its own page. Google Ads = public.google_ads_campaign_monthly (372 rows, straight from the
+Google Ads API — the PLATFORM figure, distinct from the Xero cost ROAS uses); Bing =
+public.bing_ads_campaign_monthly_raw (150 rows, the standalone project's table).
+
+Read the existing patterns (app.js renderMarketingSidebar/renderSortableTable/renderKpis/
+initPage/fetchJSON/metaChips; ac_contact_sources.html shell; roas.html segmented toggle +
+self-render init; server/index.js routes; ac-contact-sources.js + metric.js). Built:
+  - server/metrics/ad-platforms.js — ONE function getAdPlatforms() returning all three datasets
+    {ga4, google, bing}, each read independently (Promise.all) and degrading to a 'pending'
+    section on empty/error so one missing table can't fail the tab. Google/Bing share one
+    campaign-monthly SQL (casts bigint→int, numeric→float8 so JSON has real numbers; computes
+    CTR/CPC/cost-per-conv). GA4 selects event_time/name/source/medium/campaign/page/count.
+  - server/index.js — new route GET /api/marketing/ad-platforms (cached 10 min).
+  - public/app.js — added ['adplatforms','Ad Platforms','ad_platforms.html'] to
+    renderMarketingSidebar (Marketing sidebar now 8 pages).
+  - public/ad_platforms.html — new self-rendering page: initPage('marketing') +
+    renderMarketingSidebar('adplatforms') + fetchJSON. A segmented #srcSeg toggle (GA4/Google
+    Ads/Bing Ads, ROAS-toggle style) swaps the table (shared renderSortableTable, per-source
+    columns + per-source persisted state) AND the KPI cards. KPIs are recomputed client-side
+    from the active source's FILTERED rows via renderSortableTable's onFilter, so they track
+    in-table filter/search. GA4 KPIs = total events/event types/sources/campaigns/pages;
+    Google/Bing KPIs = spend/impressions/clicks/conversions/avg CPC/conv value. Per-source
+    note line surfaces the GA4 ~60-day-window caveat and each source's provenance.
+  - Bumped ALL 18 pages' app.js?v=8 → ?v=9 (sed) so the new sidebar link shows.
+  - Updated the dashboard CLAUDE.md (Marketing sidebar 7→8 pages + a full Ad Platforms
+    paragraph).
+Validation: node --check passes on both server files; dynamic import confirms getAdPlatforms is
+a function; all three SELECTs run against the live DB returning correctly-typed aliased rows.
+Flagged that this needs a manual Cloud Run redeploy (new route + metric module + page + app.js)
+and that I don't deploy; changes are uncommitted for the user to push.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (this invocation)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat history, updated as_built.txt (prepended the Ad Platforms tab to the running
+"Last updated" header), confirmed CLAUDE.md was already updated this session, checked
+.gitignore, and reported back. No git commands run — the user commits/pushes.
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -20,6 +20,7 @@ import { getRoasDeals } from './metrics/roas-deals.js';
 import { getRoasCounted } from './metrics/roas-counted.js';
 import { getMarketingRoi } from './metrics/marketing-roi.js';
 import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
+import { getAdPlatforms } from './metrics/ad-platforms.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
@@ -319,6 +320,18 @@ marketing.get('/channel-summary', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:channel-summary]', err);
     res.status(502).json({ error: 'Failed to load channel summary from data source.', detail: err.message });
+  }
+});
+// Ad Platforms — raw per-platform performance (GA4 website events, Google Ads campaign
+// monthly, Bing Ads campaign monthly), each a plain single-table SELECT the page toggles
+// between client-side. See server/metrics/ad-platforms.js. Cached briefly.
+marketing.get('/ad-platforms', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:ad-platforms', getAdPlatforms, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:ad-platforms]', err);
+    res.status(502).json({ error: 'Failed to load ad platform data from data source.', detail: err.message });
   }
 });
 app.use('/api/marketing', marketing);

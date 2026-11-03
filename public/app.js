@@ -237,6 +237,7 @@ function renderMarketingSidebar(active) {
     ['overview',   'Overview',              'marketing.html'],
     ['roi',        'ROI',                   'roi.html'],
     ['roas',       'ROAS',                  'roas.html'],
+    ['adplatforms','Ad Platforms',          'ad_platforms.html'],
     ['leads',      'Lead Tracker',          'ac_contact_sources.html'],
     ['calendly',   'Calendly-AC Sync',      'new_paid_leads_tracking.html'],
     ['ga4-agent',  'GA4 Agent',             'ga4_agent.html'],

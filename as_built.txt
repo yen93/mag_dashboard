@@ -1,6 +1,26 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-03 (ROI AC-PIPELINE CHART TOOLTIP now shows a "Total" line on hover
+Last updated: 2026-11-03 (NEW MARKETING "AD PLATFORMS" TAB — public/ad_platforms.html (= Marketing
+sidebar "Ad Platforms"), GET /api/marketing/ad-platforms, server/metrics/ad-platforms.js. A
+self-rendering page (initPage('marketing') no renderFn + renderMarketingSidebar('adplatforms') + its
+own fetchJSON) showing RAW per-platform performance with a 3-way SOURCE TOGGLE (segmented #srcSeg,
+ROAS-toggle style): GA4 / Google Ads / Bing Ads. The table (shared renderSortableTable,
+ac_contact_sources-style) AND the KPI cards both SWAP with the toggle; KPIs are recomputed
+CLIENT-SIDE from the active source's FILTERED rows (via renderSortableTable's onFilter) so they track
+in-table filter/search. Sources: GA4 = public.ga4_events_staging (website events by date/source/
+medium/campaign/page + event_count; rolling ~60-day window, truncate-reloaded from GA4; KPIs total
+events/event types/sources/campaigns/pages); Google Ads = public.google_ads_campaign_monthly
+(campaign-monthly straight from the Google Ads API — the PLATFORM figure, distinct from the
+Xero-billed google_ads_xero_monthly ROAS uses for cost); Bing Ads = public.bing_ads_campaign_monthly_raw
+(campaign-monthly straight from the MS Advertising API via the STANDALONE bing_ads_reporting project,
+NOT the dashboard's bing_ads_campaign_monthly sentinel). Google/Bing share one shape (impr/clicks/cost/
+conv/conv-value + computed CTR/CPC/cost-per-conv; KPIs spend/impr/clicks/conv/avg-CPC/conv-value). ONE
+endpoint returns all three (each read independently, degrading to a 'pending' section on empty/error so
+one missing table can't fail the tab); the page toggles client-side with NO refetch. Added the
+'adplatforms' item to renderMarketingSidebar in public/app.js → Marketing sidebar is now 8 pages; ALL
+18 pages' app.js?v=8 bumped to ?v=9 so the new link shows. Read-only, cached briefly (10 min). NEEDS a
+manual Cloud Run redeploy (new route + metric module + page + app.js). Previously 2026-11-03: ROI
+AC-PIPELINE CHART TOOLTIP now shows a "Total" line on hover
 in the "All" view — public/roi.html renderPipeline() only: added a Chart.js tooltip `footer`
 callback that sums Won+Open+Lost (the index-mode tooltip items) per hovered month as
 "Total: <n>"; returns '' in "Won only" mode so the total isn't redundant with Won.
