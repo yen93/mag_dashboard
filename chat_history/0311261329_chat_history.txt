@@ -1,0 +1,87 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-03
+Session: Diagnose and fix the ROI tab (roi.html) info (ⓘ) tooltips being clipped
+on the KPI cards — root-caused to the hover-lift transform trapping the tooltip's
+z-index inside the card's stacking context (below the sticky toolbar), fixed with
+one CSS rule.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. No DB queries were run; investigation was entirely static
+over local source files.
+
+--------------------------------------------------------------------------------
+USER:
+"info tools are broken in roi.html again"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the info-icon machinery in public/roi.html without changing anything
+first. Verified the code was structurally sound:
+- infoTip(), fillHeadInfo(), tuckKpiSubs(), setChips() all present and unchanged
+  since the last fix commit 112cfaa.
+- Shared srcInfo()/esc()/metaChips() helpers exist in app.js; roi.html loads
+  app.js?v=8 (cache-bust correct, srcInfo present in app.js).
+- Syntax-checked all three inline <script> blocks via a node new Function() pass —
+  all OK (no syntax error that would nuke the whole page's JS).
+- Confirmed .src-info/.src-tip CSS exists in app.css; no overflow:hidden on
+  .card or .kpi in either app.css or roi.html; sticky toolbar z-index:9 vs
+  tooltip z-index:60.
+- Checked git history of roi.html and app.js; diffed info-icon code against the
+  last fix (112cfaa) — the info functions themselves were untouched since.
+- No headless browser (puppeteer/playwright) available to reproduce visually.
+
+Since static review showed the code intact, asked the user (AskUserQuestion) which
+concrete symptom they were seeing: icons missing / tooltip won't show / tooltip
+clipped-cut-off / only some broken.
+
+--------------------------------------------------------------------------------
+USER:
+Answered: "Tooltip clipped/cut off" — and clarified "the ones on the cards in roi
+tab" (i.e. the KPI card ⓘ tooltips specifically).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Root-caused the clipping. Inspected .kpi CSS in roi.html (lines 77-96) and app.css.
+Finding: commit 272eb9f ("match ROI tab look and feel to ROAS") added a hover-lift
+`transform: translateY(-3px)` to `.kpi`. A transform makes the card its own
+stacking context, which TRAPS the tooltip's z-index:60 inside the card. Because the
+card itself has no z-index (auto/0) and all .kpi cards are position:relative, the
+whole hovered card — tooltip included — paints BELOW the sticky toolbar
+(z-index:9). So a top-row KPI card's upward-opening ⓘ tooltip is painted under the
+toolbar and cut off. Same clipping class as the heading tooltip fixed earlier in
+112cfaa (opened downward then) — reintroduced on the cards by the hover-lift, hence
+"broken again".
+
+Fix (public/roi.html, after the .kpi:hover rule ~line 88): added
+
+    .kpi:hover, .kpi:focus-within { z-index: 40; }
+
+Since .kpi is already position:relative, this lifts the hovered/focused card's
+whole subtree (tooltip included) above the toolbar (z-9) and sibling cards, so the
+tooltip escapes. Covers mouse hover and keyboard focus (:focus-within); keeps the
+tooltip opening upward like every other source icon on the page. Considered
+flipping the KPI tooltip downward (the heading's approach) but rejected it: all
+cards are position:relative with no z-index, so a downward tooltip would instead be
+clipped by the row below — the z-index lift is needed either way, so the minimal
+upward-preserving fix is cleanest.
+
+Noted it's frontend-only (no app.js touched → no ?v= bump) and needs a MANUAL
+Cloud Run redeploy (per CLAUDE.md, Claude never deploys). Offered a follow-up to
+harden the shared .src-tip once in app.css so this stops recurring per-page; left
+it page-local pending the user's call.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save chat history, update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file; reviewed as_built.txt and CLAUDE.md
+for whether this session changed the project's built state or dev guidance;
+checked .gitignore. (See the final report for exactly what was created/updated/left
+alone.) Did NOT run any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================

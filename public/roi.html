@@ -87,6 +87,11 @@
     }
     .kpi:hover { transform: translateY(-3px); box-shadow: var(--roi-shadow-lift); }
     .kpi:hover::after { opacity: .9; }
+    /* The hover-lift transform makes each card its own stacking context, which would
+       trap its ⓘ tooltip (z-index:60) INSIDE the card — so a top-row card's upward
+       tooltip paints under the sticky toolbar (z-index:9) and gets clipped. Lift the
+       hovered/focused card above the toolbar so its tooltip can escape. */
+    .kpi:hover, .kpi:focus-within { z-index: 40; }
     .kpi .value { font-size: 29px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
     /* Emphasise the first tile (Total revenue headline). */
     .kpi-grid .kpi:first-child {

@@ -144,7 +144,14 @@ Cloud Run.
   tokens, card + KPI hover-lift + gradient accent bars, gradient active-pill `.segmented` toggles,
   aurora backdrop — but **deliberately NOT `overflow:hidden`** on cards/KPIs unlike ROAS, because the
   tab's `.src-tip` info-icon tooltips live inside card heads/KPI labels and would be clipped; the accent
-  bars are rounded to the card radius instead). The page is **full-width** (`.content { max-width: none }`,
+  bars are rounded to the card radius instead). **Tooltip-clipping gotcha (fixed 2026-11-03):** the KPI
+  cards' **hover-lift `transform`** makes each `.kpi` its own stacking context, which TRAPS its ⓘ tooltip's
+  `z-index:60` inside the card; since `.kpi` is `position:relative` with no `z-index`, a top-row card's
+  upward tooltip then paints UNDER the sticky toolbar (`z-index:9`) and gets cut off. Fixed with
+  **`.kpi:hover, .kpi:focus-within { z-index: 40 }`** in `roi.html` (lifts the whole hovered/focused card
+  — tooltip included — above the toolbar). Same clipping class as `#roiNoteInfo` (the heading tooltip, which
+  is instead flipped to open **downward**). So any new hover-`transform` on a card/KPI that holds a `.src-tip`
+  needs a matching `z-index` lift. The page is **full-width** (`.content { max-width: none }`,
   like `sales_overview`) and its FY toolbar is **sticky** (`position:sticky; top:var(--topbar-h,58px)`)
   so it freezes under the top bar on scroll. Note: a Xero year-end accrual reversal can occasionally make
   a single month's marketing-spend bar read slightly **negative** — kept as-is (annual FY totals net
