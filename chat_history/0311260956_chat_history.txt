@@ -1,0 +1,114 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-03
+Session: Two read-only (/q) investigations into the ROI tab's "Channel Summary"
+chart — (1) where the "By type" toggle categories come from and whether IT Genius
+is under "Tools", (2) why the Tools category reads zero from August 2026 onward —
+followed by a frontend change: add a "Total" line to the AC pipeline chart's hover
+tooltip in the "All" view.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. Supabase query results contained vendor names, Xero contact
+UUIDs and spend figures (business data, not secrets) only.
+
+--------------------------------------------------------------------------------
+USER:
+/q — In roi.html's "Channel Summary" graph "By type" toggle, are those types
+explicitly defined in Xero? Is IT Genius under "tools"?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the chart renderer (public/roi.html renderChannelChart / #channelDimBar) and
+server/metrics/marketing-channel-summary.js, then verified against live Supabase.
+
+Answer: No — the "By type" categories are NOT defined in Xero. They come from the
+MAG-maintained mapping table public.marketing_channel_vendor_map (contact_id →
+type/platform), joined by contact_id. The BY_TYPE query groups on
+coalesce(m.type,'Uncategorized'). Xero only supplies the raw spend (bank txns) and
+the account it was coded to; the human-readable "type" is a separate layer. By
+contrast the "By account" toggle IS genuinely from Xero (302→Advertising, etc.).
+
+Yes — IT Genius is classified as "Tools". It has TWO Xero contact entries in the
+vendor map, both type=Tools, platform=null:
+  - IT GENIUS            (a08d0772-cc8e-4e7a-802f-c78e8ff20ab8)
+  - ITGENIUS AUSTRALIA   (0baa4ed5-61bd-41f0-a203-86db6a698bc7)
+
+Full set of types currently in the map (~38 vendors): Agency, Digital Ads, Printed
+Collaterals, Software, Tools, Wages — plus the synthetic "Uncategorized" bucket
+rendered for unmapped vendors on the open ad account (302). These are free-text
+labels, not an enforced enum. Flagged a few likely duplicate/typo contact rows
+(sites at scale vs "sites at scalesites at", Google/Google Ads, Microsoft/
+Microsoft Ads, the two IT Genius variants) — all consistent on type so they won't
+split a category. To re-categorise a vendor, change its type in the map (no Xero
+re-pull needed; type/platform join at query time). No changes made (/q).
+
+--------------------------------------------------------------------------------
+USER:
+IT Genius under tools is correct. But why does Tools show zero for Aug onwards? /q
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated read-only against live Supabase (marketing_channel_monthly ×
+marketing_channel_vendor_map).
+
+Answer: not a dashboard bug — it's what the Xero data says. The Channel Summary is
+filtered to the current FY (FY27 = Jul 2026–Jun 2027 by default). Within FY27 the
+only Tools-mapped spend is ONE row: IT Genius $1,034 in July 2026 (account 475).
+Aug/Sep/Oct 2026 have no bank transaction coded to any Tools vendor, so the Tools
+stack is zero.
+
+Confirmed it's not a sync gap: those months ARE populated for the other types
+(e.g. Aug 2026 = 11 rows, ~$12.7k across Agency / Digital Ads / Printed Collaterals
+/ Software / Wages). Tools simply isn't among them.
+
+Root cause: the Tools vendors split into two groups — LATER.COM (5d8ff214…) is the
+ONLY steady monthly subscription (~$25–31/mo) and it appears every month through
+June 2026, then has NO rows from July 2026 onward; IT Genius / WiseStamp / QR-Code-
+Generator are all sporadic/one-off. Once Later drops off after June 2026 and IT
+Genius's July lump passes, nothing recurring remains.
+
+Flagged three possibilities for the Later.com disappearance that can't be
+distinguished from Supabase alone (all read-only here): (1) subscription genuinely
+ended/paused — chart is correct; (2) a recent Later charge isn't reconciled in Xero
+yet (less likely, since AC/Google/Microsoft reconciled fine for those months);
+(3) Later now bills under a renamed/different Xero contact not in the vendor map —
+a trap, because an unmapped vendor on a SHARED account (332=Software, where Later
+sat) is DROPPED at sync time and never stored, so it would silently vanish. Advised
+checking Xero contacts for "Later" and whether recent charges sit under a
+contact_id other than 5d8ff214…; if so, add it to the vendor map as type=Tools.
+No changes made (/q).
+
+--------------------------------------------------------------------------------
+USER:
+Include totals in "AC pipeline — Won / Open / Lost by month" — the total when you
+hover over the bars in the "All" toggle.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Located renderPipeline() in public/roi.html (the AC pipeline chart, ~line 541) and
+edited its Chart.js tooltip config (~line 567) to add a `footer` callback.
+
+Change: the tooltip previously only emitted per-dataset "Label: n" lines. Added a
+footer that, when NOT in Won-only mode (PIPE_WON_ONLY === false, i.e. the "All"
+view), sums parsed.y across all tooltip items for the hovered month and appends a
+"Total: <n>" line. In "Won only" mode the footer returns '' (empty) to avoid a
+redundant total that would just equal Won. Relies on the chart's existing
+interaction.mode:'index', so `items` already contains Won+Open+Lost at the hovered
+month.
+
+Noted this is a frontend-only change to roi.html → needs a manual Cloud Run
+redeploy to go live (no app.js version bump needed; nothing shared changed).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation routine (no git): wrote this chat-history file; reviewed
+as_built.txt and CLAUDE.md for needed updates; confirmed the root .gitignore
+already covers sensitive patterns. Did NOT commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================

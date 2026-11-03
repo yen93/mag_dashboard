@@ -564,7 +564,14 @@
           interaction: { mode: 'index', intersect: false },
           plugins: {
             legend: { display: true, position: 'top', labels: { color: tc.text, usePointStyle: true, boxWidth: 8, padding: 12 } },
-            tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y; } } },
+            tooltip: { callbacks: {
+              label: function (ctx) { return ctx.dataset.label + ': ' + ctx.parsed.y; },
+              footer: function (items) {
+                if (PIPE_WON_ONLY) return '';
+                var t = items.reduce(function (s, it) { return s + (it.parsed.y || 0); }, 0);
+                return 'Total: ' + t;
+              },
+            } },
           },
           scales: {
             x: { stacked: true, ticks: { color: tc.muted }, grid: { display: false } },

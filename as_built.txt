@@ -1,6 +1,11 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-03 (CALENDLY BOOKINGS CHANNEL now reconciled to AC daily — new SQL
+Last updated: 2026-11-03 (ROI AC-PIPELINE CHART TOOLTIP now shows a "Total" line on hover
+in the "All" view — public/roi.html renderPipeline() only: added a Chart.js tooltip `footer`
+callback that sums Won+Open+Lost (the index-mode tooltip items) per hovered month as
+"Total: <n>"; returns '' in "Won only" mode so the total isn't redundant with Won.
+Frontend-only, needs a manual Cloud Run redeploy; no app.js bump. Previously 2026-11-03:
+CALENDLY BOOKINGS CHANNEL now reconciled to AC daily — new SQL
 fn public.reconcile_calendly_booking_channels() re-aligns calendly_src_sync_bookings.channel
 (what new_paid_leads_tracking.html shows via b.channel) to AC's authoritative lead source
 (contact field 77 → public.ac_new_leads.src_lead_channel) WHEN AC has one, else keeps the
