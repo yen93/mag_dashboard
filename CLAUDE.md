@@ -107,12 +107,31 @@ Cloud Run.
   `#exclOwnerToggle` / `EXCL_OWNER` / `owner_wages` machinery was removed from `roi.html` — `effSpend()`/
   `effRoi()`/`effMonthSpend()` now just pass the marketing spend through. Typical **return on marketing
   spend ≈ 7–20× per FY** (whole-business revenue ÷ marketing spend; e.g. FY26 ≈ $1.15M ÷ $140k ≈ 8.2×).
-  **7 cards as of 2026-10-30** (Total revenue / **Marketing spend** / Return on spend `x.xx×` /
+  **8 cards as of 2026-11-04** (Total company revenue / **Marketing revenue** (new 2026-11-04) /
+  **Marketing spend** / Return on spend `x.xx×` /
   **Net ROI** `±%` / Clients won / **Cost per client (CAC)** / Avg revenue per client) — all
-  computed **client-side** in `render()` from the existing `/api/marketing/roi` payload (no backend
-  change), null-guarded: `cac = effSpend÷dealsWon`, `avgRev = revenue÷dealsWon`,
+  computed **client-side** in `render()` from the `/api/marketing/roi` payload,
+  null-guarded: `cac = effSpend÷dealsWon`, `avgRev = revenue÷dealsWon`,
   `netRoi = (roi−1)×100`; spend comes straight from the marketing-spend payload (`effSpend()` is a
-  pass-through now). The cards' "Marketing spend"/CAC/ROI are genuinely **MARKETING** figures (revenue
+  pass-through now).
+  **MARKETING REVENUE card (new 2026-11-04):** marketing-ATTRIBUTED **won** revenue per FY, the sum of
+  four buckets, **DEDUPED by deal_id** across the three AC buckets (precedence roas > organic >
+  bureau/tailor; Exec X is a separate sheet source, never deduped, always adds on top): **(1) ROAS-paid**
+  = `public.roas_counted_deals` status='won' (`coalesce(xero_engagement_fee, value)`); **(2) organic
+  search** = `public.ga4_ac_contact_source` `channel ~* 'organic'` + `deal_status='won'` (`deal_value`
+  AUD, FY from contact `cdate`); **(3) bureau/tailor** = `public.ac_deals_ytd` `status='won' AND
+  (is_bureau OR is_tailor)` (same identification as the Sales overview; NB that cache is **Jul 2024+**
+  so this reads 0 before FY25); **(4) Exec X** = `public.exec_x_revenue` summed by its **event-date FY**.
+  Computed **server-side** in a new `MARKETING_REVENUE_SQL` in `marketing-roi.js` and attached per-FY to
+  each `rows[]` as `marketingRevenue` + `marketingRevenueParts{roas,organic,bureauTailor,execX,total}`
+  (and summed onto the `total` row); `roi.html`'s `render()` shows it as the 2nd KPI card with the
+  per-bucket breakdown tucked in its ⓘ tooltip (`marketingRevenueSource` in the payload = the card's
+  source string). Grand total ≈ **$884k** across FY22–27. **`public.exec_x_revenue`** is a **STATIC**
+  one-time load of the **"Executive X ROI Report" Google Sheet**
+  (`1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg`, migration `20261104090000_create_exec_x_revenue.sql`,
+  one row per REVENUE line across the 6 season tabs; `fy_end` = AU FY of the EVENT date, the one undated
+  line → cohort FY). **Re-seed it when the sheet changes** (dashboard has no live Google Sheets access).
+  FY-end Exec X totals: FY24 $10k · FY25 $113,255 · FY26 $177,315 · FY27 $22,450. The cards' "Marketing spend"/CAC/ROI are genuinely **MARKETING** figures (revenue
   whole-business ÷ marketing-only spend). Plus 2 charts (**revenue-vs-spend by month** =
   a **two-axis combo chart** as of
   2026-10-29: green **spend bars** on the left $ axis, blue **revenue line** on the right $ axis —

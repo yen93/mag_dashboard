@@ -379,10 +379,24 @@
       // Per-client economics — guard on having spend/revenue AND at least one won deal.
       var cac = (row.hasSpend && spend != null && row.dealsWon) ? spend / row.dealsWon : null;
       var avgRev = (row.hasRevenue && row.dealsWon) ? row.revenue / row.dealsWon : null;
+      // Marketing-attributed WON revenue (ROAS-paid + organic-search + bureau/tailor deals +
+      // Exec X), deduped by deal_id. Breakdown goes in the sub (tucked into the ⓘ tooltip).
+      var mp = row.marketingRevenueParts || { roas: 0, organic: 0, bureauTailor: 0, execX: 0 };
+      var mrMeta = { source: (ROI && ROI.marketingRevenueSource) || '', status: 'live' };
+      var mrSub = (row.marketingRevenue != null)
+        ? 'Won revenue from marketing-sourced deals, deduped. ROAS-paid ' + fmt(mp.roas, 'currency') +
+          ' · Organic search ' + fmt(mp.organic, 'currency') +
+          ' · Bureau/Tailor ' + fmt(mp.bureauTailor, 'currency') +
+          ' · Exec X ' + fmt(mp.execX, 'currency')
+        : null;
+
       renderKpis('kpis', [
-        { label: 'Total revenue',
+        { label: 'Total company revenue',
           metric: { value: row.hasRevenue ? row.revenue : null, unit: 'currency', meta: meta },
           sub: row.hasRevenue ? 'Xero P&L total income (whole business)' : 'No revenue recorded for this FY' },
+        { label: 'Marketing revenue',
+          metric: { value: (row.marketingRevenue != null) ? row.marketingRevenue : null, unit: 'currency', meta: mrMeta },
+          sub: mrSub },
         { label: 'Marketing spend',
           metric: { value: row.hasSpend ? spend : null, unit: 'currency' },
           sub: spendSub },
@@ -759,6 +773,7 @@
             setChips('catChips', data.rows.meta);
             renderKpis('kpis', [
               { label: 'Total revenue', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
+              { label: 'Marketing revenue', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Marketing spend', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Return on spend', metric: { value: null, unit: 'text', meta: data.rows.meta } },
               { label: 'Net ROI', metric: { value: null, unit: 'text', meta: data.rows.meta } },

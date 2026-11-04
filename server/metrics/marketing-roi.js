@@ -31,6 +31,12 @@ const SRC =
   'from marketing_channel_monthly (Xero marketing accounts 302/475/332/411/377); deals from ' +
   'activecampaign_deals';
 
+// Source string for the "Marketing revenue" card (marketing-attributed won revenue).
+const SRC_MR =
+  'Live (Supabase): won revenue from paid-ad deals (roas_counted_deals) + organic-search deals ' +
+  '(ga4_ac_contact_source) + bureau/tailor deals (ac_deals_ytd) + Executive X (exec_x_revenue, ' +
+  'from the Exec X ROI sheet). Deduped by deal_id; won deals only.';
+
 // AU financial-year END year from a date column: calendar year + 1 if month >= July.
 const FY = (col) =>
   `extract(year FROM ${col})::int + CASE WHEN extract(month FROM ${col}) >= 7 THEN 1 ELSE 0 END`;
@@ -152,6 +158,67 @@ const CATEGORIES_SQL = `
   GROUP BY 1, 2
   ORDER BY 1, 3 DESC`;
 
+// MARKETING-ATTRIBUTED (WON) REVENUE, per FY — the "Marketing revenue" KPI card.
+// Sum of WON revenue from four marketing-sourced buckets, DEDUPED by deal_id so a deal
+// that qualifies for more than one AC bucket is counted once (precedence roas > organic >
+// bureau/tailor); Exec X is a separate sheet source and always adds on top:
+//   • roas          → paid-ad deals in the canonical public.roas_counted_deals view
+//                     (status='won'; billed Xero engagement fee where invoiced, else value).
+//   • organic       → organic-search-sourced deals on public.ga4_ac_contact_source
+//                     (channel ~* 'organic', deal_status='won'; deal_value is AUD). FY from cdate.
+//   • bureauTailor  → won deals flagged is_bureau / is_tailor on public.ac_deals_ytd
+//                     (same identification as the Sales overview). FY from deal_created_at.
+//                     NB ac_deals_ytd only covers Jul 2024+, so this reads 0 before FY25.
+//   • execX         → public.exec_x_revenue (static load of the Executive X ROI Report sheet),
+//                     summed by its event-date FY. Not an AC deal, so never deduped.
+const MARKETING_REVENUE_SQL = `
+  WITH roas AS (
+    SELECT deal_id, fy_end,
+           coalesce(xero_engagement_fee, value)::numeric AS rev, 1 AS pri, 'roas' AS bucket
+    FROM public.roas_counted_deals
+    WHERE status = 'won' AND deal_id IS NOT NULL
+  ),
+  organic AS (
+    SELECT cs.deal_id, ${FY('cs.cdate')} AS fy_end,
+           cs.deal_value::numeric AS rev, 2 AS pri, 'organic' AS bucket
+    FROM public.ga4_ac_contact_source cs
+    WHERE cs.channel ~* 'organic' AND cs.deal_status = 'won' AND cs.deal_id IS NOT NULL
+  ),
+  bt AS (
+    SELECT ac_deal_id::text AS deal_id, ${FY('deal_created_at')} AS fy_end,
+           deal_value::numeric AS rev, 3 AS pri, 'bureauTailor' AS bucket
+    FROM public.ac_deals_ytd
+    WHERE status = 'won' AND (is_bureau OR is_tailor)
+  ),
+  combined AS (
+    SELECT * FROM roas UNION ALL SELECT * FROM organic UNION ALL SELECT * FROM bt
+  ),
+  dedup AS (
+    SELECT DISTINCT ON (deal_id) deal_id, fy_end, rev, bucket
+    FROM combined ORDER BY deal_id, pri
+  ),
+  deals_by_fy AS (
+    SELECT fy_end,
+      round(coalesce(sum(rev) FILTER (WHERE bucket = 'roas'), 0))::numeric         AS roas,
+      round(coalesce(sum(rev) FILTER (WHERE bucket = 'organic'), 0))::numeric      AS organic,
+      round(coalesce(sum(rev) FILTER (WHERE bucket = 'bureauTailor'), 0))::numeric AS bureau_tailor
+    FROM dedup GROUP BY fy_end
+  ),
+  exec_x AS (
+    SELECT fy_end, round(sum(revenue))::numeric AS exec_x
+    FROM public.exec_x_revenue GROUP BY fy_end
+  ),
+  axis AS (SELECT fy_end FROM deals_by_fy UNION SELECT fy_end FROM exec_x)
+  SELECT a.fy_end                                     AS "fyEnd",
+         coalesce(d.roas, 0)                          AS "roas",
+         coalesce(d.organic, 0)                       AS "organic",
+         coalesce(d.bureau_tailor, 0)                 AS "bureauTailor",
+         coalesce(e.exec_x, 0)                        AS "execX"
+  FROM axis a
+  LEFT JOIN deals_by_fy d ON d.fy_end = a.fy_end
+  LEFT JOIN exec_x e      ON e.fy_end = a.fy_end
+  ORDER BY a.fy_end`;
+
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
 // FY END year a 'YYYY-MM' month belongs to.
@@ -215,10 +282,31 @@ export async function getMarketingRoi() {
     };
   }
 
-  const [fyRows, monthRows, pipeRows, pipeMonthRows, catRows] = await Promise.all([
+  const [fyRows, monthRows, pipeRows, pipeMonthRows, catRows, mrRows] = await Promise.all([
     q(BY_FY), q(BY_MONTH), q(PIPELINE_SQL), q(PIPELINE_MONTH_SQL), q(CATEGORIES_SQL),
+    q(MARKETING_REVENUE_SQL),
   ]);
   const rows = fyRows.map(shape);
+
+  // Attach marketing-attributed (won) revenue + its bucket breakdown to each FY row, so the
+  // "Marketing revenue" card can be computed client-side from currentRow() (like the others).
+  const EMPTY_MR = { roas: 0, organic: 0, bureauTailor: 0, execX: 0, total: 0 };
+  const mrMap = {};
+  mrRows.forEach((m) => {
+    const parts = {
+      roas: num(m.roas) || 0,
+      organic: num(m.organic) || 0,
+      bureauTailor: num(m.bureauTailor) || 0,
+      execX: num(m.execX) || 0,
+    };
+    parts.total = parts.roas + parts.organic + parts.bureauTailor + parts.execX;
+    mrMap[num(m.fyEnd)] = parts;
+  });
+  rows.forEach((r) => {
+    const p = mrMap[r.fyEnd] || EMPTY_MR;
+    r.marketingRevenue = p.total;
+    r.marketingRevenueParts = p;
+  });
 
   if (!rows.length) {
     const note = 'No data — seed xero_expenses_monthly (revenue) and run xero-channel-summary-sync (marketing spend).';
@@ -275,6 +363,19 @@ export async function getMarketingRoi() {
   }));
 
   const total = totalRow(rows);
+  // Total-row marketing revenue = summed buckets across all FYs (so the "All years" card works).
+  total.marketingRevenueParts = rows.reduce(
+    (a, r) => {
+      const p = r.marketingRevenueParts || EMPTY_MR;
+      a.roas += p.roas; a.organic += p.organic; a.bureauTailor += p.bureauTailor; a.execX += p.execX;
+      return a;
+    },
+    { roas: 0, organic: 0, bureauTailor: 0, execX: 0 },
+  );
+  total.marketingRevenueParts.total =
+    total.marketingRevenueParts.roas + total.marketingRevenueParts.organic +
+    total.marketingRevenueParts.bureauTailor + total.marketingRevenueParts.execX;
+  total.marketingRevenue = total.marketingRevenueParts.total;
 
   // Default the page to the current FY if it's in the axis, else the latest FY present.
   const now = new Date();
@@ -294,6 +395,7 @@ export async function getMarketingRoi() {
     asOf: new Date().toISOString(),
     defaultFy,
     total,
+    marketingRevenueSource: SRC_MR,
     rows: section(rows, { source: SRC, status: 'live', note }),
     byMonth: section(months, { source: SRC, status: 'live', note: null }),
     pipelines: section(pipelines, { source: SRC, status: 'live', note: null }),

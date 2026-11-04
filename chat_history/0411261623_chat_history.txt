@@ -1,0 +1,107 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-04
+Session: Add a new "Marketing revenue" KPI card to the ROI tab (roi.html) =
+         marketing-attributed WON revenue per FY, summing four buckets
+         (ROAS-paid deals, organic-search deals, bureau/tailor deals, Exec X rev
+         from a Google Sheet), FY-filtered, deduped by deal_id.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Add a new marketing revenue card. It should only include income from:
+  (1) deals counted in ROAS as a paid deal,
+  (2) deals from organic search leads,
+  (3) deals under bureau and tailor (use sales_overview.html as the reference for
+      how these deals are identified),
+  (4) Exec X revenue — from the Google Sheet
+      https://docs.google.com/spreadsheets/d/1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg/edit?gid=1563889555
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the relevant files/data before building:
+  • server/metrics/marketing-roi.js — the ROI tab backend; 7 cards computed
+    client-side in roi.html render() from the /api/marketing/roi payload; FY-framed.
+  • server/metrics/roas.js — ROAS uses the canonical public.roas_counted_deals view;
+    won revenue = coalesce(xero_engagement_fee, value) FILTER (status='won').
+  • server/metrics/sales-topline.js + ac-deals-table.js + sales_overview.html —
+    bureau/tailor identification: public.ac_deals_ytd carries precomputed is_bureau
+    (LIV pipeline group 3 / stage 113 BUREAU ENQUIRY) and is_tailor (The Tailor
+    pipeline group 7) flags; that cache only covers Jul 2024+.
+  • The Google Sheet ("Executive X ROI Report") — six season tabs (SPRING 2023,
+    AUTUMN 2024, SPRING 2024, MAR-AUTUMN 2025, NOV-SPRING 2025, MAR-AUTUMN 2026),
+    each a client table with INTERNAL COST + REVENUE columns and a total row.
+
+Verified data availability in Supabase (project aivitcomiywiysrfwqxt) via MCP:
+  • roas_counted_deals view columns (deal_id, fy_end, status, value,
+    xero_engagement_fee, ...).
+  • Organic identification = ga4_ac_contact_source channel ~* 'organic'
+    (google/organic, bing/organic, "Organic search / booking"); today only 1 won
+    organic deal ($7,500) + 2 open.
+  • Bureau/Tailor won revenue on ac_deals_ytd: Bureau 5 won ($21,707),
+    Tailor 16 won ($118,555).
+
+Asked the user 3 clarifying questions (via the question tool). Answers:
+  1. Exec X source → Static seed table (I load the sheet now via MCP into a new
+     Supabase table; re-seed when the sheet changes).
+  2. FY scope → Card follows the page's FY bar (like the other cards); Exec X
+     seasons map to the AU FY of their event dates.
+  3. Deal status → Won only.
+
+Read all six Exec X season tabs. Extracted per-REVENUE-line amounts + event dates
+and mapped each to its AU financial-year END year by EVENT date (revenue is
+realized when the booked event runs; the season name is the cohort, not the
+revenue FY). One line (Chandler Mcleod, $10,000, Spring 2023 cohort) had no event
+date → assigned to the cohort FY (FY24). Per-line revenue reconciles to each tab's
+REVENUE total; FY totals: FY24 $10,000 · FY25 $113,255 · FY26 $177,315 ·
+FY27 $22,450 (grand total $323,020, matching the sum of the six tab totals).
+
+Implementation:
+  • DB — created migration supabase/migrations/20261104090000_create_exec_x_revenue.sql
+    and applied it via Supabase MCP (apply_migration "create_exec_x_revenue"):
+    public.exec_x_revenue (one row per REVENUE line, columns season/company/client/
+    revenue/event_text/fy_end), idempotent DELETE-then-INSERT, 17 rows seeded.
+  • Backend — server/metrics/marketing-roi.js: added MARKETING_REVENUE_SQL. It sums
+    WON revenue from four buckets, DEDUPED by deal_id across the three AC buckets
+    (precedence roas > organic > bureau/tailor via DISTINCT ON (deal_id) ... ORDER BY
+    deal_id, pri); Exec X is a separate sheet source, never deduped, always adds on
+    top. Buckets: roas = roas_counted_deals won; organic = ga4_ac_contact_source
+    channel ~* 'organic' + deal_status='won' (deal_value AUD, FY from cdate);
+    bureauTailor = ac_deals_ytd won is_bureau/is_tailor (FY from deal_created_at);
+    execX = exec_x_revenue by fy_end. Attached per-FY to each rows[] as
+    marketingRevenue + marketingRevenueParts{roas,organic,bureauTailor,execX,total},
+    summed onto the total row, plus a marketingRevenueSource string (SRC_MR) in the
+    payload. node --check passed.
+  • Frontend — public/roi.html: added a 2nd KPI card "Marketing revenue" (after
+    "Total company revenue") in render(), value = row.marketingRevenue, with the
+    per-bucket breakdown in its sub (which tuckKpiSubs() moves into the card's ⓘ
+    tooltip, along with the source). Added the card to the pending/empty card list
+    too. No app.js change, so no ?v= bump.
+
+Validated the final query (with the FY() expansions + camelCase aliases) directly
+against the live DB. Per-FY Marketing revenue totals:
+  FY22 $48,455 · FY23 $78,900 · FY24 $141,330 · FY25 $285,532 · FY26 $257,960 ·
+  FY27 $72,140 (All years ≈ $884,317).
+
+Docs/memory updated: CLAUDE.md (ROI bullet — "8 cards", new card + exec_x_revenue
+description), as_built.txt (new top entry), and the roi-tab-feature project memory.
+
+Flagged to the user: this is a backend + frontend change → needs a MANUAL Cloud
+Run redeploy (Claude never deploys). The DB seed is already applied. Noted the two
+assumptions (Chandler Mcleod undated line → FY24; bureau/tailor has data FY25+ only
+because ac_deals_ytd is Jul-2024+) and that exec_x_revenue is static (re-seed when
+the sheet changes).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt + CLAUDE.md + .gitignore
+(no git commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file; confirmed as_built.txt and
+CLAUDE.md were already updated during the session (ROI card + exec_x_revenue);
+checked .gitignore. No git commands run; reported back.
+
+================================================================================
+END OF EXPORT
+================================================================================
