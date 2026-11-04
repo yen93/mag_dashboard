@@ -11,7 +11,11 @@ reads 0 before FY25); (4) Exec X = new public.exec_x_revenue summed by event-dat
 MARKETING_REVENUE_SQL in marketing-roi.js, attached per-FY to each rows[] as marketingRevenue +
 marketingRevenueParts{roas,organic,bureauTailor,execX,total} and summed onto total; render() shows it
 with the per-bucket breakdown tucked in its ⓘ tooltip (payload marketingRevenueSource = card source).
-Grand total ≈ $884k FY22–27. public.exec_x_revenue (migration 20261104090000_create_exec_x_revenue.sql)
+Grand total ≈ $884k FY22–27. The Marketing revenue card is the FIRST (highlighted) KPI card, and the
+revenue-driven CARDS now use MARKETING revenue, not whole-business: Return on spend = marketingRevenue ÷
+marketing spend (~1–2×), Net ROI = (that −1)×100, Avg revenue/client = marketingRevenue ÷ dealsWon (CAC
+unchanged). Deliberate divergence: the "ROI by FY" TABLE ROI column + the month chart still use
+whole-business revenue/effRoi; only the cards switched. public.exec_x_revenue (migration 20261104090000_create_exec_x_revenue.sql)
 = STATIC one-time load of the "Executive X ROI Report" Google Sheet (1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg),
 one row per REVENUE line across the 6 season tabs, fy_end = AU FY of the EVENT date (one undated line →
 cohort FY); FY totals FY24 $10k / FY25 $113,255 / FY26 $177,315 / FY27 $22,450. RE-SEED when the sheet

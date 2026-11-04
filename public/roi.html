@@ -368,41 +368,45 @@
       var row = currentRow();
       var meta = ROI.rows.meta;
 
-      // Cards: Total revenue · Marketing spend · Return on spend · Clients won ·
-      //        Cost per client (CAC) · Avg revenue / client
+      // Cards (order): Marketing revenue (highlighted) · Total company revenue · Marketing spend ·
+      //        Return on spend · Net ROI · Clients won · Cost per client (CAC) · Avg revenue / client
       var spend = effSpend(row);           // marketing spend (Xero marketing accounts, ex-GST)
-      var roi = effRoi(row);
-      var spendSub = !row.hasSpend ? 'No marketing spend recorded for this FY' :
-        'Marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST';
-      // Net ROI % = profit ÷ spend = (return on spend − 1) × 100 (e.g. 1.23× → +23%).
-      var netRoi = roi != null ? Math.round((roi - 1) * 100) : null;
-      // Per-client economics — guard on having spend/revenue AND at least one won deal.
-      var cac = (row.hasSpend && spend != null && row.dealsWon) ? spend / row.dealsWon : null;
-      var avgRev = (row.hasRevenue && row.dealsWon) ? row.revenue / row.dealsWon : null;
       // Marketing-attributed WON revenue (ROAS-paid + organic-search + bureau/tailor deals +
-      // Exec X), deduped by deal_id. Breakdown goes in the sub (tucked into the ⓘ tooltip).
+      // Exec X), deduped by deal_id. This is the headline card AND the revenue input for the
+      // ratio cards below (Return on spend / Net ROI / Avg revenue per client) — the whole-business
+      // "Total company revenue" card is display-only and no longer feeds any ratio here.
       var mp = row.marketingRevenueParts || { roas: 0, organic: 0, bureauTailor: 0, execX: 0 };
+      var mRev = (row.marketingRevenue != null) ? row.marketingRevenue : null;
       var mrMeta = { source: (ROI && ROI.marketingRevenueSource) || '', status: 'live' };
-      var mrSub = (row.marketingRevenue != null)
+      var mrSub = (mRev != null)
         ? 'Won revenue from marketing-sourced deals, deduped. ROAS-paid ' + fmt(mp.roas, 'currency') +
           ' · Organic search ' + fmt(mp.organic, 'currency') +
           ' · Bureau/Tailor ' + fmt(mp.bureauTailor, 'currency') +
           ' · Exec X ' + fmt(mp.execX, 'currency')
         : null;
+      // Return on MARKETING spend = marketing revenue ÷ marketing spend (was whole-business revenue).
+      var roi = (mRev != null && spend) ? mRev / spend : null;
+      var spendSub = !row.hasSpend ? 'No marketing spend recorded for this FY' :
+        'Marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST';
+      // Net ROI % = (return on spend − 1) × 100 (e.g. 1.23× → +23%).
+      var netRoi = roi != null ? Math.round((roi - 1) * 100) : null;
+      // Per-client economics — CAC uses marketing spend (unchanged); avg revenue uses MARKETING revenue.
+      var cac = (row.hasSpend && spend != null && row.dealsWon) ? spend / row.dealsWon : null;
+      var avgRev = (mRev != null && row.dealsWon) ? mRev / row.dealsWon : null;
 
       renderKpis('kpis', [
+        { label: 'Marketing revenue',
+          metric: { value: mRev, unit: 'currency', meta: mrMeta },
+          sub: mrSub },
         { label: 'Total company revenue',
           metric: { value: row.hasRevenue ? row.revenue : null, unit: 'currency', meta: meta },
           sub: row.hasRevenue ? 'Xero P&L total income (whole business)' : 'No revenue recorded for this FY' },
-        { label: 'Marketing revenue',
-          metric: { value: (row.marketingRevenue != null) ? row.marketingRevenue : null, unit: 'currency', meta: mrMeta },
-          sub: mrSub },
         { label: 'Marketing spend',
           metric: { value: row.hasSpend ? spend : null, unit: 'currency' },
           sub: spendSub },
         { label: 'Return on spend',
           metric: { value: roi != null ? roi.toFixed(2) + '×' : null, unit: 'text' },
-          sub: roi != null ? 'Revenue ÷ marketing spend' : null },
+          sub: roi != null ? 'Marketing revenue ÷ marketing spend' : null },
         { label: 'Net ROI',
           metric: { value: netRoi != null ? (netRoi > 0 ? '+' : '') + netRoi + '%' : null, unit: 'text' },
           sub: netRoi != null ? '(Return on spend − 1)' : null },
@@ -414,7 +418,7 @@
           sub: cac != null ? 'Marketing spend ÷ clients won' : null },
         { label: 'Avg revenue / client',
           metric: { value: avgRev, unit: 'currency' },
-          sub: avgRev != null ? 'Revenue ÷ clients won' : null },
+          sub: avgRev != null ? 'Marketing revenue ÷ clients won' : null },
       ]);
       tuckKpiSubs();   // hide each card's description behind an ⓘ next to its label
 
@@ -772,8 +776,8 @@
             setChips('pipeChips', data.rows.meta);
             setChips('catChips', data.rows.meta);
             renderKpis('kpis', [
-              { label: 'Total revenue', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Marketing revenue', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
+              { label: 'Total company revenue', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Marketing spend', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Return on spend', metric: { value: null, unit: 'text', meta: data.rows.meta } },
               { label: 'Net ROI', metric: { value: null, unit: 'text', meta: data.rows.meta } },

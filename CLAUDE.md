@@ -105,15 +105,22 @@ Cloud Run.
   deal-count artifact, not an error.** **Owner/director wages are NO LONGER RELEVANT here (as of
   2026-11-02):** marketing spend excludes all wages except the listed WrkPod marketing team, so the old
   `#exclOwnerToggle` / `EXCL_OWNER` / `owner_wages` machinery was removed from `roi.html` — `effSpend()`/
-  `effRoi()`/`effMonthSpend()` now just pass the marketing spend through. Typical **return on marketing
-  spend ≈ 7–20× per FY** (whole-business revenue ÷ marketing spend; e.g. FY26 ≈ $1.15M ÷ $140k ≈ 8.2×).
-  **8 cards as of 2026-11-04** (Total company revenue / **Marketing revenue** (new 2026-11-04) /
-  **Marketing spend** / Return on spend `x.xx×` /
-  **Net ROI** `±%` / Clients won / **Cost per client (CAC)** / Avg revenue per client) — all
-  computed **client-side** in `render()` from the `/api/marketing/roi` payload,
-  null-guarded: `cac = effSpend÷dealsWon`, `avgRev = revenue÷dealsWon`,
-  `netRoi = (roi−1)×100`; spend comes straight from the marketing-spend payload (`effSpend()` is a
-  pass-through now).
+  `effRoi()`/`effMonthSpend()` now just pass the marketing spend through. (`effRoi()` =
+  whole-business revenue ÷ marketing spend ≈ **7–20× per FY** still backs the **"ROI by FY" TABLE**
+  column + the month chart — NOT the KPI cards, see next.)
+  **8 cards as of 2026-11-04, order changed 2026-11-04** — **Marketing revenue (FIRST + highlighted)** /
+  Total company revenue / **Marketing spend** / Return on spend `x.xx×` /
+  **Net ROI** `±%` / Clients won / **Cost per client (CAC)** / Avg revenue per client — all
+  computed **client-side** in `render()` from the `/api/marketing/roi` payload.
+  **As of 2026-11-04 the revenue-driven KPI CARDS use MARKETING revenue (`row.marketingRevenue`), NOT
+  whole-business revenue:** `roi = marketingRevenue ÷ marketingSpend` (card "Return on spend", so the
+  card now reads ~1–2×, much lower than the table's whole-business `effRoi`), `netRoi = (roi−1)×100`,
+  `avgRev = marketingRevenue ÷ dealsWon`. `cac = marketingSpend ÷ dealsWon` is unchanged (no revenue
+  term). **DELIBERATE DIVERGENCE:** the KPI "Return on spend"/"Avg revenue per client" cards (marketing
+  revenue) differ from the "ROI by FY" table's ROI column + the revenue-vs-spend month chart, which
+  BOTH still use whole-business `revenue`/`effRoi` — only the cards were switched. "Total company
+  revenue" card is display-only (whole-business, feeds no ratio). "Marketing revenue" is the FIRST card
+  so it gets the `.kpi-grid .kpi:first-child` highlight (gradient bg + accent value).
   **MARKETING REVENUE card (new 2026-11-04):** marketing-ATTRIBUTED **won** revenue per FY, the sum of
   four buckets, **DEDUPED by deal_id** across the three AC buckets (precedence roas > organic >
   bureau/tailor; Exec X is a separate sheet source, never deduped, always adds on top): **(1) ROAS-paid**
