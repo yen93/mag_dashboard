@@ -131,9 +131,20 @@ Cloud Run.
   so this reads 0 before FY25); **(4) Exec X** = `public.exec_x_revenue` summed by its **event-date FY**.
   Computed **server-side** in a new `MARKETING_REVENUE_SQL` in `marketing-roi.js` and attached per-FY to
   each `rows[]` as `marketingRevenue` + `marketingRevenueParts{roas,organic,bureauTailor,execX,total}`
-  (and summed onto the `total` row); `roi.html`'s `render()` shows it as the 2nd KPI card with the
-  per-bucket breakdown tucked in its ⓘ tooltip (`marketingRevenueSource` in the payload = the card's
-  source string). Grand total ≈ **$884k** across FY22–27. **`public.exec_x_revenue`** is a **STATIC**
+  (and summed onto the `total` row); `roi.html`'s `render()` shows it as the **1st/highlighted KPI card**
+  (as of 2026-11-04) with the per-bucket breakdown tucked in its ⓘ tooltip (`marketingRevenueSource` in
+  the payload = the card's source string). Grand total ≈ **$884k** across FY22–27.
+  **REVENUE vs SPEND BY MONTH chart (updated 2026-11-04):** `renderMonthChart()` now plots THREE series
+  — green **marketing-spend bars** + the blue **MARKETING-revenue line** SHARE the LEFT $ axis (same
+  magnitude, one `[0, niceCeil(max)]` scale — the old blue "Revenue" RIGHT axis was removed) and a gray
+  **dashed whole-business "Total company revenue" line** sits on its OWN RIGHT axis (`yCompany`, a larger
+  context scale). The blue line is fed by a new per-month marketing-revenue series: `byMonth[].marketingRevenue`
+  from a new **`MARKETING_REVENUE_MONTH_SQL`** (same four buckets/dedup as the card, each AC deal in its
+  own month, Exec X by `event_date`); months reconcile to the per-FY totals ($884k all-time). That
+  required adding **`exec_x_revenue.event_date`** (migration `20261104170000_exec_x_revenue_event_date.sql`,
+  the first date in each EVENT cell; the one undated row → nominal Oct-2023 cohort date, still FY24).
+  **The revenue-driven KPI CARDS use MARKETING revenue, the FY TABLE + this chart's company-revenue line
+  still use whole-business revenue — deliberate (see the cards note above).** **`public.exec_x_revenue`** is a **STATIC**
   one-time load of the **"Executive X ROI Report" Google Sheet**
   (`1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg`, migration `20261104090000_create_exec_x_revenue.sql`,
   one row per REVENUE line across the 6 season tabs; `fy_end` = AU FY of the EVENT date, the one undated

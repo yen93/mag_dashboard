@@ -219,6 +219,46 @@ const MARKETING_REVENUE_SQL = `
   LEFT JOIN exec_x e      ON e.fy_end = a.fy_end
   ORDER BY a.fy_end`;
 
+// Same marketing-attributed WON revenue, bucketed BY MONTH (for the "Revenue vs spend by month"
+// chart's Marketing-revenue line). Each AC deal is placed in the month of its own date and deduped
+// by deal_id (precedence roas > organic > bureau/tailor, keeping that bucket's month); Exec X is
+// placed in the month of its event_date. Months reconcile to the per-FY totals above.
+const MARKETING_REVENUE_MONTH_SQL = `
+  WITH roas AS (
+    SELECT deal_id, date_trunc('month', cdate)::date AS m,
+           coalesce(xero_engagement_fee, value)::numeric AS rev, 1 AS pri
+    FROM public.roas_counted_deals
+    WHERE status = 'won' AND deal_id IS NOT NULL AND cdate IS NOT NULL
+  ),
+  organic AS (
+    SELECT cs.deal_id, date_trunc('month', cs.cdate)::date AS m,
+           cs.deal_value::numeric AS rev, 2 AS pri
+    FROM public.ga4_ac_contact_source cs
+    WHERE cs.channel ~* 'organic' AND cs.deal_status = 'won'
+      AND cs.deal_id IS NOT NULL AND cs.cdate IS NOT NULL
+  ),
+  bt AS (
+    SELECT ac_deal_id::text AS deal_id, date_trunc('month', deal_created_at)::date AS m,
+           deal_value::numeric AS rev, 3 AS pri
+    FROM public.ac_deals_ytd
+    WHERE status = 'won' AND (is_bureau OR is_tailor) AND deal_created_at IS NOT NULL
+  ),
+  combined AS (SELECT * FROM roas UNION ALL SELECT * FROM organic UNION ALL SELECT * FROM bt),
+  dedup AS (SELECT DISTINCT ON (deal_id) deal_id, m, rev FROM combined ORDER BY deal_id, pri),
+  deals AS (SELECT m, sum(rev) AS rev FROM dedup GROUP BY m),
+  ex AS (
+    SELECT date_trunc('month', event_date)::date AS m, sum(revenue) AS rev
+    FROM public.exec_x_revenue WHERE event_date IS NOT NULL GROUP BY 1
+  ),
+  allm AS (SELECT m FROM deals UNION SELECT m FROM ex)
+  SELECT to_char(a.m, 'YYYY-MM')                                  AS "month",
+         round(coalesce(d.rev, 0) + coalesce(e.rev, 0))::numeric  AS "marketingRevenue"
+  FROM allm a
+  LEFT JOIN deals d ON d.m = a.m
+  LEFT JOIN ex e    ON e.m = a.m
+  WHERE a.m >= '${MONTH_FLOOR}'
+  ORDER BY 1`;
+
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
 // FY END year a 'YYYY-MM' month belongs to.
@@ -282,9 +322,9 @@ export async function getMarketingRoi() {
     };
   }
 
-  const [fyRows, monthRows, pipeRows, pipeMonthRows, catRows, mrRows] = await Promise.all([
+  const [fyRows, monthRows, pipeRows, pipeMonthRows, catRows, mrRows, mrMonthRows] = await Promise.all([
     q(BY_FY), q(BY_MONTH), q(PIPELINE_SQL), q(PIPELINE_MONTH_SQL), q(CATEGORIES_SQL),
-    q(MARKETING_REVENUE_SQL),
+    q(MARKETING_REVENUE_SQL), q(MARKETING_REVENUE_MONTH_SQL),
   ]);
   const rows = fyRows.map(shape);
 
@@ -325,11 +365,16 @@ export async function getMarketingRoi() {
 
   const fyEnds = rows.map((r) => r.fyEnd);
 
+  // month ('YYYY-MM') → marketing-attributed won revenue, merged onto the month series below.
+  const mrMonthMap = {};
+  mrMonthRows.forEach((m) => { mrMonthMap[m.month] = num(m.marketingRevenue) || 0; });
+
   const months = monthRows.map((m) => ({
     month: m.month,
     fyEnd: fyEndOfMonth(m.month),
-    revenue: num(m.revenue) || 0,
-    spend: num(m.spend) || 0,
+    revenue: num(m.revenue) || 0,              // whole-business Xero P&L total income
+    spend: num(m.spend) || 0,                  // marketing spend
+    marketingRevenue: mrMonthMap[m.month] || 0, // marketing-attributed won revenue
   }));
 
   // Per-pipeline counts, scoped to the FY axis (so the chart matches the shown FYs).

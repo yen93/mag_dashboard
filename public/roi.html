@@ -198,7 +198,7 @@
 
     <div class="grid">
       <div class="card col-12">
-        <div class="card-head"><h3>Revenue vs spend by month</h3><span class="head-info" id="monthInfo" data-info="The payoff over time — spend bars, revenue line"></span><span class="chips" id="monthChips"></span></div>
+        <div class="card-head"><h3>Revenue vs spend by month</h3><span class="head-info" id="monthInfo" data-info="The payoff over time — green marketing-spend bars and the blue marketing-revenue line share the left axis; the gray dashed line is whole-business company revenue (context) on the right axis."></span><span class="chips" id="monthChips"></span></div>
         <div class="chart-box" id="roi-month-chart"><canvas id="roiMonthCanvas"></canvas></div>
       </div>
 
@@ -509,27 +509,38 @@
       return m ? monthSpanLabel(+p[1], m) : label;
     }
 
+    // Revenue vs spend by month:
+    //   • green bars  = Marketing spend              } share the LEFT $ axis (same magnitude,
+    //   • blue line   = Marketing revenue            }  so one scale fits both — no 2nd blue axis)
+    //   • gray dashed = Total company revenue (context) on the RIGHT $ axis (much larger, own scale)
     function renderMonthChart() {
       var months = currentMonths();
       var tc = themeColors();
-      // Both $ axes SHARE one scale so the left (spend) and right (revenue) tick levels
-      // match — the same figure sits at the same gridline height on both sides.
+      // LEFT axis carries BOTH spend bars and the marketing-revenue line (comparable magnitudes),
+      // so they share one [0, sharedMax] scale — the old blue "Revenue" right axis is gone.
       var spendVals = months.map(function (m) { return effMonthSpend(m); });
-      var revVals = months.map(function (m) { return m.revenue; });
-      var allVals = spendVals.concat(revVals).filter(function (v) { return typeof v === 'number' && isFinite(v); });
-      var sharedMax = niceCeil(allVals.length ? Math.max.apply(null, allVals) : 0);
+      var mktRevVals = months.map(function (m) { return m.marketingRevenue || 0; });
+      var leftVals = spendVals.concat(mktRevVals).filter(function (v) { return typeof v === 'number' && isFinite(v); });
+      var sharedMax = niceCeil(leftVals.length ? Math.max.apply(null, leftVals) : 0);
+      // RIGHT axis = whole-business company revenue (context) — its own, larger scale.
+      var compVals = months.map(function (m) { return m.revenue; }).filter(function (v) { return typeof v === 'number' && isFinite(v); });
+      var companyMax = niceCeil(compVals.length ? Math.max.apply(null, compVals) : 0);
       var cfg = {
         type: 'bar',
         data: {
           labels: months.map(function (m) { return ymSpanLabel(m.month); }),
           datasets: [
-            { type: 'bar', label: 'Marketing spend', order: 2, yAxisID: 'ySpend',
-              data: months.map(function (m) { return effMonthSpend(m); }),
+            { type: 'bar', label: 'Marketing spend', order: 3, yAxisID: 'ySpend',
+              data: spendVals,
               backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 34 },
-            { type: 'line', label: 'Revenue', order: 1, yAxisID: 'yRevenue',
-              data: months.map(function (m) { return m.revenue; }),
+            { type: 'line', label: 'Marketing revenue', order: 1, yAxisID: 'ySpend',
+              data: mktRevVals,
               borderColor: '#3b6ef0', backgroundColor: '#3b6ef0', tension: 0.3,
               pointRadius: 3, pointHoverRadius: 5, borderWidth: 2 },
+            { type: 'line', label: 'Total company revenue', order: 2, yAxisID: 'yCompany',
+              data: months.map(function (m) { return m.revenue; }),
+              borderColor: '#9aa4b2', backgroundColor: '#9aa4b2', borderDash: [5, 4],
+              tension: 0.3, pointRadius: 0, pointHoverRadius: 4, borderWidth: 2 },
           ],
         },
         options: {
@@ -541,14 +552,14 @@
           },
           scales: {
             x: { ticks: { color: tc.muted }, grid: { display: false } },
-            // Left axis = Marketing spend (green). Shared [0, sharedMax] range.
+            // Left axis = Marketing spend + Marketing revenue (shared [0, sharedMax]).
             ySpend: { position: 'left', min: 0, max: sharedMax,
-              title: { display: true, text: 'Marketing spend', color: '#17a673' },
-              ticks: { color: '#17a673', callback: compactAud }, grid: { color: tc.grid } },
-            // Right axis = Revenue (blue). SAME [0, sharedMax] range → tick levels line up.
-            yRevenue: { position: 'right', min: 0, max: sharedMax,
-              title: { display: true, text: 'Revenue', color: '#3b6ef0' },
-              ticks: { color: '#3b6ef0', callback: compactAud }, grid: { drawOnChartArea: false } },
+              title: { display: true, text: 'Marketing spend & revenue', color: tc.muted },
+              ticks: { color: tc.muted, callback: compactAud }, grid: { color: tc.grid } },
+            // Right axis = whole-business company revenue (context) — its own larger scale.
+            yCompany: { position: 'right', min: 0, max: companyMax,
+              title: { display: true, text: 'Company revenue (context)', color: '#9aa4b2' },
+              ticks: { color: '#9aa4b2', callback: compactAud }, grid: { drawOnChartArea: false } },
           },
         },
       };
