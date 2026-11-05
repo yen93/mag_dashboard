@@ -334,6 +334,28 @@ Cloud Run.
     `routines/sales-topline-sync.md`. Live: total_income, bureau, tailor;
     "needs setup" until their AC fields/tags are mirrored: direct/indirect split,
     speaking_enquiries, inbound/outbound.
+  - **Indirect/bureau deals cache (`public.ac_indirect_deals`, NEW 2026-11-05)** — a
+    cache of **every INDIRECT ("bureau") AC deal 2021→present** (559 rows). **"Indirect"
+    is defined STRICTLY as the AC deal custom field "Deal Source?" (dealCustomFieldMeta
+    id 6) = `"Indirect (PCO/ Bureau/ Events company)"`** — deliberately NOT the
+    title-heuristic `ac_deals_ytd.is_bureau` flag (which diverges + only covers
+    Jul-2024+). The "Deal Source?" value is NOT in the `activecampaign_deals` mirror, so
+    the **`ac-indirect-deals-sync` edge fn** (`--no-verify-jwt`; daily cron
+    `ac-indirect-deals-sync-daily` `15 22 * * 0-4` = 06:15 PH, after the deal+contact
+    mirrors) sweeps the AC field-6 feed `GET /api/3/dealCustomFieldMeta/6/
+    dealCustomFieldData` in one paginated pass (**GOTCHA: that nested feed returns its
+    value rows under JSON key `dealCustomFieldMeta`, NOT `dealCustomFieldData`**), keeps
+    deals whose value starts "Indirect", then calls RPC **`reload_ac_indirect_deals(_ids
+    jsonb)`** (atomic delete→insert, refuses empty payload; joins the ids onto
+    `activecampaign_deals` + `activecampaign_contacts`/`activecampaign_accounts` for
+    names; `value_aud` via `ac_value_aud`, `fy`/`cal_yr` via `mag_fy_label`/`mag_cal_yr`).
+    Modes `?dry=1`/`?sync=1`/bare(bg). **Supabase-only — NO server/public code reads it
+    yet, so NO dashboard redeploy** (add a route/page later if a tab needs it). Created
+    as `ac_bureau_deals` and **renamed same day** (migrations `20261105120000` create →
+    `20261105130000` rename + `20261105131000` rpc-body; NB `ALTER FUNCTION … RENAME`
+    doesn't rewrite the body, so the rpc body was re-created vs the renamed table). The
+    old `ac-bureau-deals-sync` slug + the throwaway `ac-probe-tmp` probe are inert 410
+    stubs (deletable from the Supabase dashboard; the MCP has no delete-function tool).
   - **ROAS** (`roas.html` = Marketing sidebar item "ROAS", `/api/operations/roas`,
     `server/metrics/roas.js`) is a self-rendering page: Google Ads ROAS by **Australian
     FINANCIAL YEAR** (Jul–Jun, **END-year** convention: FY25 = Jul 2024–Jun 2025).

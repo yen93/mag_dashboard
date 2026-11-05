@@ -1,6 +1,9 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-05 (MARKETING OVERVIEW — LIVE "KEYNOTE ENQUIRIES" CARD + DESIGN GUIDE. Three
+Last updated: 2026-11-05 (NEW CACHED TABLE public.ac_indirect_deals — all INDIRECT/bureau AC deals
+(Deal Source? = "Indirect (PCO/ Bureau/ Events company)") 2021→present, 559 rows; filled by the new
+ac-indirect-deals-sync edge fn (AC field-6 sweep) + daily cron; created as ac_bureau_deals and renamed
+same day; Supabase-only, no dashboard redeploy. EARLIER SAME DAY: MARKETING OVERVIEW — LIVE "KEYNOTE ENQUIRIES" CARD + DESIGN GUIDE. Three
 things this pass: (A) NEW C:/Users/Cloverly/claude_code/dashboard/DESIGN_GUIDE.md — a dev-facing
 design standard for the whole dashboard, with roas.html as the reference: color tokens (app.css
 light/dark) + page-local accent/depth token pattern, typography scale, the HORIZONTAL SEGMENTED
@@ -624,6 +627,22 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     by the API route / Invoices page.
   - public.sales_topline — Sales page top-line KPIs (long format
     metric/bucket/dimension/value/unit; RLS enabled).
+  - public.ac_indirect_deals (NEW 2026-11-05; created as ac_bureau_deals, renamed
+    same day) — cache of every INDIRECT/bureau AC deal 2021→present (559 rows at
+    first load). "Indirect" is defined STRICTLY as the AC deal custom field
+    "Deal Source?" (dealCustomFieldMeta id 6) = "Indirect (PCO/ Bureau/ Events
+    company)" — NOT ac_deals_ytd.is_bureau (a title heuristic that diverges + only
+    covers Jul-2024+). PK deal_id; cols title, deal_source, pipeline_id/name,
+    stage_id, status/status_label, contact_id/name/email, account_id, organization,
+    value_raw (cents), value_aud (ac_value_aud), currency, cdate, mdate, event_date,
+    cal_yr (mag_cal_yr), fy (mag_fy_label, AU FY END-year), synced_at. RLS enabled;
+    indexes on cdate/status/fy. Rebuilt atomically by RPC reload_ac_indirect_deals(
+    _ids jsonb) (refuses empty payload; delete→insert in one tx; joins the passed
+    bureau ids onto activecampaign_deals + contacts/accounts + the pipeline map).
+    NOT yet read by any server/public code (Supabase-only; no dashboard redeploy).
+    Migrations 20261105120000 (create ac_bureau_deals + rpc) → 20261105130000
+    (rename→ac_indirect_deals) + 20261105131000 (rpc body re-created vs renamed
+    table). Filled by the ac-indirect-deals-sync edge fn (see AUTOMATIONS).
   - public.roas_year_on_year — DEPRECATED/UNUSED as of 2026-10-20 (migration
     20261020080000, seeded 2022–2026 from the "MAG Marketing ROAS Report" sheet). It
     was the ROAS page cache when the tab mirrored that sheet; the tab now computes live
@@ -1134,6 +1153,26 @@ AUTOMATIONS / ROUTINES
   supabase/functions/activecampaign-contacts-sync/index.ts,
   supabase/migrations/20261020040000_reload_activecampaign_contacts.sql,
   supabase/migrations/20261020050000_schedule_activecampaign_contacts_sync.sql (uncommitted).
+- ac-indirect-deals-sync (NEW 2026-11-05; Supabase Edge Function, MAG project; pg_cron
+  `ac-indirect-deals-sync-daily`, '15 22 * * 0-4' = 06:15 AM PH Mon–Fri — AFTER the deal
+  + contact mirrors) — rebuilds public.ac_indirect_deals, the cache of every INDIRECT/
+  bureau AC deal 2021→present (deals whose "Deal Source?" custom field = "Indirect (PCO/
+  Bureau/ Events company)"). The field is NOT in the deal mirror, so the fn sweeps the AC
+  field-6 feed in ONE paginated pass: GET /api/3/dealCustomFieldMeta/6/dealCustomFieldData
+  (GOTCHA: that nested feed returns its value rows under JSON key `dealCustomFieldMeta`,
+  NOT `dealCustomFieldData`), keeps deals whose value starts "Indirect", then calls RPC
+  reload_ac_indirect_deals(_ids jsonb) (atomic delete→insert, joins the ids onto
+  activecampaign_deals + contacts/accounts; refuses empty payload). Modes ?dry=1 / ?sync=1
+  / bare(background). Deployed --no-verify-jwt; cron calls ?sync=1 + 120s pg_net timeout.
+  Emails ALERT_EMAIL on failure. Secrets reused from the other AC syncs (AC_API_URL/
+  AC_API_TOKEN + SUPABASE_* + GMAIL_*). Originally deployed as ac-bureau-deals-sync +
+  cron ac-bureau-deals-sync-daily and RENAMED the same day — the old slug ac-bureau-deals-
+  sync + the throwaway probe ac-probe-tmp are now inert 410 stubs (deletable from the
+  Supabase dashboard; the MCP has no delete-function tool). Files:
+  supabase/functions/ac-indirect-deals-sync/index.ts, supabase/migrations/20261105120000_
+  create_ac_bureau_deals.sql, 20261105121000_schedule_ac_bureau_deals_sync.sql,
+  20261105130000_rename_ac_bureau_deals_to_ac_indirect_deals.sql,
+  20261105131000_reload_ac_indirect_deals_body.sql (uncommitted).
 - GA4 & Ads Leads Tracking daily chain — as of 2026-10-09 driven by ONE cron job
   and ONE orchestrator edge function (was 3 staggered jobs). pg_cron job
   `contact-sources-sync-daily` ('0 22 * * *' = 06:00 PH daily) POSTs the

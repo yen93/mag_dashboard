@@ -344,10 +344,12 @@
     renderMarketingHead();
     renderMarketingSidebar('overview');
     renderMktKpis();                     // initial paint (enquiries shows … until loaded)
+    loadEnquiries();                     // fetch live per-FY enquiry counts FIRST (independent of charts)
     wireSeg('fySeg', renderMktKpis);     // re-render the live card on FY change
-    drawCharts();
-    window.onThemeChange = drawCharts;   // recolor charts on light/dark toggle
-    loadEnquiries();                     // fetch live per-FY enquiry counts
+    try {                                // a chart error must never block the live KPI load above
+      drawCharts();
+      window.onThemeChange = drawCharts; // recolor charts on light/dark toggle
+    } catch (e) { console.error('Overview charts failed to render:', e); }
   </script>
 </body>
 </html>

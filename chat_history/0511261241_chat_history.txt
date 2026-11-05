@@ -1,0 +1,118 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Created a new cached Supabase table of all BUREAU/INDIRECT ActiveCampaign
+deals (Deal Source? = "Indirect (PCO/ Bureau/ Events company)") covering 2021 →
+present, filled by a new edge function + daily cron. Then renamed the whole feature
+from "bureau" to "indirect" (table ac_bureau_deals → ac_indirect_deals, plus its
+RPC, edge function, and cron). Supabase-only — no dashboard code consumes it yet, so
+no Cloud Run redeploy needed.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into or printed in this chat. Edge-function calls used public function URLs
+with no auth header; AC/Supabase credentials stayed in edge-function env secrets and
+the Supabase MCP, never echoed into the conversation.
+
+--------------------------------------------------------------------------------
+USER:
+"create a new cached table for all bureau AC deals. all bureau deals are those where
+'Deal Source?' is 'Indirect (PCO/ Bureau/ Events company)'. get all bureau deals
+within 2021 to present." (Later clarified: "btw i mean supabase table.")
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated how bureau is currently identified and how cached tables are built in
+this repo, then designed and shipped the table.
+
+Findings from exploration:
+  - The exact "Deal Source?" value lives on AC deal custom field
+    dealCustomFieldMeta id 6 (confirmed via AC MCP retrieve-all-custom-deal-field-meta:
+    options = Direct / "Indirect (PCO/ Bureau/ Events company)" / Post-Conference /
+    Post-Executive X).
+  - public.ac_deals_ytd already carries direct_or_indirect (the literal "Deal Source?"
+    value) AND an is_bureau flag — but the two DIVERGE (is_bureau is a title heuristic),
+    and ac_deals_ytd only covers Jul-2024+ (and was stale, max created 2026-10-06). So
+    it could not serve "all bureau 2021→present." Followed the user's STRICT definition:
+    Deal Source? = the Indirect option, NOT the is_bureau flag.
+  - The full mirror public.activecampaign_deals has all 3,573 deals back to Jul-2021
+    (min cdate 2021-07-29, refreshed daily) but does NOT store the Deal Source? field.
+  - Helper fns ac_value_aud(value,currency), mag_fy_label(ts), mag_cal_yr(ts) all exist
+    and are reused. No pipeline/stage name tables — reused the group→name map from
+    marketing-roi.js. Org names from activecampaign_accounts, contact names/emails from
+    activecampaign_contacts.
+
+Design (mirrors the existing activecampaign-deals-sync pattern):
+  - Migration 20261105120000_create_ac_bureau_deals.sql: table public.ac_bureau_deals
+    (deal_id PK, title, deal_source, pipeline_id/name, stage_id, status/status_label,
+    contact_id/name/email, account_id, organization, value_raw, value_aud, currency,
+    cdate, mdate, event_date, cal_yr, fy, synced_at) + RLS on + indexes, plus the atomic
+    rebuild RPC reload_ac_bureau_deals(_ids jsonb) (refuses empty payload; delete→insert
+    in one tx; joins the passed bureau ids onto the mirror + contacts/accounts + the
+    pipeline map; value_aud/fy/cal_yr via the shared helpers).
+  - Edge function ac-bureau-deals-sync (verify_jwt:false): sweeps the AC field-6 feed in
+    one paginated pass, keeps deals whose Deal Source? starts "Indirect", hands the id
+    list to the RPC. Modes ?dry=1 / ?sync=1 / bare(background). Emails ALERT_EMAIL on
+    failure. Applied the table migration + deployed the function via Supabase MCP.
+  - First dry-run returned 0 (bug): the nested endpoint
+    /dealCustomFieldMeta/6/dealCustomFieldData returns the value rows under the JSON key
+    `dealCustomFieldMeta`, NOT `dealCustomFieldData`. Discovered this with a tiny
+    throwaway probe fn (ac-probe-tmp) that dumped the raw AC response shapes
+    (flat dealCustomFieldData total=25964 across all fields; nested field-6 total=2970).
+    Fixed the function to read d.dealCustomFieldMeta, redeployed.
+  - Dry-run then showed 2,970 field rows swept → 559 Indirect deals. Ran ?sync=1 →
+    559 rows written (all 559 matched the mirror). Validated: deal_source has a single
+    variant (the Indirect option), 0 null value/pipeline, cdate 2021-07-29→2026-10-27,
+    total ~$2.89M; status 401 Lost / 141 Won / 17 Open; per-FY FY22 52·FY23 105·FY24
+    113·FY25 140·FY26 114·FY27 35. Sample rows looked right (ICMI, Inspire Speakers,
+    The Tailor). Applied the cron schedule migration (ac-bureau-deals-sync-daily,
+    15 22 * * 0-4 = 06:15 PH, after the deal+contact mirrors) and confirmed it active.
+    Neutralized the throwaway ac-probe-tmp probe to a 410 stub (verify_jwt on, reads
+    nothing) since the Supabase MCP has no delete-function tool.
+  - Saved a project memory (ac-bureau-deals-table.md) + MEMORY.md index line. Noted it's
+    Supabase-only (no server/public consumer), so no Cloud Run redeploy is needed.
+
+--------------------------------------------------------------------------------
+USER:
+"rename it to ac_indirect_deals"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Renamed the table AND the matching machinery for coherence (the whole feature was
+one-session-old and nothing external referenced it):
+  - DB migration (applied via MCP): ALTER TABLE ac_bureau_deals → ac_indirect_deals,
+    renamed the 3 indexes + pkey, ALTER FUNCTION reload_ac_bureau_deals → reload_ac_
+    indirect_deals, cron.unschedule('ac-bureau-deals-sync-daily') + cron.schedule(
+    'ac-indirect-deals-sync-daily', …) pointing at the new function URL.
+  - GOTCHA handled: ALTER FUNCTION … RENAME does not rewrite the body, which still
+    referenced public.ac_bureau_deals (would error at runtime). Re-created the RPC body
+    (CREATE OR REPLACE) against public.ac_indirect_deals.
+  - Renamed the edge-function dir to ac-indirect-deals-sync, rewrote its identifiers
+    (bureau→indirect: fn name, rpc call reload_ac_indirect_deals, summary field
+    indirect_deals, log tags, email subject/body) while keeping the literal option label
+    "Indirect (PCO/ Bureau/ Events company)" intact. Deployed ac-indirect-deals-sync
+    (verify_jwt:false). Neutralized the old ac-bureau-deals-sync slug to a 410 stub.
+  - Verified end-to-end: ?sync=1 on ac-indirect-deals-sync rebuilt all 559 rows;
+    confirmed on the DB that public.ac_indirect_deals exists (559 rows), public.ac_
+    bureau_deals is gone, reload_ac_bureau_deals is gone / reload_ac_indirect_deals
+    exists, and only ac-indirect-deals-sync-daily cron remains.
+  - Recorded the rename as forward-only migration FILES on disk
+    (20261105130000_rename_ac_bureau_deals_to_ac_indirect_deals.sql +
+    20261105131000_reload_ac_indirect_deals_body.sql), kept the original create/schedule
+    files as history, renamed the memory file → ac-indirect-deals-table.md and updated
+    MEMORY.md. Flagged two decommissioned 410-stub slugs the user can delete from the
+    Supabase dashboard: ac-bureau-deals-sync (old name) + ac-probe-tmp (probe).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat, update as_built.txt + CLAUDE.md + .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file, updated as_built.txt with the new
+ac_indirect_deals table + ac-indirect-deals-sync function + cron, updated CLAUDE.md's
+data-layer section to document the new cached table, and checked .gitignore. Did NOT
+run any git commands — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================
