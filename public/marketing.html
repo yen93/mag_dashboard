@@ -208,13 +208,11 @@
     // ac_indirect_deals), deduped by deal — from GET /api/marketing/overview.
     //   • Enquiries = ALL deals created in the FY.
     //   • Bookings  = only WON deals created in the FY.
-    // Cards 3–5 ("Enquiry → booking rate", "Marketing revenue", "Marketing spend")
-    // are LIVE + FY-aware. The rate is computed client-side as bookings ÷ enquiries;
-    // revenue + spend come from the SAME DB-backed source as the ROI tab
-    // (GET /api/marketing/roi → MROI state below). Marketing ROI (card 6) is still sample.
-    var KPIS = [
-      { label: 'Marketing ROI',          value: '218%',    delta: '▲ 74 pts', info: 'Incl. influenced revenue 260%. Read quarterly.' },
-    ];
+    // Cards 3–6 ("Enquiry → booking rate", "Marketing revenue", "Marketing spend",
+    // "Marketing ROI") are ALL LIVE + FY-aware. The rate is bookings ÷ enquiries; revenue,
+    // spend and ROI come from the SAME DB-backed source as the ROI tab (GET /api/marketing/roi
+    // → MROI state below). Marketing ROI = net return = (revenue ÷ spend − 1) × 100.
+    var KPIS = [];   // all six cards are now computed live (see the *Card() builders below)
 
     // Live per-FY state (counts across the two sources, deduped by deal).
     var ENQ = { byFy: {}, total: null, loaded: false };      // all deals
@@ -386,6 +384,43 @@
       }
       return kpiHtml('Marketing spend', val, info, deltaHtml);
     }
+    // Marketing ROI = NET return on marketing spend = (marketing revenue ÷ marketing spend − 1)
+    // × 100, computed from the two live $ cards above (same MROI source as the ROI tab's
+    // "Net ROI" card). A value of +218% means revenue is 3.18× spend.
+    function roiCard() {
+      var key = selFyKey();
+      var fyName = key === 'all' ? 'all years' : key.toUpperCase();
+      var val = '…', deltaHtml = '';
+      var info = 'Net return on marketing spend = (marketing revenue ÷ marketing spend − 1) × 100. ' +
+        'Both inputs live from /api/marketing/roi — same figures as the Marketing revenue and spend cards.';
+      function netRoiOf(k) {
+        var r = mroiRow(k);
+        var rev = (r && r.marketingRevenue != null) ? r.marketingRevenue : null;
+        var spend = (r && r.hasSpend) ? r.totalSpend : null;
+        return (rev != null && spend) ? Math.round((rev / spend - 1) * 100) : null;
+      }
+      if (MROI.loaded) {
+        var cur = netRoiOf(key);
+        val = cur == null ? '—' : (cur > 0 ? '+' : '') + cur + '%';
+        if (cur != null) {
+          var r = mroiRow(key);
+          info = 'Marketing revenue ' + fmt(r.marketingRevenue, 'currency') + ' ÷ marketing spend ' +
+            fmt(r.totalSpend, 'currency') + ' − 1 in ' + fyName + ' = ' + (cur > 0 ? '+' : '') + cur +
+            '% net return on marketing spend.';
+          if (key !== 'all') {
+            var prev = netRoiOf('fy' + String(fyEndOf(key) - 1).slice(-2));
+            if (prev != null) {
+              var d = cur - prev;
+              var cls = d >= 0 ? 'pos' : 'neg';
+              var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
+              deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(d) +
+                ' pts vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
+            }
+          }
+        }
+      }
+      return kpiHtml('Marketing ROI', val, info, deltaHtml);
+    }
     function renderMktKpis() {
       var rest = KPIS.map(function (k) {
         var ic = k.info ? infoSpan(k.info) : '';
@@ -394,7 +429,7 @@
           '<div class="delta pos">' + k.delta + '</div></div>';
       }).join('');
       document.getElementById('mktKpis').innerHTML =
-        enqCard() + bookCard() + rateCard() + revenueCard() + spendCard() + rest;
+        enqCard() + bookCard() + rateCard() + revenueCard() + spendCard() + roiCard() + rest;
     }
     // Fetch the ROI tab's DB-backed figures and index them by fyEnd for the two live
     // $ cards (Marketing revenue + Marketing spend). Re-renders the KPI row once loaded.
