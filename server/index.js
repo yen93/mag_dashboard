@@ -20,6 +20,7 @@ import { getRoasDeals } from './metrics/roas-deals.js';
 import { getRoasCounted } from './metrics/roas-counted.js';
 import { getMarketingRoi } from './metrics/marketing-roi.js';
 import { getMarketingOverview } from './metrics/marketing-overview.js';
+import { getMarketingInsight } from './marketingInsight.js';
 import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
 import { getAdPlatforms } from './metrics/ad-platforms.js';
 import { ga4AgentRouter } from './ga4Agent.js';
@@ -346,6 +347,21 @@ marketing.get('/overview', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:overview]', err);
     res.status(502).json({ error: 'Failed to load marketing overview from data source.', detail: err.message });
+  }
+});
+// Live AI Insight — a one-shot OpenAI insight over the live Overview + ROI figures for the
+// selected FY (card on marketing.html). Read-only (context-stuffed, no DB tools). Cached per
+// FY so repeated FY switches don't re-bill OpenAI. See server/marketingInsight.js. Needs
+// OPENAI_API_KEY; returns a graceful {insight:null,note} (200) when the key isn't set.
+marketing.get('/insight', async (req, res) => {
+  let fy = String(req.query.fy || 'all').toLowerCase();
+  if (fy !== 'all' && !/^fy\d{2}$/.test(fy)) fy = 'all';   // guard the cache key
+  try {
+    const payload = await cached('marketing:insight:' + fy, () => getMarketingInsight(fy), 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:insight]', err);
+    res.status(err.status || 502).json({ error: 'Failed to generate insight.', detail: err.message });
   }
 });
 app.use('/api/marketing', marketing);

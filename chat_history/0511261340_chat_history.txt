@@ -1,0 +1,203 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Make the rest of the Marketing Overview (marketing.html) cards + charts
+live — Enquiry→booking rate, Marketing revenue/spend/ROI, the month chart copied
+from roi.html, the Enquiries-vs-bookings chart, Cost per enquiry, and a new
+OpenAI-backed "Live AI Insight" card.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+(Task 1) card_to_update: "Enquiry → booking rate". Compute it from "Keynote
+enquiries" and "Keynote bookings".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read public/marketing.html. Found the two headline cards (Keynote enquiries,
+Keynote bookings) already LIVE + FY-aware via GET /api/marketing/overview →
+ENQ/BOOKINGS state objects (per-FY counts across ads=roas_counted_deals +
+indirect=ac_indirect_deals, deduped by deal). The "Enquiry → booking rate" card
+was still hardcoded sample (27%, KPIS[0]).
+
+Added a computed rateCard(): bookings ÷ enquiries for the selected FY, FY-aware,
+shows … until loaded / — when no enquiries / a rounded %; delta vs prior FY in
+percentage points; ⓘ tooltip spells out "won ÷ created = x.x%". Removed the
+sample entry from KPIS, rendered rateCard() after bookCard(). Frontend-only, no
+app.js bump, needs a Cloud Run redeploy. Noted the amber takeaway sentence still
+has sample prose.
+
+--------------------------------------------------------------------------------
+USER:
+/cm
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+git status (only public/marketing.html modified). Output:
+feat(marketing): make Enquiry to booking rate card live and FY-aware, computed as
+keynote bookings over enquiries from the shared overview state.
+
+--------------------------------------------------------------------------------
+USER:
+(Task 2) cards_to_update: "Marketing revenue", "Marketing spend". Make them come
+from actual syncing DB data — already built for the same cards in roi.html.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read roi.html to learn the source: both cards come from GET /api/marketing/roi —
+Marketing revenue = row.marketingRevenue (+ marketingRevenueParts, source string
+marketingRevenueSource); Marketing spend = row.hasSpend ? row.totalSpend : null.
+Payload shape: rows.data[] keyed by fyEnd + a `total` row for "all years" — maps
+onto marketing.html's #fySeg toggle (fyEndOf(key)).
+
+Added MROI state { byFy, total, loaded, revSource } + helpers mroiRow(key),
+currencyDelta(d, prevFyEnd), kpiHtml(). Wrote revenueCard() (marketing-attributed
+won revenue, ⓘ breaks down ROAS/organic/bureau-tailor/Exec X parts) and
+spendCard() (Xero marketing accounts, ex-GST, — when no spend). Both FY-aware with
+vs-prior-FY currency deltas. Added loadRoiCards() to fetch /api/marketing/roi and
+index rows by fyEnd. Removed both from the sample KPIS array; render order now
+enquiries→bookings→rate→revenue→spend→(Marketing ROI sample). Verified fmt/esc are
+global in app.js (fmt currency → _aud.format). No app.js bump; needs redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/cm
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+git status (only public/marketing.html). Output:
+feat(marketing): make Marketing revenue and spend cards live and FY-aware from
+/api/marketing/roi, matching the ROI tab instead of sample data.
+
+--------------------------------------------------------------------------------
+USER:
+(Task 3) Update the "Marketing ROI" card — computation based on the Marketing
+revenue and Marketing spend cards.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Added roiCard(): net return on marketing spend = (marketingRevenue ÷ marketingSpend
+− 1) × 100, from the same MROI rows as the revenue/spend cards (mirrors the ROI
+tab's "Net ROI"). Signed % value, — when inputs missing, vs-prior-FY delta in pts,
+ⓘ tooltip showing the full math. Emptied the KPIS array (all six overview KPI cards
+now computed live) and appended roiCard() to the render. No app.js bump; needs
+redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/cm
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+git status (only public/marketing.html). Output:
+feat(marketing): make Marketing ROI card live and FY-aware as net return (revenue
+over spend minus 1) from the live MROI data, no longer sample.
+
+--------------------------------------------------------------------------------
+USER:
+(Task 4) Replace the "Spend vs marketing revenue" graph in marketing.html with the
+"Revenue vs spend by month" graph from roi.html. Copy the graph, don't move it
+(roi.html keeps its chart).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Re-read roi.html's renderMonthChart() (combo chart: green marketing-spend bars +
+blue marketing-revenue line sharing the left $ axis via niceCeil(); gray dashed
+company-revenue line on its own right axis; "Mon 1-<last>" month-span x labels;
+currentMonths() filters ROI.byMonth by SEL).
+
+Copied it into marketing.html: added MROI.byMonth (stored in loadRoiCards from
+d.byMonth.data), helpers compactAud/niceCeil/MON_ABBR/monthSpanLabel/ymSpanLabel,
+currentMroiMonths() (filters byMonth by #fySeg selection), and renderMonthChart()
+targeting the existing #spendRevCanvas. Updated the card title to "Revenue vs spend
+by month" + caption. Rewrote drawCharts() to call renderMonthChart() (dropped the
+sample _c1) and kept the enq/book _c2 chart. Re-renders on FY change + theme change
++ on data load. Removed dead sample vars (SPEND/REVENUE/C_SPEND/C_REV/moneyK/_c1);
+grep-confirmed none remain. roi.html untouched. Chart lives in a col-6 card (more
+compact than roi.html's col-12) — offered to widen.
+
+--------------------------------------------------------------------------------
+USER:
+/cm
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+git status (only public/marketing.html). Output:
+feat(marketing): copy the roi.html Revenue vs spend by month combo chart into the
+Overview, fed live from /api/marketing/roi byMonth and filtered by the FY toggle.
+(Composed as a single-line commit for the user to paste.)
+
+--------------------------------------------------------------------------------
+USER:
+(Task 5) to_update_list: "Enquiries vs bookings" graph, "Cadence delivered" card,
+"Cost per enquiry" card. 1) Update them to the now-live DB data. 2) Remove
+"Past-client Offsites booked". 3) Rename "Latest notes · October" → "Live AI
+Insight." and use the OpenAI key to create a helpful insight based on the displayed
+data.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated data sources first. Read server/metrics/marketing-overview.js (per-FY
+enquiries/bookings only — no monthly), server/roiAssistant.js (the OpenAI
+context-stuffed read-only pattern), server/index.js route registration, and
+server/config.js (config.openai.apiKey / .model, default gpt-4o-mini; hasSource
+('openai')).
+
+Flagged that "Cadence delivered" (95% / 91% on time) has NO matching source in the
+Supabase DB — nothing tracks marketing content/send cadence. Asked the user via
+AskUserQuestion with live-metric options; the user chose to clarify. Explained the
+gap in prose. User's decision: keep the "Cadence delivered" card and its name, but
+show "pending" instead of numbers.
+
+Implemented:
+BACKEND
+- marketing-overview.js: added OVERVIEW_MONTH_SQL — the same two-source deduped
+  deal set collapsed to one row/deal (creation month/FY, won-in-any-source via
+  bool_or), grouped by month → enquiries + bookings. Exposed enquiries.byMonth /
+  bookings.byMonth ([{month,fyEnd,total}]); added byMonth:[] to the pending shape.
+- server/marketingInsight.js (NEW): getMarketingInsight(fy) — read-only, fetches
+  getMarketingOverview() + getMarketingRoi(), shapes the selected FY (+ prior FY)
+  into enquiries/bookings/rate/marketing revenue/spend/net ROI/cost-per-enquiry/
+  deals, one OpenAI chat call (temp 0.4, max_tokens 200) for a 1–2 sentence
+  insight. No DB tools, key stays server-side; returns {insight:null,note} when
+  OPENAI_API_KEY unset.
+- index.js: import getMarketingInsight; GET /api/marketing/insight?fy=fy27, fy
+  validated against /^fy\d{2}$/|all before use as the cache key, cached per FY
+  (10 min) so FY switches don't re-bill OpenAI.
+FRONTEND (marketing.html)
+- Enquiries vs bookings chart → LIVE: added byMonth to ENQ/BOOKINGS, stored in
+  loadEnquiries; currentEnqBookMonths() (merge+filter by FY) + renderEnqBookChart()
+  (monthLabel x-axis). Removed sample arrays MONTHS/ENQ_SERIES/BOOK; drawCharts()
+  now calls renderMonthChart()+renderEnqBookChart(). Caption → "by month, selected
+  FY".
+- Cost per enquiry → LIVE: renderBottomCards() computes marketing spend ÷
+  enquiries for the FY, with a costDelta() (lower=greener) vs prior FY; … until
+  loaded, — when inputs missing.
+- Cadence delivered → kept name, shows a "pending" chip (.chip warn) + "No live
+  data source yet".
+- Removed the Past-client Offsites booked card.
+- "Latest notes · October" → "Live AI Insight": #aiInsight, loadInsight()/
+  scheduleInsight() (debounced 400ms) hitting /api/marketing/insight; spans two
+  grid columns.
+- FY-change handler + init re-render KPIs, bottom cards, both charts, and schedule
+  the insight.
+
+Verification: node --check passed on the three server files; extracted the
+marketing.html inline <script> and parsed it with new Function(stubbed globals) —
+OK; grep confirmed no leftover sample-var references; confirmed .chip.warn exists
+in app.css. No app.js bump. Needs a Cloud Run redeploy; the insight reuses the
+OPENAI_API_KEY already on the service (same key as ROAS/ROI assistants) — no new
+secret. Caveat flagged: the amber takeaway sentence still has sample prose.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save chat, update as_built.txt / CLAUDE.md / .gitignore (no git commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file; updated as_built.txt and CLAUDE.md
+to record the now-fully-live Marketing Overview + the new /api/marketing/insight
+endpoint and marketingInsight.js; checked .gitignore. Did NOT run any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================

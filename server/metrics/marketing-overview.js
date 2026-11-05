@@ -53,17 +53,46 @@ const OVERVIEW_SQL = `
   GROUP BY fy_end
   ORDER BY fy_end`;
 
+// Per-MONTH version of the same deduped-deal set (feeds the "Enquiries vs bookings"
+// chart). Each deal collapses to ONE row (its creation month/FY, and whether it is
+// won in any source), so counts reconcile with the per-FY totals above.
+const OVERVIEW_MONTH_SQL = `
+  WITH ads AS (
+    SELECT DISTINCT deal_id::text AS deal_id, cdate, ${FY('cdate')} AS fy_end,
+      (status = 'won') AS won
+    FROM public.roas_counted_deals WHERE cdate IS NOT NULL AND deal_id IS NOT NULL
+  ),
+  indirect AS (
+    SELECT DISTINCT deal_id::text AS deal_id, cdate, ${FY('cdate')} AS fy_end,
+      (status = 1) AS won
+    FROM public.ac_indirect_deals WHERE cdate IS NOT NULL AND deal_id IS NOT NULL
+  ),
+  u AS ( SELECT * FROM ads UNION ALL SELECT * FROM indirect ),
+  dedup AS (
+    SELECT deal_id,
+      to_char(date_trunc('month', min(cdate)), 'YYYY-MM') AS month,
+      max(fy_end) AS fy_end,
+      bool_or(won) AS won
+    FROM u GROUP BY deal_id
+  )
+  SELECT month, max(fy_end) AS "fyEnd",
+    count(*)                    AS enquiries,
+    count(*) FILTER (WHERE won) AS bookings
+  FROM dedup
+  GROUP BY month
+  ORDER BY month`;
+
 export async function getMarketingOverview() {
   if (!supabaseConfigured()) {
     const pending = (source) => ({
-      byFy: [], total: null,
+      byFy: [], byMonth: [], total: null,
       meta: { status: 'pending', source, note: 'Supabase not configured.' },
     });
     return { enquiries: pending(SRC_ENQ), bookings: pending(SRC_BOOK) };
   }
 
   const n = (v) => Number(v) || 0;
-  const rows = await q(OVERVIEW_SQL);
+  const [rows, monthRows] = await Promise.all([q(OVERVIEW_SQL), q(OVERVIEW_MONTH_SQL)]);
 
   const enqByFy = rows.map((r) => ({
     fyEnd: n(r.fyEnd), fy: 'FY' + String(r.fyEnd).slice(-2),
@@ -74,6 +103,10 @@ export async function getMarketingOverview() {
     ads: n(r.adsWon), indirect: n(r.indirectWon), total: n(r.totalWon),
   }));
 
+  // Monthly series (one { month:'YYYY-MM', fyEnd, total } per bucket), parallel to byFy.
+  const enqByMonth = monthRows.map((r) => ({ month: r.month, fyEnd: n(r.fyEnd), total: n(r.enquiries) }));
+  const bookByMonth = monthRows.map((r) => ({ month: r.month, fyEnd: n(r.fyEnd), total: n(r.bookings) }));
+
   // "All years" roll-up. Deals partition by their creation FY, so summing the
   // per-FY (already deal-distinct) totals is the all-years distinct count.
   const sum = (arr) => arr.reduce(
@@ -82,7 +115,7 @@ export async function getMarketingOverview() {
   );
 
   return {
-    enquiries: { byFy: enqByFy, total: sum(enqByFy), meta: { status: 'live', source: SRC_ENQ, note: null } },
-    bookings: { byFy: bookByFy, total: sum(bookByFy), meta: { status: 'live', source: SRC_BOOK, note: null } },
+    enquiries: { byFy: enqByFy, byMonth: enqByMonth, total: sum(enqByFy), meta: { status: 'live', source: SRC_ENQ, note: null } },
+    bookings: { byFy: bookByFy, byMonth: bookByMonth, total: sum(bookByFy), meta: { status: 'live', source: SRC_BOOK, note: null } },
   };
 }

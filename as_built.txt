@@ -1,6 +1,26 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-05 (MARKETING OVERVIEW — "KEYNOTE ENQUIRIES" + "KEYNOTE BOOKINGS" CARDS REWIRED
+Last updated: 2026-11-05 (MARKETING OVERVIEW — REST OF THE CARDS/CHARTS MADE LIVE + A NEW "LIVE AI
+INSIGHT" CARD. public/marketing.html, all frontend except one new backend route/module. The Overview is
+now fully live: (KPI cards) all six computed client-side — Keynote enquiries + Keynote bookings
+(/api/marketing/overview), Enquiry→booking rate (bookings÷enquiries), Marketing revenue + Marketing
+spend + Marketing ROI (all from /api/marketing/roi via a new MROI state: revenue = row.marketingRevenue,
+spend = row.totalSpend, ROI = net return (rev÷spend−1)×100). KPIS[] array now EMPTY — no sample KPI
+cards left. (Charts) "Spend vs marketing revenue" REPLACED by a COPY of roi.html's "Revenue vs spend by
+month" combo chart (green spend bars + blue marketing-revenue line on a shared niceCeil left $ axis +
+gray dashed company-revenue line on the right axis), fed by /api/marketing/roi byMonth (new MROI.byMonth)
+and filtered by #fySeg — roi.html untouched. "Enquiries vs bookings" chart made LIVE from new monthly
+series ENQ.byMonth / BOOKINGS.byMonth. (Bottom cards) "Cost per enquiry" LIVE = marketing spend ÷
+enquiries for the FY (costDelta, lower=green); "Cadence delivered" KEPT but shows a "pending" chip (no DB
+source for marketing cadence); "Past-client Offsites booked" REMOVED; "Latest notes · October" RENAMED
+"Live AI Insight" — auto-loads a 1–2 sentence OpenAI insight. BACKEND: server/metrics/marketing-overview.js
+gained OVERVIEW_MONTH_SQL → enquiries.byMonth / bookings.byMonth ([{month,fyEnd,total}], same two-source
+deduped set, per month). NEW server/marketingInsight.js (getMarketingInsight(fy): read-only, context-
+stuffs the live Overview+ROI figures for the FY + prior FY, ONE OpenAI chat call; returns {insight} or
+{insight:null,note} when no key). NEW route GET /api/marketing/insight?fy=fy27 (requireAuth, fy validated,
+cached per-FY 10 min) in server/index.js. REUSES the OPENAI_API_KEY already on the Cloud Run service (same
+key as the ROAS/ROI assistants) — no new secret. NEEDS a manual Cloud Run redeploy (server + frontend; no
+app.js bump). EARLIER SAME DAY: "KEYNOTE ENQUIRIES" + "KEYNOTE BOOKINGS" CARDS REWIRED
 to the TWO sources public.ac_indirect_deals + public.roas_counted_deals. server/metrics/marketing-overview.js
 rewritten: ONE union query over ads (roas_counted_deals) + indirect (ac_indirect_deals), deduped by
 deal_id, FY from cdate (AU END-year), carrying a per-row `won` flag. Now returns BOTH { enquiries } (all
@@ -610,6 +630,12 @@ EXTERNAL INTEGRATIONS
   configured (widget degrades gracefully). Frontend: a bottom-right launcher/panel widget on
   roas.html and roi.html (mirrored .asst-* CSS + --<tab>-accent blue→purple gradient), posting
   the message history via postJSON().
+  ALSO (as of 2026-11-05) powers the Marketing Overview "Live AI Insight" CARD — server/marketingInsight.js
+  (getMarketingInsight(fy)), mounted at GET /api/marketing/insight?fy=fy27 (requireAuth, fy validated,
+  cached per-FY 10 min). Same read-only pattern (context-stuffs the live Overview + ROI figures for the
+  selected FY + prior FY, ONE Chat Completions call, no tools) but a ONE-SHOT insight generator, not a
+  chat widget — returns { insight } or { insight:null, note } when the key is unset (the card shows the
+  note gracefully). REUSES the same OPENAI_API_KEY — no new secret.
 
 DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
 - Most metrics are read live from MAG's existing AC-mirror / leads / reviews
