@@ -6,6 +6,101 @@
   <title>Spend &amp; ROI — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    /* ============================================================
+       Spend & ROI — bespoke visual layer, following DESIGN_GUIDE.md
+       (ROAS / Overview / Leads & Bookings as reference). LIVE data.
+       ============================================================ */
+    :root {
+      --mkt-accent: var(--accent);
+      --mkt-accent-2: #6a4bf5;
+      --mkt-accent-soft: #eef2fe;
+      --mkt-shadow:      0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --mkt-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+    }
+    html[data-theme='dark'] {
+      --mkt-accent-2: #9b7dff;
+      --mkt-accent-soft: #1b2440;
+      --mkt-shadow:      0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --mkt-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+    }
+
+    /* Full-width layout (match Overview / Leads & Bookings) */
+    .content { max-width: none; }
+    #marketingNav { max-width: none; }
+
+    /* Page head */
+    .sr-head { margin: 0 0 16px; }
+    .sr-head h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -.01em; }
+    .sr-head p { margin: 0; color: var(--text-muted); font-size: 14px; }
+
+    /* Cards + card heads */
+    .card { border-radius: 16px; box-shadow: var(--mkt-shadow);
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease; }
+    .card-head h3 {
+      font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .card-head h3::before {
+      content: ""; width: 4px; height: 17px; border-radius: 3px; flex: none;
+      background: linear-gradient(var(--mkt-accent), var(--mkt-accent-2));
+    }
+    .chart-cap { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Controls bar + segmented toggle (DESIGN_GUIDE §4) */
+    .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: linear-gradient(135deg, var(--mkt-accent), var(--mkt-accent-2));
+      color: #fff;
+      box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
+    }
+
+    /* KPI cards (hand-built so each can carry its own delta / sub-line) */
+    #kpis { margin-bottom: 20px; }
+    .sr-kpi { position: relative; border-radius: 16px; box-shadow: var(--mkt-shadow);
+      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; overflow: hidden; }
+    .sr-kpi::after {
+      content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      background: linear-gradient(90deg, var(--mkt-accent), var(--mkt-accent-2));
+      opacity: 0; transition: opacity .2s ease; pointer-events: none;
+    }
+    .sr-kpi:hover { transform: translateY(-3px); box-shadow: var(--mkt-shadow-lift); }
+    .sr-kpi:hover::after { opacity: .9; }
+    .sr-kpi .label { font-size: 13px; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    .sr-kpi .value { font-size: 28px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 10px 0 4px; }
+    .sr-kpi .sub { font-size: 12.5px; color: var(--text-muted); }
+    /* Emphasise the first tile (Marketing spend headline) */
+    #kpis .sr-kpi:first-child {
+      background: linear-gradient(140deg, color-mix(in srgb, var(--mkt-accent) 13%, var(--surface)), var(--surface) 70%);
+      border-color: color-mix(in srgb, var(--mkt-accent) 32%, var(--border));
+    }
+
+    .delta { font-size: 12px; font-weight: 600; }
+    .delta.pos { color: var(--pos); }
+    .delta.neg { color: var(--neg); }
+    .delta.muted { color: var(--text-muted); }
+    .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
+    .kpi-info:hover, .kpi-info:focus { color: var(--mkt-accent); outline: none; }
+
+    /* Lower section: Spend by type (left) + Channel results (right) */
+    .sr-lower { display: grid; grid-template-columns: minmax(260px, .82fr) 1.7fr; gap: 16px; align-items: start; }
+    @media (max-width: 900px) { .sr-lower { grid-template-columns: 1fr; } }
+
+    /* Channel results table */
+    .sr-table-wrap { overflow-x: auto; }
+    table.sr-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    table.sr-table th, table.sr-table td { padding: 11px 12px; text-align: right; white-space: nowrap; }
+    table.sr-table th:first-child, table.sr-table td:first-child { text-align: left; }
+    table.sr-table thead th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    table.sr-table tbody td { border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+    table.sr-table tbody tr:last-child td { border-bottom: none; }
+    table.sr-table tbody td:first-child { font-weight: 600; }
+    table.sr-table .ch-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 8px; vertical-align: baseline; }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -25,20 +120,364 @@
 
   <div class="marketing-layout">
     <nav class="subtabs" id="marketingNav"></nav>
+
     <main class="content">
-      <h1 style="margin:0 0 6px;font-size:24px">Spend &amp; ROI</h1>
-      <p class="muted" style="margin:0 0 22px;font-size:14px">Part of the new Marketing layout.</p>
-      <div class="card">
-        <div class="needs-setup"><strong>Coming soon</strong><span>This tab is a placeholder — its content will be added here.</span></div>
+      <div class="sr-head">
+        <h1>Spend &amp; ROI</h1>
+        <p>What marketing spent, what it returned, and how each channel performed — by financial year.</p>
+      </div>
+
+      <!-- Controls bar (same FY toggle + placement as marketing.html) -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="mkt-controls">
+          <span class="ctl-label">Financial year</span>
+          <div class="segmented" id="fySeg">
+            <button data-fy="all">All years</button>
+            <button data-fy="fy22">FY22</button>
+            <button data-fy="fy23">FY23</button>
+            <button data-fy="fy24">FY24</button>
+            <button data-fy="fy25">FY25</button>
+            <button data-fy="fy26">FY26</button>
+            <button class="active" data-fy="fy27">FY27</button>
+          </div>
+          <div class="spacer" style="flex:1"></div>
+          <span class="muted" style="font-size:13px">Australian FY (Jul–Jun)</span>
+        </div>
+      </div>
+
+      <!-- KPI cards -->
+      <div class="kpi-grid" id="kpis"></div>
+
+      <!-- Spend by type (left) + Channel results (right) -->
+      <div class="sr-lower">
+        <div class="card">
+          <div class="card-head" style="display:block;margin-bottom:10px">
+            <h3>Spend by type</h3>
+            <div class="chart-cap" id="spendCap">from Xero</div>
+          </div>
+          <div class="chart-box" id="spendBox" style="height:320px"><canvas id="spendCanvas"></canvas></div>
+        </div>
+
+        <div class="card">
+          <div class="card-head" style="display:block;margin-bottom:10px">
+            <h3>Channel results</h3>
+            <div class="chart-cap" id="channelCap">ROAS on total cost and on ad spend alone</div>
+          </div>
+          <div class="sr-table-wrap">
+            <table class="sr-table">
+              <thead>
+                <tr>
+                  <th>Channel</th><th>Spend</th><th>Enquiries</th><th>Cost / enquiry</th>
+                  <th>Bookings</th><th>Revenue</th><th>ROAS total</th><th>ROAS ads</th>
+                </tr>
+              </thead>
+              <tbody id="channelBody"></tbody>
+            </table>
+          </div>
+        </div>
       </div>
     </main>
   </div>
 
+  <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=10"></script>
   <script>
+    /* Spend & ROI — LIVE.
+       • 5 KPI cards        ← GET /api/marketing/roi (same source as roi.html) +
+                              GET /api/marketing/overview (enquiry count, for Cost per enquiry)
+       • "Spend by type"    ← GET /api/marketing/channel-summary (the `type` series — the SAME
+                              buckets as roi.html's Channel Summary "By type"), summed over the FY
+       • "Channel results"  ← GET /api/marketing/channel-results (the two channel_list channels:
+                              Paid Google/Bing/Agency from the ROAS metric; Executive X from
+                              exec_x_revenue)
+       All FY-aware via the #fySeg toggle (AU FY, END-year). */
+
+    // ----- FY helpers (mirror marketing.html / leads_bookings.html) -----
+    function selFyKey() {
+      var b = document.querySelector('#fySeg button.active');
+      return b ? b.getAttribute('data-fy') : 'fy27';
+    }
+    function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
+    function fyName(key) { return key === 'all' ? 'All years' : key.toUpperCase(); }
+    function infoSpan(text) {
+      if (!text) return '';
+      return ' <span class="kpi-info" tabindex="0" role="img" aria-label="' + esc(text) + '" title="' + esc(text) + '">ⓘ</span>';
+    }
+    function fmtCur(v) { return (v == null) ? '<span class="muted">—</span>' : fmt(v, 'currency'); }
+
+    // ===================================================================
+    //  State
+    // ===================================================================
+    var ROI = { rows: [], total: null, loaded: false };          // /api/marketing/roi
+    var OV  = { byFy: {}, total: null, loaded: false };           // /api/marketing/overview (enquiries)
+    var CH  = { months: [], type: [], loaded: false };           // /api/marketing/channel-summary
+    var CR  = { rows: [], total: null, loaded: false };          // /api/marketing/channel-results
+
+    function roiRowFor(key) {
+      if (!ROI.loaded) return null;
+      if (key === 'all') return ROI.total;
+      var fe = fyEndOf(key);
+      return ROI.rows.find(function (r) { return r.fyEnd === fe; }) || null;
+    }
+    function enqObj(key) { return key === 'all' ? OV.total : OV.byFy[fyEndOf(key)]; }
+    function enqCount(key) { var o = enqObj(key); return o ? o.total : null; }
+
+    // ===================================================================
+    //  KPI cards
+    // ===================================================================
+    function deltaHtml(cur, prev, mode, prevFyEnd) {
+      if (cur == null || prev == null || !mode) return '';
+      var d = cur - prev, r = Math.round(d);
+      var prevLabel = 'FY' + String(prevFyEnd).slice(-2);
+      if (r === 0) return '<div class="delta muted">■ no change vs ' + prevLabel + '</div>';
+      var good = mode === 'neutral' ? null : (mode === 'down-good' ? d < 0 : d > 0);
+      var cls = good == null ? 'muted' : (good ? 'pos' : 'neg');
+      var arrow = d > 0 ? '▲' : '▼';
+      return '<div class="delta ' + cls + '">' + arrow + ' ' + fmt(Math.abs(d), 'currency') + ' vs ' + prevLabel + '</div>';
+    }
+
+    function kpiCard(label, info, valueStr, extraHtml) {
+      return '<div class="sr-kpi"><div class="label">' + esc(label) + infoSpan(info) + '</div>' +
+        '<div class="value">' + valueStr + '</div>' + (extraHtml || '') + '</div>';
+    }
+
+    function renderCards() {
+      var box = document.getElementById('kpis');
+      if (!box) return;
+      if (!ROI.loaded) {
+        box.innerHTML = kpiCard('Marketing spend', '', '…') + kpiCard('Net return', '', '…') +
+          kpiCard('Marketing ROI', '', '…') + kpiCard('Marketing CAC', '', '…') +
+          kpiCard('Cost per enquiry', '', '…');
+        return;
+      }
+      var key = selFyKey();
+      var row = roiRowFor(key);
+      var prevKey = (key === 'all') ? null : 'fy' + String(fyEndOf(key) - 1).slice(-2);
+      var prevRow = prevKey ? roiRowFor(prevKey) : null;
+      var prevFyEnd = prevKey ? fyEndOf(prevKey) : null;
+
+      var spend = (row && row.hasSpend) ? row.totalSpend : null;
+      var mRev = row ? row.marketingRevenue : null;
+      var dealsWon = row ? row.dealsWon : null;
+      var enq = enqCount(key);
+
+      var netReturn = (mRev != null && spend != null) ? mRev - spend : null;
+      var ros = (mRev != null && spend) ? mRev / spend : null;                 // return on spend (×)
+      var marketingRoi = (ros != null) ? Math.round((ros - 1) * 100) : null;   // net ROI %  (roi.html "Net ROI")
+      var cac = (spend != null && dealsWon) ? spend / dealsWon : null;
+      var costPerEnq = (spend != null && enq) ? spend / enq : null;
+
+      // Prior-FY values for deltas
+      var pSpend = (prevRow && prevRow.hasSpend) ? prevRow.totalSpend : null;
+      var pMRev = prevRow ? prevRow.marketingRevenue : null;
+      var pNetReturn = (pMRev != null && pSpend != null) ? pMRev - pSpend : null;
+      var pEnq = prevKey ? enqCount(prevKey) : null;
+      var pCostPerEnq = (pSpend != null && pEnq) ? pSpend / pEnq : null;
+
+      var html = '';
+      // 1 — Marketing spend
+      html += kpiCard('Marketing spend',
+        'Xero marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST. Same figure as the ROI tab.',
+        fmtCur(spend),
+        deltaHtml(spend, pSpend, 'neutral', prevFyEnd));
+      // 2 — Net return (marketing revenue − marketing spend)
+      html += kpiCard('Net return',
+        'Marketing-attributed won revenue minus marketing spend. Revenue = ROAS-paid + organic + bureau/tailor + Exec X (deduped), same as the ROI tab.',
+        fmtCur(netReturn),
+        deltaHtml(netReturn, pNetReturn, 'up-good', prevFyEnd));
+      // 3 — Marketing ROI (net ROI %)
+      html += kpiCard('Marketing ROI',
+        'Net return on marketing spend = (marketing revenue ÷ marketing spend − 1). Same definition as the ROI tab’s "Net ROI".',
+        (marketingRoi != null ? (marketingRoi > 0 ? '+' : '') + marketingRoi + '%' : '<span class="muted">—</span>'),
+        ros != null ? '<div class="sub">Return on spend ' + ros.toFixed(2) + '×</div>' : '');
+      // 4 — Marketing CAC
+      html += kpiCard('Marketing CAC',
+        'Cost to acquire a client = marketing spend ÷ clients won (all AC deals won this FY). Same as the ROI tab’s "Cost per client".',
+        fmtCur(cac),
+        (dealsWon ? '<div class="sub">Marketing spend ÷ ' + dealsWon + ' clients won</div>'
+                  : (spend != null ? '<div class="sub">No clients won this FY</div>' : '')));
+      // 5 — Cost per enquiry
+      html += kpiCard('Cost per enquiry',
+        'Marketing spend ÷ enquiries (deals created this FY across the two deal sources, deduped — same count as the Overview).',
+        fmtCur(costPerEnq),
+        deltaHtml(costPerEnq, pCostPerEnq, 'down-good', prevFyEnd));
+
+      box.innerHTML = html;
+    }
+
+    // ===================================================================
+    //  Spend by type (horizontal bar) — the channel-summary `type` series,
+    //  summed over the selected FY's calendar months. Same DB source +
+    //  buckets as roi.html's Channel Summary "By type".
+    // ===================================================================
+    var MON_IDX = { Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12 };
+    function channelMonthFyEnd(label) {
+      var p = String(label).split('-'), m = MON_IDX[p[0]], y = Number(p[1]);
+      if (!m || !y) return null;
+      return m >= 7 ? y + 1 : y;
+    }
+    function spendByTypeForFy(key) {
+      var months = CH.months || [], type = CH.type || [];
+      var idxs = months.map(function (_, i) { return i; });
+      if (key !== 'all') {
+        var fe = fyEndOf(key);
+        idxs = idxs.filter(function (i) { return channelMonthFyEnd(months[i]) === fe; });
+      }
+      return type.map(function (s) {
+        return { name: s.name, total: idxs.reduce(function (a, i) { return a + (s.data[i] || 0); }, 0) };
+      }).filter(function (d) { return d.total > 0; }).sort(function (a, b) { return b.total - a.total; });
+    }
+
+    function compactAud(v) {
+      var n = Math.abs(v);
+      if (n >= 1e6) return '$' + (v / 1e6).toFixed(n % 1e6 ? 1 : 0) + 'm';
+      if (n >= 1e3) return '$' + (v / 1e3).toFixed(n % 1e3 ? 1 : 0) + 'k';
+      return '$' + Math.round(v);
+    }
+
+    var _spendChart = null;
+    function renderSpendByType() {
+      var el = document.getElementById('spendCanvas');
+      if (!el) return;
+      var cap = document.getElementById('spendCap');
+      if (cap) cap.textContent = fyName(selFyKey()) + ' · from Xero';
+      var rows = CH.loaded ? spendByTypeForFy(selFyKey()) : [];
+      var tc = themeColors();
+      // Size the box to the number of bars so they stay readable.
+      var box = document.getElementById('spendBox');
+      if (box) box.style.height = Math.max(200, rows.length * 44 + 40) + 'px';
+
+      if (_spendChart) { _spendChart.destroy(); _spendChart = null; }
+      _spendChart = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: rows.map(function (r) { return r.name; }),
+          datasets: [{
+            label: 'Spend',
+            data: rows.map(function (r) { return r.total; }),
+            backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 26,
+          }],
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function (ctx) { return fmt(ctx.parsed.x, 'currency'); } } },
+          },
+          scales: {
+            x: { beginAtZero: true, ticks: { color: tc.muted, callback: compactAud }, grid: { color: tc.grid } },
+            y: { ticks: { color: tc.muted, font: { size: 12 } }, grid: { display: false } },
+          },
+        },
+      });
+    }
+
+    // ===================================================================
+    //  Channel results table — the two channel_list channels for the FY.
+    // ===================================================================
+    var CH_COLOR = { 'Paid (Google, Bing, Agency)': '#3b6ef0', 'Executive X': '#7c5cff' };
+    function crRowFor(key) {
+      if (!CR.loaded) return null;
+      if (key === 'all') return CR.total;
+      var fe = fyEndOf(key);
+      return (CR.rows || []).find(function (r) { return r.fyEnd === fe; }) || null;
+    }
+    function intCell(v) { return (v == null) ? '<span class="muted">—</span>' : String(v); }
+    function roasCell(v) { return (v == null) ? '<span class="muted">—</span>' : v.toFixed(1) + '×'; }
+    function channelRowHtml(name, c) {
+      var costPerEnq = (c.spend != null && c.enquiries) ? c.spend / c.enquiries : null;
+      var dot = '<span class="ch-dot" style="background:' + (CH_COLOR[name] || '#9aa4b2') + '"></span>';
+      return '<tr>' +
+        '<td>' + dot + esc(name) + '</td>' +
+        '<td>' + fmtCur(c.spend) + '</td>' +
+        '<td>' + intCell(c.enquiries) + '</td>' +
+        '<td>' + fmtCur(costPerEnq) + '</td>' +
+        '<td>' + intCell(c.bookings) + '</td>' +
+        '<td>' + fmtCur(c.revenue) + '</td>' +
+        '<td>' + roasCell(c.roasTotal) + '</td>' +
+        '<td>' + roasCell(c.roasAds) + '</td>' +
+        '</tr>';
+    }
+    function renderChannelResults() {
+      var body = document.getElementById('channelBody');
+      var cap = document.getElementById('channelCap');
+      if (cap) cap.textContent = 'ROAS on total cost and on ad spend alone · ' + fyName(selFyKey());
+      if (!body) return;
+      if (!CR.loaded) { body.innerHTML = '<tr><td colspan="8" class="muted">Loading…</td></tr>'; return; }
+      var row = crRowFor(selFyKey());
+      if (!row) {
+        body.innerHTML = '<tr><td colspan="8" class="muted">No channel data for ' + fyName(selFyKey()) + '.</td></tr>';
+        return;
+      }
+      body.innerHTML =
+        channelRowHtml('Paid (Google, Bing, Agency)', row.paid) +
+        channelRowHtml('Executive X', row.execX);
+    }
+
+    // ===================================================================
+    //  Loaders
+    // ===================================================================
+    function loadRoi() {
+      return fetchJSON('/api/marketing/roi').then(function (d) {
+        ROI.rows = (d && d.rows && d.rows.data) || [];
+        ROI.total = d && d.total;
+        ROI.loaded = true;
+        renderCards();
+      }).catch(function (err) { console.error('roi', err); ROI.loaded = true; renderCards(); });
+    }
+    function loadOverview() {
+      return fetchJSON('/api/marketing/overview').then(function (d) {
+        var e = d && d.enquiries;
+        if (e) { (e.byFy || []).forEach(function (r) { OV.byFy[r.fyEnd] = r; }); OV.total = e.total; }
+        OV.loaded = true;
+        renderCards();   // re-render so Cost per enquiry fills in
+      }).catch(function (err) { console.error('overview', err); OV.loaded = true; });
+    }
+    function loadChannelSummary() {
+      return fetchJSON('/api/marketing/channel-summary').then(function (d) {
+        CH.months = (d && d.months) || [];
+        CH.type = (d && d.type) || [];
+        CH.loaded = true;
+        try { renderSpendByType(); } catch (e) { console.error('spend chart', e); }
+      }).catch(function (err) { console.error('channel-summary', err); CH.loaded = true; });
+    }
+    function loadChannelResults() {
+      return fetchJSON('/api/marketing/channel-results').then(function (d) {
+        CR.rows = (d && d.rows) || [];
+        CR.total = d && d.total;
+        CR.loaded = true;
+        renderChannelResults();
+      }).catch(function (err) { console.error('channel-results', err); CR.loaded = true; renderChannelResults(); });
+    }
+
+    // ----- Segmented toggle -----
+    function wireSeg(id, onChange) {
+      var seg = document.getElementById(id);
+      if (!seg) return;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (onChange) onChange();
+        });
+      });
+    }
+
     initPage('marketing');
-    renderMarketingHead();
     renderMarketingSidebar('spend-roi');
+    renderCards();              // initial (…)
+    renderChannelResults();     // initial (Loading…)
+    try { renderSpendByType(); } catch (e) {}
+    loadRoi();
+    loadOverview();
+    loadChannelSummary();
+    loadChannelResults();
+    wireSeg('fySeg', function () {
+      renderCards();
+      renderChannelResults();
+      try { renderSpendByType(); } catch (e) { console.error('chart', e); }
+    });
+    window.onThemeChange = function () { try { renderSpendByType(); } catch (e) {} };
   </script>
 </body>
 </html>

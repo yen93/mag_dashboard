@@ -23,6 +23,7 @@ import { getMarketingOverview } from './metrics/marketing-overview.js';
 import { getMarketingLeadsBySource } from './metrics/marketing-leads-by-source.js';
 import { getMarketingInsight } from './marketingInsight.js';
 import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
+import { getMarketingChannelResults } from './metrics/marketing-channel-results.js';
 import { getAdPlatforms } from './metrics/ad-platforms.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
@@ -323,6 +324,18 @@ marketing.get('/channel-summary', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:channel-summary]', err);
     res.status(502).json({ error: 'Failed to load channel summary from data source.', detail: err.message });
+  }
+});
+// Channel results — the two channel_list channels (Paid Google/Bing/Agency + Executive X)
+// per FY for the "Spend & ROI" tab's Channel results table. Paid from the ROAS metric,
+// Executive X from exec_x_revenue. See server/metrics/marketing-channel-results.js.
+marketing.get('/channel-results', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:channel-results', getMarketingChannelResults, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:channel-results]', err);
+    res.status(502).json({ error: 'Failed to load channel results from data source.', detail: err.message });
   }
 });
 // Ad Platforms — raw per-platform performance (GA4 website events, Google Ads campaign

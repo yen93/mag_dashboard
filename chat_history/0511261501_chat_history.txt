@@ -1,0 +1,118 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Built out the Marketing → "Spend & ROI" sub-tab (public/spend_roi.html)
+from a placeholder into a LIVE page, per prompts/051126_marketing_roi_v2.txt and a
+design screenshot. Added 5 KPI cards (same DB sources as roi.html), a "Spend by
+type" horizontal bar (channel-summary `type` series), and a "Channel results"
+table limited to the two channel_list channels (Paid Google/Bing/Agency + Exec X),
+plus the standard FY toggle and responsive layout. New server endpoint
+/api/marketing/channel-results backs the table. Server + frontend change → needs a
+manual Cloud Run redeploy. No app.js bump.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. The only external identifier used was the Supabase project
+ref (aivitcomiywiysrfwqxt, MAGTestProject) — already documented in CLAUDE.md and
+not a secret.
+
+--------------------------------------------------------------------------------
+USER:
+(Pointed at prompts/051126_marketing_roi_v2.txt with spend_roi.html open.)
+The prompt: update the spend_roi.html tab. (1) create the cards, graph, and table
+in the design screenshot; (2) add the same per-FY toggle filter on top, same
+placement as marketing.html; (3) fix responsiveness; (4) see roi.html and use the
+same DB data source for the KPI cards; (5) "Spend by type" graph should show the
+types listed in roi.html's "Channel Summary" graph, same DB source; (6) "Channel
+results" table should only include channel_list — "Paid (Google, Bing, Agency)"
+(ga4_ac_contact_source + related) and "Executive X" (exec_x_sheet + related).
+Design screenshot shows 5 KPI cards (Marketing spend, Net return, Marketing ROI,
+Marketing CAC, Cost per enquiry), a "Spend by type" horizontal bar, and a
+"Channel results" table with columns Channel/Spend/Enquiries/Cost-per-enquiry/
+Bookings/Revenue/ROAS total/ROAS ads and rows Google/Bing/LinkedIn/Meta/Exec X.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Gathered context: read the prompt file + design screenshot; read the current
+placeholder spend_roi.html; read roi.html (full), marketing-roi.js, marketing-
+channel-summary.js, marketing-leads-by-source.js, and leads_bookings.html (the
+newest LIVE sub-tab, used as the visual/pattern template). Confirmed the marketing
+API wiring in server/index.js and that renderMarketingSidebar supports the
+'spend-roi' key and app.js is at ?v=10.
+
+Flagged the one genuine ambiguity — the design mock shows 5 per-platform rows but
+task 6 says "only include channel_list" (two grouped channels) — and asked two
+scoped questions. User chose: (a) Channel results = 2 GROUPED rows ("Paid (Google,
+Bing, Agency)" + "Executive X"); (b) FULL design columns (incl. ROAS total + ROAS
+ads, with "—" where a channel has no source).
+
+Chose data sources:
+  • Paid row = the canonical ROAS metric getRoas() (server/metrics/roas.js), which
+    already computes per-FY: totalCost (All-in = Google Xero + Bing + Simple
+    Digital/agency), leads (won+lost+open), won, wonRevenue, roasAllin, roasGoogle.
+    This maps cleanly to "Paid (Google, Bing, Agency)".
+  • Executive X = public.exec_x_revenue. Verified its schema (id/season/company/
+    client/revenue/event_text/fy_end/loaded_at/event_date) and per-FY aggregates
+    via Supabase MCP: one row per client → bookings = count(*), revenue = sum;
+    FY24 $10k · FY25 $113,255 · FY26 $177,315 · FY27 $22,450. No spend/enquiry/ROAS
+    tracked → null ("—").
+
+Implemented:
+  1. NEW server/metrics/marketing-channel-results.js — getMarketingChannelResults():
+     early-returns pending when Supabase unconfigured; otherwise calls getRoas() +
+     one exec_x_revenue GROUP BY query; builds a union FY axis, per-FY {paid,execX}
+     rows, an all-years total (paid from the ROAS total row, Exec X summed), and a
+     defaultFy (current AU FY if present else latest). Exports CHANNELS.
+  2. server/index.js — imported it and registered
+     GET /api/marketing/channel-results (requireAuth, cached 10 min), placed just
+     before the ad-platforms route.
+  3. Rebuilt public/spend_roi.html as a self-rendering LIVE page (initPage(
+     'marketing') + renderMarketingSidebar('spend-roi'), its own fetchJSON; does
+     NOT call renderMarketingHead() — it's live, not a sample mockup — uses its own
+     .sr-head). Bespoke inline styling mirroring leads_bookings/ROAS (--mkt tokens,
+     card/KPI hover, gradient-active .segmented). Contents:
+       • FY toggle (#fySeg: All years + FY22–FY27, default FY27) in a controls card,
+         same placement/shape as marketing.html.
+       • 5 hand-built KPI cards (so each carries its own delta/sub), fed by
+         /api/marketing/roi (same source as roi.html) + /api/marketing/overview
+         (enquiry count): Marketing spend (= totalSpend; neutral vs-prior delta),
+         Net return (= marketingRevenue − spend; up-good delta), Marketing ROI
+         (= net ROI %, (mRev/spend−1); sub shows "Return on spend ×"), Marketing
+         CAC (= spend ÷ dealsWon), Cost per enquiry (= spend ÷ enquiries; down-good
+         delta). All FY-aware, re-render on toggle.
+       • "Spend by type" horizontal bar from /api/marketing/channel-summary `type`
+         series (the SAME buckets as roi.html's Channel Summary "By type"), summed
+         over the selected FY's calendar months via a local channelMonthFyEnd()
+         ('Mon-YYYY' → AU FY-end). Verified live FY27 buckets: Wages, Digital Ads,
+         Agency, Software, Tools, Printed Collaterals.
+       • "Channel results" table from the new endpoint — two rows (Paid, Exec X),
+         full columns; cost-per-enquiry derived client-side (spend ÷ enquiries);
+         "—" where a channel lacks a source.
+       • Responsive: .kpi-grid auto-fits/wraps; .sr-lower grid collapses to one
+         column < 900px; table scrolls (overflow-x) with min-width; segmented wraps.
+     No app.js change (page already references app.js?v=10).
+
+Verified: node --check passed on marketing-channel-results.js + index.js; booted
+the server locally (no DB) — it started clean, /spend_roi.html served 200, and
+/api/marketing/channel-results returned 401 (route registered, auth-gated). Checked
+exec_x_revenue and the channel-summary `type` buckets live against Supabase.
+
+Told the user: this is a server + frontend change → needs a manual Cloud Run
+redeploy (I don't deploy). Flagged one judgment call — "Marketing ROI" reads as net
+ROI % (roi.html's definition) rather than the mock's gross "218% / incl. influenced
+260%", since there's no live "influenced" figure; offered to switch it to gross
+return-on-spend % if preferred.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (save chat history; update as_built.txt, CLAUDE.md, .gitignore; no git)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file; updated as_built.txt (new
+channel-results endpoint/module + the spend_roi.html page now LIVE) and CLAUDE.md
+(documented the Spend & ROI tab + /api/marketing/channel-results); verified
+.gitignore already covers all sensitive patterns (left as-is). Ran no git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================

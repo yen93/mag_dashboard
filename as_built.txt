@@ -1,6 +1,30 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-05 (MARKETING "LEADS & BOOKINGS" TAB BUILT OUT + MADE LIVE — public/leads_bookings.html
+Last updated: 2026-11-05 (MARKETING "SPEND & ROI" TAB BUILT OUT + MADE LIVE — public/spend_roi.html
+rebuilt from the "Coming soon" placeholder into a live page, + ONE new backend route/module. (A) NEW
+server/metrics/marketing-channel-results.js (getMarketingChannelResults) + NEW route
+GET /api/marketing/channel-results (requireAuth, 10-min cache) on the `marketing` router — returns the TWO
+channel_list channels per FY (+ an all-years total + defaultFy): "Paid (Google, Bing, Agency)" from the
+ROAS metric getRoas() (Spend = All-in cost Google+Bing+Simple-Digital/agency; Enquiries = leads
+won+lost+open; Bookings = won; Revenue = wonRevenue; ROAS total/ads = roasAllin/roasGoogle) and
+"Executive X" from public.exec_x_revenue (Bookings = count of engagements/clients, Revenue = sum; spend/
+enquiries/ROAS not tracked → null, shown "—"). Union FY axis across both channels; early-returns pending
+when Supabase unconfigured. (B) public/spend_roi.html rebuilt (leads_bookings/ROAS inline visual layer
+reused — --mkt tokens, card/KPI hover, gradient-active .segmented; full-width; does NOT call
+renderMarketingHead(), it's live and has its own .sr-head): the SAME #fySeg FY toggle (All years +
+FY22–FY27, default FY27) in the same top placement as marketing.html; 5 KPI cards fed by /api/marketing/roi
+(SAME source as roi.html) + /api/marketing/overview (enquiry count) — Marketing spend (=totalSpend), Net
+return (=marketingRevenue−spend), Marketing ROI (=net ROI % (rev÷spend−1); sub shows "Return on spend ×"),
+Marketing CAC (=spend÷dealsWon), Cost per enquiry (=spend÷enquiries); all FY-aware with vs-prior-FY deltas;
+a "Spend by type" HORIZONTAL bar from /api/marketing/channel-summary `type` series (the SAME buckets as
+roi.html's Channel Summary "By type"), summed over the selected FY's months via a local channelMonthFyEnd();
+a "Channel results" table (full columns Channel/Spend/Enquiries/Cost-per-enquiry/Bookings/Revenue/ROAS-
+total/ROAS-ads) with exactly the two grouped rows from the new endpoint (cost-per-enquiry derived
+client-side; "—" where a channel has no source). Responsive: .kpi-grid auto-fits/wraps, .sr-lower grid
+collapses to 1 col < 900px, table scrolls (overflow-x, min-width 620), segmented wraps. NOTE: "Marketing
+ROI" reads as net ROI % (roi.html's definition), not the design mock's gross "218% / incl. influenced 260%"
+— no live "influenced" figure. No app.js change (stays app.js?v=10). NEEDS a manual Cloud Run redeploy
+(new route + module + rebuilt page). Previously same day 2026-11-05 (MARKETING "LEADS & BOOKINGS" TAB BUILT OUT + MADE LIVE — public/leads_bookings.html
 rebuilt from the "Coming soon" placeholder into a live page, + ONE new backend route/module. (A) NEW
 server/metrics/marketing-leads-by-source.js (getMarketingLeadsBySource) + NEW route
 GET /api/marketing/leads-by-source (requireAuth, 10-min cache) on the `marketing` router — ONE union query

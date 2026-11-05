@@ -39,7 +39,7 @@ Cloud Run.
   apply).** `renderMarketingSidebar(active)` in `app.js` now renders a HORIZONTAL sub-tab bar into
   `#marketingNav` (not a vertical list): **8 primary tabs inline** — `marketing.html` (Overview,
   **rebuilt to a sample-data layout mockup**), plus **7 primary sub-tab pages**
-  `leads_bookings.html` (Leads & Bookings — **now LIVE, see its own paragraph below**), `spend_roi.html` (Spend & ROI), `content_social.html`
+  `leads_bookings.html` (Leads & Bookings — **now LIVE, see its own paragraph below**), `spend_roi.html` (Spend & ROI — **now LIVE, see its own paragraph below**), `content_social.html`
   (Content & Social), `email_partners.html` (Email & Partners), `website_search.html`
   (Website & Search), `nurture_events.html` (Nurture & Events), `monthly_log.html` (Monthly Log) —
   followed by a **"More ▾" DROPDOWN** holding the 7 existing live tools (ROI, ROAS, Ad Platforms,
@@ -88,6 +88,35 @@ Cloud Run.
   chip. **Responsive** (brief item #3): `.lb-lower` grid collapses to one column < 860px, the table scrolls
   (`.lb-table-wrap`), the segmented toggle wraps, charts flex. **No `app.js` change** (stays `?v=10`).
   Server + frontend change → needs a **Cloud Run redeploy**.
+  **Spend & ROI page (`spend_roi.html` = Marketing sub-tab "Spend & ROI", now LIVE as of 2026-11-05):**
+  a self-rendering page (`initPage('marketing')` with no renderFn + `renderMarketingSidebar('spend-roi')` +
+  its own `fetchJSON`) that does **NOT** call `renderMarketingHead()` (it's live — has its own `.sr-head`).
+  Same bespoke inline visual layer as `leads_bookings.html`/ROAS (page-local `--mkt-*` tokens, card/KPI
+  hover, gradient-active `.segmented`, full-width `.content`). Top: the **standard `#fySeg` FY toggle**
+  (All years + FY22–FY27, default FY27), same placement as the Overview. **Three live pieces:**
+  (1) **5 KPI cards** — **SAME DB sources as `roi.html`** (brief item #4): fed by **`GET /api/marketing/roi`**
+  + **`GET /api/marketing/overview`** (enquiry count only). **Marketing spend** = `row.totalSpend`;
+  **Net return** = `marketingRevenue − spend`; **Marketing ROI** = **net ROI %** `(mRev÷spend − 1)` (the
+  SAME definition as roi.html's "Net ROI" — the sub-line shows "Return on spend ×"; **deliberately NOT** the
+  design mock's gross "218% / incl. influenced 260%" — there's no live "influenced" figure); **Marketing
+  CAC** = `spend ÷ dealsWon`; **Cost per enquiry** = `spend ÷ enquiries`. All FY-aware, hand-built (so each
+  carries its own vs-prior-FY delta), re-rendered on the `#fySeg` toggle. (2) **"Spend by type"** horizontal
+  bar — the **`type` series of `GET /api/marketing/channel-summary`** (the **SAME buckets + DB source** as
+  roi.html's Channel Summary "By type" — Wages/Digital Ads/Agency/Software/Tools/Printed Collaterals; brief
+  item #5), **summed over the selected FY's calendar months** via a page-local `channelMonthFyEnd()`
+  (`'Mon-YYYY'` → AU FY-end). (3) **"Channel results"** table — **ONLY the two `channel_list` channels**
+  (brief item #6), full design columns (Channel / Spend / Enquiries / Cost-per-enquiry / Bookings / Revenue /
+  ROAS total / ROAS ads), from a **NEW endpoint `GET /api/marketing/channel-results`** →
+  **`server/metrics/marketing-channel-results.js`** (`getMarketingChannelResults`, requireAuth, cached 10 min):
+  returns the two channels **per FY** (+ an all-years `total` + `defaultFy`). **Paid (Google, Bing, Agency)**
+  reuses the canonical **ROAS metric `getRoas()`** (`server/metrics/roas.js`) — Spend = **All-in cost**
+  (Google Xero + Bing + Simple Digital/agency), Enquiries = `leads` (won+lost+open), Bookings = `won`,
+  Revenue = `wonRevenue`, ROAS total/ads = `roasAllin`/`roasGoogle`. **Executive X** = `public.exec_x_revenue`
+  — Bookings = count of engagements (one row/client), Revenue = `sum(revenue)`; **spend/enquiries/ROAS are not
+  tracked → `null`, shown "—"**. Cost-per-enquiry is derived client-side (`spend ÷ enquiries`). **Responsive**
+  (brief item #3): `.kpi-grid` auto-fits/wraps, `.sr-lower` grid collapses to one column < 900px, the table
+  scrolls (`.sr-table-wrap`, `min-width:620px`), the segmented toggle wraps. **No `app.js` change** (stays
+  `?v=10`). Server + frontend change → needs a **Cloud Run redeploy**.
   **DESIGN GUIDE (as of 2026-11-05):** `DESIGN_GUIDE.md` (repo root) is the dev-facing styling
   standard for the whole dashboard — **`public/roas.html` is the reference**. It codifies the color
   tokens (+ page-local `--x-accent`/`--x-shadow` pattern), typography, the **horizontal segmented
