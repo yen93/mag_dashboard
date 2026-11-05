@@ -1,0 +1,35 @@
+**design_and_structure:**
+"C:\Users\Cloverly\Downloads\Screenshot 2026-11-05 135608.png"
+
+**google_cpc_leads_query:**
+select * from ga4_ac_contact_source 
+where medium ilike '%cpc%'
+and source = 'google'
+
+**bing_cpc_leads_query:**
+select * from ga4_ac_contact_source 
+where medium ilike '%cpc%'
+and source = 'bing'
+
+**tailor_leads_query:**
+select * from ac_indirect_deals
+where is_tailor = true
+
+**bureau_leads_query:**
+select * from ac_indirect_deals
+where is_tailor = false
+
+**source_list:**
+Google (google_cpc_leads_query)
+Bing (bing_cpc_leads_query)
+Organic (ga4_ac_contact_source where medium = 'organic')
+Tailor (tailor_leads_query)
+Bureau (bureau_leads_query)
+
+## main_task: update leads_bookings.html tab
+1. create the cards, graph, and table in the design_and_structure. 
+2. add the same per fy toggle filter on top (same placement as in marketing.html). 
+3. fix responsiveness of tab.
+4. “Enquiries by source” graph and By source table should only show source_list
+5. “Form enquiries” card to be called just “Enquiries” and should be the same as the “Keynote enquiries” card in marketing.html
+6. “Demos booked (Calendly)” card to be called just “Events Booked” and show same data as the “Keynote bookings” card in marketing.html

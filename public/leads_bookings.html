@@ -6,6 +6,89 @@
   <title>Leads &amp; Bookings — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    /* ============================================================
+       Leads & Bookings — bespoke visual layer, following
+       DESIGN_GUIDE.md (ROAS/Overview as reference). Scoped inline.
+       LIVE data (not a sample mockup).
+       ============================================================ */
+    :root {
+      --mkt-accent: var(--accent);
+      --mkt-accent-2: #6a4bf5;
+      --mkt-accent-soft: #eef2fe;
+      --mkt-shadow:      0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --mkt-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+    }
+    html[data-theme='dark'] {
+      --mkt-accent-2: #9b7dff;
+      --mkt-accent-soft: #1b2440;
+      --mkt-shadow:      0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --mkt-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+    }
+
+    /* Full-width layout (match Overview) */
+    .content { max-width: none; }
+    #marketingNav { max-width: none; }
+
+    /* Page head */
+    .lb-head { margin: 0 0 16px; }
+    .lb-head h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -.01em; }
+    .lb-head p { margin: 0; color: var(--text-muted); font-size: 14px; }
+
+    /* Cards */
+    .card { border-radius: 16px; box-shadow: var(--mkt-shadow);
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease; }
+    .card-head h3 {
+      font-size: 15px; font-weight: 700; letter-spacing: -.01em;
+      display: inline-flex; align-items: center; gap: 10px;
+    }
+    .card-head h3::before {
+      content: ""; width: 4px; height: 17px; border-radius: 3px; flex: none;
+      background: linear-gradient(var(--mkt-accent), var(--mkt-accent-2));
+    }
+    .chart-cap { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+
+    /* Controls bar + segmented toggle (DESIGN_GUIDE §4) */
+    .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: linear-gradient(135deg, var(--mkt-accent), var(--mkt-accent-2));
+      color: #fff;
+      box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
+    }
+
+    /* Lower section: table (left) + stacked cards (right) */
+    .lb-lower { display: grid; grid-template-columns: 1.15fr .85fr; gap: 16px; align-items: start; margin-top: 16px; }
+    .lb-cards { display: flex; flex-direction: column; gap: 16px; }
+    @media (max-width: 860px) { .lb-lower { grid-template-columns: 1fr; } }
+
+    .lb-card { transition: transform .2s ease, box-shadow .2s ease; }
+    .lb-card:hover { transform: translateY(-3px); box-shadow: var(--mkt-shadow-lift); }
+    .lb-card .label-sm { font-size: 13px; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    .lb-card .big { font-size: 30px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 10px 0 4px; }
+    .lb-card .notes { font-size: 13px; line-height: 1.55; margin-top: 8px; color: var(--text-muted); }
+
+    .delta { font-size: 12px; font-weight: 600; }
+    .delta.pos { color: var(--pos); }
+    .delta.neg { color: var(--neg); }
+    .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
+    .kpi-info:hover, .kpi-info:focus { color: var(--mkt-accent); outline: none; }
+
+    /* By-source table */
+    .lb-table-wrap { overflow-x: auto; }
+    table.lb-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 360px; }
+    table.lb-table th, table.lb-table td { padding: 9px 10px; text-align: right; white-space: nowrap; }
+    table.lb-table th:first-child, table.lb-table td:first-child { text-align: left; }
+    table.lb-table thead th { font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-muted); border-bottom: 1px solid var(--border); }
+    table.lb-table tbody td { border-bottom: 1px solid var(--border); font-variant-numeric: tabular-nums; }
+    table.lb-table tbody tr:last-child td { border-bottom: none; }
+    table.lb-table .src-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 8px; vertical-align: baseline; }
+    table.lb-table tfoot td { padding: 10px; font-weight: 700; border-top: 2px solid var(--border); font-variant-numeric: tabular-nums; }
+    table.lb-table tfoot td:first-child { text-align: left; }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -25,20 +108,290 @@
 
   <div class="marketing-layout">
     <nav class="subtabs" id="marketingNav"></nav>
+
     <main class="content">
-      <h1 style="margin:0 0 6px;font-size:24px">Leads &amp; Bookings</h1>
-      <p class="muted" style="margin:0 0 22px;font-size:14px">Part of the new Marketing layout.</p>
+      <div class="lb-head">
+        <h1>Leads &amp; Bookings</h1>
+        <p>Where enquiries come from, and how many become bookings — by source.</p>
+      </div>
+
+      <!-- Controls bar (same FY toggle + placement as marketing.html) -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="mkt-controls">
+          <span class="ctl-label">Financial year</span>
+          <div class="segmented" id="fySeg">
+            <button data-fy="all">All years</button>
+            <button data-fy="fy22">FY22</button>
+            <button data-fy="fy23">FY23</button>
+            <button data-fy="fy24">FY24</button>
+            <button data-fy="fy25">FY25</button>
+            <button data-fy="fy26">FY26</button>
+            <button class="active" data-fy="fy27">FY27</button>
+          </div>
+          <div class="spacer" style="flex:1"></div>
+          <span class="muted" style="font-size:13px">Australian FY (Jul–Jun)</span>
+        </div>
+      </div>
+
+      <!-- Enquiries by source (stacked bar, per month) -->
       <div class="card">
-        <div class="needs-setup"><strong>Coming soon</strong><span>This tab is a placeholder — its content will be added here.</span></div>
+        <div class="card-head" style="display:block;margin-bottom:10px">
+          <h3>Enquiries by source</h3>
+          <div class="chart-cap" id="chartCap">Enquiries per month, stacked</div>
+        </div>
+        <div class="chart-box"><canvas id="sourceCanvas"></canvas></div>
+      </div>
+
+      <!-- By source table (left) + summary cards (right) -->
+      <div class="lb-lower">
+        <div class="card">
+          <div class="card-head" style="display:block;margin-bottom:10px">
+            <h3>By source</h3>
+            <div class="chart-cap" id="tableCap">This period</div>
+          </div>
+          <div class="lb-table-wrap">
+            <table class="lb-table">
+              <thead>
+                <tr><th>Source</th><th>Enquiries</th><th>Bookings</th><th>Rate</th></tr>
+              </thead>
+              <tbody id="sourceTableBody"></tbody>
+              <tfoot id="sourceTableFoot"></tfoot>
+            </table>
+          </div>
+        </div>
+
+        <div class="lb-cards">
+          <div class="card lb-card">
+            <div class="label-sm" id="bookLabel">Events Booked</div>
+            <div class="big" id="bookValue">…</div>
+            <div id="bookDelta"></div>
+          </div>
+          <div class="card lb-card">
+            <div class="label-sm" id="enqLabel">Enquiries</div>
+            <div class="big" id="enqValue">…</div>
+            <div id="enqDelta"></div>
+          </div>
+          <!-- <div class="card lb-card">
+            <div class="label-sm">Phone enquiries</div>
+            <div class="big"><span class="chip partial">Not tracked yet</span></div>
+            <div class="notes">Waiting on Done Digital to add the phone-click tag</div>
+          </div> -->
+        </div>
       </div>
     </main>
   </div>
 
+  <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=10"></script>
   <script>
+    /* Leads & Bookings — LIVE.
+       • "Enquiries by source" chart + "By source" table  ← GET /api/marketing/leads-by-source
+         (five fixed sources: Google/Bing cpc, Organic, Tailor, Bureau; booking = won deal).
+       • "Events Booked" + "Enquiries" cards              ← GET /api/marketing/overview
+         (the SAME figures as marketing.html's "Keynote bookings" / "Keynote enquiries").
+       All FY-aware via the #fySeg toggle (AU FY, END-year). */
+
+    // Fixed source order + colours (stacked chart + table dots).
+    var SOURCES = ['Google', 'Bing', 'Organic', 'Tailor', 'Bureau'];
+    var SRC_COLOR = { Google: '#3b6ef0', Bing: '#14a0c4', Organic: '#17a673', Tailor: '#d9663a', Bureau: '#6a4bf5' };
+
+    // ----- FY helpers (mirror marketing.html) -----
+    function selFyKey() {
+      var b = document.querySelector('#fySeg button.active');
+      return b ? b.getAttribute('data-fy') : 'fy27';
+    }
+    function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
+    function fyName(key) { return key === 'all' ? 'All years' : key.toUpperCase(); }
+    function infoSpan(text) {
+      return ' <span class="kpi-info" tabindex="0" role="img" aria-label="' + esc(text) + '" title="' + esc(text) + '">ⓘ</span>';
+    }
+
+    // =====================================================================
+    //  By-source data (chart + table)
+    // =====================================================================
+    var BYSRC = { rows: [], loaded: false };   // rows: [{source, month, fyEnd, enquiries, bookings}]
+
+    function loadBySource() {
+      fetchJSON('/api/marketing/leads-by-source').then(function (d) {
+        BYSRC.rows = (d && d.data) || [];
+        if (d && d.sources && d.sources.length) SOURCES = d.sources;
+        BYSRC.loaded = true;
+        renderSourceTable();
+        try { renderSourceChart(); } catch (e) { console.error('source chart', e); }
+      }).catch(function (err) {
+        console.error('leads-by-source', err);
+        BYSRC.loaded = true; renderSourceTable();
+      });
+    }
+
+    // Rows for the current FY selection.
+    function currentSrcRows() {
+      var key = selFyKey();
+      if (key === 'all') return BYSRC.rows;
+      var fyEnd = fyEndOf(key);
+      return BYSRC.rows.filter(function (r) { return r.fyEnd === fyEnd; });
+    }
+
+    // ----- By source table -----
+    function renderSourceTable() {
+      var body = document.getElementById('sourceTableBody');
+      var foot = document.getElementById('sourceTableFoot');
+      var cap = document.getElementById('tableCap');
+      if (cap) cap.textContent = 'This period · ' + fyName(selFyKey());
+      if (!body) return;
+      if (!BYSRC.loaded) { body.innerHTML = '<tr><td colspan="4" class="muted">Loading…</td></tr>'; foot.innerHTML = ''; return; }
+
+      var rows = currentSrcRows();
+      var totals = {};
+      SOURCES.forEach(function (s) { totals[s] = { enq: 0, book: 0 }; });
+      rows.forEach(function (r) {
+        if (!totals[r.source]) totals[r.source] = { enq: 0, book: 0 };
+        totals[r.source].enq += r.enquiries; totals[r.source].book += r.bookings;
+      });
+      function rateCell(enq, book) {
+        if (!enq) return '—';
+        return Math.round(book / enq * 100) + '%';
+      }
+      body.innerHTML = SOURCES.map(function (s) {
+        var t = totals[s] || { enq: 0, book: 0 };
+        var dot = '<span class="src-dot" style="background:' + (SRC_COLOR[s] || '#9aa4b2') + '"></span>';
+        return '<tr><td>' + dot + esc(s) + '</td><td>' + t.enq + '</td><td>' + t.book + '</td><td>' + rateCell(t.enq, t.book) + '</td></tr>';
+      }).join('');
+      var gEnq = 0, gBook = 0;
+      SOURCES.forEach(function (s) { gEnq += totals[s].enq; gBook += totals[s].book; });
+      foot.innerHTML = '<tr><td>Total</td><td>' + gEnq + '</td><td>' + gBook + '</td><td>' + rateCell(gEnq, gBook) + '</td></tr>';
+    }
+
+    // ----- Enquiries-by-source stacked chart (per month) -----
+    var _srcChart = null;
+    function renderSourceChart() {
+      var el = document.getElementById('sourceCanvas');
+      if (!el) return;
+      var cap = document.getElementById('chartCap');
+      if (cap) cap.textContent = 'Enquiries per month, stacked · ' + fyName(selFyKey());
+      var rows = currentSrcRows();
+      // Ordered unique month axis.
+      var months = Array.from(new Set(rows.map(function (r) { return r.month; }))).sort();
+      // source -> month -> enquiries
+      var lookup = {};
+      rows.forEach(function (r) {
+        (lookup[r.source] = lookup[r.source] || {})[r.month] = (lookup[r.source][r.month] || 0) + r.enquiries;
+      });
+      var tc = themeColors();
+      var datasets = SOURCES.map(function (s) {
+        return {
+          label: s,
+          data: months.map(function (m) { return (lookup[s] && lookup[s][m]) || 0; }),
+          backgroundColor: SRC_COLOR[s] || '#9aa4b2',
+          borderRadius: 3, maxBarThickness: 40,
+        };
+      });
+      if (_srcChart) _srcChart.destroy();
+      _srcChart = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: { labels: months.map(function (m) { return monthLabel(m); }), datasets: datasets },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
+            y: { stacked: true, beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 } },
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { color: tc.text, usePointStyle: true, pointStyle: 'rect', boxWidth: 10, padding: 14 } },
+          },
+        },
+      });
+    }
+
+    // =====================================================================
+    //  Summary cards — SAME data as marketing.html "Keynote enquiries" /
+    //  "Keynote bookings" (GET /api/marketing/overview; deduped two-source set).
+    // =====================================================================
+    var ENQ = { byFy: {}, total: null, loaded: false };       // all deals (enquiries)
+    var BOOKINGS = { byFy: {}, total: null, loaded: false };   // won deals (bookings)
+
+    function rowFor(state, key) {
+      if (key === 'all') return state.total;
+      return state.byFy[fyEndOf(key)] || { ads: 0, indirect: 0, total: 0 };
+    }
+    // cfg: { state, valueEl, deltaEl, labelEl, title, loadedInfo(fyName,r) }
+    function paintCard(cfg) {
+      var key = selFyKey();
+      var fName = fyName(key).toLowerCase() === 'all years' ? 'all years' : key.toUpperCase();
+      var valEl = document.getElementById(cfg.valueEl);
+      var dEl = document.getElementById(cfg.deltaEl);
+      var lEl = document.getElementById(cfg.labelEl);
+      if (!valEl) return;
+      if (!cfg.state.loaded) { valEl.textContent = '…'; if (dEl) dEl.innerHTML = ''; return; }
+      var r = rowFor(cfg.state, key);
+      valEl.textContent = r ? String(r.total) : '—';
+      var info = r ? cfg.loadedInfo(fName, r) : cfg.title;
+      if (lEl) lEl.innerHTML = cfg.title + infoSpan(info);
+      var deltaHtml = '';
+      if (r && key !== 'all') {
+        var prev = cfg.state.byFy[fyEndOf(key) - 1];
+        if (prev) {
+          var d = r.total - prev.total;
+          var cls = d >= 0 ? 'pos' : 'neg';
+          var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
+          deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(d) +
+            ' vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
+        }
+      }
+      if (dEl) dEl.innerHTML = deltaHtml;
+    }
+    function renderCards() {
+      paintCard({
+        state: BOOKINGS, valueEl: 'bookValue', deltaEl: 'bookDelta', labelEl: 'bookLabel', title: 'Events Booked',
+        loadedInfo: function (fName, r) {
+          return 'Won deals created in ' + fName + ' across two sources — Ads ' + r.ads + ', Indirect ' + r.indirect +
+            ' (deduped by deal). Same figure as marketing.html "Keynote bookings".';
+        },
+      });
+      paintCard({
+        state: ENQ, valueEl: 'enqValue', deltaEl: 'enqDelta', labelEl: 'enqLabel', title: 'Enquiries',
+        loadedInfo: function (fName, r) {
+          return 'Deals created in ' + fName + ' across two sources — Ads ' + r.ads + ', Indirect ' + r.indirect +
+            ' (deduped by deal). Same figure as marketing.html "Keynote enquiries".';
+        },
+      });
+    }
+    function loadOverview() {
+      fetchJSON('/api/marketing/overview').then(function (d) {
+        var e = d && d.enquiries, b = d && d.bookings;
+        if (e) { (e.byFy || []).forEach(function (r) { ENQ.byFy[r.fyEnd] = r; }); ENQ.total = e.total; }
+        if (b) { (b.byFy || []).forEach(function (r) { BOOKINGS.byFy[r.fyEnd] = r; }); BOOKINGS.total = b.total; }
+        ENQ.loaded = BOOKINGS.loaded = true;
+        renderCards();
+      }).catch(function (err) { console.error('overview', err); ENQ.loaded = BOOKINGS.loaded = true; renderCards(); });
+    }
+
+    // ----- Segmented toggle -----
+    function wireSeg(id, onChange) {
+      var seg = document.getElementById(id);
+      if (!seg) return;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (onChange) onChange();
+        });
+      });
+    }
+
     initPage('marketing');
-    renderMarketingHead();
     renderMarketingSidebar('leads-bookings');
+    renderSourceTable();   // initial (shows Loading…)
+    renderCards();         // initial (shows …)
+    loadBySource();
+    loadOverview();
+    wireSeg('fySeg', function () {
+      renderSourceTable();
+      renderCards();
+      try { renderSourceChart(); } catch (e) { console.error('chart', e); }
+    });
+    window.onThemeChange = function () { try { renderSourceChart(); } catch (e) {} };
   </script>
 </body>
 </html>

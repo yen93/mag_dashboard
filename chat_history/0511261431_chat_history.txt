@@ -1,0 +1,124 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Built out the Marketing → "Leads & Bookings" tab
+(public/leads_bookings.html) from a blank placeholder into a LIVE page — a new
+"Enquiries by source" stacked bar chart, a "By source" enquiries/bookings/rate
+table (both over five fixed sources: Google/Bing cpc, Organic, Tailor, Bureau),
+a shared per-FY toggle, and two summary cards ("Events Booked" / "Enquiries")
+reusing the same /api/marketing/overview figures as the marketing.html keynote
+cards. Added a new backend route + metrics module. Needs a Cloud Run redeploy.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret, token, or connection string was pasted
+into this chat. Supabase was queried via the read-only MCP tool against project
+ref aivitcomiywiysrfwqxt (a non-secret identifier); no credentials were involved.
+
+--------------------------------------------------------------------------------
+USER:
+(Opened public/leads_bookings.html in the IDE and pointed at a prompt file,
+prompts/051126_marketing_leads_and_bookings.txt.) The prompt supplied:
+  • A reference screenshot (Downloads/Screenshot 2026-11-05 135608.png) showing
+    an "Enquiries by source" stacked bar chart, a "By source" table
+    (Source / Enquiries / Bookings / Rate), and three stacked cards
+    (Demos booked (Calendly), Form enquiries, Phone enquiries "Not tracked yet").
+  • Exact SQL for five sources:
+      Google  = ga4_ac_contact_source WHERE medium ILIKE '%cpc%' AND source='google'
+      Bing    = ga4_ac_contact_source WHERE medium ILIKE '%cpc%' AND source='bing'
+      Organic = ga4_ac_contact_source WHERE medium='organic'
+      Tailor  = ac_indirect_deals WHERE is_tailor=true
+      Bureau  = ac_indirect_deals WHERE is_tailor=false
+  • main_task for leads_bookings.html:
+      1. create the cards, graph, and table in the design.
+      2. add the same per-FY toggle filter on top (same placement as marketing.html).
+      3. fix responsiveness of tab.
+      4. graph + "By source" table only show the five sources above.
+      5. "Form enquiries" card → rename "Enquiries", same as marketing.html
+         "Keynote enquiries" card.
+      6. "Demos booked (Calendly)" card → rename "Events Booked", same data as
+         marketing.html "Keynote bookings" card.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the prompt file, the reference screenshot, the current placeholder
+leads_bookings.html, and marketing.html (the live reference for the FY toggle,
+the KPI card machinery, and the bespoke inline visual layer). Inspected the
+backend: marketing-overview.js (the two-source deduped enquiries/bookings model)
+and the marketing router registrations in server/index.js.
+
+Investigated the two source tables via the Supabase MCP (read-only):
+  • Confirmed column sets for ga4_ac_contact_source (has source/medium/channel/
+    deal_status/cdate/fy) and ac_indirect_deals (has is_tailor/status/cdate/fy).
+  • Confirmed booking semantics: ga4 deal_status='won'; ac_indirect_deals
+    status=1 (Won) vs 0 (Open) / 2 (Lost).
+  • Ran the five source queries per FY and per month to sanity-check volumes —
+    data is real but sparse for the ga4-sourced rows (Google/Bing/Organic mostly
+    recent months), so earlier FYs are dominated by Bureau/Tailor. Flagged this
+    to the user as expected behaviour of the exact queries, not a bug.
+
+Backend (new, live):
+  • Created server/metrics/marketing-leads-by-source.js — one UNION ALL query
+    over the five sources, returning per-source-per-month
+    { source, month, fyEnd, enquiries, bookings }. Booking = won deal. Month and
+    AU FY (END-year, Jul–Jun) both derived from cdate (matching Overview/ROI).
+    Exports LEAD_SOURCES = ['Google','Bing','Organic','Tailor','Bureau'].
+    Has a notConfigured()-style pending fallback when Supabase isn't set.
+  • server/index.js — imported getMarketingLeadsBySource and registered
+    GET /api/marketing/leads-by-source (requireAuth + 10-min cache, same pattern
+    as /overview, /roi, /ad-platforms, /channel-summary).
+  • Validated the full query (month + fyEnd + enquiries + bookings) directly
+    against Supabase — clean FY27 rows (e.g. Oct: Bureau 5/1, Bing 1/0,
+    Organic 1/0, Tailor 2/0).
+  • node --check passed on both the new module and server/index.js.
+
+Frontend (public/leads_bookings.html — rebuilt from the "Coming soon" placeholder):
+  • Reused marketing.html's inline visual layer (page-local --mkt-* tokens,
+    card/segmented styling, delta/kpi-info classes), full-width content.
+  • Top: a page head ("Leads & Bookings" + framing line) and a controls card with
+    the SAME #fySeg segmented FY toggle (All years + FY22–FY27, default FY27) in
+    the same top placement as marketing.html.
+  • Full-width "Enquiries by source" card — a Chart.js STACKED bar chart, one
+    dataset per source (fixed order + colours: Google blue, Bing cyan, Organic
+    green, Tailor orange, Bureau purple), x-axis = months of the selected FY via
+    monthLabel(); dynamic caption.
+  • A ".lb-lower" grid (1.15fr / .85fr, collapses to one column < 860px):
+      - Left: "By source" table (Source / Enquiries / Bookings / Rate per source,
+        with a coloured dot, plus a Total footer row; Rate = bookings÷enquiries).
+      - Right: three stacked cards —
+          * "Events Booked"  (was Demos booked) — live FY-aware, renders the EXACT
+            "Keynote bookings" total from /api/marketing/overview (bookings state),
+            with ⓘ breakdown (Ads/Indirect) + vs-prior-FY delta.
+          * "Enquiries" (was Form enquiries) — live FY-aware, the EXACT "Keynote
+            enquiries" total from the same endpoint.
+          * "Phone enquiries" — amber "Not tracked yet" chip (chip partial) +
+            "Waiting on Done Digital to add the phone-click tag".
+  • Data wiring: loadBySource() → /api/marketing/leads-by-source (drives chart +
+    table, filtered client-side to the selected FY); loadOverview() →
+    /api/marketing/overview (drives the two cards). Everything re-renders on FY
+    change via wireSeg(); charts recolour on theme change.
+  • Responsiveness (task #3): lower grid collapses at 860px, table scrolls
+    horizontally (.lb-table-wrap), the segmented control wraps, charts flex to
+    width (maintainAspectRatio:false + fixed .chart-box height).
+
+Deliberate choice: since this tab is now LIVE, did NOT call renderMarketingHead()
+(it would stamp the misleading amber "Sample data — layout only" badge) — gave
+the page its own live header instead. No app.js change, so no ?v= bump
+(stays app.js?v=10).
+
+Closed by telling the user the work needs a manual Cloud Run redeploy (new route
++ metrics module + the rebuilt page) and did not deploy (per project rule — Claude
+never deploys the dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (save the chat, update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four /dcp steps: wrote this chat-history file; updated as_built.txt and
+CLAUDE.md to record the new /api/marketing/leads-by-source route, its metrics
+module, and the now-live leads_bookings.html page; confirmed .gitignore already
+covers all sensitive patterns (left as-is). Did NOT run any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================

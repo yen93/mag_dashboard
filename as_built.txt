@@ -1,6 +1,24 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-05 (MARKETING OVERVIEW — REST OF THE CARDS/CHARTS MADE LIVE + A NEW "LIVE AI
+Last updated: 2026-11-05 (MARKETING "LEADS & BOOKINGS" TAB BUILT OUT + MADE LIVE — public/leads_bookings.html
+rebuilt from the "Coming soon" placeholder into a live page, + ONE new backend route/module. (A) NEW
+server/metrics/marketing-leads-by-source.js (getMarketingLeadsBySource) + NEW route
+GET /api/marketing/leads-by-source (requireAuth, 10-min cache) on the `marketing` router — ONE union query
+over FIVE fixed sources returning per-source-per-month { source, month, fyEnd, enquiries, bookings }:
+Google = ga4_ac_contact_source medium ILIKE '%cpc%' AND source='google'; Bing = same, source='bing';
+Organic = ga4_ac_contact_source medium='organic'; Tailor = ac_indirect_deals is_tailor=true; Bureau =
+ac_indirect_deals is_tailor=false. Booking = won deal (ga4 deal_status='won' / ac_indirect_deals status=1);
+month + AU FY (END-year) from cdate. Exports LEAD_SOURCES=['Google','Bing','Organic','Tailor','Bureau'].
+(B) public/leads_bookings.html rebuilt (marketing.html's inline visual layer reused, full-width): the SAME
+#fySeg FY toggle (All years + FY22–FY27, default FY27) in the same top placement; a full-width "Enquiries by
+source" Chart.js STACKED bar chart (one dataset/source, months of the selected FY); a ".lb-lower" grid
+(collapses < 860px) with a "By source" table (Source/Enquiries/Bookings/Rate + Total row) on the left and
+three cards on the right — "Events Booked" (was Demos booked/Calendly) + "Enquiries" (was Form enquiries),
+both FY-aware and reading the EXACT "Keynote bookings"/"Keynote enquiries" totals from
+/api/marketing/overview, plus "Phone enquiries" = amber "Not tracked yet" chip. Chart + table show ONLY the
+five sources. Did NOT call renderMarketingHead() (would stamp the misleading "Sample data — layout only"
+badge) — the page has its own live header. No app.js change (stays app.js?v=10). NEEDS a manual Cloud Run
+redeploy (new route + module + the rebuilt page). Previously same day 2026-11-05 (MARKETING OVERVIEW — REST OF THE CARDS/CHARTS MADE LIVE + A NEW "LIVE AI
 INSIGHT" CARD. public/marketing.html, all frontend except one new backend route/module. The Overview is
 now fully live: (KPI cards) all six computed client-side — Keynote enquiries + Keynote bookings
 (/api/marketing/overview), Enquiry→booking rate (bookings÷enquiries), Marketing revenue + Marketing

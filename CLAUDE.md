@@ -38,8 +38,8 @@ Cloud Run.
   "Marketing left sidebar" description below for NAVIGATION — the backend/page details below still
   apply).** `renderMarketingSidebar(active)` in `app.js` now renders a HORIZONTAL sub-tab bar into
   `#marketingNav` (not a vertical list): **8 primary tabs inline** — `marketing.html` (Overview,
-  **rebuilt to a sample-data layout mockup**), plus **7 NEW BLANK placeholder pages**
-  `leads_bookings.html` (Leads & Bookings), `spend_roi.html` (Spend & ROI), `content_social.html`
+  **rebuilt to a sample-data layout mockup**), plus **7 primary sub-tab pages**
+  `leads_bookings.html` (Leads & Bookings — **now LIVE, see its own paragraph below**), `spend_roi.html` (Spend & ROI), `content_social.html`
   (Content & Social), `email_partners.html` (Email & Partners), `website_search.html`
   (Website & Search), `nurture_events.html` (Nurture & Events), `monthly_log.html` (Monthly Log) —
   followed by a **"More ▾" DROPDOWN** holding the 7 existing live tools (ROI, ROAS, Ad Platforms,
@@ -58,9 +58,36 @@ Cloud Run.
   + the 7 new sub-tabs, so the head shows on all primary sub-tabs — but **NOT** on the live More tools
   (the sample badge would mislead there; they keep their own headers). **The Overview + the 7 new
   pages are LAYOUT-ONLY with hardcoded sample data** (no API calls; `initPage('marketing')` with no
-  renderFn; charts drawn inline with Chart.js). The 15 Marketing pages were bumped to **`app.js?v=10`**
+  renderFn; charts drawn inline with Chart.js) — **EXCEPT `leads_bookings.html`, now LIVE (its own
+  paragraph below)**. The 15 Marketing pages were bumped to **`app.js?v=10`**
   (Home/Sales/Operations and all non-Marketing pages deliberately stay `?v=9`). Frontend-only →
   needs a Cloud Run redeploy. The paragraph below still documents each live tool's backend.
+  **Leads & Bookings page (`leads_bookings.html` = Marketing sub-tab "Leads & Bookings", now LIVE as of
+  2026-11-05):** a self-rendering page (`initPage('marketing')` with no renderFn +
+  `renderMarketingSidebar('leads-bookings')` + its own `fetchJSON`) that does **NOT** call
+  `renderMarketingHead()` (it would stamp the misleading "Sample data — layout only" badge — it's live) —
+  it has its own `.lb-head` header instead. Same bespoke inline visual layer as `marketing.html`
+  (page-local `--mkt-*` tokens, `.segmented` toggle, `.delta`/`.kpi-info`). Top: the **standard `#fySeg`
+  FY toggle** (All years + FY22–FY27, default FY27), same placement as the Overview. **Two live data
+  sources:** (1) a full-width **"Enquiries by source"** Chart.js **stacked bar** chart + a **"By source"**
+  table (Source / Enquiries / Bookings / Rate + Total row) — both from **`GET /api/marketing/leads-by-source`**
+  → **`server/metrics/marketing-leads-by-source.js`** (`getMarketingLeadsBySource`, requireAuth, cached
+  10 min). That endpoint is **ONE union query over FIVE FIXED sources**, returning per-source-per-month
+  `{ source, month, fyEnd, enquiries, bookings }`: **Google** = `ga4_ac_contact_source` `medium ILIKE
+  '%cpc%' AND source='google'`; **Bing** = same, `source='bing'`; **Organic** = `ga4_ac_contact_source`
+  `medium='organic'`; **Tailor** = `ac_indirect_deals` `is_tailor=true`; **Bureau** = `ac_indirect_deals`
+  `is_tailor=false`. **Booking = WON deal** (ga4 `deal_status='won'` / `ac_indirect_deals status=1`); month
+  + AU FY (END-year) from `cdate`. Exports `LEAD_SOURCES=['Google','Bing','Organic','Tailor','Bureau']` —
+  the chart + table show **ONLY** these five (brief item #4); the client filters the rows to the selected
+  FY. **NB** the ga4-sourced rows (Google/Bing/Organic) are sparse for older FYs (GA4 ~60-day retention), so
+  earlier FYs read mostly Bureau/Tailor — expected, it's the exact queries. (2) Two summary cards —
+  **"Events Booked"** (was "Demos booked (Calendly)") + **"Enquiries"** (was "Form enquiries") — are
+  FY-aware and render the **EXACT same `total`s as `marketing.html`'s "Keynote bookings" / "Keynote
+  enquiries"** cards, from **`GET /api/marketing/overview`** (the deduped two-source set), with the same
+  ⓘ breakdown + vs-prior-FY delta. A third **"Phone enquiries"** card is an amber **"Not tracked yet"**
+  chip. **Responsive** (brief item #3): `.lb-lower` grid collapses to one column < 860px, the table scrolls
+  (`.lb-table-wrap`), the segmented toggle wraps, charts flex. **No `app.js` change** (stays `?v=10`).
+  Server + frontend change → needs a **Cloud Run redeploy**.
   **DESIGN GUIDE (as of 2026-11-05):** `DESIGN_GUIDE.md` (repo root) is the dev-facing styling
   standard for the whole dashboard — **`public/roas.html` is the reference**. It codifies the color
   tokens (+ page-local `--x-accent`/`--x-shadow` pattern), typography, the **horizontal segmented
