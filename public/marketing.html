@@ -208,9 +208,10 @@
     // ac_indirect_deals), deduped by deal — from GET /api/marketing/overview.
     //   • Enquiries = ALL deals created in the FY.
     //   • Bookings  = only WON deals created in the FY.
-    // Cards 3–5 are sample data.
+    // Card 3 ("Enquiry → booking rate") is LIVE + FY-aware too — computed
+    // client-side as bookings ÷ enquiries (both from the live state above).
+    // Cards 4–6 are sample data.
     var KPIS = [
-      { label: 'Enquiry → booking rate', value: '27%',     delta: '▲ 2 pts', info: 'Rolling 3-month conversion of keynote enquiries into bookings.' },
       { label: 'Marketing revenue',      value: '$30,500', delta: '▲ $8,000 vs Sep' },
       { label: 'Marketing spend',        value: '$9,580',  delta: '▼ $420 under budget' },
       { label: 'Marketing ROI',          value: '218%',    delta: '▲ 74 pts', info: 'Incl. influenced revenue 260%. Read quarterly.' },
@@ -281,6 +282,42 @@
         },
       });
     }
+    // Enquiry → booking rate = keynote bookings ÷ keynote enquiries, FY-aware,
+    // computed from the two live states above (same FY selection, same sources).
+    function rateCard() {
+      var key = selFyKey();
+      var fyName = key === 'all' ? 'all years' : key.toUpperCase();
+      var val = '…', deltaHtml = '';
+      var info = 'Keynote bookings ÷ keynote enquiries for the selected FY — the ' +
+        'share of created deals that are won. Both counts deduped by deal across ' +
+        'the ads + indirect sources.';
+      function rateOf(k) {
+        var e = rowFor(ENQ, k), b = rowFor(BOOKINGS, k);
+        var enq = e ? e.total : 0, book = b ? b.total : 0;
+        return enq > 0 ? { pct: book / enq * 100, enq: enq, book: book } : { pct: null, enq: enq, book: book };
+      }
+      if (ENQ.loaded && BOOKINGS.loaded) {
+        var cur = rateOf(key);
+        val = cur.pct === null ? '—' : (Math.round(cur.pct) + '%');
+        info = 'Keynote bookings ÷ keynote enquiries in ' + fyName + ' — ' + cur.book +
+          ' won ÷ ' + cur.enq + ' created' +
+          (cur.pct === null ? ' (no enquiries)' : ' = ' + cur.pct.toFixed(1) + '%') +
+          '. Both counts deduped by deal across the ads + indirect sources.';
+        if (key !== 'all' && cur.pct !== null) {
+          var prevKey = 'fy' + String(fyEndOf(key) - 1).slice(-2);
+          var prev = rateOf(prevKey);
+          if (prev.pct !== null) {
+            var d = cur.pct - prev.pct;
+            var cls = d >= 0 ? 'pos' : 'neg';
+            var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
+            deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(Math.round(d)) +
+              ' pts vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
+          }
+        }
+      }
+      return '<div class="kpi"><div class="label">Enquiry → booking rate' + infoSpan(info) + '</div>' +
+        '<div class="value">' + esc(val) + '</div>' + deltaHtml + '</div>';
+    }
     function renderMktKpis() {
       var rest = KPIS.map(function (k) {
         var ic = k.info ? infoSpan(k.info) : '';
@@ -288,7 +325,7 @@
           '<div class="value">' + esc(k.value) + '</div>' +
           '<div class="delta pos">' + k.delta + '</div></div>';
       }).join('');
-      document.getElementById('mktKpis').innerHTML = enqCard() + bookCard() + rest;
+      document.getElementById('mktKpis').innerHTML = enqCard() + bookCard() + rateCard() + rest;
     }
     function loadEnquiries() {
       fetchJSON('/api/marketing/overview').then(function (d) {

@@ -1,6 +1,18 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-05 (NEW CACHED TABLE public.ac_indirect_deals — all INDIRECT/bureau AC deals
+Last updated: 2026-11-05 (MARKETING OVERVIEW — "KEYNOTE ENQUIRIES" + "KEYNOTE BOOKINGS" CARDS REWIRED
+to the TWO sources public.ac_indirect_deals + public.roas_counted_deals. server/metrics/marketing-overview.js
+rewritten: ONE union query over ads (roas_counted_deals) + indirect (ac_indirect_deals), deduped by
+deal_id, FY from cdate (AU END-year), carrying a per-row `won` flag. Now returns BOTH { enquiries } (all
+deals) AND { bookings } (WON only: roas status='won' / ac_indirect_deals status=1), each shaped
+{ byFy:[{fyEnd,fy,ads,indirect,total}], total, meta }. The OLD four-group enquiries model (organic =
+ga4_ac_contact_source + bureau/tailor = ac_deals_ytd) is GONE. public/marketing.html: the "Keynote
+enquiries" + "Keynote bookings" cards are both LIVE + FY-aware (generic liveCard(cfg) helper + ENQ /
+BOOKINGS state; the static sample Bookings KPI removed); also fixed a hoisting name-collision bug —
+chart sample arrays `ENQ`/stayed-distinct `BOOK` vs state objects ENQ/BOOKINGS (chart array renamed to
+ENQ_SERIES). Validated enquiries per FY (deduped): FY22 65 · FY23 128 · FY24 147 · FY25 178 · FY26 137 ·
+FY27 40. Validated bookings/won per FY: FY22 33 · FY23 41 · FY24 42 · FY25 40 · FY26 21 · FY27 9. NEEDS a
+manual Cloud Run redeploy (server + frontend; no app.js bump). EARLIER SAME DAY: NEW CACHED TABLE public.ac_indirect_deals — all INDIRECT/bureau AC deals
 (Deal Source? = "Indirect (PCO/ Bureau/ Events company)") 2021→present, 559 rows; filled by the new
 ac-indirect-deals-sync edge fn (AC field-6 sweep) + daily cron; created as ac_bureau_deals and renamed
 same day; Supabase-only, no dashboard redeploy. EARLIER SAME DAY: MARKETING OVERVIEW — LIVE "KEYNOTE ENQUIRIES" CARD + DESIGN GUIDE. Three
@@ -15,7 +27,9 @@ OVERVIEW (public/marketing.html) restyled to follow DESIGN_GUIDE.md (page-local 
 tokens, card + KPI hover polish, gradient-active .segmented toggles, .kpi-info ⓘ, .mkt-take callout)
 and its PERIOD FILTER replaced with the standard FINANCIAL-YEAR segmented toggle (#fySeg: All years +
 FY22–FY27, default FY27) — the old Month/3M/6M/12M/YTD pills + the Fiscal/Calendar basis group are
-gone. (C) The first KPI card, "Keynote enquiries", is now LIVE + FY-AWARE: the count of deals CREATED
+gone. (C) [SOURCES SUPERSEDED SAME DAY — see the header: the enquiries card now counts ac_indirect_deals +
+roas_counted_deals only, and the bookings card is also live now.] The first KPI card, "Keynote
+enquiries", was made LIVE + FY-AWARE: the count of deals CREATED
 in the selected FY across the four ac_deal_groups — ads (public.roas_counted_deals) + organic search
 (public.ga4_ac_contact_source, channel~organic) + bureau + tailor (public.ac_deals_ytd
 is_bureau/is_tailor) — DEDUPED by deal, status-agnostic, FY by creation date (AU FY END-year). NEW

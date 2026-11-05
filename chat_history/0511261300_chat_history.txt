@@ -1,0 +1,114 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Make the Marketing Overview "Keynote enquiries" and "Keynote bookings"
+cards live + FY-aware, sourced from ac_indirect_deals + roas_counted_deals.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+(Task 1) supabase_sources: ac_indirect_deals table, roas_counted_deals view.
+Main task: fix the "Keynote enquiries" card in marketing.html so the enquiry count
+is based on the count of deals from those two sources in the selected FY.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the current implementation: the card was backed by GET /api/marketing/overview
+→ server/metrics/marketing-overview.js, which counted deals across FOUR groups
+(ads = roas_counted_deals, organic = ga4_ac_contact_source, bureau + tailor =
+ac_deals_ytd), deduped by deal, per AU FY (END-year, from cdate). The inline card
+logic lives in public/marketing.html (ENQ state object, enqCard/renderMktKpis/
+loadEnquiries).
+
+Inspected both requested sources via Supabase (project aivitcomiywiysrfwqxt):
+  • ac_indirect_deals — columns incl. deal_id (text), cdate (timestamptz),
+    status (int) + status_label (text), fy (text), value_aud, etc.
+  • roas_counted_deals — columns incl. deal_id (text), cdate, fy_end (int),
+    fy (text), status (text: won/open/lost), value, etc.
+
+Rewrote the ENQUIRIES_SQL to union only the two sources (ads = roas_counted_deals,
+indirect = ac_indirect_deals), FY from cdate, deduped by deal_id. Validated per-FY
+totals (ads/indirect/deduped-total): FY22 13/52/65 · FY23 23/105/128 ·
+FY24 34/113/147 · FY25 39/140/178 · FY26 23/114/137 · FY27 5/35/40. The two
+sources are effectively disjoint but count(distinct deal_id) is kept for safety.
+
+Updated server/metrics/marketing-overview.js (new SRC string, two-CTE SQL,
+byFy rows now {ads, indirect, total}, all-years roll-up). Updated the inline card
+in marketing.html (tooltip text, enqRowFor default shape, loaded-info string).
+
+Found and fixed a latent bug that would have broken the card regardless of the
+data change: the live state object `var ENQ = {...}` was being clobbered by the
+chart sample array also named `var ENQ` (hoisting → single binding). Renamed the
+chart array to ENQ_SERIES and its one use in drawCharts. Confirmed no leftover
+references to organic/bureau/tailor or the old ENQ array.
+
+Reported it as a backend + frontend change needing a manual Cloud Run redeploy
+(Claude never deploys the dashboard), no app.js version bump required.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — compose a one-line git commit command for the current changes.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked git status (public/marketing.html + server/metrics/marketing-overview.js
+modified, nothing staged). Output a single-line conventional-commit command:
+fix(marketing): base Keynote enquiries on roas_counted_deals + ac_indirect_deals
+(deduped, per FY), drop organic/bureau/tailor groups; fix ENQ chart array name
+collision.
+
+--------------------------------------------------------------------------------
+USER:
+(Task 2) Same supabase_sources. Main task: fix the "Keynote bookings" card in
+marketing.html so the booking count is based on the count of deals from the two
+sources where status is WON, in the selected FY.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked the status values in each source: roas_counted_deals.status is text
+(won/open/lost); ac_indirect_deals.status is int (0=Open, 1=Won, 2=Lost) with a
+status_label. So won = roas status='won' and indirect status=1.
+
+Validated per-FY won counts (ads/indirect/deduped): FY22 5/28/33 · FY23 8/33/41 ·
+FY24 13/29/42 · FY25 9/31/40 · FY26 7/14/21 · FY27 3/6/9.
+
+Backend: rewrote marketing-overview.js to run ONE union query carrying a per-row
+`won` flag, and return BOTH an `enquiries` section (all deals) and a new
+`bookings` section (won only), each shaped {byFy:[{fyEnd,fy,ads,indirect,total}],
+total, meta}. Won totals use count(DISTINCT deal_id) FILTER (WHERE won).
+
+Frontend (marketing.html): removed the static sample "Keynote bookings" KPI from
+the KPIS array; refactored enqCard into a generic liveCard(cfg) helper and added a
+live bookCard() backed by a new BOOKINGS state object (named distinctly from the
+chart's BOOK array to avoid the hoisting collision). loadEnquiries now populates
+both ENQ and BOOKINGS; renderMktKpis renders enquiries + bookings + the remaining
+sample cards. Both cards show a vs-prior-FY delta and an ⓘ tooltip with the
+per-source breakdown. Verified no leftover enqRowFor references and that
+BOOKINGS vs BOOK don't collide.
+
+Reported it as a backend + frontend change needing a manual Cloud Run redeploy,
+no app.js bump.
+
+--------------------------------------------------------------------------------
+USER:
+/cm (for this Keynote bookings update) — one-line git commit command.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed the same two files modified, nothing staged. Output:
+feat(marketing): make Keynote bookings card live and FY-aware, counting won deals
+from roas_counted_deals + ac_indirect_deals (deduped per FY).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history; update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps. Saved this transcript. Updated as_built.txt and CLAUDE.md
+to reflect the Marketing Overview cards now being live from the two sources, and
+confirmed .gitignore already covers all sensitive patterns. No git commands run —
+user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

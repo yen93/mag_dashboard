@@ -71,20 +71,26 @@ Cloud Run.
   follows `DESIGN_GUIDE.md` (page-local `--mkt-*` tokens, card/KPI hover polish, gradient-active
   `.segmented` toggles, `.kpi-info` ⓘ, `.mkt-take` callout). Its period filter is the **standard
   FINANCIAL-YEAR segmented toggle** (`#fySeg`: All years + FY22–FY27, default FY27) — the old
-  Month/3M/6M/12M/YTD pills + Fiscal/Calendar basis group are gone. The **first KPI card, "Keynote
-  enquiries", is LIVE + FY-aware**: the count of deals **created** in the selected FY across the four
-  **`ac_deal_groups`** — **ads** (`public.roas_counted_deals`) + **organic search**
-  (`public.ga4_ac_contact_source`, `channel ~* 'organic'`) + **bureau** + **tailor**
-  (`public.ac_deals_ytd` `is_bureau`/`is_tailor`) — **deduped by deal**, status-agnostic, FY by the
-  deal's creation date (AU END-year). Backed by **`GET /api/marketing/overview`** →
-  **`server/metrics/marketing-overview.js`** (`getMarketingOverview`, requireAuth, cached 10 min),
-  returning `{ enquiries:{ byFy:[{fyEnd,fy,ads,organic,bureau,tailor,total}], total, meta } }`; the
-  card reads it client-side and re-renders on FY change (`wireSeg` onChange), with an ⓘ tooltip
-  (per-group breakdown + sources + caveats) and a vs-prior-FY delta. **Cards 2–6 are still sample
-  data** (the Overview is otherwise a layout mockup). Per-FY totals (validated): FY22 13 · FY23 23 ·
-  FY24 34 · FY25 165 · FY26 128 · FY27 38. **Caveats:** organic reads ~0 for past FYs (GA4 ~60-day
-  window on `ga4_ac_contact_source`); bureau/tailor are 0 before FY25 (`ac_deals_ytd` cache starts
-  Jul-2024). New route + metrics module → needs a **Cloud Run redeploy**.
+  Month/3M/6M/12M/YTD pills + Fiscal/Calendar basis group are gone. The **first TWO KPI cards,
+  "Keynote enquiries" and "Keynote bookings", are LIVE + FY-aware (as of 2026-11-05)** — both the count
+  of deals **created** in the selected FY across TWO sources, **deduped by `deal_id`**, FY by the deal's
+  `cdate` (AU END-year): **ads** (`public.roas_counted_deals`) + **indirect/bureau**
+  (`public.ac_indirect_deals`). **Enquiries = ALL deals** (status-agnostic); **Bookings = WON deals
+  only** (`roas_counted_deals.status = 'won'` / `ac_indirect_deals.status = 1`). **This REPLACED the
+  old four-group enquiries model** (ads + organic `ga4_ac_contact_source` + bureau/tailor
+  `ac_deals_ytd`) — organic/bureau/tailor are **no longer read** by this card. Backed by
+  **`GET /api/marketing/overview`** → **`server/metrics/marketing-overview.js`** (`getMarketingOverview`,
+  requireAuth, cached 10 min) — **ONE** union query carrying a per-row `won` flag, now returning
+  `{ enquiries:{…}, bookings:{…} }`, each `{ byFy:[{fyEnd,fy,ads,indirect,total}], total, meta }` (won
+  totals via `count(DISTINCT deal_id) FILTER (WHERE won)`). Client-side, a generic `liveCard(cfg)` helper
+  renders both cards from `ENQ` / `BOOKINGS` state objects, re-rendering on FY change (`wireSeg` onChange),
+  each with an ⓘ tooltip (per-source breakdown) + a vs-prior-FY delta. **GOTCHA:** the chart sample array
+  that used to be `var ENQ` collided (hoisting) with the `ENQ` state object — renamed to `ENQ_SERIES`;
+  the bookings state is `BOOKINGS` (distinct from the chart's `BOOK` array), keep them distinct. **Cards
+  3–5 are still sample data** (the Overview is otherwise a layout mockup). Validated enquiries per FY
+  (deduped): FY22 65 · FY23 128 · FY24 147 · FY25 178 · FY26 137 · FY27 40. Validated bookings/won per FY:
+  FY22 33 · FY23 41 · FY24 42 · FY25 40 · FY26 21 · FY27 9. Server + frontend change (no `app.js` bump) →
+  needs a **Cloud Run redeploy**.
   **Marketing left sidebar (as of 2026-10-22; +`roi.html` 2026-10-28):** five former top
   tabs plus the new **ROI** page live UNDER Marketing, reached via a left sidebar
   (`<aside class="subnav" id="marketingNav">`) shown on **8 pages** — `marketing.html`
