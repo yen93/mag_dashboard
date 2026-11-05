@@ -675,14 +675,19 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     covers Jul-2024+). PK deal_id; cols title, deal_source, pipeline_id/name,
     stage_id, status/status_label, contact_id/name/email, account_id, organization,
     value_raw (cents), value_aud (ac_value_aud), currency, cdate, mdate, event_date,
-    cal_yr (mag_cal_yr), fy (mag_fy_label, AU FY END-year), synced_at. RLS enabled;
-    indexes on cdate/status/fy. Rebuilt atomically by RPC reload_ac_indirect_deals(
-    _ids jsonb) (refuses empty payload; delete→insert in one tx; joins the passed
-    bureau ids onto activecampaign_deals + contacts/accounts + the pipeline map).
-    NOT yet read by any server/public code (Supabase-only; no dashboard redeploy).
-    Migrations 20261105120000 (create ac_bureau_deals + rpc) → 20261105130000
-    (rename→ac_indirect_deals) + 20261105131000 (rpc body re-created vs renamed
-    table). Filled by the ac-indirect-deals-sync edge fn (see AUTOMATIONS).
+    cal_yr (mag_cal_yr), fy (mag_fy_label, AU FY END-year), is_tailor (boolean, added
+    2026-11-05 = title ILIKE '%the tailor%', 124/559 rows), synced_at. RLS enabled;
+    indexes on cdate/status/fy/is_tailor. Rebuilt by RPC reload_ac_indirect_deals(
+    _ids jsonb) — as of 2026-11-05 UPSERT-ONLY on the deal_id PK (ON CONFLICT DO
+    UPDATE; NEVER deletes/truncates, so a deal that drops out of the Indirect feed
+    keeps its last-synced row), refuses empty payload, computes is_tailor on write,
+    joins the passed indirect ids onto activecampaign_deals + contacts/accounts +
+    the pipeline map. Read by server/metrics/marketing-overview.js (deal_id/cdate/
+    status for the Keynote enquiries/bookings cards). Migrations 20261105120000
+    (create ac_bureau_deals + rpc) → 20261105130000 (rename→ac_indirect_deals) +
+    20261105131000 (rpc body re-created vs renamed table) → 20261105140000 (add
+    is_tailor col + backfill) → 20261105150000 (rpc rewritten to upsert-only).
+    Filled by the ac-indirect-deals-sync edge fn (see AUTOMATIONS).
   - public.roas_year_on_year — DEPRECATED/UNUSED as of 2026-10-20 (migration
     20261020080000, seeded 2022–2026 from the "MAG Marketing ROAS Report" sheet). It
     was the ROAS page cache when the tab mirrored that sheet; the tab now computes live
@@ -1201,8 +1206,10 @@ AUTOMATIONS / ROUTINES
   field-6 feed in ONE paginated pass: GET /api/3/dealCustomFieldMeta/6/dealCustomFieldData
   (GOTCHA: that nested feed returns its value rows under JSON key `dealCustomFieldMeta`,
   NOT `dealCustomFieldData`), keeps deals whose value starts "Indirect", then calls RPC
-  reload_ac_indirect_deals(_ids jsonb) (atomic delete→insert, joins the ids onto
-  activecampaign_deals + contacts/accounts; refuses empty payload). Modes ?dry=1 / ?sync=1
+  reload_ac_indirect_deals(_ids jsonb) (as of 2026-11-05 UPSERT-ONLY on the deal_id PK —
+  never deletes/truncates; computes is_tailor = title ILIKE '%the tailor%'; joins the ids
+  onto activecampaign_deals + contacts/accounts; refuses empty payload). The edge-fn code
+  is unchanged by the upsert switch (same RPC call) — no fn redeploy needed. Modes ?dry=1 / ?sync=1
   / bare(background). Deployed --no-verify-jwt; cron calls ?sync=1 + 120s pg_net timeout.
   Emails ALERT_EMAIL on failure. Secrets reused from the other AC syncs (AC_API_URL/
   AC_API_TOKEN + SUPABASE_* + GMAIL_*). Originally deployed as ac-bureau-deals-sync +
@@ -1212,7 +1219,9 @@ AUTOMATIONS / ROUTINES
   supabase/functions/ac-indirect-deals-sync/index.ts, supabase/migrations/20261105120000_
   create_ac_bureau_deals.sql, 20261105121000_schedule_ac_bureau_deals_sync.sql,
   20261105130000_rename_ac_bureau_deals_to_ac_indirect_deals.sql,
-  20261105131000_reload_ac_indirect_deals_body.sql (uncommitted).
+  20261105131000_reload_ac_indirect_deals_body.sql,
+  20261105140000_ac_indirect_deals_is_tailor.sql,
+  20261105150000_reload_ac_indirect_deals_upsert.sql (uncommitted).
 - GA4 & Ads Leads Tracking daily chain — as of 2026-10-09 driven by ONE cron job
   and ONE orchestrator edge function (was 3 staggered jobs). pg_cron job
   `contact-sources-sync-daily` ('0 22 * * *' = 06:00 PH daily) POSTs the

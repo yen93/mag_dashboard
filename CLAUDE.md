@@ -352,9 +352,16 @@ Cloud Run.
     dealCustomFieldData` in one paginated pass (**GOTCHA: that nested feed returns its
     value rows under JSON key `dealCustomFieldMeta`, NOT `dealCustomFieldData`**), keeps
     deals whose value starts "Indirect", then calls RPC **`reload_ac_indirect_deals(_ids
-    jsonb)`** (atomic delete→insert, refuses empty payload; joins the ids onto
+    jsonb)`** (**UPSERT-ONLY on the `deal_id` PK — NEVER deletes/truncates** as of
+    2026-11-05, so a deal that drops out of the Indirect feed keeps its last-synced row;
+    refuses empty payload; joins the ids onto
     `activecampaign_deals` + `activecampaign_contacts`/`activecampaign_accounts` for
     names; `value_aud` via `ac_value_aud`, `fy`/`cal_yr` via `mag_fy_label`/`mag_cal_yr`).
+    **`is_tailor` column (added 2026-11-05, migrations `20261105140000` col +
+    `20261105150000` rpc-upsert):** `boolean`, set `= (title ILIKE '%the tailor%')` on
+    every upsert (124/559 rows today). The edge-fn code is unchanged by the upsert switch
+    (it calls the same RPC) — **the behaviour change is entirely in the RPC body, no fn
+    redeploy needed**.
     Modes `?dry=1`/`?sync=1`/bare(bg). **Supabase-only — NO server/public code reads it
     yet, so NO dashboard redeploy** (add a route/page later if a tab needs it). Created
     as `ac_bureau_deals` and **renamed same day** (migrations `20261105120000` create →

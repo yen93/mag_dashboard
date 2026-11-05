@@ -1,0 +1,100 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Add an is_tailor column to the ac_indirect_deals cache and switch its
+reload sync (RPC reload_ac_indirect_deals) from delete→insert to UPSERT-ONLY so
+it never truncates.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"update tailor_leads_query table and sync that updates the table. add column
+'is_tailor'. if title ilike '%the tailor%' then set to true. also make sure the
+sync never truncates. we only upsert."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Searched for `tailor_leads_query` everywhere it could live and found nothing:
+not in the dashboard repo, not on disk under C:/Users/Cloverly/claude_code/ or
+Antigravity/, and not in either Supabase project (MAGTestProject
+aivitcomiywiysrfwqxt or n8n-production uwsncuowtzydylfabikj). Listed all public
+tables in MAGTestProject — no such table. The closest existing objects were
+`ac_deals_ytd` (which already carries is_bureau/is_tailor booleans) and
+`ac_indirect_deals` (the indirect/bureau deal cache built earlier today, filled
+by the ac-indirect-deals-sync edge fn).
+
+Rather than guess, asked the user (AskUserQuestion) which object they meant —
+create new vs ac_deals_ytd vs ac_indirect_deals vs elsewhere.
+
+--------------------------------------------------------------------------------
+USER:
+"sorry i meant ac_indirect_deals table"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the current state of ac_indirect_deals:
+- Migration 20261105120000 (create as ac_bureau_deals), 20261105130000 (rename to
+  ac_indirect_deals), 20261105131000 (rpc body re-created vs renamed table).
+- Table PK is deal_id (text). The reload RPC reload_ac_indirect_deals(_ids jsonb)
+  did DELETE all rows → INSERT (joined onto activecampaign_deals + contacts +
+  accounts, with a VALUES pipeline-name map where group '7' = 'The Tailor').
+- Read the deployed edge fn ac-indirect-deals-sync source: it sweeps the AC
+  "Deal Source?" field-6 feed, keeps Indirect deal_ids, guards against an empty
+  result, and calls the RPC. The edge fn itself never truncates — the DELETE was
+  inside the RPC. So the "never truncate" change belongs in the RPC body.
+
+Checked consumers: only server/metrics/marketing-overview.js reads the table, and
+only deal_id/cdate/status — so adding a column and switching to upsert won't break
+reads. Flagged the one real consequence of upsert-only to the user: a deal that
+loses its Indirect flag in AC will now persist in the table (and keep being
+counted by Marketing Overview) instead of being removed.
+
+Implemented as two new migration files (written to disk AND applied via the
+Supabase MCP apply_migration):
+
+1. 20261105140000_ac_indirect_deals_is_tailor.sql
+   - ALTER TABLE ... ADD COLUMN is_tailor boolean not null default false
+   - Backfill: UPDATE ... SET is_tailor = (title ilike '%the tailor%')
+   - New index ac_indirect_deals_is_tailor_idx
+
+2. 20261105150000_reload_ac_indirect_deals_upsert.sql
+   - CREATE OR REPLACE reload_ac_indirect_deals: computes
+     is_tailor = (d.title ilike '%the tailor%') on write, and replaces the
+     DELETE→INSERT with INSERT ... ON CONFLICT (deal_id) DO UPDATE (every non-PK
+     column set from EXCLUDED, incl. synced_at = now()). Empty-payload guard and
+     the mirror/name/pipeline joins unchanged.
+
+Verification queries:
+- 559 total rows → 124 is_tailor=true, exactly matching the 124 title matches,
+  0 mismatches (backfill exact).
+- Called reload_ac_indirect_deals with a single existing deal id ("4429"); table
+  stayed at 559 rows (the old body would have wiped it to 1) — upsert-only /
+  never-truncates confirmed.
+
+Doc/comment cleanup (no behavior change):
+- Edited the local edge-fn source supabase/functions/ac-indirect-deals-sync/
+  index.ts — replaced the stale "delete all → insert" / "rebuilds the table"
+  comments with upsert language. Did NOT redeploy the edge fn (behavior unchanged,
+  and redeploying via MCP risks flipping verify_jwt back to true per the known
+  gotcha).
+- Updated CLAUDE.md's ac_indirect_deals paragraph: RPC is now UPSERT-ONLY (never
+  truncates), documented the is_tailor column + the two new migrations, noted no
+  fn/dashboard redeploy needed.
+
+Stated clearly: no dashboard (Cloud Run) redeploy and no edge-fn redeploy are
+needed — the change is entirely in the RPC body in Supabase; marketing-overview.js
+reads are unaffected.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill (no git): wrote this chat-history file, updated as_built.txt
+(ac_indirect_deals now notes is_tailor + upsert-only reload), confirmed CLAUDE.md
+already updated this session, and checked .gitignore. Reminded the user that dcp
+does not commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================

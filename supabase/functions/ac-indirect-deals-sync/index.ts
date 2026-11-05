@@ -5,8 +5,9 @@
 // "Deal Source?" (dealCustomFieldMeta id 6) = "Indirect (PCO/ Bureau/ Events company)".
 // That field is NOT mirrored into public.activecampaign_deals, so this function pulls
 // the field-6 values straight from the AC REST API, keeps the deal_ids flagged
-// Indirect, and hands them to public.reload_ac_indirect_deals(_ids), which rebuilds the
-// table by joining those ids back onto the local deal mirror (+ contacts/accounts).
+// Indirect, and hands them to public.reload_ac_indirect_deals(_ids), which UPSERTS
+// those ids onto the local deal mirror (+ contacts/accounts). The rpc never deletes
+// or truncates — a deal that drops out of the Indirect feed keeps its last-synced row.
 //
 // Efficient pull: one paginated sweep of /dealCustomFieldMeta/6/dealCustomFieldData
 // (all deals' Deal Source value in a single field feed) — NOT per-deal reads.
@@ -182,7 +183,7 @@ async function run(dry: boolean): Promise<Summary> {
       return summary;
     }
 
-    // 2. Atomic rebuild (delete all → insert, joined onto the mirror) in one transaction.
+    // 2. Upsert the indirect deals onto the mirror in one transaction (never truncates).
     const { data, error } = await db.rpc("reload_ac_indirect_deals", { _ids: ids });
     if (error) throw new Error(`reload_ac_indirect_deals failed: ${error.message}`);
     summary.reloaded_rows = typeof data === "number" ? data : ids.length;
