@@ -208,18 +208,37 @@
     // ac_indirect_deals), deduped by deal — from GET /api/marketing/overview.
     //   • Enquiries = ALL deals created in the FY.
     //   • Bookings  = only WON deals created in the FY.
-    // Card 3 ("Enquiry → booking rate") is LIVE + FY-aware too — computed
-    // client-side as bookings ÷ enquiries (both from the live state above).
-    // Cards 4–6 are sample data.
+    // Cards 3–5 ("Enquiry → booking rate", "Marketing revenue", "Marketing spend")
+    // are LIVE + FY-aware. The rate is computed client-side as bookings ÷ enquiries;
+    // revenue + spend come from the SAME DB-backed source as the ROI tab
+    // (GET /api/marketing/roi → MROI state below). Marketing ROI (card 6) is still sample.
     var KPIS = [
-      { label: 'Marketing revenue',      value: '$30,500', delta: '▲ $8,000 vs Sep' },
-      { label: 'Marketing spend',        value: '$9,580',  delta: '▼ $420 under budget' },
       { label: 'Marketing ROI',          value: '218%',    delta: '▲ 74 pts', info: 'Incl. influenced revenue 260%. Read quarterly.' },
     ];
 
     // Live per-FY state (counts across the two sources, deduped by deal).
     var ENQ = { byFy: {}, total: null, loaded: false };      // all deals
     var BOOKINGS = { byFy: {}, total: null, loaded: false };  // won deals
+
+    // Live per-FY ROI data (marketing revenue + marketing spend), from
+    // GET /api/marketing/roi — the SAME DB-backed source the ROI tab uses.
+    // Keyed by fyEnd; `total` = the all-years row; `revSource` = revenue source string.
+    var MROI = { byFy: {}, total: null, loaded: false, revSource: '' };
+    function mroiRow(key) {
+      if (!MROI.loaded) return null;
+      return key === 'all' ? MROI.total : (MROI.byFy[fyEndOf(key)] || null);
+    }
+    // A currency delta line vs the prior FY (directional colour, same as the count cards).
+    function currencyDelta(d, prevFyEnd) {
+      var cls = d >= 0 ? 'pos' : 'neg';
+      var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
+      return '<div class="delta ' + cls + '">' + arrow + ' ' + fmt(Math.abs(d), 'currency') +
+        ' vs FY' + String(prevFyEnd).slice(-2) + '</div>';
+    }
+    function kpiHtml(label, val, info, deltaHtml) {
+      return '<div class="kpi"><div class="label">' + esc(label) + infoSpan(info) + '</div>' +
+        '<div class="value">' + esc(val) + '</div>' + (deltaHtml || '') + '</div>';
+    }
     function infoSpan(text) {
       return ' <span class="kpi-info" tabindex="0" role="img" aria-label="' + esc(text) + '" title="' + esc(text) + '">ⓘ</span>';
     }
@@ -318,6 +337,55 @@
       return '<div class="kpi"><div class="label">Enquiry → booking rate' + infoSpan(info) + '</div>' +
         '<div class="value">' + esc(val) + '</div>' + deltaHtml + '</div>';
     }
+    // Marketing revenue = marketing-attributed WON revenue per FY (ROAS-paid + organic
+    // search + bureau/tailor + Exec X, deduped by deal) — row.marketingRevenue from the
+    // ROI payload. Same figure the ROI tab's headline card shows.
+    function revenueCard() {
+      var key = selFyKey();
+      var fyName = key === 'all' ? 'all years' : key.toUpperCase();
+      var val = '…', deltaHtml = '';
+      var info = 'Won revenue from marketing-sourced deals (ROAS-paid + organic search + ' +
+        'bureau/tailor + Exec X), deduped by deal. Live from /api/marketing/roi.';
+      if (MROI.loaded) {
+        var r = mroiRow(key);
+        var mRev = (r && r.marketingRevenue != null) ? r.marketingRevenue : null;
+        val = (mRev == null) ? '—' : fmt(mRev, 'currency');
+        if (r) {
+          var mp = r.marketingRevenueParts || {};
+          info = 'Won revenue from marketing-sourced deals in ' + fyName + ', deduped by deal — ' +
+            'ROAS-paid ' + fmt(mp.roas || 0, 'currency') + ' · Organic ' + fmt(mp.organic || 0, 'currency') +
+            ' · Bureau/Tailor ' + fmt(mp.bureauTailor || 0, 'currency') + ' · Exec X ' + fmt(mp.execX || 0, 'currency') +
+            '.' + (MROI.revSource ? ' Source: ' + MROI.revSource : '');
+          if (key !== 'all' && mRev != null) {
+            var prev = MROI.byFy[fyEndOf(key) - 1];
+            if (prev && prev.marketingRevenue != null) deltaHtml = currencyDelta(mRev - prev.marketingRevenue, fyEndOf(key) - 1);
+          }
+        }
+      }
+      return kpiHtml('Marketing revenue', val, info, deltaHtml);
+    }
+    // Marketing spend = Xero marketing accounts only (Advertising, Website, Software,
+    // Printing, WrkPod), ex-GST — row.totalSpend from the ROI payload (same as the ROI tab).
+    function spendCard() {
+      var key = selFyKey();
+      var fyName = key === 'all' ? 'all years' : key.toUpperCase();
+      var val = '…', deltaHtml = '';
+      var info = 'Marketing spend — Xero marketing accounts only (Advertising, Website, ' +
+        'Software, Printing, WrkPod), ex-GST. Live from /api/marketing/roi.';
+      if (MROI.loaded) {
+        var r = mroiRow(key);
+        var spend = (r && r.hasSpend) ? r.totalSpend : null;
+        val = (spend == null) ? '—' : fmt(spend, 'currency');
+        if (r && !r.hasSpend) info = 'No marketing spend recorded for ' + fyName + '.';
+        else info = 'Xero marketing accounts only (Advertising, Website, Software, Printing, ' +
+          'WrkPod), ex-GST, in ' + fyName + '.';
+        if (key !== 'all' && spend != null) {
+          var prev = MROI.byFy[fyEndOf(key) - 1];
+          if (prev && prev.hasSpend) deltaHtml = currencyDelta(spend - prev.totalSpend, fyEndOf(key) - 1);
+        }
+      }
+      return kpiHtml('Marketing spend', val, info, deltaHtml);
+    }
     function renderMktKpis() {
       var rest = KPIS.map(function (k) {
         var ic = k.info ? infoSpan(k.info) : '';
@@ -325,7 +393,19 @@
           '<div class="value">' + esc(k.value) + '</div>' +
           '<div class="delta pos">' + k.delta + '</div></div>';
       }).join('');
-      document.getElementById('mktKpis').innerHTML = enqCard() + bookCard() + rateCard() + rest;
+      document.getElementById('mktKpis').innerHTML =
+        enqCard() + bookCard() + rateCard() + revenueCard() + spendCard() + rest;
+    }
+    // Fetch the ROI tab's DB-backed figures and index them by fyEnd for the two live
+    // $ cards (Marketing revenue + Marketing spend). Re-renders the KPI row once loaded.
+    function loadRoiCards() {
+      fetchJSON('/api/marketing/roi').then(function (d) {
+        MROI.revSource = (d && d.marketingRevenueSource) || '';
+        ((d && d.rows && d.rows.data) || []).forEach(function (r) { MROI.byFy[r.fyEnd] = r; });
+        MROI.total = (d && d.total) || null;
+        MROI.loaded = true;
+        renderMktKpis();
+      }).catch(function (err) { console.error('roi cards', err); MROI.loaded = true; renderMktKpis(); });
     }
     function loadEnquiries() {
       fetchJSON('/api/marketing/overview').then(function (d) {
@@ -409,7 +489,8 @@
     renderMarketingSidebar('overview');
     renderMktKpis();                     // initial paint (enquiries shows … until loaded)
     loadEnquiries();                     // fetch live per-FY enquiry counts FIRST (independent of charts)
-    wireSeg('fySeg', renderMktKpis);     // re-render the live card on FY change
+    loadRoiCards();                      // fetch live per-FY marketing revenue + spend (same source as ROI tab)
+    wireSeg('fySeg', renderMktKpis);     // re-render the live cards on FY change
     try {                                // a chart error must never block the live KPI load above
       drawCharts();
       window.onThemeChange = drawCharts; // recolor charts on light/dark toggle
