@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monthly Log — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab active" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+  </nav>
+
+  <div class="marketing-layout">
+    <nav class="subtabs" id="marketingNav"></nav>
+    <main class="content">
+      <h1 style="margin:0 0 6px;font-size:24px">Monthly Log</h1>
+      <p class="muted" style="margin:0 0 22px;font-size:14px">Part of the new Marketing layout.</p>
+      <div class="card">
+        <div class="needs-setup"><strong>Coming soon</strong><span>This tab is a placeholder — its content will be added here.</span></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js?v=10"></script>
+  <script>
+    initPage('marketing');
+    renderMarketingHead();
+    renderMarketingSidebar('monthly-log');
+  </script>
+</body>
+</html>

@@ -34,6 +34,57 @@ Cloud Run.
   `renderSalesSidebar('<key>')` right after `initPage`. Reuses the same `.subnav`/`.subnav-link`
   CSS; `.sales-layout` is added alongside `.marketing-layout`/`.operations-layout` on the three
   shared layout rules in `app.css`. `sales.html` keeps its `<title>`/heading "Conferences".
+  **Marketing nav RESTRUCTURED to a HORIZONTAL sub-tab bar (as of 2026-11-05; supersedes the
+  "Marketing left sidebar" description below for NAVIGATION — the backend/page details below still
+  apply).** `renderMarketingSidebar(active)` in `app.js` now renders a HORIZONTAL sub-tab bar into
+  `#marketingNav` (not a vertical list): **8 primary tabs inline** — `marketing.html` (Overview,
+  **rebuilt to a sample-data layout mockup**), plus **7 NEW BLANK placeholder pages**
+  `leads_bookings.html` (Leads & Bookings), `spend_roi.html` (Spend & ROI), `content_social.html`
+  (Content & Social), `email_partners.html` (Email & Partners), `website_search.html`
+  (Website & Search), `nurture_events.html` (Nurture & Events), `monthly_log.html` (Monthly Log) —
+  followed by a **"More ▾" DROPDOWN** holding the 7 existing live tools (ROI, ROAS, Ad Platforms,
+  Lead Tracker `ac_contact_sources.html`, Calendly-AC Sync `new_paid_leads_tracking.html`, GA4 Agent,
+  Historical Paid Leads). Keys: `overview`/`leads-bookings`/`spend-roi`/`content-social`/
+  `email-partners`/`website-search`/`nurture-events`/`monthly-log` (primary) and
+  `roi`/`roas`/`adplatforms`/`leads`/`calendly`/`ga4-agent`/`historical` (More). The dropdown
+  toggles on click (click-away/Esc to close); the More button shows active when the current page is a
+  More item. **CSS (app.css):** a block overrides the shared `.subnav` sidebar styling for
+  `#marketingNav` **ONLY** (id beats class, so **Sales & Operations keep their left sidebars**) →
+  horizontal `.subtab` bar + `.more-wrap`/`.more-btn`/`.more-menu`; `.marketing-layout` set to
+  `display:block` so the nav stacks above content; added `.card.col-3`. **Shared head section:** a new
+  `renderMarketingHead()` in `app.js` is the single source of truth for the Marketing head
+  ("Marketing" h1 + the framing question + amber **"Sample data — layout only"** badge; `.mkt-head`
+  CSS now in `app.css`); it injects the head just before `#marketingNav` and is called on the Overview
+  + the 7 new sub-tabs, so the head shows on all primary sub-tabs — but **NOT** on the live More tools
+  (the sample badge would mislead there; they keep their own headers). **The Overview + the 7 new
+  pages are LAYOUT-ONLY with hardcoded sample data** (no API calls; `initPage('marketing')` with no
+  renderFn; charts drawn inline with Chart.js). The 15 Marketing pages were bumped to **`app.js?v=10`**
+  (Home/Sales/Operations and all non-Marketing pages deliberately stay `?v=9`). Frontend-only →
+  needs a Cloud Run redeploy. The paragraph below still documents each live tool's backend.
+  **DESIGN GUIDE (as of 2026-11-05):** `DESIGN_GUIDE.md` (repo root) is the dev-facing styling
+  standard for the whole dashboard — **`public/roas.html` is the reference**. It codifies the color
+  tokens (+ page-local `--x-accent`/`--x-shadow` pattern), typography, the **horizontal segmented
+  toggle as THE standard period/filter control** (the ROAS "by FY" pattern — no dropdowns / no
+  `3M/6M/12M/YTD` for new work), KPI tiles, the 3 info-tool patterns, tables, chart conventions, etc.
+  Read it before restyling or building a page.
+  **Marketing OVERVIEW is now design-guide-styled + partly LIVE (as of 2026-11-05):** `marketing.html`
+  follows `DESIGN_GUIDE.md` (page-local `--mkt-*` tokens, card/KPI hover polish, gradient-active
+  `.segmented` toggles, `.kpi-info` ⓘ, `.mkt-take` callout). Its period filter is the **standard
+  FINANCIAL-YEAR segmented toggle** (`#fySeg`: All years + FY22–FY27, default FY27) — the old
+  Month/3M/6M/12M/YTD pills + Fiscal/Calendar basis group are gone. The **first KPI card, "Keynote
+  enquiries", is LIVE + FY-aware**: the count of deals **created** in the selected FY across the four
+  **`ac_deal_groups`** — **ads** (`public.roas_counted_deals`) + **organic search**
+  (`public.ga4_ac_contact_source`, `channel ~* 'organic'`) + **bureau** + **tailor**
+  (`public.ac_deals_ytd` `is_bureau`/`is_tailor`) — **deduped by deal**, status-agnostic, FY by the
+  deal's creation date (AU END-year). Backed by **`GET /api/marketing/overview`** →
+  **`server/metrics/marketing-overview.js`** (`getMarketingOverview`, requireAuth, cached 10 min),
+  returning `{ enquiries:{ byFy:[{fyEnd,fy,ads,organic,bureau,tailor,total}], total, meta } }`; the
+  card reads it client-side and re-renders on FY change (`wireSeg` onChange), with an ⓘ tooltip
+  (per-group breakdown + sources + caveats) and a vs-prior-FY delta. **Cards 2–6 are still sample
+  data** (the Overview is otherwise a layout mockup). Per-FY totals (validated): FY22 13 · FY23 23 ·
+  FY24 34 · FY25 165 · FY26 128 · FY27 38. **Caveats:** organic reads ~0 for past FYs (GA4 ~60-day
+  window on `ga4_ac_contact_source`); bureau/tailor are 0 before FY25 (`ac_deals_ytd` cache starts
+  Jul-2024). New route + metrics module → needs a **Cloud Run redeploy**.
   **Marketing left sidebar (as of 2026-10-22; +`roi.html` 2026-10-28):** five former top
   tabs plus the new **ROI** page live UNDER Marketing, reached via a left sidebar
   (`<aside class="subnav" id="marketingNav">`) shown on **8 pages** — `marketing.html`

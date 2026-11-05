@@ -1,0 +1,165 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-04
+Session: ROI tab "Marketing revenue" work — (1) add a Marketing revenue KPI card
+         (marketing-attributed WON revenue per FY = ROAS-paid + organic-search +
+         bureau/tailor deals + Exec X, from a Google Sheet); (2) make it the first
+         highlighted card and switch the revenue-driven card formulas to use it;
+         (3) rework the "Revenue vs spend by month" chart to show a marketing-
+         revenue line + a company-revenue context line.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Add a new marketing revenue card. It should only include income from (1) deals
+counted in ROAS as a paid deal, (2) deals from organic search leads, (3) deals
+under bureau and tailor (use sales_overview.html as the reference for how these
+deals are identified), and (4) Exec X revenue — from the Google Sheet
+https://docs.google.com/spreadsheets/d/1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg/edit?gid=1563889555
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the data sources: server/metrics/marketing-roi.js (ROI backend, 7 cards
+computed client-side in roi.html render() from /api/marketing/roi), roas.js (uses
+the canonical public.roas_counted_deals view; won revenue = coalesce(xero_engagement_fee,
+value) for status='won'), sales-topline.js + ac-deals-table.js + sales_overview.html
+(bureau/tailor identification = public.ac_deals_ytd.is_bureau / is_tailor flags;
+that cache only covers Jul 2024+), and the Exec X Google Sheet (six season tabs,
+each a client table with INTERNAL COST + REVENUE columns).
+
+Verified in Supabase (project aivitcomiywiysrfwqxt) via MCP: roas_counted_deals
+columns; organic = ga4_ac_contact_source channel ~* 'organic' (today just 1 won
+deal $7,500 + 2 open); bureau/tailor won on ac_deals_ytd (Bureau 5 won $21,707,
+Tailor 16 won $118,555).
+
+Asked 3 clarifying questions; user chose: static seed table for Exec X / card
+follows the FY bar / won revenue only.
+
+Read all six Exec X season tabs, extracted per-REVENUE-line amounts and event
+dates, mapped each to its AU financial-year END year by EVENT date (revenue is
+realized when the event runs; season name = cohort, not revenue FY). One line
+(Chandler Mcleod, $10,000) had no event date → assigned to the Spring 2023 cohort
+FY (FY24). Reconciled: FY24 $10,000 · FY25 $113,255 · FY26 $177,315 · FY27 $22,450
+(grand total $323,020 = sum of the six tab totals).
+
+Implemented:
+  • DB — migration supabase/migrations/20261104090000_create_exec_x_revenue.sql,
+    applied via MCP: public.exec_x_revenue (one row per REVENUE line; season/company/
+    client/revenue/event_text/fy_end), idempotent DELETE+INSERT, 17 rows.
+  • Backend — marketing-roi.js: new MARKETING_REVENUE_SQL summing WON revenue from
+    4 buckets, DEDUPED by deal_id across the 3 AC buckets (precedence roas > organic
+    > bureau/tailor via DISTINCT ON (deal_id)); Exec X separate, always adds. Attached
+    per-FY to each rows[] as marketingRevenue + marketingRevenueParts{...}, summed onto
+    total, plus a marketingRevenueSource string in the payload. node --check passed.
+  • Frontend — roi.html render(): added the Marketing revenue KPI card with the
+    per-bucket breakdown tucked into its ⓘ tooltip; added it to the pending card list.
+
+Validated the final query live. Per-FY Marketing revenue: FY22 $48,455 · FY23
+$78,900 · FY24 $141,330 · FY25 $285,532 · FY26 $257,960 · FY27 $72,140 (≈ $884,317
+all years). Updated CLAUDE.md, as_built.txt, and the roi-tab-feature memory. Flagged
+that this is backend + frontend → needs a manual Cloud Run redeploy (DB seed already
+applied); noted the two assumptions (undated Exec X line → FY24; bureau/tailor only
+FY25+ because ac_deals_ytd is Jul-2024+); Exec X is static (re-seed when the sheet
+changes).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (first invocation) — save chat history + update as_built/CLAUDE.md/.gitignore,
+no git.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote chat_history/0411261623_chat_history.txt; confirmed as_built.txt + CLAUDE.md
+were already updated; .gitignore already comprehensive (left alone). No git run.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — compose a one-line commit command.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Output: feat(roi): add Marketing revenue KPI card summing won revenue from ROAS-paid,
+organic-search, bureau/tailor deals + Exec X (new exec_x_revenue seed), FY-filtered
+and deduped.
+
+--------------------------------------------------------------------------------
+USER:
+Highlight the "Marketing revenue" card — make it the first card now. Update the
+other cards' computation based on this, only the cards that need revenue in their
+formula.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+In roi.html render(): moved Marketing revenue to FIRST position (so it gets the
+.kpi-grid .kpi:first-child highlight — gradient bg + accent value), Total company
+revenue to second. Switched the revenue-driven CARD formulas to use marketing
+revenue (row.marketingRevenue): Return on spend = marketingRevenue ÷ marketing spend
+(sub "Marketing revenue ÷ marketing spend"), Net ROI = (that − 1) × 100, Avg revenue
+/ client = marketingRevenue ÷ clients won. Left CAC (marketing spend ÷ clients won)
+and the non-revenue cards unchanged. Reordered the pending card list to match.
+Flagged a DELIBERATE divergence: the "ROI by FY" table's ROI column + the month
+chart still use whole-business revenue/effRoi (effRoi left intact); offered to align
+them too. Updated CLAUDE.md + as_built.txt.
+
+--------------------------------------------------------------------------------
+USER:
+/cm
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Output: feat(roi): make Marketing revenue the first highlighted KPI card and switch
+revenue-driven cards (Return on spend, Net ROI, avg rev/client) to use marketing
+revenue.
+
+--------------------------------------------------------------------------------
+USER:
+Update the "Revenue vs spend by month" graph: the blue line should be the new
+Marketing revenue; add a gray line for Total company revenue; remove the right blue
+scale since it is the same as the left scale. (Provided a reference screenshot with
+spend bars + a sourced-revenue line on the left axis and a dashed company-revenue
+context line on the right axis.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+The blue line needed marketing revenue BY MONTH (the card only had it per-FY), and
+Exec X had no month, so:
+  • DB — migration 20261104170000_exec_x_revenue_event_date.sql (applied via MCP):
+    added exec_x_revenue.event_date = the first date in each EVENT cell; the undated
+    Chandler Mcleod row got a nominal Oct-2023 cohort date (still FY24). Verified
+    every event_date's FY matches its stored fy_end, and the by-month marketing-
+    revenue total reconciles to $884,317 (= the per-FY grand total — no rows dropped).
+  • Backend — marketing-roi.js: new MARKETING_REVENUE_MONTH_SQL (same 4 buckets/dedup
+    as the card; each AC deal in the month of its own date; Exec X by event_date);
+    merged onto byMonth[].marketingRevenue. node --check passed.
+  • Frontend — roi.html renderMonthChart(): now 3 series — green marketing-spend bars
+    + blue MARKETING-revenue line SHARE the LEFT axis (one [0, niceCeil(max)] scale;
+    the old blue "Revenue" right axis removed) and a gray dashed "Total company
+    revenue" line on its own RIGHT context axis (yCompany, larger scale). Updated the
+    chart's ⓘ description. Verified no stale yRevenue refs; all inline scripts parse.
+Recorded the migration in the repo; updated CLAUDE.md + as_built.txt. Noted it's
+backend + frontend → manual Cloud Run redeploy (DB migration already live), and the
+gray line/FY table still use whole-business revenue by design.
+
+--------------------------------------------------------------------------------
+USER:
+/cm
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Output: feat(roi): plot marketing-revenue line (blue) + company-revenue context line
+(gray) on the month chart, drop the duplicate right axis; add exec_x_revenue.event_date
+and a by-month marketing-revenue series.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (this invocation) — save chat history + update as_built/CLAUDE.md/.gitignore,
+no git.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote this chat-history file; confirmed as_built.txt + CLAUDE.md already reflect the
+card + chart changes; checked .gitignore (comprehensive, nothing new sensitive).
+No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

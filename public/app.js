@@ -227,27 +227,83 @@ function renderTable(containerId, rows, columns) {
     '<table class="data"><thead>' + thead + '</thead><tbody>' + tbody + '</tbody></table>';
 }
 
-/* Marketing left sidebar sub-nav. Fills the #marketingNav <aside> on the
-   Marketing page and its sub-pages. `active` is the current page's key.
+/* Marketing head section (area title + framing question + "layout only" badge),
+   shown above the sub-tab bar on the Marketing Overview and its sub-tab pages.
+   Injected just before #marketingNav so every page shares one definition.
+   Single source of truth for the head text/badge — call once per page. */
+function renderMarketingHead() {
+  var nav = document.getElementById('marketingNav');
+  if (!nav || document.getElementById('marketingHead')) return;
+  var head = document.createElement('div');
+  head.className = 'mkt-head';
+  head.id = 'marketingHead';
+  head.innerHTML =
+    '<div><h1>Marketing</h1>' +
+    '<p class="mkt-sub">Are we getting more keynote enquiries and turning them into bookings?</p></div>' +
+    '<span class="mkt-sample">Sample data — layout only</span>';
+  nav.parentNode.insertBefore(head, nav);
+}
+
+/* Marketing sub-tab bar (horizontal). Fills #marketingNav on the Marketing page
+   and its sub-pages. The primary sections show inline; the existing live tools
+   live under a "More" dropdown. `active` is the current page's key (it may be a
+   "More" item, in which case the More button is marked active).
    Single source of truth for the sub-nav list. */
 function renderMarketingSidebar(active) {
   var el = document.getElementById('marketingNav');
   if (!el) return;
-  var items = [
-    ['overview',   'Overview',              'marketing.html'],
-    ['roi',        'ROI',                   'roi.html'],
-    ['roas',       'ROAS',                  'roas.html'],
-    ['adplatforms','Ad Platforms',          'ad_platforms.html'],
-    ['leads',      'Lead Tracker',          'ac_contact_sources.html'],
-    ['calendly',   'Calendly-AC Sync',      'new_paid_leads_tracking.html'],
-    ['ga4-agent',  'GA4 Agent',             'ga4_agent.html'],
-    ['historical', 'Historical Paid Leads', 'historical_paid_leads.html'],
+  // Primary sub-tabs (shown inline). The new sections are placeholders for now.
+  var main = [
+    ['overview',       'Overview',          'marketing.html'],
+    ['leads-bookings', 'Leads & Bookings',  'leads_bookings.html'],
+    ['spend-roi',      'Spend & ROI',       'spend_roi.html'],
+    ['content-social', 'Content & Social',  'content_social.html'],
+    ['email-partners', 'Email & Partners',  'email_partners.html'],
+    ['website-search', 'Website & Search',  'website_search.html'],
+    ['nurture-events', 'Nurture & Events',  'nurture_events.html'],
+    ['monthly-log',    'Monthly Log',       'monthly_log.html'],
   ];
-  el.innerHTML = items.map(function (it) {
-    var key = it[0], label = it[1], href = it[2];
-    var cls = 'subnav-link' + (key === active ? ' active' : '');
-    return '<a class="' + cls + '" href="' + href + '">' + label + '</a>';
+  // "More" dropdown — the existing live Marketing tools.
+  var more = [
+    ['roi',         'ROI',                   'roi.html'],
+    ['roas',        'ROAS',                  'roas.html'],
+    ['adplatforms', 'Ad Platforms',          'ad_platforms.html'],
+    ['leads',       'Lead Tracker',          'ac_contact_sources.html'],
+    ['calendly',    'Calendly-AC Sync',      'new_paid_leads_tracking.html'],
+    ['ga4-agent',   'GA4 Agent',             'ga4_agent.html'],
+    ['historical',  'Historical Paid Leads', 'historical_paid_leads.html'],
+  ];
+  var moreActive = more.some(function (it) { return it[0] === active; });
+  var mainHtml = main.map(function (it) {
+    return '<a class="subtab' + (it[0] === active ? ' active' : '') + '" href="' + it[2] + '">' + esc(it[1]) + '</a>';
   }).join('');
+  var moreHtml = more.map(function (it) {
+    return '<a class="more-item' + (it[0] === active ? ' active' : '') + '" href="' + it[2] + '">' + esc(it[1]) + '</a>';
+  }).join('');
+  el.innerHTML = mainHtml +
+    '<div class="more-wrap">' +
+      '<button type="button" class="subtab more-btn' + (moreActive ? ' active' : '') +
+        '" aria-haspopup="true" aria-expanded="false">More</button>' +
+      '<div class="more-menu" hidden>' + moreHtml + '</div>' +
+    '</div>';
+
+  // Dropdown open/close (click to toggle, click-away or Escape to close).
+  var wrap = el.querySelector('.more-wrap');
+  var btn = wrap.querySelector('.more-btn');
+  var menu = wrap.querySelector('.more-menu');
+  function onDoc(e) { if (!wrap.contains(e.target)) close(); }
+  function onKey(e) { if (e.key === 'Escape') close(); }
+  function close() {
+    menu.hidden = true; btn.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('mousedown', onDoc, true);
+    document.removeEventListener('keydown', onKey, true);
+  }
+  function open() {
+    menu.hidden = false; btn.setAttribute('aria-expanded', 'true');
+    document.addEventListener('mousedown', onDoc, true);
+    document.addEventListener('keydown', onKey, true);
+  }
+  btn.addEventListener('click', function (e) { e.stopPropagation(); if (menu.hidden) open(); else close(); });
 }
 
 /* Operations left sidebar sub-nav. Fills the #operationsNav <aside> on the

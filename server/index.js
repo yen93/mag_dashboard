@@ -19,6 +19,7 @@ import { getRoas } from './metrics/roas.js';
 import { getRoasDeals } from './metrics/roas-deals.js';
 import { getRoasCounted } from './metrics/roas-counted.js';
 import { getMarketingRoi } from './metrics/marketing-roi.js';
+import { getMarketingOverview } from './metrics/marketing-overview.js';
 import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
 import { getAdPlatforms } from './metrics/ad-platforms.js';
 import { ga4AgentRouter } from './ga4Agent.js';
@@ -332,6 +333,19 @@ marketing.get('/ad-platforms', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:ad-platforms]', err);
     res.status(502).json({ error: 'Failed to load ad platform data from data source.', detail: err.message });
+  }
+});
+// Overview — live KPI(s) for the Marketing Overview page. Currently the
+// "Keynote enquiries" headline: per-FY count of deals created across the four
+// deal groups (ads / organic / bureau / tailor), deduped by deal. See
+// server/metrics/marketing-overview.js. Cached briefly.
+marketing.get('/overview', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:overview', getMarketingOverview, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:overview]', err);
+    res.status(502).json({ error: 'Failed to load marketing overview from data source.', detail: err.message });
   }
 });
 app.use('/api/marketing', marketing);

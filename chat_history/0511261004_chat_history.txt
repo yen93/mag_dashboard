@@ -1,0 +1,138 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Restructure the Marketing dashboard to match a provided design mockup —
+convert the Marketing left sidebar into a horizontal sub-tab bar with a "More"
+dropdown holding the existing live tools, rebuild the Overview (marketing.html) to
+the mockup's layout with sample data, add 7 new blank primary sub-tab pages, and
+make the "Marketing" head section (title + framing question + "Sample data"
+badge) shared across all primary Marketing sub-tabs. Scoped to Marketing only —
+Home / Sales / Operations left untouched.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. Work was entirely on static frontend files
+(public/*.html, app.js, app.css); no DB queries, no credentials involved.
+
+--------------------------------------------------------------------------------
+USER:
+Provided a design screenshot (Downloads/Screenshot 2026-11-05 092938.png) and two
+tasks: (1) restructure the Marketing Dashboard so it looks like the design;
+(2) add a new sub tab beside "Monthly Log" called "More" that, when clicked, shows
+a dropdown of all the OLD marketing sub tabs — and for all new tabs, leave them
+blank for now.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the design screenshot. It showed a redesigned Marketing area: page head
+("Marketing" h1 + subtitle "Are we getting more keynote enquiries and turning them
+into bookings?" + an amber "Sample data — layout only" badge), a HORIZONTAL
+sub-tab bar (Overview, Leads & Bookings, Spend & ROI, Content & Social,
+Email & Partners, Website & Search, Nurture & Events, Monthly Log), a Period /
+Fiscal-year / Calendar-year pill filter bar, 6 KPI cards (Keynote enquiries,
+Keynote bookings, Enquiry→booking rate, Marketing revenue, Marketing spend,
+Marketing ROI), two chart cards (Spend vs marketing revenue = bars+line combo;
+Enquiries vs bookings = two lines), and 4 bottom cards (Cadence delivered, Cost
+per enquiry, Past-client Offsites booked, Latest notes). The badge made clear this
+is a layout-only mockup with sample data.
+
+Explored the current structure: marketing.html + the 7 existing marketing
+sub-pages all use `.marketing-layout` (flex) + `<aside class="subnav"
+id="marketingNav">`, filled by the single-source-of-truth renderMarketingSidebar()
+in app.js. Read app.css (.subnav/.marketing-layout/.kpi/.card/.segmented), app.js
+(renderMarketingSidebar, initPage, chart helpers, renderKpis). Confirmed all 8
+marketing pages share the aside pattern and all 18 pages load app.js?v=9.
+
+Implemented (Marketing-scoped):
+- app.css: added a block that overrides the shared `.subnav` sidebar styling for
+  `#marketingNav` ONLY (id beats class), turning it into a horizontal secondary
+  tab bar with `.subtab` links + a `.more-wrap`/`.more-btn`/`.more-menu` dropdown;
+  set `.marketing-layout { display:block }` so the nav stacks on top of content;
+  added `.card.col-3`. Sales/Operations keep their left sidebars (they use
+  `.sales-layout`/`.operations-layout`, untouched).
+- app.js: rewrote renderMarketingSidebar() to render the 8 primary tabs inline
+  plus a "More ▾" dropdown containing the 7 existing live tools (ROI, ROAS,
+  Ad Platforms, Lead Tracker, Calendly-AC Sync, GA4 Agent, Historical Paid Leads),
+  with click-to-toggle + click-away/Escape close. Active handling marks the More
+  button active when the current page is a More item.
+- marketing.html: rebuilt the Overview to the mockup — head block, period/basis
+  pill bar (visual-only toggles), 6 custom KPI cards, two Chart.js charts drawn
+  inline from hardcoded sample series (combo bar+line for spend/revenue; two-line
+  for enquiries/bookings; recolor on theme toggle via window.onThemeChange), and
+  the 4 bottom cards. No API calls (initPage('marketing') with no renderFn).
+- Created 7 new blank sub-tab pages (leads_bookings, spend_roi, content_social,
+  email_partners, website_search, nurture_events, monthly_log) — each shows the
+  new nav + a "Coming soon" placeholder card.
+- Bumped app.js?v=9 → v=10 on ONLY the 15 marketing pages (8 primary + 7 new; the
+  7 live tools were already in the set via sed). Verified Home/Sales/Operations
+  and their sub-pages stayed at v=9.
+- Fixed a Chart.js correctness issue: the mixed bar+line combo needs a base
+  `type: 'bar'` on the chart config — added it. Ran `node --check public/app.js`
+  (OK) and confirmed vendored chart.umd.min.js exists.
+
+Noted this is frontend-only and needs a manual Cloud Run redeploy (per policy
+Claude never deploys). Offered to wire blank tabs to real data or tweak the
+sample numbers/colors.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — asked for a one-line Conventional Commits `git commit -m "..."` for the
+current changes.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran `git status --short`, then output a single-line commit command:
+feat(marketing): replace left sidebar with horizontal sub-tabs plus a More
+dropdown for legacy tools, rebuild Overview to new layout, add 7 blank section
+pages.
+
+--------------------------------------------------------------------------------
+USER:
+"do not touch home, sales, and operations"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed the change was already scoped to Marketing: `.marketing-layout` /
+`#marketingNav` CSS is marketing-specific, renderMarketingSidebar is only called
+on marketing pages, and the app.js?v bump had only gone on the marketing pages —
+Home/Sales/Operations stay at v=9 with their sidebars and cached behavior intact.
+(This clarification arrived mid-build and matched what was already done.)
+
+--------------------------------------------------------------------------------
+USER:
+"//marketing_head_section should also show as head section in all marketing sub
+tabs" — placed a literal `//marketing_head_section` marker next to the `.mkt-head`
+block in marketing.html.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Made the head section (Marketing title + framing question + "Sample data — layout
+only" badge) a shared, single-source-of-truth helper so it renders on all primary
+Marketing sub-tabs:
+- Moved the `.mkt-head` / `.mkt-sub` / `.mkt-sample` (+ dark variant) styles from
+  marketing.html's inline <style> into app.css (shared).
+- Added renderMarketingHead() to app.js: builds the head block and inserts it just
+  before #marketingNav (idempotent; one definition of the text/badge).
+- marketing.html: removed the hardcoded head div, removed the stray literal
+  `//marketing_head_section` text (it would have rendered as visible text),
+  removed the now-duplicated inline CSS, and called renderMarketingHead().
+- Added renderMarketingHead() calls to the 7 new sub-tab pages (via sed).
+Deliberately did NOT add the head to the live tools in the "More" dropdown — the
+"Sample data — layout only" badge would be misleading on real pages, and they have
+their own headers; told the user and offered to apply it there too if wanted.
+Re-ran `node --check public/app.js` (OK) and confirmed the stray marker was gone
+from all HTML. Reiterated the pending manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat, update as_built.txt / CLAUDE.md / .gitignore (no git
+commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote this transcript, then reviewed as_built.txt, CLAUDE.md and .gitignore for
+needed updates (see those files). Did NOT run any git commands — the user handles
+commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

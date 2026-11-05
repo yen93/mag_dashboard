@@ -125,6 +125,57 @@ body {
   }
 }
 
+/* ---- Marketing sub-tabs (horizontal secondary tab bar) ----
+   Overrides the shared .subnav left-sidebar styling for #marketingNav ONLY
+   (an id selector beats the .subnav class), so Sales & Operations keep their
+   left sidebars while Marketing gets a horizontal tab bar below the title.
+   The link list (primary tabs + "More" dropdown) is built by
+   renderMarketingSidebar() in app.js. */
+.marketing-layout { display: block; }   /* stack the nav on top of the content */
+#marketingNav {
+  display: flex; flex-flow: row wrap; align-items: center; gap: 2px;
+  width: 100%; max-width: 1200px; flex: none; align-self: auto;
+  min-height: 0; position: static; overflow: visible;
+  margin: 0 auto 18px; padding: 0 24px;
+  background: transparent; border: none; border-bottom: 1px solid var(--border);
+}
+#marketingNav .subtab {
+  padding: 11px 15px 13px; color: var(--text-muted); font-size: 14px; font-weight: 600;
+  text-decoration: none; background: none; border: none; border-bottom: 2px solid transparent;
+  border-radius: 0; cursor: pointer; white-space: nowrap; font-family: inherit;
+}
+#marketingNav .subtab:hover { color: var(--text); }
+#marketingNav .subtab.active { color: var(--text); border-bottom-color: var(--accent); }
+#marketingNav .more-wrap { position: relative; }
+#marketingNav .more-btn::after { content: ' \25BE'; font-size: 11px; }
+#marketingNav .more-menu {
+  position: absolute; top: 100%; left: 0; margin-top: 2px; min-width: 210px; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: var(--shadow); padding: 6px; display: flex; flex-direction: column; gap: 2px;
+}
+#marketingNav .more-menu[hidden] { display: none; }
+#marketingNav .more-item {
+  padding: 9px 12px; border-radius: 7px; text-decoration: none; color: var(--text);
+  font-size: 14px; font-weight: 600; white-space: nowrap;
+}
+#marketingNav .more-item:hover { background: var(--surface-2); }
+#marketingNav .more-item.active { background: var(--accent-soft); color: var(--accent); }
+
+/* Marketing head section (title + framing question + "layout only" badge).
+   Shown above the sub-tab bar on the Marketing Overview and its sub-tab pages;
+   injected by renderMarketingHead() in app.js (single source of truth). */
+.mkt-head {
+  max-width: 1200px; margin: 0 auto; padding: 18px 24px 14px;
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+}
+.mkt-head h1 { margin: 0 0 4px; font-size: 26px; }
+.mkt-sub { margin: 0; color: var(--text-muted); font-size: 14px; }
+.mkt-sample {
+  background: color-mix(in srgb, #f0a63b 18%, transparent); color: #b9791d;
+  font-size: 12px; font-weight: 600; padding: 6px 12px; border-radius: 999px; white-space: nowrap;
+}
+html[data-theme='dark'] .mkt-sample { color: #f0a63b; }
+
 /* segmented toggle (date range, chart/table view) */
 .segmented { display: inline-flex; background: var(--surface-2); border: 1px solid var(--border); border-radius: 9px; padding: 3px; }
 .segmented button {
@@ -160,8 +211,9 @@ body {
 .card.col-6 { grid-column: span 6; }
 .card.col-5 { grid-column: span 5; }
 .card.col-4 { grid-column: span 4; }
+.card.col-3 { grid-column: span 3; }
 @media (max-width: 860px) {
-  .card.col-8, .card.col-7, .card.col-6, .card.col-5, .card.col-4 { grid-column: span 12; }
+  .card.col-8, .card.col-7, .card.col-6, .card.col-5, .card.col-4, .card.col-3 { grid-column: span 12; }
 }
 .card-head { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
 .card-head h3 { margin: 0; font-size: 15px; }

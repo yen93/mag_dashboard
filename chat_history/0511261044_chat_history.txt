@@ -1,0 +1,146 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Continuation of the Marketing-tab restructure session (prior export
+0511261004_chat_history.txt covered the nav/Overview/head-section work). This
+export covers: (1) authoring DESIGN_GUIDE.md from roas.html as the standard;
+(2) restyling the Marketing Overview to follow it; (3) replacing the Overview
+period filter with the standard FY segmented toggle (FY22–FY27 + All years);
+(4) making the "Keynote enquiries" KPI card LIVE + FY-aware (count of deals
+created per FY across the four ac_deal_groups) with an info tooltip — new
+/api/marketing/overview endpoint + server/metrics/marketing-overview.js.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. The Supabase project ref (aivitcomiywiysrfwqxt) is
+non-secret (already in CLAUDE.md); Supabase query results were deal counts
+(business data, not secrets). DB reads were done via the read-only Supabase MCP.
+
+--------------------------------------------------------------------------------
+USER:
+Create a design guide for the dashboard — "maybe an md file? idk, what is
+better?" — standardizing toggles, colors, fonts, KPI cards, tables, info tools,
+etc. Use roas.html as the overall design reference/standard; the "by FY" toggle
+should be the standard horizontal period filter.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Recommended a Markdown file (dev-facing, lives beside CLAUDE.md/as_built.txt, no
+build/auth needed) over a rendered styleguide.html, and offered the HTML page as
+an optional follow-up. Read roas.html in depth (its inline <style>: page-local
+--roas-accent/-2/-soft + --roas-shadow/-lift tokens, hero, card hover-lift +
+gradient accent bar, gradient-active .segmented toggles, KPI tiles with
+first-child emphasis + .kpi-info ⓘ, .roas-table with sticky uppercase headers +
+clickrow/rowsel + st-won/lost/open, pills, takeaway callout, chat-assistant
+widget, invoice modal) and the FY toggle JS (buildFySeg builds buttons from the
+data; syncPressed toggles the .active class). Also referenced app.css tokens and
+app.js shared helpers (metaChips/srcInfo, renderKpis, renderSortableTable,
+themeColors, PALETTE).
+
+Wrote C:/Users/Cloverly/claude_code/dashboard/DESIGN_GUIDE.md — a thorough,
+code-grounded spec: golden rules; full color-token table (light/dark) + the
+color-mix tinting formula + page-local accent/depth token pattern; typography
+scale (system font stack, tabular-nums); layout/surfaces (12-col grid, radius,
+elevation, card + hero markup); §4 THE STANDARD segmented period/filter toggle
+(markup + build-from-data + syncPressed wiring + gradient-active CSS; explicitly
+"no dropdowns / no 3M/6M/12M/YTD for new work"); KPI tiles; the 3 info-tool
+patterns (.kpi-info title, srcInfo source icon, infoTip) + the hover-transform
+tooltip-clipping gotcha; tables (.roas-table standard + renderSortableTable);
+pills/chips/callouts; chart conventions; detail modal; motion; a11y; a
+new-page checklist; and a "where things live" reference table. Offered to also
+build an optional rendered styleguide.html.
+
+--------------------------------------------------------------------------------
+USER:
+Update marketing.html/Overview: (1) follow DESIGN_GUIDE.md; (2) replace the
+Period filters with the per-FY standard toggle time-range filter.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Rewrote public/marketing.html's inline <style> + body to follow the guide
+(page-scoped): added page-local --mkt-accent/-2/-soft + --mkt-shadow/-lift
+tokens (theme-aware); card polish (gradient accent bar before each h3, hover
+lift + fade-in top gradient line on chart cards, hover lift on the bottom
+cards); KPI polish (192px auto-fit grid, 29px/800 tabular values, accent
+top-bar on hover, first-tile gradient emphasis); standard .delta.pos/.neg;
+.kpi-info ⓘ info icons on two KPIs (notes moved into the tooltip) with a
+z-index lift to avoid clipping; a .mkt-take takeaway callout. Replaced the two
+.pill groups with .segmented toggles in a .mkt-controls bar (gradient-active
+pill, .ctl-label labels), driven by a class toggle (wireSeg). Kept the sample
+charts (themeColors, bottom rect legend, $k ticks, combo base type:'bar',
+redraw on theme toggle). Verified no stale pill/periodBar/wirePills refs.
+
+--------------------------------------------------------------------------------
+USER:
+The time-range filter should be per Financial Year like the ROAS filters — not
+Month/3M/etc. — from FY22 to FY27.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Replaced the "Time range" segmented group with a "Financial year" group
+(#fySeg): All years · FY22 · FY23 · FY24 · FY25 · FY26 · FY27, with FY27 active
+by default (latest FY, like ROAS). Removed the now-contradictory "Basis:
+Fiscal/Calendar year" group and its wireSeg call. Verified no stale
+rangeSeg/basisSeg/data-r/data-b references remain.
+
+--------------------------------------------------------------------------------
+USER:
+Defined ac_deal_groups: ads (ROAS.html), organic search (ROAS.html), bureau
+(sales_overview.html), tailor (sales_overview.html). Main task: update the
+"Keynote enquiries" card — it should be the TOTAL of all deals under
+ac_deal_groups CREATED in the selected FY, and add an info tool to the card.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated how the four groups are defined (grep of server/metrics;
+marketing-roi.js's MARKETING_REVENUE_SQL buckets) and mapped them to sources:
+ads = public.roas_counted_deals; organic = public.ga4_ac_contact_source
+(channel ~* 'organic'); bureau/tailor = public.ac_deals_ytd.is_bureau/is_tailor.
+Read the backend conventions (FY helper, q() returns res.rows, the marketing
+Express router + cached() in index.js, metric.js live/section helpers).
+
+Validated the counting SQL against the live DB via the read-only Supabase MCP
+(project aivitcomiywiysrfwqxt): per-FY DISTINCT deal counts by creation date
+(AU FY, END-year) across the four groups, deduped by deal_id —
+FY22 13 · FY23 23 · FY24 34 · FY25 165 · FY26 128 · FY27 38. (Observed data
+realities to note: organic reads ~0 for past FYs due to GA4's ~60-day window;
+bureau/tailor are 0 before FY25 because ac_deals_ytd starts Jul-2024.)
+
+Built the backend: new server/metrics/marketing-overview.js
+(getMarketingOverview) with ENQUIRIES_SQL (4 CTEs ads/organic/bureau/tailor →
+union → per-FY counts + distinct total), returning
+{ enquiries: { byFy:[{fyEnd,fy,ads,organic,bureau,tailor,total}], total, meta } }
+with a graceful pending fallback when Supabase isn't configured. Wired a new
+route GET /api/marketing/overview in server/index.js (requireAuth, cached 10
+min) + the import.
+
+Wired the frontend (public/marketing.html): made the first KPI card ("Keynote
+enquiries", the emphasized headline) LIVE + FY-aware. Removed it from the static
+KPIS array; added ENQ state, selFyKey()/fyEndOf()/enqRowFor()/enqCard()
+helpers, and loadEnquiries() (fetchJSON('/api/marketing/overview')). The card
+value = total for the FY selected on #fySeg (default FY27=38, incl. "All
+years"); wireSeg now takes an onChange callback so changing FY re-renders the
+card; added an ⓘ info tool showing the per-group breakdown (Ads/Organic/Bureau/
+Tailor) + each group's source + the GA4-window/FY25 caveats; added a small
+"vs prior FY" delta. Cards 2–6 stay sample data.
+
+Verified: re-ran the module's exact SQL against the DB (same numbers);
+node --check on marketing-overview.js and index.js (OK); extracted + node
+--check'd the inline page script (OK); grep-confirmed a single Keynote
+enquiries card + the live wiring. Flagged that the default FY27 is a partial
+current year (its vs-FY26 delta reads as a drop), offered to remove that delta,
+and noted a manual Cloud Run redeploy is required (new route + metrics module).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat, update as_built.txt / CLAUDE.md / .gitignore (no git
+commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote this transcript; updated as_built.txt and CLAUDE.md for the new endpoint +
+design guide + Overview changes; checked .gitignore (see those files). Ran no
+git commands — the user handles commits/pushes.
+
+================================================================================
+END OF EXPORT
+================================================================================
