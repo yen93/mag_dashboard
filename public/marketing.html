@@ -204,7 +204,7 @@
 
     // ----- KPI cards -----
     // Card 1 ("Keynote enquiries") is LIVE + FY-aware: total deals created in the
-    // selected FY across the four ac_deal_groups (ads / organic / bureau / tailor),
+    // selected FY across two sources (ads = roas_counted_deals, indirect = ac_indirect_deals),
     // deduped by deal — from GET /api/marketing/overview. Cards 2–6 are sample data.
     var KPIS = [
       { label: 'Keynote bookings',       value: '4',       delta: '▲ 1 vs Sep' },
@@ -226,23 +226,22 @@
     function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
     function enqRowFor(key) {
       if (key === 'all') return ENQ.total;
-      return ENQ.byFy[fyEndOf(key)] || { ads: 0, organic: 0, bureau: 0, tailor: 0, total: 0 };
+      return ENQ.byFy[fyEndOf(key)] || { ads: 0, indirect: 0, total: 0 };
     }
     function enqCard() {
       var key = selFyKey();
       var fyName = key === 'all' ? 'all years' : key.toUpperCase();
       var val = '…', deltaHtml = '';
-      var info = 'Total ActiveCampaign deals created across the four deal groups — ads, organic ' +
-        'search, bureau and tailor — deduped by deal. Created = deal date (Australian FY, Jul–Jun).';
+      var info = 'Total ActiveCampaign deals created across two sources — ads and ' +
+        'indirect/bureau — deduped by deal. Created = deal date (Australian FY, Jul–Jun).';
       if (ENQ.loaded) {
         var r = enqRowFor(key);
         val = r ? String(r.total) : '—';
         if (r) {
-          info = 'Deals created in ' + fyName + ' across the four deal groups — Ads ' + r.ads +
-            ', Organic ' + r.organic + ', Bureau ' + r.bureau + ', Tailor ' + r.tailor +
-            ' (deduped by deal). Ads = roas_counted_deals · Organic = ga4_ac_contact_source ' +
-            '(organic; rolling ~60-day window, so past FYs read low) · Bureau/Tailor = ac_deals_ytd ' +
-            '(cache from FY25). Created = deal date, AU FY.';
+          info = 'Deals created in ' + fyName + ' across two sources — Ads ' + r.ads +
+            ', Indirect ' + r.indirect + ' (deduped by deal). Ads = roas_counted_deals · ' +
+            'Indirect = ac_indirect_deals (Deal Source? = Indirect, 2021→present). ' +
+            'Created = deal date, AU FY.';
           if (key !== 'all') {
             var prev = ENQ.byFy[fyEndOf(key) - 1];
             if (prev) {
@@ -283,7 +282,7 @@
     var MONTHS  = ['Nov','Dec','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct'];
     var SPEND   = [8000,7000,6000,8000,9000,20000,5000,6000,11000,10000,7000,9580];
     var REVENUE = [20000,28000,12000,26000,38000,30000,22000,25000,9000,37000,22000,30500];
-    var ENQ     = [12,13,12,10,13,14,15,12,11,12,13,14];
+    var ENQ_SERIES = [12,13,12,10,13,14,15,12,11,12,13,14];
     var BOOK    = [3,3,3,3,4,5,4,3,3,4,3,4];
     var C_SPEND = '#3b6ef0', C_REV = '#d9663a', C_ENQ = '#3b6ef0', C_BOOK = '#d9663a';
     var _c1, _c2;
@@ -312,7 +311,7 @@
       _c2 = new Chart(document.getElementById('enqBookCanvas'), {
         type: 'line',
         data: { labels: MONTHS, datasets: [
-          { label: 'Enquiries', data: ENQ,  borderColor: C_ENQ,  backgroundColor: C_ENQ,  borderWidth: 2, tension: 0.3, pointRadius: 2, pointHoverRadius: 4 },
+          { label: 'Enquiries', data: ENQ_SERIES,  borderColor: C_ENQ,  backgroundColor: C_ENQ,  borderWidth: 2, tension: 0.3, pointRadius: 2, pointHoverRadius: 4 },
           { label: 'Bookings',  data: BOOK, borderColor: C_BOOK, backgroundColor: C_BOOK, borderWidth: 2, tension: 0.3, pointRadius: 2, pointHoverRadius: 4 },
         ] },
         options: {
