@@ -59,25 +59,31 @@
       box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
     }
 
-    /* KPI cards (hand-built so each can carry its own delta / sub-line) */
-    #kpis { margin-bottom: 20px; }
-    .sr-kpi { position: relative; border-radius: 16px; box-shadow: var(--mkt-shadow);
-      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease; overflow: hidden; }
-    .sr-kpi::after {
+    /* KPI tiles — identical look to marketing.html (shared .kpi class + its §5 styling,
+       so the cards inherit app.css's .kpi surface/border/padding base). */
+    .kpi-grid { gap: 14px; margin: 18px 0 8px; grid-template-columns: repeat(auto-fit, minmax(192px, 1fr)); }
+    .kpi {
+      position: relative; border-radius: 16px; padding: 18px 18px 16px; overflow: hidden;
+      box-shadow: var(--mkt-shadow);
+      transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
+    }
+    .kpi::after {
       content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
       background: linear-gradient(90deg, var(--mkt-accent), var(--mkt-accent-2));
-      opacity: 0; transition: opacity .2s ease; pointer-events: none;
+      opacity: 0; transition: opacity .2s ease;
     }
-    .sr-kpi:hover { transform: translateY(-3px); box-shadow: var(--mkt-shadow-lift); }
-    .sr-kpi:hover::after { opacity: .9; }
-    .sr-kpi .label { font-size: 13px; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 4px; }
-    .sr-kpi .value { font-size: 28px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 10px 0 4px; }
-    .sr-kpi .sub { font-size: 12.5px; color: var(--text-muted); }
-    /* Emphasise the first tile (Marketing spend headline) */
-    #kpis .sr-kpi:first-child {
+    .kpi:hover { transform: translateY(-3px); box-shadow: var(--mkt-shadow-lift); }
+    .kpi:hover::after { opacity: .9; }
+    .kpi:hover, .kpi:focus-within { z-index: 2; }   /* keep ⓘ tooltip above neighbours */
+    .kpi .label { font-size: 12px; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 4px; }
+    .kpi .value { font-size: 29px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 11px 0 6px; }
+    .kpi .sub { font-size: 12px; color: var(--text-muted); }
+    /* Emphasise the first tile (Marketing spend headline). */
+    .kpi-grid .kpi:first-child {
       background: linear-gradient(140deg, color-mix(in srgb, var(--mkt-accent) 13%, var(--surface)), var(--surface) 70%);
       border-color: color-mix(in srgb, var(--mkt-accent) 32%, var(--border));
     }
+    .kpi-grid .kpi:first-child .value { color: var(--mkt-accent); }
 
     .delta { font-size: 12px; font-weight: 600; }
     .delta.pos { color: var(--pos); }
@@ -237,7 +243,7 @@
     }
 
     function kpiCard(label, info, valueStr, extraHtml) {
-      return '<div class="sr-kpi"><div class="label">' + esc(label) + infoSpan(info) + '</div>' +
+      return '<div class="kpi"><div class="label">' + esc(label) + infoSpan(info) + '</div>' +
         '<div class="value">' + valueStr + '</div>' + (extraHtml || '') + '</div>';
     }
 
