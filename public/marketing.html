@@ -112,6 +112,15 @@
     .mkt-bottom .big { font-size: 26px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 10px 0 4px; }
     .mkt-bottom .sm { font-size: 12px; }
     .mkt-bottom .notes { font-size: 13px; line-height: 1.55; margin-top: 10px; }
+
+    /* ---------- Full-width layout (DESIGN_GUIDE.md §layout) ----------
+       On wide screens the Overview STRETCHES edge-to-edge instead of being capped
+       at 1200px and centered — the content, the sub-tab bar and the head band all
+       drop their max-width so the KPI grid, charts and bottom cards fill the screen
+       (matches roi.html / sales_overview). The 24px side padding stays as the gutter. */
+    .content { max-width: none; }
+    #marketingNav { max-width: none; }
+    .mkt-head { max-width: none; }
   </style>
 </head>
 <body>
@@ -557,6 +566,7 @@
     // dashed company-revenue line on its own right $ axis), fed by the live /api/marketing/roi
     // byMonth series and filtered to the selected FY. LIVE (not sample).
     var _monthChart = null;
+    var C_REV_LINE = '#3b6ef0';   // blue — the marketing-revenue line AND its (left) axis share this
     var MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     function compactAud(v) {
       var n = Math.abs(v);
@@ -607,7 +617,7 @@
             { type: 'bar', label: 'Marketing spend', order: 3, yAxisID: 'ySpend',
               data: spendVals, backgroundColor: '#17a673', borderRadius: 4, maxBarThickness: 34 },
             { type: 'line', label: 'Marketing revenue', order: 1, yAxisID: 'ySpend',
-              data: mktRevVals, borderColor: '#3b6ef0', backgroundColor: '#3b6ef0', tension: 0.3,
+              data: mktRevVals, borderColor: C_REV_LINE, backgroundColor: C_REV_LINE, tension: 0.3,
               pointRadius: 3, pointHoverRadius: 5, borderWidth: 2 },
             { type: 'line', label: 'Total company revenue', order: 2, yAxisID: 'yCompany',
               data: months.map(function (m) { return m.revenue; }),
@@ -624,9 +634,11 @@
           },
           scales: {
             x: { ticks: { color: tc.muted }, grid: { display: false } },
+            // Left axis reads the blue marketing-revenue line (spend bars share its scale) —
+            // its ticks + title are the SAME blue as that line (DESIGN_GUIDE.md §charts).
             ySpend: { position: 'left', min: 0, max: sharedMax,
-              title: { display: true, text: 'Marketing spend & revenue', color: tc.muted },
-              ticks: { color: tc.muted, callback: compactAud }, grid: { color: tc.grid } },
+              title: { display: true, text: 'Marketing revenue & spend', color: C_REV_LINE },
+              ticks: { color: C_REV_LINE, callback: compactAud }, grid: { color: tc.grid } },
             yCompany: { position: 'right', min: 0, max: companyMax,
               title: { display: true, text: 'Company revenue (context)', color: '#9aa4b2' },
               ticks: { color: '#9aa4b2', callback: compactAud }, grid: { drawOnChartArea: false } },

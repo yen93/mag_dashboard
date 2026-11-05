@@ -118,8 +118,14 @@ Rename the prefix per page (`--roi-*`, `--sales-*`, …) to keep scoping obvious
 - **Shell** (identical on every page, copy from any tab): `.topbar` (sticky) →
   `.tabbar` (Home / Sales / Marketing / Operations) → area layout.
 - **Content width:** default `.content` is `max-width: 1200px` centered,
-  `padding: 24px`. Data-dense tables use full width — follow ROAS:
-  `.content { max-width: none; }` and a roomier pad.
+  `padding: 24px`. **Data-dense / dashboard pages (tables, multi-chart overviews)
+  STRETCH to full width on wide screens** — follow ROAS / `sales_overview` /
+  `roi.html` / the Marketing Overview: set `.content { max-width: none; }` (keep the
+  24px padding as the gutter). On a page that also has a sub-tab bar or a head band
+  capped at 1200px (e.g. `#marketingNav`, `.mkt-head`), **drop their `max-width` too**
+  (`#marketingNav { max-width: none; } .mkt-head { max-width: none; }`) so the nav,
+  head, KPI grid and charts all align edge-to-edge — don't leave the content full
+  width while the nav stays centered.
 - **Grid:** 12-column — `.grid` + `.card.col-{12,8,7,6,5,4,3}`; cards collapse to
   full width under 860px. Two charts side by side = two `.card.col-6`.
 - **Radius:** cards/panels/modals `14–16px`; toggles/inputs `8–11px`; pills `999px`.
@@ -336,6 +342,14 @@ hand-rolling sort/filter. Key options: `columns:[{key,label,unit,render,text}]`,
 - **Conventions:**
   - Gridlines `var(--grid)`; tick labels `var(--text-muted)` at `11px`; hide the
     x gridline (`grid:{display:false}`).
+  - **Multi-axis charts — colour each y-axis to match the series it measures.** When a
+    chart has more than one value axis, set that axis's `ticks.color` AND `title.color`
+    to the same colour as the series plotted against it, so the reader can tell which
+    scale belongs to which line/bars (e.g. the Marketing Overview / ROI "Revenue vs
+    spend by month": the left axis reads the **blue** marketing-revenue line → blue
+    ticks + blue title `#3b6ef0`; the right axis reads the **gray** company-revenue
+    line → gray `#9aa4b2`). Store the colour in one const shared by the dataset and the
+    axis so they can't drift. A single-series axis stays `var(--text-muted)`.
   - Money axes: tick callback → compact `$Nk`.
   - Legend at the **bottom**, `usePointStyle:true, pointStyle:'rect'`.
   - Series colors: primary = accent/blue (`#3b6ef0`), comparison = warm

@@ -1,0 +1,70 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Restyle the Marketing Overview "Revenue vs spend by month" chart (blue
+marketing-revenue axis) + make the Overview full-width on wide screens; document
+both conventions in DESIGN_GUIDE.md.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Update the "Revenue vs spend by month" graph in marketing.html: (1) the y-axis
+scale for marketing revenue should be the same color as the blue line, including
+the axis label text; (2) fix responsive design so everything stretches when the
+screen is wide; (3) update the design .md file accordingly.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected the layout CSS (public/app.css): .content is capped at max-width:1200px
+centered (line 98); the Marketing area's horizontal sub-tab bar #marketingNav
+(line 137) and the head band .mkt-head (line 168) are ALSO capped at 1200px with
+margin:0 auto — so on a wide screen the whole Overview is boxed to 1200px and
+centered. The chart's left axis (ySpend) carried BOTH the green spend bars and the
+blue marketing-revenue line with neutral tc.muted ticks/title; the right axis
+(yCompany) was already gray to match the gray company-revenue line.
+
+Made these edits, all in public/marketing.html (inline <style> + the month-chart
+JS), plus DESIGN_GUIDE.md:
+
+1) Blue revenue axis: added a shared const C_REV_LINE = '#3b6ef0' (near the
+   _monthChart decl), used it for BOTH the marketing-revenue line dataset
+   (borderColor/backgroundColor) and the left axis (ticks.color + title.color), so
+   they can't drift. Renamed the left-axis title "Marketing spend & revenue" →
+   "Marketing revenue & spend" to fit the blue. The right (company) axis stays gray
+   #9aa4b2.
+
+2) Full-width: appended inline overrides to marketing.html's <style> —
+   .content { max-width: none } , #marketingNav { max-width: none } ,
+   .mkt-head { max-width: none } — so the content, sub-tab bar, head band, KPI grid,
+   charts and bottom cards all stretch edge-to-edge on wide screens (24px padding
+   kept as the gutter), matching roi.html / sales_overview. Inline <style> comes
+   after the app.css link in <head>, so it wins by source order for equal
+   specificity (id/class).
+
+3) DESIGN_GUIDE.md updated: §3 Layout — expanded the content-width rule to say
+   data-dense/dashboard pages stretch full width, and if a page's sub-tab bar/head
+   band is capped at 1200px, drop their max-width too so nothing is left centered
+   while content is full width. §9 Charts — added a multi-axis color convention:
+   colour each y-axis's ticks + title to match the series it measures (blue #3b6ef0
+   for marketing revenue, gray #9aa4b2 for company revenue), stored in one shared
+   const; single-series axes stay var(--text-muted).
+
+Verified the marketing.html inline <script> still parses (extracted the last
+<script> block, wrapped in new Function with stubbed browser globals — OK). No
+app.js change, so no version bump (page stays app.js?v=10). Flagged a caveat: the
+left axis is technically shared with the green spend bars, so it's now blue even
+though spend also sits on it — that's the explicit ask; offered to give spend its
+own axis instead. Frontend + design-doc only → needs a manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save chat, update as_built.txt / CLAUDE.md / .gitignore (no git commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file; checked whether as_built.txt /
+CLAUDE.md needed updates for this styling-only change; verified .gitignore. Did NOT
+run any git command.
+
+================================================================================
+END OF EXPORT
+================================================================================
