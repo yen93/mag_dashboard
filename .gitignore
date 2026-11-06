@@ -25,6 +25,8 @@ env.json
 *.token
 *_token
 *-token.*
+*cookie*
+*li_at*
 
 # ── Keys & certificates ─────────────────────────────────────
 *.pem
@@ -77,6 +79,8 @@ supabase/functions/**/.env.*
 **/*.token
 **/*_token
 **/*-token.*
+**/*cookie*
+**/*li_at*
 # Keys & certificates
 **/*.pem
 **/*.key

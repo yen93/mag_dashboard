@@ -324,6 +324,14 @@ hand-rolling sort/filter. Key options: `columns:[{key,label,unit,render,text}]`,
   consistently. Don't invent new readiness chips.
 - **Needs-setup body:** `renderPendingBody(elId, meta)` for a card whose data
   isn't wired yet (the `.needs-setup` block). Use it instead of blank panels.
+- **Pending / not-tracked-yet KPI card:** when a tile's metric has **no live data
+  source yet**, do NOT show a placeholder or sample number — replace the value with a
+  **red "pending" chip**: `<span class="chip warn">pending</span>` (`.chip.warn` =
+  `--neg` red tint). Keep the card's **label** so the reader still knows what it will
+  track. This is the dashboard-wide standard for honest empty states on summary tiles
+  (e.g. `marketing.html` "Cadence delivered"; `content_social.html` KPI row + "Article
+  views" / "By format and pillar" cards). **Never fabricate a number to fill a tile** —
+  a red `pending` is always preferred over sample data on a live page.
 - **Takeaway callout:** the `.roas-take` block — a left-accent, gradient-tinted
   one-liner summarizing the view ("**2.4×** — above the 2.00× target"). Use for a
   single headline insight above/below the KPIs.

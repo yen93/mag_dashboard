@@ -40,7 +40,7 @@ Cloud Run.
   `#marketingNav` (not a vertical list): **8 primary tabs inline** — `marketing.html` (Overview,
   **rebuilt to a sample-data layout mockup**), plus **7 primary sub-tab pages**
   `leads_bookings.html` (Leads & Bookings — **now LIVE, see its own paragraph below**), `spend_roi.html` (Spend & ROI — **now LIVE, see its own paragraph below**), `content_social.html`
-  (Content & Social), `email_partners.html` (Email & Partners), `website_search.html`
+  (Content & Social — **its "Platforms" table is now LIVE, see its own paragraph below; rest of the page still sample**), `email_partners.html` (Email & Partners), `website_search.html`
   (Website & Search), `nurture_events.html` (Nurture & Events), `monthly_log.html` (Monthly Log) —
   followed by a **"More ▾" DROPDOWN** holding the 7 existing live tools (ROI, ROAS, Ad Platforms,
   Lead Tracker `ac_contact_sources.html`, Calendly-AC Sync `new_paid_leads_tracking.html`, GA4 Agent,
@@ -52,21 +52,26 @@ Cloud Run.
   `#marketingNav` **ONLY** (id beats class, so **Sales & Operations keep their left sidebars**) →
   horizontal `.subtab` bar + `.more-wrap`/`.more-btn`/`.more-menu`; `.marketing-layout` set to
   `display:block` so the nav stacks above content; added `.card.col-3`. **Shared head section:** a new
-  `renderMarketingHead()` in `app.js` is the single source of truth for the Marketing head
-  ("Marketing" h1 + the framing question + amber **"Sample data — layout only"** badge; `.mkt-head`
-  CSS now in `app.css`); it injects the head just before `#marketingNav` and is called on the Overview
-  + the 7 new sub-tabs, so the head shows on all primary sub-tabs — but **NOT** on the live More tools
-  (the sample badge would mislead there; they keep their own headers). **The Overview + the 7 new
-  pages are LAYOUT-ONLY with hardcoded sample data** (no API calls; `initPage('marketing')` with no
-  renderFn; charts drawn inline with Chart.js) — **EXCEPT `leads_bookings.html`, now LIVE (its own
-  paragraph below)**. The 15 Marketing pages were bumped to **`app.js?v=10`**
-  (Home/Sales/Operations and all non-Marketing pages deliberately stay `?v=9`). Frontend-only →
-  needs a Cloud Run redeploy. The paragraph below still documents each live tool's backend.
+  `renderMarketingHead(live)` in `app.js` is the single source of truth for the Marketing head
+  ("Marketing" h1 + the framing question; `.mkt-head` CSS now in `app.css`); it injects the head just
+  before `#marketingNav`. **As of 2026-11-05 it takes a `live` arg:** the h1 + framing question ALWAYS
+  render; the amber **"Sample data — layout only"** badge is emitted only when `live` is falsy (ternary).
+  It is now called on **ALL** primary sub-tabs: the Overview + the 5 still-sample sub-tabs call it with
+  **no arg** (badge shows), and the two LIVE pages `leads_bookings.html`/`spend_roi.html` call it with
+  **`true`** (badge suppressed). Still **NOT** called on the live More tools (they keep their own
+  headers). **The Overview + the 5 still-sample sub-tabs are LAYOUT-ONLY with hardcoded sample data**
+  (no API calls; `initPage('marketing')` with no renderFn; charts drawn inline with Chart.js) —
+  **EXCEPT `leads_bookings.html` + `spend_roi.html`, now LIVE (their own paragraphs below)**. The 15
+  Marketing pages were bumped to **`app.js?v=10`**, then **`leads_bookings.html` + `spend_roi.html` to
+  `?v=11` (2026-11-05)** when `renderMarketingHead` gained the `live` arg (the only two pages depending
+  on it; the backward-compatible no-arg call means the rest stay `?v=10`). Home/Sales/Operations and all
+  non-Marketing pages deliberately stay `?v=9`. Frontend-only → needs a Cloud Run redeploy. The paragraph
+  below still documents each live tool's backend.
   **Leads & Bookings page (`leads_bookings.html` = Marketing sub-tab "Leads & Bookings", now LIVE as of
   2026-11-05):** a self-rendering page (`initPage('marketing')` with no renderFn +
-  `renderMarketingSidebar('leads-bookings')` + its own `fetchJSON`) that does **NOT** call
-  `renderMarketingHead()` (it would stamp the misleading "Sample data — layout only" badge — it's live) —
-  it has its own `.lb-head` header instead. Same bespoke inline visual layer as `marketing.html`
+  `renderMarketingSidebar('leads-bookings')` + its own `fetchJSON`). **As of 2026-11-05 it calls
+  `renderMarketingHead(true)`** (right after `initPage`, before the sidebar) → the shared Marketing head
+  with NO "Sample data" badge; its old bespoke `.lb-head` header was removed. Same bespoke inline visual layer as `marketing.html`
   (page-local `--mkt-*` tokens, `.segmented` toggle, `.delta`/`.kpi-info`). Top: the **standard `#fySeg`
   FY toggle** (All years + FY22–FY27, default FY27), same placement as the Overview. **Two live data
   sources:** (1) a full-width **"Enquiries by source"** Chart.js **stacked bar** chart + a **"By source"**
@@ -86,11 +91,14 @@ Cloud Run.
   enquiries"** cards, from **`GET /api/marketing/overview`** (the deduped two-source set), with the same
   ⓘ breakdown + vs-prior-FY delta. A third **"Phone enquiries"** card is an amber **"Not tracked yet"**
   chip. **Responsive** (brief item #3): `.lb-lower` grid collapses to one column < 860px, the table scrolls
-  (`.lb-table-wrap`), the segmented toggle wraps, charts flex. **No `app.js` change** (stays `?v=10`).
+  (`.lb-table-wrap`), the segmented toggle wraps, charts flex. (**app.js bumped to `?v=11` 2026-11-05**
+  when `renderMarketingHead(true)` was added — see the sub-tab-bar paragraph above.)
   Server + frontend change → needs a **Cloud Run redeploy**.
   **Spend & ROI page (`spend_roi.html` = Marketing sub-tab "Spend & ROI", now LIVE as of 2026-11-05):**
   a self-rendering page (`initPage('marketing')` with no renderFn + `renderMarketingSidebar('spend-roi')` +
-  its own `fetchJSON`) that does **NOT** call `renderMarketingHead()` (it's live — has its own `.sr-head`).
+  its own `fetchJSON`). **As of 2026-11-05 it calls `renderMarketingHead(true)`** (right after `initPage`,
+  before the sidebar) → the shared Marketing head with NO "Sample data" badge; its old bespoke `.sr-head`
+  header was removed.
   Same bespoke inline visual layer as `leads_bookings.html`/ROAS (page-local `--mkt-*` tokens, card/KPI
   hover, gradient-active `.segmented`, full-width `.content`). Top: the **standard `#fySeg` FY toggle**
   (All years + FY22–FY27, default FY27), same placement as the Overview. **Three live pieces:**
@@ -115,8 +123,100 @@ Cloud Run.
   — Bookings = count of engagements (one row/client), Revenue = `sum(revenue)`; **spend/enquiries/ROAS are not
   tracked → `null`, shown "—"**. Cost-per-enquiry is derived client-side (`spend ÷ enquiries`). **Responsive**
   (brief item #3): `.kpi-grid` auto-fits/wraps, `.sr-lower` grid collapses to one column < 900px, the table
-  scrolls (`.sr-table-wrap`, `min-width:620px`), the segmented toggle wraps. **No `app.js` change** (stays
-  `?v=10`). Server + frontend change → needs a **Cloud Run redeploy**.
+  scrolls (`.sr-table-wrap`, `min-width:620px`), the segmented toggle wraps. (**app.js bumped to `?v=11`
+  2026-11-05** when `renderMarketingHead(true)` was added — see the sub-tab-bar paragraph above.)
+  Server + frontend change → needs a **Cloud Run redeploy**.
+  **Content & Social "Platforms" table — now LIVE via Apify (as of 2026-11-06; rest of
+  `content_social.html` still sample).** Only the Platforms table is wired live; the KPI row,
+  "Impressions by platform" chart, and side cards stay mock, so the page KEEPS its "Sample data"
+  head badge (`renderMarketingHead()` with **no** `true`). The table was **redesigned to
+  scrapable-only columns** — Platform · Followers · Change · Posts · Avg engagement/post ·
+  Engagement rate — because **Apify scrapes PUBLIC data only** (followers, post counts, per-post
+  likes/comments/reactions); **Impressions / reach are private platform analytics (Meta Business
+  Suite, LinkedIn page analytics) and are NOT scraped** (the old Impressions + Per-post columns were
+  dropped). Backed by **`GET /api/marketing/platforms`** → **`server/metrics/marketing-platforms.js`**
+  (`getMarketingPlatforms`, requireAuth, cached 10 min) — a plain SELECT of the new cache
+  **`public.social_platform_stats`** returning the **latest snapshot per platform PER AU financial
+  year** (`fy_end` = snapshot year +1 if month≥Jul; `row_number() … PARTITION BY platform_key, fy_end`).
+  **UI (as of 2026-11-06, revised):** the `#fySeg` FY toggle **drives this view** — the client shows the
+  selected FY's latest snapshot per platform (or, for "All years", the newest snapshot per platform
+  across FYs); FYs before data collection are simply empty (social scrapes only capture the current
+  state, so there's no back-history — FY27 has data, earlier FYs are blank). **Followers render as
+  per-platform CARDS** (`#followerCards`, reusing `.cs-kpi-grid`/`.cs-kpi`), **not** in the table; the
+  **table columns are Platform · Posts · Avg engagement/post · Engagement rate** (the **Followers and
+  Change columns were dropped**; there is no more week-over-week `change`). Self-rendering
+  (`fetchJSON('/api/marketing/platforms')` → `renderPlatforms()` filtered by `curFyEnd()`/`platformRowsForFy()`,
+  re-run on every `#fySeg` change alongside `renderAll()`). **REVISED 2026-11-06 (round 2):** (a) the lower
+  **"Impressions by platform" chart was replaced by a LIVE "Engagement by platform" bar chart**
+  (`renderEngagementChart()`) — total recent-post engagement per platform from the same
+  `/api/marketing/platforms` data, FY-aware + theme-aware; **NB `social_platform_stats` has no impressions**
+  (private analytics, not scraped), so it shows engagement, the closest scrapable reach signal. (b) **All
+  non-live tiles now show a red `pending` chip** (`<span class="chip warn">pending</span>`, the design-guide
+  standard — see DESIGN_GUIDE §8) instead of sample numbers: the 4 KPI tiles (Cadence/Delivered/Extra/Pillar),
+  "Article views", and "By format and pillar". Live tiles stay live (follower cards, Platforms table,
+  Engagement chart, Newsletter subscribers). (c) **The "Sample data — layout only" head badge is GONE** —
+  `renderMarketingHead(true)`, so **`content_social.html` was bumped to `app.js?v=11`** (needs the `live` arg,
+  same as leads_bookings/spend_roi). (The `MOCK_BY_FY` object still holds now-unused chart/newsletter/article
+  sample data — only `kpis[].label` is still read, for the tile labels.) **Cache + sync:**
+  `public.social_platform_stats` (PK
+  `(platform_key, snapshot_date)`, RLS on, migration `20261106120000`) is filled **weekly, UPSERT-ONLY
+  (never truncates)** by the **`apify-platforms-sync` edge fn**
+  (`supabase/functions/apify-platforms-sync/index.ts`, deploy `--no-verify-jwt`) → RPC
+  **`reload_social_platform_stats(_rows jsonb)`** (security definer, empty-payload refusal,
+  `on conflict (platform_key, snapshot_date) do update`; same family as
+  `reload_ac_indirect_deals`). The fn scrapes all 4 profiles **in parallel** via Apify
+  **`run-sync-get-dataset-items`** and **degrades per-platform** (one broken actor doesn't sink the
+  others; all-fail → nothing written + Gmail alert). Modes `?dry=1`/`?sync=1`/bg. **Secret:**
+  **`APIFY_API_TOKEN`** (Supabase edge secret; the fn falls back to `APIFY_TOKEN`). The 4 profile URLs
+  are hardcoded defaults in the fn (env-overridable `MAG_LINKEDIN_URL`/`MAG_FACEBOOK_URL`/
+  `MAG_INSTAGRAM_URL`/`JAMES_LINKEDIN_URL`), as are the actor ids (`APIFY_ACTOR_*`). **ACTORS — a platform can MERGE
+  multiple sources** (the fn's `PlatformCfg.sources[]`: followers from one actor + posts/engagement from
+  another, merged first-non-null; all run in parallel). All 6 confirmed working, pay-per-event: **IG (1)**
+  `apify/instagram-profile-scraper` (`{directUrls,usernames}` → followers + `latestPosts[]` TOP-LEVEL
+  `likesCount`/`commentsCount`); **FB (2)** `apify/facebook-pages-scraper`
+  (`{startUrls:[{url}]}` → `followers`) + `apify/facebook-posts-scraper` (`{startUrls:[{url}],resultsLimit}`
+  → posts w/ TOP-LEVEL `likes`/`shares`, **no comments field** → FB engagement = likes+shares only);
+  **LinkedIn company (2)** `harvestapi/linkedin-company`
+  (`{companies:[url]}` → `followerCount`) + `harvestapi/linkedin-company-posts` (`{targetUrls:[url],maxPosts}`
+  → posts w/ NESTED `engagement:{likes,comments,shares}`); **LinkedIn personal/James (2)**
+  `harvestapi/linkedin-profile-scraper` (`{queries:[url]}` → `followerCount`) + `harvestapi/linkedin-profile-posts`
+  (`{targetUrls:[url],maxPosts}` → nested engagement). **GOTCHA: LinkedIn posts nest engagement in
+  `post.engagement`, Instagram uses top-level `likesCount`/`commentsCount` — `perPostEng()` handles both.**
+  **⇒ All 4 platforms now fill every column** (FB engagement omits comments, a slight undercount).
+  `linkedin-post-comments` is deliberately NOT used (fetches comment THREADS per post, billed
+  per post — the posts actors already return the counts). `MAX_POSTS` env default 24. (First-guess
+  `scrapio/linkedin-company-page-scraper` 403'd = rental; `dendelabs/linkedin-posts-scraper-pro` 404'd = bad
+  slug — replaced by harvestapi.) Weekly cron **`apify-platforms-sync-weekly`** (`0 20 * * 0` = Mon 04:00 PH,
+  migration `20261106121000`) **APPLIED + active**. **Status (2026-11-06): DONE + validated** — table+RPC+cron
+  applied (MAGTestProject), fn deployed v4 `verify_jwt:false` (7 actors), `?sync=1` snapshot (all 4 full):
+  James LI 6897/24/12.79/0.19% · IG 1894/12/1.83/0.1% · FB 1438/24/2.29/0.16% · MAG LI 455/24/3.79/0.83%;
+  upsert confirmed (4 rows/day). **ONLY REMAINING: a manual Cloud Run redeploy** (new route + page).
+  **Newsletter-subscribers card + login-gated content metrics (as of 2026-11-06):** the Content & Social
+  side card "Newsletter subscribers" is wired live to **`GET /api/marketing/content-metrics`** →
+  **`server/metrics/content-metrics.js`** (`getContentMetrics`, plain SELECT of new table
+  **`public.content_social_metrics`**, migration `20261106140000`). That table is a tiny key/value store
+  (`metric_key` PK, `value`, `unit`, `source`, `as_of`, …) for figures that are **login-gated and can't be
+  scraped anonymously** — confirmed by testing: LinkedIn's newsletter **subscriber count is only visible to
+  signed-in members**, so the no-login Apify actors (incl. `automation-lab/linkedin-newsletter-scraper`,
+  which returns newsletter metadata + issue URLs but NO subscriber field) can't get it. Metric `li_newsletter_subscribers_james`
+  (Cas Tips for High Performers, newsletter id `7358785085849919488`). **Set two ways, both UPSERT the same
+  `metric_key`:** (1) **manual** — `update content_social_metrics set value=…, source='manual', as_of=current_date`
+  (read "N subscribers" off the page); (2) **NOW AUTOMATED (2026-11-06) via `linkedin-newsletter-sync` edge fn**
+  (NOT Apify — Apify actors can't: the count is login-gated; verified the no-cookie `automation-lab/linkedin-newsletter-scraper`
+  returns metadata + issue URLs but NO subscriber field). **KEY FINDING: the subscriber count IS in the newsletter
+  page's embedded JSON** (`subscriberCount":N`, HTML-entity-encoded), so a plain cookie-authenticated fetch + regex
+  gets it — **no headless browser, no Apify needed**. The edge fn (`supabase/functions/linkedin-newsletter-sync/`,
+  deploy `--no-verify-jwt`) fetches the newsletter URL with `Cookie: li_at=<LINKEDIN_LI_AT edge secret>` + a browser
+  UA, regexes `subscriberCount`, upserts with `source='linkedin-cookie'`; `?dry=1`/`?sync=1`/bg modes; writes
+  nothing + emails `ALERT_EMAIL` if no count parses (cookie expired / challenged). Weekly cron
+  **`linkedin-newsletter-sync-weekly`** (`30 20 * * 0` = Mon 04:30 PH, migration `20261106150000`). **Verified
+  2026-11-06: works even from Supabase's datacenter IP** (HTTP 200, no challenge) — current value **905**.
+  `LINKEDIN_LI_AT` = a `li_at` session cookie (use a DEDICATED account since the count is visible to any member;
+  cookie lasts ~12 mo, refresh the secret when the alert fires). ToS caveat: automated logged-in access. The page's
+  `applyLiveContentMetrics()` overrides the sample newsletter card with the live value (FY-toggle-safe). Server +
+  frontend change → folds into the same **Cloud Run redeploy**. GOTCHA: `.gitignore` gained `*cookie*`/`*li_at*`
+  (both recursive) so a cookie file can't be committed. **No `config.js` / Cloud Run secret change** — the server only SELECTs the cache; the Apify
+  token lives only in the edge function.
   **DESIGN GUIDE (as of 2026-11-05):** `DESIGN_GUIDE.md` (repo root) is the dev-facing styling
   standard for the whole dashboard — **`public/roas.html` is the reference**. It codifies the color
   tokens (+ page-local `--x-accent`/`--x-shadow` pattern), typography, the **horizontal segmented

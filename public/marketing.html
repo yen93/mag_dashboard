@@ -201,7 +201,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
   <script>
     /* Sample-data mockup — this Overview is "layout only" (see the head badge).
        The KPIs, charts and notes are illustrative placeholders, not live metrics. */
@@ -669,7 +669,7 @@
     }
 
     initPage('marketing');               // wires top bar / theme (no data fetch)
-    renderMarketingHead();
+    renderMarketingHead(true);
     renderMarketingSidebar('overview');
     renderMktKpis();                     // initial paint (enquiries shows … until loaded)
     renderBottomCards();                 // initial paint (cost per enquiry shows … until loaded)

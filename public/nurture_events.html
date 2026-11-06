@@ -6,6 +6,160 @@
   <title>Nurture &amp; Events — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    /* ============================================================
+       Nurture & Events — bespoke visual layer following
+       DESIGN_GUIDE.md and marketing.html. Mock data only.
+       ============================================================ */
+    :root {
+      --mkt-accent: var(--accent);
+      --mkt-accent-2: #6a4bf5;
+      --mkt-accent-soft: #eef2fe;
+      --mkt-shadow:      0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --mkt-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+    }
+    html[data-theme='dark'] {
+      --mkt-accent-2: #9b7dff;
+      --mkt-accent-soft: #1b2440;
+      --mkt-shadow:      0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --mkt-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+    }
+
+    /* Full-width layout matching marketing.html / content_social.html / email_partners.html */
+    .content { max-width: none; }
+    #marketingNav { max-width: none; }
+    .mkt-head { max-width: none; }
+
+    /* Cards */
+    .card {
+      border-radius: 16px;
+      box-shadow: var(--mkt-shadow);
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+    }
+    .card-head.block-head {
+      display: block;
+      margin-bottom: 14px;
+    }
+    .card-head h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      color: var(--text);
+    }
+    .chart-cap {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* Controls bar + segmented toggles (same as marketing.html) */
+    .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: linear-gradient(135deg, var(--mkt-accent), var(--mkt-accent-2));
+      color: #fff;
+      box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
+    }
+
+    /* Top 4 KPI cards */
+    .ne-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin: 16px 0 12px;
+    }
+    @media (max-width: 960px) {
+      .ne-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 540px) {
+      .ne-kpi-grid { grid-template-columns: 1fr; }
+    }
+    .ne-kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 22px 18px;
+      box-shadow: var(--mkt-shadow);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .ne-kpi:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--mkt-shadow-lift);
+    }
+    .ne-kpi .label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .ne-kpi .value {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      font-variant-numeric: tabular-nums;
+      margin: 8px 0 6px;
+      color: var(--text);
+    }
+    .ne-kpi .sub {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+    .ne-kpi .sub.pos {
+      color: var(--pos);
+    }
+
+    /* Mid note between KPI cards and Executive X table */
+    .ne-midnote {
+      margin: 0 0 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    /* Executive X table card */
+    .ne-events-card {
+      padding: 22px 24px;
+    }
+    .ne-table-wrap {
+      overflow-x: auto;
+    }
+    table.ne-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 720px;
+    }
+    table.ne-table th,
+    table.ne-table td {
+      padding: 12px 10px;
+      text-align: right;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+    table.ne-table th:first-child,
+    table.ne-table td:first-child {
+      text-align: left;
+      padding-left: 4px;
+    }
+    table.ne-table th:last-child,
+    table.ne-table td:last-child {
+      padding-right: 4px;
+    }
+    table.ne-table thead th {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding-top: 6px;
+      padding-bottom: 10px;
+    }
+    table.ne-table tbody td {
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -25,20 +179,219 @@
 
   <div class="marketing-layout">
     <nav class="subtabs" id="marketingNav"></nav>
+
     <main class="content">
-      <h1 style="margin:0 0 6px;font-size:24px">Nurture &amp; Events</h1>
-      <p class="muted" style="margin:0 0 22px;font-size:14px">Part of the new Marketing layout.</p>
-      <div class="card">
-        <div class="needs-setup"><strong>Coming soon</strong><span>This tab is a placeholder — its content will be added here.</span></div>
+      <!-- Controls bar (same per-FY top toggle filter as marketing.html) -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="mkt-controls">
+          <span class="ctl-label">Financial year</span>
+          <div class="segmented" id="fySeg">
+            <button data-fy="all">All years</button>
+            <button data-fy="fy22">FY22</button>
+            <button data-fy="fy23">FY23</button>
+            <button data-fy="fy24">FY24</button>
+            <button data-fy="fy25">FY25</button>
+            <button data-fy="fy26">FY26</button>
+            <button class="active" data-fy="fy27">FY27</button>
+          </div>
+          <div class="spacer" style="flex:1"></div>
+          <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
+        </div>
+      </div>
+
+      <!-- Top 4 KPI cards -->
+      <div class="ne-kpi-grid" id="neKpis"></div>
+
+      <!-- Note between KPIs and Executive X card -->
+      <p class="ne-midnote">Reported separately — not added to marketing revenue.</p>
+
+      <!-- Executive X table card -->
+      <div class="card ne-events-card">
+        <div class="card-head block-head">
+          <h3 id="eventsHeading">Executive X</h3>
+          <div class="chart-cap" id="eventsCap">Per event · follow-through within 6 months</div>
+        </div>
+        <div class="ne-table-wrap" tabindex="0" role="region" aria-labelledby="eventsHeading">
+          <table class="ne-table">
+            <thead>
+              <tr>
+                <th>Event</th>
+                <th>Cost</th>
+                <th>Attendees</th>
+                <th>Cost per attendee</th>
+                <th>Orgs that enquired</th>
+                <th>Bookings</th>
+                <th>Revenue</th>
+                <th>Return</th>
+              </tr>
+            </thead>
+            <tbody id="eventsBody"></tbody>
+          </table>
+        </div>
       </div>
     </main>
   </div>
 
   <script src="app.js?v=10"></script>
   <script>
+    /* Nurture & Events — Frontend-only mock data view.
+       Default active FY (FY27) renders the exact figures from the reference design. */
+
+    var MOCK_BY_FY = {
+      fy27: {
+        eventsCap: 'Per event · follow-through within 6 months',
+        kpis: [
+          { label: 'Past keynote clients in nurture',    value: '64', sub: 'Keynote-client tag',                   pos: true },
+          { label: 'Offsite enquiries from past clients', value: '1',  sub: '6 in last 12 months',                  pos: true },
+          { label: 'Offsites booked by past clients',     value: '0',  sub: '3 in last 12 months · $126,000',       pos: true },
+          { label: 'Keynote → Offsite conversion',        value: '8%', sub: '3 of 38 keynote clients · rolling 12 mo', pos: true }
+        ],
+        events: [
+          { event: 'April 2026',    cost: '$14,066',          attendees: '22',                 costPerAttendee: '$639', orgsEnquired: '5', bookings: '2', revenue: '$23,000', returnVal: '1.6×' },
+          { event: 'November 2026', cost: '$14,000 budgeted', attendees: '14 of 25 confirmed', costPerAttendee: '—',    orgsEnquired: '—', bookings: '—', revenue: '—',       returnVal: 'Upcoming' }
+        ]
+      },
+      fy26: {
+        eventsCap: 'Per event · follow-through within 6 months (FY26)',
+        kpis: [
+          { label: 'Past keynote clients in nurture',    value: '56', sub: 'Keynote-client tag',                   pos: true },
+          { label: 'Offsite enquiries from past clients', value: '5',  sub: '5 in FY26',                            pos: true },
+          { label: 'Offsites booked by past clients',     value: '3',  sub: '3 in FY26 · $126,000',                 pos: true },
+          { label: 'Keynote → Offsite conversion',        value: '8%', sub: '3 of 36 keynote clients · rolling 12 mo', pos: true }
+        ],
+        events: [
+          { event: 'October 2025', cost: '$13,400', attendees: '20', costPerAttendee: '$670', orgsEnquired: '4', bookings: '2', revenue: '$21,500', returnVal: '1.6×' },
+          { event: 'April 2026',   cost: '$14,066', attendees: '22', costPerAttendee: '$639', orgsEnquired: '5', bookings: '2', revenue: '$23,000', returnVal: '1.6×' }
+        ]
+      },
+      fy25: {
+        eventsCap: 'Per event · follow-through within 6 months (FY25)',
+        kpis: [
+          { label: 'Past keynote clients in nurture',    value: '44', sub: 'Keynote-client tag',                   pos: true },
+          { label: 'Offsite enquiries from past clients', value: '4',  sub: '4 in FY25',                            pos: true },
+          { label: 'Offsites booked by past clients',     value: '2',  sub: '2 in FY25 · $84,000',                  pos: true },
+          { label: 'Keynote → Offsite conversion',        value: '7%', sub: '2 of 29 keynote clients · rolling 12 mo', pos: true }
+        ],
+        events: [
+          { event: 'November 2024', cost: '$12,800', attendees: '19', costPerAttendee: '$674', orgsEnquired: '4', bookings: '1', revenue: '$14,500', returnVal: '1.1×' },
+          { event: 'May 2025',      cost: '$13,100', attendees: '21', costPerAttendee: '$624', orgsEnquired: '5', bookings: '2', revenue: '$22,000', returnVal: '1.7×' }
+        ]
+      },
+      fy24: {
+        eventsCap: 'Per event · follow-through within 6 months (FY24)',
+        kpis: [
+          { label: 'Past keynote clients in nurture',    value: '35', sub: 'Keynote-client tag',                   pos: true },
+          { label: 'Offsite enquiries from past clients', value: '3',  sub: '3 in FY24',                            pos: true },
+          { label: 'Offsites booked by past clients',     value: '2',  sub: '2 in FY24 · $78,000',                  pos: true },
+          { label: 'Keynote → Offsite conversion',        value: '7%', sub: '2 of 27 keynote clients · rolling 12 mo', pos: true }
+        ],
+        events: [
+          { event: 'November 2023', cost: '$11,900', attendees: '18', costPerAttendee: '$661', orgsEnquired: '3', bookings: '1', revenue: '$13,500', returnVal: '1.1×' },
+          { event: 'April 2024',    cost: '$12,400', attendees: '20', costPerAttendee: '$620', orgsEnquired: '4', bookings: '2', revenue: '$19,000', returnVal: '1.5×' }
+        ]
+      },
+      fy23: {
+        eventsCap: 'Per event · follow-through within 6 months (FY23)',
+        kpis: [
+          { label: 'Past keynote clients in nurture',    value: '26', sub: 'Keynote-client tag',                   pos: true },
+          { label: 'Offsite enquiries from past clients', value: '2',  sub: '2 in FY23',                            pos: true },
+          { label: 'Offsites booked by past clients',     value: '1',  sub: '1 in FY23 · $38,000',                  pos: true },
+          { label: 'Keynote → Offsite conversion',        value: '6%', sub: '1 of 18 keynote clients · rolling 12 mo', pos: true }
+        ],
+        events: [
+          { event: 'March 2023', cost: '$11,200', attendees: '17', costPerAttendee: '$659', orgsEnquired: '3', bookings: '1', revenue: '$13,000', returnVal: '1.2×' }
+        ]
+      },
+      fy22: {
+        eventsCap: 'Per event · follow-through within 6 months (FY22)',
+        kpis: [
+          { label: 'Past keynote clients in nurture',    value: '18', sub: 'Keynote-client tag',                   pos: true },
+          { label: 'Offsite enquiries from past clients', value: '2',  sub: '2 in FY22',                            pos: true },
+          { label: 'Offsites booked by past clients',     value: '1',  sub: '1 in FY22 · $35,000',                  pos: true },
+          { label: 'Keynote → Offsite conversion',        value: '6%', sub: '1 of 16 keynote clients · rolling 12 mo', pos: true }
+        ],
+        events: [
+          { event: 'April 2022', cost: '$10,500', attendees: '16', costPerAttendee: '$656', orgsEnquired: '2', bookings: '1', revenue: '$12,000', returnVal: '1.1×' }
+        ]
+      },
+      all: {
+        eventsCap: 'Per event · follow-through within 6 months',
+        kpis: [
+          { label: 'Past keynote clients in nurture',    value: '64', sub: 'Keynote-client tag',                   pos: true },
+          { label: 'Offsite enquiries from past clients', value: '1',  sub: '6 in last 12 months',                  pos: true },
+          { label: 'Offsites booked by past clients',     value: '0',  sub: '3 in last 12 months · $126,000',       pos: true },
+          { label: 'Keynote → Offsite conversion',        value: '8%', sub: '3 of 38 keynote clients · rolling 12 mo', pos: true }
+        ],
+        events: [
+          { event: 'April 2026',    cost: '$14,066',          attendees: '22',                 costPerAttendee: '$639', orgsEnquired: '5', bookings: '2', revenue: '$23,000', returnVal: '1.6×' },
+          { event: 'November 2026', cost: '$14,000 budgeted', attendees: '14 of 25 confirmed', costPerAttendee: '—',    orgsEnquired: '—', bookings: '—', revenue: '—',       returnVal: 'Upcoming' }
+        ]
+      }
+    };
+
+    function selFyKey() {
+      var b = document.querySelector('#fySeg button.active');
+      return b ? b.getAttribute('data-fy') : 'fy27';
+    }
+
+    function currentData() {
+      var key = selFyKey();
+      return MOCK_BY_FY[key] || MOCK_BY_FY.fy27;
+    }
+
+    function renderKpiRow() {
+      var d = currentData();
+      var html = d.kpis.map(function (k) {
+        var subCls = k.pos ? 'sub pos' : 'sub';
+        return '<div class="ne-kpi">' +
+          '<div class="label">' + esc(k.label) + '</div>' +
+          '<div class="value">' + esc(k.value) + '</div>' +
+          '<div class="' + subCls + '">' + esc(k.sub) + '</div>' +
+        '</div>';
+      }).join('');
+      document.getElementById('neKpis').innerHTML = html;
+    }
+
+    function renderEventsTable() {
+      var d = currentData();
+      document.getElementById('eventsCap').textContent = d.eventsCap;
+      var rowsHtml = d.events.map(function (ev) {
+        return '<tr>' +
+          '<td>' + esc(ev.event) + '</td>' +
+          '<td>' + esc(ev.cost) + '</td>' +
+          '<td>' + esc(ev.attendees) + '</td>' +
+          '<td>' + esc(ev.costPerAttendee) + '</td>' +
+          '<td>' + esc(ev.orgsEnquired) + '</td>' +
+          '<td>' + esc(ev.bookings) + '</td>' +
+          '<td>' + esc(ev.revenue) + '</td>' +
+          '<td>' + esc(ev.returnVal) + '</td>' +
+        '</tr>';
+      }).join('');
+      document.getElementById('eventsBody').innerHTML = rowsHtml;
+    }
+
+    function renderAll() {
+      renderKpiRow();
+      renderEventsTable();
+    }
+
+    function wireSeg(id, onChange) {
+      var seg = document.getElementById(id);
+      if (!seg) return;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (onChange) onChange();
+        });
+      });
+    }
+
     initPage('marketing');
     renderMarketingHead();
     renderMarketingSidebar('nurture-events');
+    renderAll();
+    wireSeg('fySeg', renderAll);
   </script>
 </body>
 </html>

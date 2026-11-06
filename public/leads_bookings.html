@@ -29,11 +29,7 @@
     /* Full-width layout (match Overview) */
     .content { max-width: none; }
     #marketingNav { max-width: none; }
-
-    /* Page head */
-    .lb-head { margin: 0 0 16px; }
-    .lb-head h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -.01em; }
-    .lb-head p { margin: 0; color: var(--text-muted); font-size: 14px; }
+    .mkt-head { max-width: none; }
 
     /* Cards */
     .card { border-radius: 16px; box-shadow: var(--mkt-shadow);
@@ -110,11 +106,6 @@
     <nav class="subtabs" id="marketingNav"></nav>
 
     <main class="content">
-      <div class="lb-head">
-        <h1>Leads &amp; Bookings</h1>
-        <p>Where enquiries come from, and how many become bookings — by source.</p>
-      </div>
-
       <!-- Controls bar (same FY toggle + placement as marketing.html) -->
       <div class="card" style="margin-bottom:16px">
         <div class="mkt-controls">
@@ -182,7 +173,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
   <script>
     /* Leads & Bookings — LIVE.
        • "Enquiries by source" chart + "By source" table  ← GET /api/marketing/leads-by-source
@@ -381,6 +372,7 @@
     }
 
     initPage('marketing');
+    renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('leads-bookings');
     renderSourceTable();   // initial (shows Loading…)
     renderCards();         // initial (shows …)

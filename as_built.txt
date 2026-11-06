@@ -1,6 +1,51 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-05 (MARKETING "SPEND & ROI" TAB BUILT OUT + MADE LIVE — public/spend_roi.html
+Last updated: 2026-11-06 (CONTENT & SOCIAL "PLATFORMS" BUILT LIVE VIA APIFY + LINKEDIN NEWSLETTER SUBSCRIBER
+COUNT VIA A COOKIE FETCH. (A) NEW cache public.social_platform_stats (PK (platform_key, snapshot_date), RLS on;
+migration 20261106120000) + RPC reload_social_platform_stats(_rows jsonb) (security definer, empty-payload
+refusal, UPSERT on the PK — never truncates). Filled WEEKLY (upsert-only) by NEW edge fn apify-platforms-sync
+(supabase/functions/apify-platforms-sync/, deploy --no-verify-jwt) which scrapes PUBLIC social stats via Apify
+run-sync-get-dataset-items — each platform MERGES multiple source actors (followers + posts) in parallel,
+degrades per-platform, all-fail guard + Gmail alert. 7 actors: IG apify/instagram-profile-scraper; FB
+apify/facebook-pages-scraper (followers) + apify/facebook-posts-scraper (engagement, likes+shares, no comments);
+LinkedIn company harvestapi/linkedin-company + harvestapi/linkedin-company-posts; LinkedIn personal
+harvestapi/linkedin-profile-scraper + harvestapi/linkedin-profile-posts. GOTCHA: LinkedIn posts nest engagement
+in post.engagement{likes,comments,shares}; IG uses top-level likesCount/commentsCount — perPostEng() handles
+both. Served by NEW server/metrics/marketing-platforms.js + route GET /api/marketing/platforms (latest snapshot
+per platform PER FY; cached 10 min). Secret APIFY_API_TOKEN (edge). Weekly cron apify-platforms-sync-weekly
+(0 20 * * 0 = Mon 04:00 PH, migration 20261106121000). Validated 2026-11-06: James LI 6897 · IG 1894 · FB 1438 ·
+MAG LI 455 followers, all with engagement. (B) public/content_social.html made live: FY-toggle-driven Platforms
+TABLE (Platform · Posts · Avg engagement/post · Engagement rate), Followers moved to per-platform CARDS
+(#followerCards), the lower chart is now a LIVE "Engagement by platform" bar chart (renderEngagementChart, total
+engagement per platform; NB social_platform_stats has NO impressions — private — so it shows engagement). All
+NON-LIVE tiles now show a red "pending" chip (<span class="chip warn">pending</span>) instead of sample numbers
+(4 KPI tiles + Article views + By-format-and-pillar); "Sample data — layout only" badge REMOVED
+(renderMarketingHead(true)); bumped app.js?v=10→?v=11. (C) NEW cache public.content_social_metrics (metric_key PK /
+value / unit / source / as_of; migration 20261106140000) for LOGIN-GATED figures + NEW server/metrics/content-metrics.js
++ route GET /api/marketing/content-metrics; the "Newsletter subscribers" side card reads it. Confirmed no-login
+Apify actors CAN'T get the newsletter subscriber count (login-gated) — but the count IS in the newsletter page's
+embedded JSON, so NEW edge fn linkedin-newsletter-sync (supabase/functions/linkedin-newsletter-sync/, deploy
+--no-verify-jwt) does a COOKIE-authenticated fetch (Cookie: li_at=<LINKEDIN_LI_AT secret>), regexes subscriberCount,
+upserts content_social_metrics; ?dry/?sync/bg; Gmail alert + no write if the cookie expires/challenges. Verified it
+works even from Supabase's datacenter IP → 905 subscribers stored. Weekly cron linkedin-newsletter-sync-weekly
+(30 20 * * 0 = Mon 04:30 PH, migration 20261106150000). Secret LINKEDIN_LI_AT (edge; use a DEDICATED account,
+~12-mo cookie, refresh on alert). (D) DESIGN_GUIDE.md §8 gained the red "pending" tile standard; .gitignore gained
+*cookie*/*li_at* (recursive). (E) public/marketing.html: "Sample data — layout only" badge removed
+(renderMarketingHead(true), app.js?v=10→?v=11). Server/frontend/route changes NEED a manual Cloud Run redeploy;
+the edge fns, migrations, crons and secrets are already live on Supabase. Previously 2026-11-05 (MARKETING SUB-TABS — SHARED HEAD ON THE TWO LIVE PAGES. Frontend-only. The shared
+Marketing head ("Marketing" h1 + the framing question "Are we getting more keynote enquiries and turning them
+into bookings?") now shows on EVERY Marketing sub-tab, including the two LIVE ones, and the amber "Sample data
+— layout only" badge was removed from those two. (1) public/app.js renderMarketingHead() now takes a `live`
+arg: the h1 + framing question always render; the "Sample data — layout only" badge is emitted only when
+!live (ternary). Backward-compatible — the no-arg calls on the Overview + the 5 still-sample sub-tabs are
+unchanged and keep the badge. (2) public/leads_bookings.html + public/spend_roi.html — each dropped its
+bespoke page-title head (the .lb-head / .sr-head div + its now-dead CSS) and instead calls
+renderMarketingHead(true) right after initPage('marketing') (before renderMarketingSidebar), so both now show
+the shared Marketing head WITHOUT the badge. Both bumped app.js?v=10 → app.js?v=11 (the only two pages
+depending on the new `live` arg; the other Marketing pages stay ?v=10 since the change is backward-compatible).
+Net: framing header on all sub-tabs; badge gone from Leads & Bookings + Spend & ROI, still present on the
+mockup tabs (Overview + Content & Social, Email & Partners, Website & Search, Nurture & Events, Monthly Log).
+NEEDS a manual Cloud Run redeploy. Previously same day 2026-11-05 (MARKETING "SPEND & ROI" TAB BUILT OUT + MADE LIVE — public/spend_roi.html
 rebuilt from the "Coming soon" placeholder into a live page, + ONE new backend route/module. (A) NEW
 server/metrics/marketing-channel-results.js (getMarketingChannelResults) + NEW route
 GET /api/marketing/channel-results (requireAuth, 10-min cache) on the `marketing` router — returns the TWO
@@ -251,7 +296,16 @@ SCRIPTS / APP CODE
   `marketing` router mounted at /api/marketing).
   The one WRITE route is POST /api/operations/contact-sources/jc-tag (set the JC
   manual-review tag; requireAuth + canReviewJc gate = admins + James). Listens on
-  $PORT (default 8080).
+  $PORT (default 8080). (NEW 2026-11-06: two more `marketing` routes —
+  GET /api/marketing/platforms → server/metrics/marketing-platforms.js (latest
+  social_platform_stats snapshot per platform per FY) and GET /api/marketing/content-metrics
+  → server/metrics/content-metrics.js (login-gated figures from content_social_metrics,
+  e.g. the newsletter subscriber count). Both plain SELECTs, 10-min cache.)
+- public/content_social.html — Marketing → Content & Social page, now LIVE: FY-driven
+  Platforms table + per-platform follower cards + a live "Engagement by platform" bar
+  chart (all from /api/marketing/platforms) + a live "Newsletter subscribers" card (from
+  /api/marketing/content-metrics); non-live tiles show a red "pending" chip; no sample
+  badge (renderMarketingHead(true), app.js?v=11).
 - server/auth.js / server/users.js — unchanged: JWT login, 3 bcrypt-hashed
   seed users (see README for demo credentials).
 - server/config.js — reads every data-source credential from env vars
@@ -678,6 +732,19 @@ EXTERNAL INTEGRATIONS
   selected FY + prior FY, ONE Chat Completions call, no tools) but a ONE-SHOT insight generator, not a
   chat widget — returns { insight } or { insight:null, note } when the key is unset (the card shows the
   note gracefully). REUSES the same OPENAI_API_KEY — no new secret.
+- **Apify** (api.apify.com) — used by the apify-platforms-sync edge function to scrape PUBLIC social
+  stats (followers, post counts, per-post engagement) for the Content & Social "Platforms" table, via
+  the run-sync-get-dataset-items endpoint. Pay-per-event actors: IG apify/instagram-profile-scraper;
+  FB apify/facebook-pages-scraper + apify/facebook-posts-scraper; LinkedIn harvestapi/linkedin-company
+  (+ -company-posts) and harvestapi/linkedin-profile-scraper (+ -profile-posts). Impressions/reach are
+  NOT scraped (private analytics). Credential APIFY_API_TOKEN is a Supabase EDGE secret (not on Cloud
+  Run — the dashboard only SELECTs the resulting cache).
+- **LinkedIn (cookie-authenticated fetch)** (linkedin.com) — used by the linkedin-newsletter-sync edge
+  function to read the login-gated newsletter SUBSCRIBER COUNT, which the public Apify actors can't get.
+  A plain HTTPS GET of the newsletter page with Cookie: li_at=<cookie> returns the count inside the page's
+  embedded JSON (no headless browser). Credential LINKEDIN_LI_AT is a Supabase EDGE secret = a li_at
+  session cookie from a DEDICATED LinkedIn account (count is visible to any signed-in member); ~12-month
+  life, refreshed manually when the function's expiry alert fires. ToS caveat: automated logged-in access.
 
 DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
 - Most metrics are read live from MAG's existing AC-mirror / leads / reviews
@@ -730,6 +797,25 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     20261105131000 (rpc body re-created vs renamed table) → 20261105140000 (add
     is_tailor col + backfill) → 20261105150000 (rpc rewritten to upsert-only).
     Filled by the ac-indirect-deals-sync edge fn (see AUTOMATIONS).
+  - public.social_platform_stats (NEW 2026-11-06; migration 20261106120000) — weekly
+    snapshots of each social platform's PUBLIC stats for the Content & Social "Platforms"
+    table. PK (platform_key, snapshot_date); cols platform_name, network, profile_url,
+    followers, posts, total_engagement, avg_engagement_per_post, engagement_rate, raw
+    (jsonb), synced_at. platform_key ∈ mag_linkedin / mag_facebook / mag_instagram /
+    james_linkedin. RLS enabled; index (platform_key, snapshot_date desc). One row per
+    platform per weekly snapshot. Rebuilt by RPC reload_social_platform_stats(_rows jsonb)
+    — security definer, empty-payload refusal, UPSERT on (platform_key, snapshot_date)
+    (never deletes/truncates). Impressions/reach deliberately NOT stored (not scrapable).
+    Filled weekly by the apify-platforms-sync edge fn; read by server/metrics/
+    marketing-platforms.js (latest snapshot per platform per FY).
+  - public.content_social_metrics (NEW 2026-11-06; migration 20261106140000) — small
+    key/value store for LOGIN-GATED content figures that can't be scraped anonymously.
+    Cols metric_key (PK), label, value (numeric), unit, source ('manual'|'linkedin-cookie'),
+    as_of (date), note, updated_at. Seeded metric li_newsletter_subscribers_james (James's
+    LinkedIn newsletter subscriber count; current value 905). RLS enabled. Set by the
+    linkedin-newsletter-sync edge fn (cookie fetch) or a manual upsert; read by
+    server/metrics/content-metrics.js → GET /api/marketing/content-metrics (the Content &
+    Social "Newsletter subscribers" card).
   - public.roas_year_on_year — DEPRECATED/UNUSED as of 2026-10-20 (migration
     20261020080000, seeded 2022–2026 from the "MAG Marketing ROAS Report" sheet). It
     was the ROAS page cache when the tab mirrored that sheet; the tab now computes live
@@ -1264,6 +1350,29 @@ AUTOMATIONS / ROUTINES
   20261105131000_reload_ac_indirect_deals_body.sql,
   20261105140000_ac_indirect_deals_is_tailor.sql,
   20261105150000_reload_ac_indirect_deals_upsert.sql (uncommitted).
+- apify-platforms-sync (NEW 2026-11-06; Supabase Edge Function, MAG project; pg_cron
+  `apify-platforms-sync-weekly`, '0 20 * * 0' = Mon 04:00 PH) — weekly snapshot of each
+  social platform's PUBLIC stats into public.social_platform_stats (upsert-only). Scrapes
+  via Apify run-sync-get-dataset-items; each platform MERGES source actors (followers +
+  posts) in PARALLEL, degrades per-platform (one broken actor doesn't sink the rest),
+  all-fail guard, Gmail alert. 7 actors (IG profile; FB pages + posts; LinkedIn company +
+  company-posts; LinkedIn profile + profile-posts). Modes ?dry=1/?sync=1/bare; deployed
+  --no-verify-jwt; cron calls ?sync=1 + 120s pg_net timeout. Secrets APIFY_API_TOKEN +
+  SUPABASE_* + GMAIL_* (edge). Files: supabase/functions/apify-platforms-sync/index.ts,
+  migrations 20261106120000_create_social_platform_stats.sql,
+  20261106121000_schedule_apify_platforms_sync.sql.
+- linkedin-newsletter-sync (NEW 2026-11-06; Supabase Edge Function, MAG project; pg_cron
+  `linkedin-newsletter-sync-weekly`, '30 20 * * 0' = Mon 04:30 PH) — weekly pull of the
+  LinkedIn newsletter SUBSCRIBER COUNT into public.content_social_metrics. The count is
+  login-gated but sits in the newsletter page's embedded JSON, so the fn does a plain
+  COOKIE-authenticated GET (Cookie: li_at=<LINKEDIN_LI_AT>), regexes subscriberCount, and
+  upserts content_social_metrics (source='linkedin-cookie'). No headless browser / no Apify.
+  Writes nothing + emails ALERT_EMAIL if no count parses (cookie expired / challenged).
+  Modes ?dry=1/?sync=1/bare; deployed --no-verify-jwt; cron calls ?sync=1 + 120s timeout.
+  Verified working from Supabase's datacenter IP (905 subscribers). Secrets LINKEDIN_LI_AT
+  (a li_at cookie from a DEDICATED account, ~12-mo life, refresh on alert) + SUPABASE_* +
+  GMAIL_* (edge). Files: supabase/functions/linkedin-newsletter-sync/index.ts, migration
+  20261106150000_schedule_linkedin_newsletter_sync.sql. ToS caveat: automated logged-in access.
 - GA4 & Ads Leads Tracking daily chain — as of 2026-10-09 driven by ONE cron job
   and ONE orchestrator edge function (was 3 staggered jobs). pg_cron job
   `contact-sources-sync-daily` ('0 22 * * *' = 06:00 PH daily) POSTs the

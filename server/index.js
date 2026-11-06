@@ -21,6 +21,8 @@ import { getRoasCounted } from './metrics/roas-counted.js';
 import { getMarketingRoi } from './metrics/marketing-roi.js';
 import { getMarketingOverview } from './metrics/marketing-overview.js';
 import { getMarketingLeadsBySource } from './metrics/marketing-leads-by-source.js';
+import { getMarketingPlatforms } from './metrics/marketing-platforms.js';
+import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
 import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
 import { getMarketingChannelResults } from './metrics/marketing-channel-results.js';
@@ -373,6 +375,31 @@ marketing.get('/leads-by-source', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:leads-by-source]', err);
     res.status(502).json({ error: 'Failed to load leads by source from data source.', detail: err.message });
+  }
+});
+// Platforms — latest weekly snapshot per social platform (followers / posts / engagement)
+// + week-over-week follower change, for the "Platforms" table on content_social.html.
+// Plain SELECT of public.social_platform_stats (filled weekly by apify-platforms-sync).
+// See server/metrics/marketing-platforms.js. Cached briefly.
+marketing.get('/platforms', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:platforms', getMarketingPlatforms, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:platforms]', err);
+    res.status(502).json({ error: 'Failed to load platform stats from data source.', detail: err.message });
+  }
+});
+// Content metrics — login-gated figures (LinkedIn newsletter subscribers, article views)
+// set manually or by a cookie-authenticated Apify sync. Plain SELECT of
+// public.content_social_metrics. See server/metrics/content-metrics.js. Cached briefly.
+marketing.get('/content-metrics', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:content-metrics', getContentMetrics, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:content-metrics]', err);
+    res.status(502).json({ error: 'Failed to load content metrics from data source.', detail: err.message });
   }
 });
 // Live AI Insight — a one-shot OpenAI insight over the live Overview + ROI figures for the

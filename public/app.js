@@ -231,7 +231,11 @@ function renderTable(containerId, rows, columns) {
    shown above the sub-tab bar on the Marketing Overview and its sub-tab pages.
    Injected just before #marketingNav so every page shares one definition.
    Single source of truth for the head text/badge — call once per page. */
-function renderMarketingHead() {
+/* Shared Marketing head: "Marketing" h1 + the framing question, injected just
+   before #marketingNav so it shows on every Marketing sub-tab. Pass live=true on
+   pages whose data is LIVE to omit the amber "Sample data — layout only" badge
+   (it would mislead there). */
+function renderMarketingHead(live) {
   var nav = document.getElementById('marketingNav');
   if (!nav || document.getElementById('marketingHead')) return;
   var head = document.createElement('div');
@@ -240,7 +244,7 @@ function renderMarketingHead() {
   head.innerHTML =
     '<div><h1>Marketing</h1>' +
     '<p class="mkt-sub">Are we getting more keynote enquiries and turning them into bookings?</p></div>' +
-    '<span class="mkt-sample">Sample data — layout only</span>';
+    (live ? '' : '<span class="mkt-sample">Sample data — layout only</span>');
   nav.parentNode.insertBefore(head, nav);
 }
 

@@ -1,0 +1,101 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-05
+Session: Fixed the two now-LIVE Marketing sub-tabs (public/leads_bookings.html and
+public/spend_roi.html) so the shared Marketing header — the "Marketing" h1 + the
+framing question "Are we getting more keynote enquiries and turning them into
+bookings?" — shows on EVERY Marketing sub-tab, and removed the amber "Sample data —
+layout only" badge from those two live pages (while keeping it on the tabs that are
+still mockups). Frontend-only change; no DB, no git. Needs a manual Cloud Run
+redeploy to go live.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/connection string was pasted into
+this chat. Credentials were not involved in this session.
+
+--------------------------------------------------------------------------------
+USER:
+fix leads_bookings.html and spend_roi.html so that marketing header with "Are we
+getting more keynote enquiries and turning them into bookings?" line is shown in
+all subtabs in this dept. also remove "Sample data — layout only" for tabs that are
+no longer "coming soon".
+
+(Editor selection context: line 424 "sample" in public/marketing.html.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the existing structure before editing:
+
+  - public/app.js `renderMarketingHead()` (line ~234) is the single source of truth
+    for the Marketing head. It injects a `.mkt-head` div (id="marketingHead") just
+    before #marketingNav, containing "<h1>Marketing</h1>" + the framing question
+    "<p class='mkt-sub'>Are we getting more keynote enquiries and turning them into
+    bookings?</p>" + "<span class='mkt-sample'>Sample data — layout only</span>".
+    It's guarded idempotent (returns if #marketingHead already exists).
+  - The Overview (marketing.html) + the 5 still-sample sub-tabs call
+    renderMarketingHead() (no arg) → they get the head WITH the sample badge.
+  - leads_bookings.html and spend_roi.html (both now LIVE) deliberately did NOT call
+    renderMarketingHead() — to avoid stamping the misleading "Sample data" badge —
+    and instead rendered their own bespoke `.lb-head` / `.sr-head` page-title blocks
+    ("Leads & Bookings" / "Spend & ROI" + a one-line description). So they were the
+    only two sub-tabs missing the consistent Marketing framing header.
+
+Chose the single-source-of-truth fix (extend the shared helper) over hand-
+duplicating head markup into the two pages.
+
+Changes made:
+
+1. public/app.js — changed `renderMarketingHead()` to `renderMarketingHead(live)`.
+   The "Marketing" h1 + framing question always render; the amber "Sample data —
+   layout only" badge is now emitted only when `live` is falsy:
+   `(live ? '' : '<span class="mkt-sample">Sample data — layout only</span>')`.
+   Added a doc comment. The existing no-arg calls on the sample pages are
+   unchanged (backward-compatible — they still get the badge).
+
+2. public/leads_bookings.html —
+   - Removed the bespoke `.lb-head` div (the "Leads & Bookings" title block) from
+     the markup, and removed its now-dead `.lb-head` CSS rules from the <style>.
+   - Added `renderMarketingHead(true);` right after `initPage('marketing')` and
+     before `renderMarketingSidebar('leads-bookings')` — so it now shows the shared
+     Marketing head without the sample badge.
+   - Bumped `app.js?v=10` → `app.js?v=11` (this page depends on the new `live` arg).
+
+3. public/spend_roi.html — identical treatment:
+   - Removed the `.sr-head` div ("Spend & ROI" title block) + its dead `.sr-head`
+     CSS rules.
+   - Added `renderMarketingHead(true);` after `initPage('marketing')`, before
+     `renderMarketingSidebar('spend-roi')`.
+   - Bumped `app.js?v=10` → `app.js?v=11`.
+
+Verified with grep that no stray `lb-head`/`sr-head` references remain in either
+file, and that each page now has exactly one renderMarketingHead(true) call, the
+renderMarketingSidebar call, and the `?v=11` script tag.
+
+Version-bump reasoning: only the two changed pages were bumped to v=11 (the only
+ones whose behavior depends on the new `live` parameter). The change is strictly
+backward-compatible, so the other Marketing pages' `app.js?v=10` references were
+left untouched — their no-arg renderMarketingHead() call works identically under
+old or new app.js.
+
+Net effect: the Marketing framing header now appears on ALL Marketing sub-tabs; the
+"Sample data — layout only" badge is gone from the two live ones (Leads & Bookings,
+Spend & ROI) but remains on the tabs still being mockups (Overview + Content &
+Social, Email & Partners, Website & Search, Nurture & Events, Monthly Log).
+
+Told the user this is a frontend-only change that needs a manual Cloud Run redeploy
+to go live (Claude never deploys the dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — document the session (save chat transcript, update as_built.txt, CLAUDE.md,
+.gitignore). No git commands.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation steps: saved this chat transcript, reviewed as_built.txt /
+CLAUDE.md / .gitignore for needed updates (see this file's companion edits), and
+confirmed no git commands were run — the user handles staging/commit/push
+themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

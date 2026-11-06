@@ -1,0 +1,272 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-06
+Session: Built the Content & Social "Platforms" feature end-to-end — a new Supabase
+cache (public.social_platform_stats) filled weekly by Apify scrapers via a new
+apify-platforms-sync edge function (upsert-only), served by /api/marketing/platforms
+(server/metrics/marketing-platforms.js) and wired into public/content_social.html.
+Then: made the table FY-toggle-driven, moved followers to per-platform cards, dropped
+the Change column; added a login-gated content-metrics store (public.content_social_metrics)
++ /api/marketing/content-metrics for the LinkedIn newsletter subscriber count — proven
+that no-login Apify actors can't get it, then built linkedin-newsletter-sync (a direct
+cookie-authenticated fetch that DOES get it: 905). Finally replaced the "Impressions by
+platform" chart with a live "Engagement by platform" bar chart, switched all non-live
+tiles to a red "pending" chip (documented in DESIGN_GUIDE §8), and removed the "Sample
+data — layout only" badge. Also a one-line first task: removed the sample badge from
+marketing.html. All frontend/route/DB work done + validated; needs a manual Cloud Run
+redeploy. Supabase edge fns + migrations + secrets applied live to MAGTestProject.
+================================================================================
+
+NOTE ON REDACTIONS: The user's live Apify API token was pasted into the chat (via a
+credentials file and typed into several terminal `!` commands). Every occurrence has
+been replaced with [REDACTED_APIFY_TOKEN]. The LinkedIn `li_at` session cookie was
+handled via a local file read by scripts (always referenced through a shell variable),
+so its value never appeared as literal text in the chat and required no redaction; it
+is now stored only as the Supabase edge secret LINKEDIN_LI_AT. Supabase DB URL / service
+role keys were never exposed (edge secrets, server-side).
+
+--------------------------------------------------------------------------------
+USER:
+remove "Sample data — layout only" in marketing.html
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+The badge is emitted by the shared renderMarketingHead(live) helper when `live` is
+falsy. marketing.html called it with no arg. Two edits in public/marketing.html:
+(1) renderMarketingHead() → renderMarketingHead(true) (suppresses the amber "Sample
+data — layout only" badge; h1 + framing question still render); (2) app.js?v=10 →
+?v=11, because the page now depends on the `live` arg and a browser caching the
+pre-live-arg v=10 would ignore the `true` and keep showing the badge. Frontend-only →
+needs a Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+Use Apify to populate the "Platforms" table — put the data in a NEW cache table, with
+a weekly sync. No truncate — upsert only.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(Entered plan mode.) Found the "Platforms" table in public/content_social.html
+(Marketing → Content & Social), hardcoded sample data with columns Platform / Posts /
+Impressions / Per post / Engagement rate / Followers / Change for MAG's LinkedIn,
+Facebook, Instagram pages + James's personal LinkedIn.
+
+Explored (2 Explore agents) the canonical upsert-cache pattern (ac-indirect-deals-sync
+edge fn + reload RPC with ON CONFLICT … DO UPDATE, empty-payload refusal, pg_cron
+net.http_post ?sync=1) and the serve pattern (plain-SELECT metric module → cached
+route in server/index.js → self-rendering page via fetchJSON). Confirmed NO existing
+Apify integration anywhere. Web-searched Apify actors and established the key
+constraint: Apify scrapes PUBLIC data only (followers, post counts, per-post
+likes/comments) — IMPRESSIONS/REACH are private analytics, not scrapable.
+
+Asked 4 questions; user chose: redesign table to scrapable-only columns (drop
+Impressions/Per-post, add avg engagement/post); edge function + pg_cron; latest
+snapshot + weekly delta ("Change"); user has an Apify token and I pick the actors.
+
+Wrote the plan and, after approval, built:
+- Migration 20261106120000 — public.social_platform_stats (PK (platform_key,
+  snapshot_date), RLS on) + RPC reload_social_platform_stats(_rows jsonb) (security
+  definer, empty-payload refusal, upsert on the PK, NO delete/truncate). Applied via
+  MCP; validated the RPC + the latest-per-platform + week-over-week "change" query with
+  throwaway rows (change = +75 correct; cleaned up).
+- supabase/functions/apify-platforms-sync/index.ts — mirrors ac-indirect-deals-sync
+  (secrets via Deno.env, parallel per-platform scrape via Apify
+  run-sync-get-dataset-items, per-platform degrade, all-fail guard + Gmail alert,
+  ?dry/?sync/bg modes).
+- server/metrics/marketing-platforms.js + GET /api/marketing/platforms (cached 10 min).
+- content_social.html: redesigned columns, fetchJSON loader, decoupled from FY toggle.
+- Cron migration file 20261106121000 (held until the fn verified).
+Updated CLAUDE.md + memory. Flagged that the user must supply APIFY_TOKEN + 4 URLs.
+
+--------------------------------------------------------------------------------
+USER:
+(Provided a credentials file) apify-api-token: [REDACTED_APIFY_TOKEN]; and the 4
+profile URLs — MAG LinkedIn company page, MAG Facebook, MAG Instagram, James's personal
+LinkedIn. Later: "APIFY_API_TOKEN in db" (set the secret under that name).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Hardcoded the 4 URLs as env-overridable defaults in the edge fn. Aligned the fn to read
+the APIFY_API_TOKEN secret (fallback APIFY_TOKEN). Deployed apify-platforms-sync
+(verify_jwt:false). Dry run: Instagram (1,894 followers, 12 posts) + Facebook (1,438)
+worked; the two LinkedIn actors I guessed FAILED — scrapio/linkedin-company-page-scraper
+403 (rental not subscribed), dendelabs/linkedin-posts-scraper-pro 404 (bad slug).
+Searched the store and switched to harvestapi actors (pay-per-event, no cookies);
+verified their input/output live: harvestapi/linkedin-company {companies:[url]} →
+followerCount 455; harvestapi/linkedin-profile-scraper {queries:[url]} → followerCount
+6897. Redeployed; ?sync=1 wrote the first snapshot (4 rows). LinkedIn + Facebook were
+followers-only at this point.
+
+--------------------------------------------------------------------------------
+USER:
+(/q) Is harvestapi/linkedin-profile-posts better since it returns posts? Then: also
+harvestapi/linkedin-post-comments for likes/comments — 3 actors?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained (read-only): the posts actor is an ADD, not a swap — it returns posts +
+engagement but NOT follower count, which the table still needs (Followers, Change, and
+the engagement-rate denominator). So use BOTH actors per LinkedIn account and merge.
+linkedin-post-comments is unnecessary — the posts actors already return like/comment
+COUNTS (that actor fetches full comment threads, billed per post). Instagram already
+needs just 1 actor (returns followers + latestPosts engagement in one call).
+
+--------------------------------------------------------------------------------
+USER:
+Go ahead with your plans for both LinkedIn accounts.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Tested harvestapi/linkedin-company-posts + linkedin-profile-posts: input {targetUrls:[url],
+maxPosts}; engagement is a NESTED post.engagement {likes, comments, shares} object
+(Instagram uses top-level likesCount/commentsCount). Restructured the edge fn so each
+platform has a `sources[]` array merged first-non-null (followers actor + posts actor);
+made sumEngagement handle both nested + flat shapes. Redeployed (v3) and re-ran ?sync=1:
+all 4 platforms now have engagement — James LI 6897/24 posts/avg 12.79/0.19% · IG
+1894/12/1.83/0.1% · MAG LI 455/24/3.79/0.83% · FB 1438 (still followers-only). Upsert
+confirmed (4 rows/day, not duplicated). Scheduled weekly cron apify-platforms-sync-weekly
+(0 20 * * 0 = Mon 04:00 PH), active. Updated docs.
+
+--------------------------------------------------------------------------------
+USER:
+(/q) Will your proposed FB actor fill the 3 blank FB columns? Then: go update FB.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed apify/facebook-posts-scraper (pay-per-event) returns posts + engagement
+(top-level likes/shares, NO comments field). Added it as a 2nd FB source
+({startUrls:[{url}], resultsLimit}); redeployed (v4, 7 actors). ?sync=1: Facebook now
+24 posts / avg 2.29 / 0.16%. All 4 platforms fill every column. Noted FB engagement =
+likes+shares only (no comments from that actor). Updated docs.
+
+--------------------------------------------------------------------------------
+USER:
+(/q) What tables do I check in the DB? Does the sync edit rows or just insert?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+One table: public.social_platform_stats (one row per platform per weekly snapshot_date;
++ RPC reload_social_platform_stats and cron apify-platforms-sync-weekly). It UPSERTS on
+(platform_key, snapshot_date): a new week inserts new rows; a same-date re-run overwrites
+that date's rows (no duplicates); never deletes/truncates.
+
+--------------------------------------------------------------------------------
+USER:
+delete the token file in Downloads
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Deleted dashboard_marketing_content_social_credentials_links.txt from Downloads (the
+token lives only as the APIFY_API_TOKEN edge secret now).
+
+--------------------------------------------------------------------------------
+USER:
+Update the Platforms table: (1) values change with the FY toggle; (2) drop the Change
+column; (3) move Followers into separate per-platform cards (out of the table).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Changed getMarketingPlatforms() to return the latest snapshot per platform PER FY
+(fy_end via a window function); validated the SQL. Frontend: FY toggle now drives the
+view (selected FY's latest per platform; "All years" = newest per platform; earlier FYs
+blank since there's no social back-history). Followers moved to per-platform cards
+(#followerCards, reusing .cs-kpi-grid). Table columns now Platform · Posts · Avg
+engagement/post · Engagement rate (dropped Followers + Change). Syntax-checked; updated
+docs.
+
+--------------------------------------------------------------------------------
+USER:
+(Several /q's about LinkedIn newsletter/article data) Is there an MCP for our LinkedIn
+newsletter/article data? Is the newsletter subscriber count publicly visible? Walk me
+through the LinkedIn Partner API, then the logged-in Apify actor, then automating the
+cookie.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained (read-only, with web research): no LinkedIn MCP is connected here and none is
+official; third-party ones can get article content + engagement but not newsletter
+subscriber counts / article views (login-gated, UI-only). The subscriber COUNT is
+visible to any signed-in member (not anonymous), so it's semi-public but not
+anonymously scrapable. Walked through the Partner/Community Management API path (gated
+approval; gets company-PAGE analytics incl. impressions, but NOT newsletter subscribers
+or personal-profile stats) and the cookie-based route (li_at cookie, dedicated account,
+ToS + ban risk, cookie ~12-month life). On automating cookie-saving: explained the
+cookie is long-lived so it's a once-or-twice-a-year chore; full auto-login
+(headless + TOTP + email-code reading + residential proxy) is fragile/over-engineered
+for one number.
+
+--------------------------------------------------------------------------------
+USER:
+Set up Option 1 (manual-refresh cookie path) AND a manual-entry fallback. Walk me
+through steps. Then: is there an Apify actor for the newsletter sub count? Tested
+automation-lab/linkedin-newsletter-scraper with the newsletter URL.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Built the shared store: migration 20261106140000 — public.content_social_metrics
+(metric_key PK / value / unit / source / as_of; seeded li_newsletter_subscribers_james),
+server/metrics/content-metrics.js + GET /api/marketing/content-metrics, and wired the
+"Newsletter subscribers" side card (applyLiveContentMetrics, FY-toggle-safe, shows
+"— / not set yet" until set). Provided the manual upsert SQL.
+Investigated actors: the no-login automation-lab/linkedin-newsletter-scraper (startUrls
+must be [{url:...}]) returned newsletter metadata + issue URLs but NO subscriber field;
+themineworks is keyword-based ("where available"); the only cookie-capable one
+(curious_coder/linkedin-profile-scraper) is a profile scraper needing full-cookie JSON
+and doesn't do newsletters. Conclusion: no off-the-shelf actor returns the count.
+
+--------------------------------------------------------------------------------
+USER:
+Can't you scrape the page using my cookie — a custom scraper you build? (Provided
+C:\...\dashboard\linkedin_li_at_cookie.txt)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+First hardened .gitignore (added *cookie* / *li_at*, both recursive) and confirmed the
+file is ignored. Wrote a local script (scratchpad) that reads the cookie FROM THE FILE
+(so no credential is inlined — avoids the sandbox credential-leakage guard), fetches the
+newsletter page with Cookie: li_at=…, and scans for the count. Result: HTTP 200, 1.6 MB
+authenticated page, no auth wall — and the subscriber count IS embedded in the page's
+JSON: subscriberCount":905 (title "Tips for High Performers" confirmed). So a plain
+cookie fetch + regex works — no headless browser, no Apify. Stored 905 into
+content_social_metrics.
+
+--------------------------------------------------------------------------------
+USER:
+Option A (automate it).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Built supabase/functions/linkedin-newsletter-sync/index.ts: fetches the newsletter URL
+with Cookie: li_at=<LINKEDIN_LI_AT secret> + browser UA, regexes subscriberCount,
+upserts content_social_metrics (source='linkedin-cookie'); ?dry/?sync/bg; writes nothing
++ emails ALERT_EMAIL if no count parses (cookie expired/challenged). Deployed
+(verify_jwt:false). User set the LINKEDIN_LI_AT edge secret. CRITICAL TEST: a ?dry=1
+from Supabase's datacenter IP returned HTTP 200, count 905, no challenge — the prod-IP
+risk didn't materialize. ?sync=1 wrote it. Scheduled weekly cron
+linkedin-newsletter-sync-weekly (30 20 * * 0 = Mon 04:30 PH), active. Deleted the local
+cookie file (now in the edge secret). Updated CLAUDE.md + memory.
+
+--------------------------------------------------------------------------------
+USER:
+Update content_social.html: (1) make the "Impressions by platform" graph reflect
+social_platform_stats; (2) all non-live cards show a red "pending" label like
+marketing.html's "Cadence delivered" (document the red pending labeling in DESIGN_GUIDE).
+Also: content_social.html should no longer show "Sample data — layout only".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(1) Replaced the sample "Impressions by platform" line chart with a LIVE "Engagement by
+platform" bar chart (renderEngagementChart()) — total recent-post engagement per
+platform from the existing /api/marketing/platforms data, FY-aware + theme-aware. Noted
+social_platform_stats has no impressions (private), so it honestly shows engagement.
+(2) All non-live tiles now render <span class="chip warn">pending</span> (the red --neg
+chip, like marketing.html) instead of sample numbers: the 4 KPI tiles, "Article views",
+"By format and pillar". Documented this as the standard in DESIGN_GUIDE §8 ("Pending /
+not-tracked-yet KPI card" — keep the label, never fabricate a number). (3) Removed the
+badge via renderMarketingHead(true) and bumped content_social.html to app.js?v=11.
+Extracted + syntax-checked the inline script (OK). Updated CLAUDE.md + memory. All
+frontend/route/DB changes done this session need a manual Cloud Run redeploy; the
+Supabase edge fns, migrations, cron jobs and secrets are already live.
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -28,11 +28,7 @@
     /* Full-width layout (match Overview / Leads & Bookings) */
     .content { max-width: none; }
     #marketingNav { max-width: none; }
-
-    /* Page head */
-    .sr-head { margin: 0 0 16px; }
-    .sr-head h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -.01em; }
-    .sr-head p { margin: 0; color: var(--text-muted); font-size: 14px; }
+    .mkt-head { max-width: none; }
 
     /* Cards + card heads */
     .card { border-radius: 16px; box-shadow: var(--mkt-shadow);
@@ -128,11 +124,6 @@
     <nav class="subtabs" id="marketingNav"></nav>
 
     <main class="content">
-      <div class="sr-head">
-        <h1>Spend &amp; ROI</h1>
-        <p>What marketing spent, what it returned, and how each channel performed — by financial year.</p>
-      </div>
-
       <!-- Controls bar (same FY toggle + placement as marketing.html) -->
       <div class="card" style="margin-bottom:16px">
         <div class="mkt-controls">
@@ -186,7 +177,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
   <script>
     /* Spend & ROI — LIVE.
        • 5 KPI cards        ← GET /api/marketing/roi (same source as roi.html) +
@@ -470,6 +461,7 @@
     }
 
     initPage('marketing');
+    renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('spend-roi');
     renderCards();              // initial (…)
     renderChannelResults();     // initial (Loading…)

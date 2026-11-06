@@ -6,6 +6,169 @@
   <title>Email &amp; Partners — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    /* ============================================================
+       Email & Partners — bespoke visual layer following
+       DESIGN_GUIDE.md and marketing.html. Mock data only.
+       ============================================================ */
+    :root {
+      --mkt-accent: var(--accent);
+      --mkt-accent-2: #6a4bf5;
+      --mkt-accent-soft: #eef2fe;
+      --mkt-shadow:      0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --mkt-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+      --ep-warn: #b4531f;
+    }
+    html[data-theme='dark'] {
+      --mkt-accent-2: #9b7dff;
+      --mkt-accent-soft: #1b2440;
+      --mkt-shadow:      0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --mkt-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+      --ep-warn: #f08c5b;
+    }
+
+    /* Full-width layout matching marketing.html / content_social.html */
+    .content { max-width: none; }
+    #marketingNav { max-width: none; }
+    .mkt-head { max-width: none; }
+
+    /* Cards */
+    .card {
+      border-radius: 16px;
+      box-shadow: var(--mkt-shadow);
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+    }
+    .card-head.block-head {
+      display: block;
+      margin-bottom: 14px;
+    }
+    .card-head h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      color: var(--text);
+    }
+    .chart-cap {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* Controls bar + segmented toggles (same as marketing.html) */
+    .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: linear-gradient(135deg, var(--mkt-accent), var(--mkt-accent-2));
+      color: #fff;
+      box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
+    }
+
+    /* Top 5 KPI cards */
+    .ep-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+    @media (max-width: 1080px) {
+      .ep-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    }
+    @media (max-width: 680px) {
+      .ep-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 480px) {
+      .ep-kpi-grid { grid-template-columns: 1fr; }
+    }
+    .ep-kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 22px 18px;
+      box-shadow: var(--mkt-shadow);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .ep-kpi:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--mkt-shadow-lift);
+    }
+    .ep-kpi .label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .ep-kpi .value {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      font-variant-numeric: tabular-nums;
+      margin: 8px 0 6px;
+      color: var(--text);
+    }
+    .ep-kpi .sub {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+    .ep-kpi .sub.pos {
+      color: var(--pos);
+    }
+    .ep-kpi .sub.warn {
+      color: var(--ep-warn);
+    }
+
+    /* Partner outreach table card */
+    .ep-outreach-card {
+      padding: 22px 24px;
+      margin-bottom: 14px;
+    }
+    .ep-table-wrap {
+      overflow-x: auto;
+    }
+    table.ep-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 680px;
+    }
+    table.ep-table th,
+    table.ep-table td {
+      padding: 12px 10px;
+      text-align: right;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+    table.ep-table th:first-child,
+    table.ep-table td:first-child {
+      text-align: left;
+      padding-left: 4px;
+    }
+    table.ep-table th:last-child,
+    table.ep-table td:last-child {
+      padding-right: 4px;
+    }
+    table.ep-table thead th {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding-top: 6px;
+      padding-bottom: 10px;
+    }
+    table.ep-table tbody td {
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+
+    /* Footnote below the table card */
+    .ep-footnote {
+      margin: 0;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -25,20 +188,228 @@
 
   <div class="marketing-layout">
     <nav class="subtabs" id="marketingNav"></nav>
+
     <main class="content">
-      <h1 style="margin:0 0 6px;font-size:24px">Email &amp; Partners</h1>
-      <p class="muted" style="margin:0 0 22px;font-size:14px">Part of the new Marketing layout.</p>
-      <div class="card">
-        <div class="needs-setup"><strong>Coming soon</strong><span>This tab is a placeholder — its content will be added here.</span></div>
+      <!-- Controls bar (same per-FY top toggle filter as marketing.html) -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="mkt-controls">
+          <span class="ctl-label">Financial year</span>
+          <div class="segmented" id="fySeg">
+            <button data-fy="all">All years</button>
+            <button data-fy="fy22">FY22</button>
+            <button data-fy="fy23">FY23</button>
+            <button data-fy="fy24">FY24</button>
+            <button data-fy="fy25">FY25</button>
+            <button data-fy="fy26">FY26</button>
+            <button class="active" data-fy="fy27">FY27</button>
+          </div>
+          <div class="spacer" style="flex:1"></div>
+          <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
+        </div>
       </div>
+
+      <!-- Top 5 KPI cards -->
+      <div class="ep-kpi-grid" id="epKpis"></div>
+
+      <!-- Partner outreach table card -->
+      <div class="card ep-outreach-card">
+        <div class="card-head block-head">
+          <h3 id="outreachHeading">Partner outreach</h3>
+          <div class="chart-cap" id="outreachCap">1st Tuesday send · this FY vs same period last FY</div>
+        </div>
+        <div class="ep-table-wrap" tabindex="0" role="region" aria-labelledby="outreachHeading">
+          <table class="ep-table">
+            <thead>
+              <tr>
+                <th>Partner</th>
+                <th>Sent on time</th>
+                <th>Contacts</th>
+                <th>Replies</th>
+                <th>Enquiries</th>
+                <th>Bookings</th>
+                <th>Revenue FYTD</th>
+                <th>Last FY same period</th>
+              </tr>
+            </thead>
+            <tbody id="outreachBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <p class="ep-footnote" id="epFootnote">Open rate is shown only as a small trend on hover — Apple Mail inflates opens.</p>
     </main>
   </div>
 
   <script src="app.js?v=10"></script>
   <script>
+    /* Email & Partners — Frontend-only mock data view.
+       Default active FY (FY27) renders the exact figures from the reference design. */
+
+    var MOCK_BY_FY = {
+      fy27: {
+        outreachCap: '1st Tuesday send · this FY vs same period last FY',
+        kpis: [
+          { label: 'Subscribed contacts', value: '2,512', sub: '▲ 12 vs Sep',         tone: 'pos' },
+          { label: 'EDM sends',           value: '2',     sub: 'On cadence',          tone: 'pos', hover: 'Open rate trend: 46.8% → 47.4% (Apple Mail inflates opens)' },
+          { label: 'Click rate',          value: '2.2%',  sub: '▲ 0.2 pts',           tone: 'pos', hover: 'Open rate trend: 46.8% → 47.4% (Apple Mail inflates opens)' },
+          { label: 'Replies',             value: '5',     sub: '2 from past clients', tone: 'pos' },
+          { label: 'Unsubscribes',        value: '6',     sub: '0.25% of list',       tone: 'warn' }
+        ],
+        partners: [
+          { name: 'The Tailor',      sentOnTime: '4 of 4 months', contacts: 2,  replies: 1, enquiries: 0, bookings: 0, revenueFytd: '$0',      lastFy: '$0' },
+          { name: 'Speaker bureaus', sentOnTime: '4 of 4 months', contacts: 81, replies: 4, enquiries: 2, bookings: 1, revenueFytd: '$22,500', lastFy: '$15,000' }
+        ]
+      },
+      fy26: {
+        outreachCap: '1st Tuesday send · FY26 vs FY25',
+        kpis: [
+          { label: 'Subscribed contacts', value: '2,360', sub: '▲ 18 vs May',         tone: 'pos' },
+          { label: 'EDM sends',           value: '2',     sub: 'On cadence',          tone: 'pos', hover: 'Open rate trend: 45.2% → 46.1% (Apple Mail inflates opens)' },
+          { label: 'Click rate',          value: '2.0%',  sub: '▲ 0.1 pts',           tone: 'pos', hover: 'Open rate trend: 45.2% → 46.1% (Apple Mail inflates opens)' },
+          { label: 'Replies',             value: '4',     sub: '2 from past clients', tone: 'pos' },
+          { label: 'Unsubscribes',        value: '5',     sub: '0.21% of list',       tone: 'warn' }
+        ],
+        partners: [
+          { name: 'The Tailor',      sentOnTime: '12 of 12 months', contacts: 2,  replies: 3,  enquiries: 1, bookings: 1, revenueFytd: '$18,000', lastFy: '$12,500' },
+          { name: 'Speaker bureaus', sentOnTime: '11 of 12 months', contacts: 78, replies: 11, enquiries: 6, bookings: 3, revenueFytd: '$64,000', lastFy: '$48,000' }
+        ]
+      },
+      fy25: {
+        outreachCap: '1st Tuesday send · FY25 vs FY24',
+        kpis: [
+          { label: 'Subscribed contacts', value: '1,980', sub: '▲ 15 vs May',         tone: 'pos' },
+          { label: 'EDM sends',           value: '2',     sub: 'On cadence',          tone: 'pos', hover: 'Open rate trend: 43.9% → 44.5% (Apple Mail inflates opens)' },
+          { label: 'Click rate',          value: '1.9%',  sub: '▲ 0.1 pts',           tone: 'pos', hover: 'Open rate trend: 43.9% → 44.5% (Apple Mail inflates opens)' },
+          { label: 'Replies',             value: '4',     sub: '1 from past clients', tone: 'pos' },
+          { label: 'Unsubscribes',        value: '5',     sub: '0.25% of list',       tone: 'warn' }
+        ],
+        partners: [
+          { name: 'The Tailor',      sentOnTime: '11 of 12 months', contacts: 2,  replies: 2, enquiries: 1, bookings: 1, revenueFytd: '$12,500', lastFy: '$10,000' },
+          { name: 'Speaker bureaus', sentOnTime: '10 of 12 months', contacts: 72, replies: 9, enquiries: 5, bookings: 2, revenueFytd: '$48,000', lastFy: '$36,000' }
+        ]
+      },
+      fy24: {
+        outreachCap: '1st Tuesday send · FY24 vs FY23',
+        kpis: [
+          { label: 'Subscribed contacts', value: '1,640', sub: '▲ 11 vs May',         tone: 'pos' },
+          { label: 'EDM sends',           value: '2',     sub: 'On cadence',          tone: 'pos', hover: 'Open rate trend: 42.1% → 43.0% (Apple Mail inflates opens)' },
+          { label: 'Click rate',          value: '1.8%',  sub: '▲ 0.1 pts',           tone: 'pos', hover: 'Open rate trend: 42.1% → 43.0% (Apple Mail inflates opens)' },
+          { label: 'Replies',             value: '3',     sub: '1 from past clients', tone: 'pos' },
+          { label: 'Unsubscribes',        value: '4',     sub: '0.24% of list',       tone: 'warn' }
+        ],
+        partners: [
+          { name: 'The Tailor',      sentOnTime: '10 of 12 months', contacts: 2,  replies: 2, enquiries: 1, bookings: 1, revenueFytd: '$10,000', lastFy: '$0' },
+          { name: 'Speaker bureaus', sentOnTime: '10 of 12 months', contacts: 65, replies: 7, enquiries: 4, bookings: 2, revenueFytd: '$36,000', lastFy: '$28,000' }
+        ]
+      },
+      fy23: {
+        outreachCap: '1st Tuesday send · FY23 vs FY22',
+        kpis: [
+          { label: 'Subscribed contacts', value: '1,310', sub: '▲ 9 vs May',          tone: 'pos' },
+          { label: 'EDM sends',           value: '2',     sub: 'On cadence',          tone: 'pos', hover: 'Open rate trend: 40.5% → 41.2% (Apple Mail inflates opens)' },
+          { label: 'Click rate',          value: '1.7%',  sub: '▲ 0.1 pts',           tone: 'pos', hover: 'Open rate trend: 40.5% → 41.2% (Apple Mail inflates opens)' },
+          { label: 'Replies',             value: '3',     sub: '1 from past clients', tone: 'pos' },
+          { label: 'Unsubscribes',        value: '3',     sub: '0.23% of list',       tone: 'warn' }
+        ],
+        partners: [
+          { name: 'The Tailor',      sentOnTime: '9 of 12 months', contacts: 2,  replies: 1, enquiries: 0, bookings: 0, revenueFytd: '$0',      lastFy: '$0' },
+          { name: 'Speaker bureaus', sentOnTime: '9 of 12 months', contacts: 58, replies: 6, enquiries: 3, bookings: 1, revenueFytd: '$28,000', lastFy: '$20,000' }
+        ]
+      },
+      fy22: {
+        outreachCap: '1st Tuesday send · FY22 vs FY21',
+        kpis: [
+          { label: 'Subscribed contacts', value: '980',   sub: '▲ 8 vs May',          tone: 'pos' },
+          { label: 'EDM sends',           value: '1',     sub: 'On cadence',          tone: 'pos', hover: 'Open rate trend: 38.8% → 39.4% (Apple Mail inflates opens)' },
+          { label: 'Click rate',          value: '1.6%',  sub: '▲ 0.1 pts',           tone: 'pos', hover: 'Open rate trend: 38.8% → 39.4% (Apple Mail inflates opens)' },
+          { label: 'Replies',             value: '2',     sub: '1 from past clients', tone: 'pos' },
+          { label: 'Unsubscribes',        value: '2',     sub: '0.20% of list',       tone: 'warn' }
+        ],
+        partners: [
+          { name: 'The Tailor',      sentOnTime: '8 of 12 months', contacts: 1,  replies: 1, enquiries: 0, bookings: 0, revenueFytd: '$0',      lastFy: '$0' },
+          { name: 'Speaker bureaus', sentOnTime: '8 of 12 months', contacts: 50, replies: 4, enquiries: 2, bookings: 1, revenueFytd: '$20,000', lastFy: '$14,000' }
+        ]
+      },
+      all: {
+        outreachCap: '1st Tuesday send · this FY vs same period last FY',
+        kpis: [
+          { label: 'Subscribed contacts', value: '2,512', sub: '▲ 12 vs Sep',         tone: 'pos' },
+          { label: 'EDM sends',           value: '2',     sub: 'On cadence',          tone: 'pos', hover: 'Open rate trend: 46.8% → 47.4% (Apple Mail inflates opens)' },
+          { label: 'Click rate',          value: '2.2%',  sub: '▲ 0.2 pts',           tone: 'pos', hover: 'Open rate trend: 46.8% → 47.4% (Apple Mail inflates opens)' },
+          { label: 'Replies',             value: '5',     sub: '2 from past clients', tone: 'pos' },
+          { label: 'Unsubscribes',        value: '6',     sub: '0.25% of list',       tone: 'warn' }
+        ],
+        partners: [
+          { name: 'The Tailor',      sentOnTime: '4 of 4 months', contacts: 2,  replies: 1, enquiries: 0, bookings: 0, revenueFytd: '$0',      lastFy: '$0' },
+          { name: 'Speaker bureaus', sentOnTime: '4 of 4 months', contacts: 81, replies: 4, enquiries: 2, bookings: 1, revenueFytd: '$22,500', lastFy: '$15,000' }
+        ]
+      }
+    };
+
+    function selFyKey() {
+      var b = document.querySelector('#fySeg button.active');
+      return b ? b.getAttribute('data-fy') : 'fy27';
+    }
+
+    function currentData() {
+      var key = selFyKey();
+      return MOCK_BY_FY[key] || MOCK_BY_FY.fy27;
+    }
+
+    function renderKpiRow() {
+      var d = currentData();
+      var html = d.kpis.map(function (k) {
+        var subCls = k.tone ? ('sub ' + k.tone) : 'sub';
+        var titleAttr = k.hover ? ' title="' + esc(k.hover) + '"' : '';
+        return '<div class="ep-kpi"' + titleAttr + '>' +
+          '<div class="label">' + esc(k.label) + '</div>' +
+          '<div class="value">' + esc(k.value) + '</div>' +
+          '<div class="' + subCls + '">' + esc(k.sub) + '</div>' +
+        '</div>';
+      }).join('');
+      document.getElementById('epKpis').innerHTML = html;
+    }
+
+    function renderOutreachTable() {
+      var d = currentData();
+      document.getElementById('outreachCap').textContent = d.outreachCap;
+      var rowsHtml = d.partners.map(function (p) {
+        return '<tr>' +
+          '<td>' + esc(p.name) + '</td>' +
+          '<td>' + esc(p.sentOnTime) + '</td>' +
+          '<td>' + fmt(p.contacts, 'count') + '</td>' +
+          '<td>' + fmt(p.replies, 'count') + '</td>' +
+          '<td>' + fmt(p.enquiries, 'count') + '</td>' +
+          '<td>' + fmt(p.bookings, 'count') + '</td>' +
+          '<td>' + esc(p.revenueFytd) + '</td>' +
+          '<td>' + esc(p.lastFy) + '</td>' +
+        '</tr>';
+      }).join('');
+      document.getElementById('outreachBody').innerHTML = rowsHtml;
+    }
+
+    function renderAll() {
+      renderKpiRow();
+      renderOutreachTable();
+    }
+
+    function wireSeg(id, onChange) {
+      var seg = document.getElementById(id);
+      if (!seg) return;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (onChange) onChange();
+        });
+      });
+    }
+
     initPage('marketing');
     renderMarketingHead();
     renderMarketingSidebar('email-partners');
+    renderAll();
+    wireSeg('fySeg', renderAll);
   </script>
 </body>
 </html>

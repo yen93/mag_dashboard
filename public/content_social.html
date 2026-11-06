@@ -6,6 +6,231 @@
   <title>Content &amp; Social — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    /* ============================================================
+       Content & Social — bespoke visual layer following
+       DESIGN_GUIDE.md and marketing.html. Mock data only.
+       ============================================================ */
+    :root {
+      --mkt-accent: var(--accent);
+      --mkt-accent-2: #6a4bf5;
+      --mkt-accent-soft: #eef2fe;
+      --mkt-shadow:      0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --mkt-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+    }
+    html[data-theme='dark'] {
+      --mkt-accent-2: #9b7dff;
+      --mkt-accent-soft: #1b2440;
+      --mkt-shadow:      0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --mkt-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+    }
+
+    /* Full-width layout matching marketing.html / leads_bookings.html / spend_roi.html */
+    .content { max-width: none; }
+    #marketingNav { max-width: none; }
+    .mkt-head { max-width: none; }
+
+    /* Cards */
+    .card {
+      border-radius: 16px;
+      box-shadow: var(--mkt-shadow);
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+    }
+    .card-head.block-head {
+      display: block;
+      margin-bottom: 14px;
+    }
+    .card-head h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      color: var(--text);
+    }
+    .chart-cap {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* Controls bar + segmented toggles (same as marketing.html) */
+    .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: linear-gradient(135deg, var(--mkt-accent), var(--mkt-accent-2));
+      color: #fff;
+      box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
+    }
+
+    /* Top 4 KPI cards */
+    .cs-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 16px;
+      margin: 16px 0;
+    }
+    @media (max-width: 960px) {
+      .cs-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 540px) {
+      .cs-kpi-grid { grid-template-columns: 1fr; }
+    }
+    .cs-kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 20px 22px 18px;
+      box-shadow: var(--mkt-shadow);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .cs-kpi:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--mkt-shadow-lift);
+    }
+    .cs-kpi .label {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .cs-kpi .value {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      font-variant-numeric: tabular-nums;
+      margin: 8px 0 6px;
+      color: var(--text);
+    }
+    .cs-kpi .sub {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+    .cs-kpi .sub.pos {
+      color: var(--pos);
+    }
+
+    /* Section title above the follower cards */
+    .cs-block-title {
+      margin: 20px 2px 10px;
+      font-size: 15px;
+      font-weight: 600;
+    }
+    /* Platforms table card */
+    .cs-platforms-card {
+      padding: 22px 24px;
+      margin-bottom: 16px;
+    }
+    .cs-table-wrap {
+      overflow-x: auto;
+    }
+    table.cs-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+      min-width: 640px;
+    }
+    table.cs-table th,
+    table.cs-table td {
+      padding: 12px 10px;
+      text-align: right;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+    table.cs-table th:first-child,
+    table.cs-table td:first-child {
+      text-align: left;
+      padding-left: 4px;
+    }
+    table.cs-table th:last-child,
+    table.cs-table td:last-child {
+      padding-right: 4px;
+    }
+    table.cs-table thead th {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding-top: 6px;
+      padding-bottom: 10px;
+    }
+    table.cs-table tbody td {
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+
+    /* Lower 2-column section: Impressions chart (left) + 3 stacked cards (right) */
+    .cs-lower {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: stretch;
+    }
+    @media (max-width: 900px) {
+      .cs-lower { grid-template-columns: 1fr; }
+    }
+    .cs-chart-card {
+      padding: 22px 24px 18px;
+      display: flex;
+      flex-direction: column;
+    }
+    .cs-chart-box {
+      position: relative;
+      flex: 1;
+      min-height: 260px;
+    }
+    .cs-stack {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .cs-side-card {
+      padding: 20px 24px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .cs-side-card:hover {
+      transform: translateY(-2px);
+      box-shadow: var(--mkt-shadow-lift);
+    }
+    .cs-side-card .label-sm {
+      font-size: 13px;
+      color: var(--text-muted);
+      font-weight: 500;
+    }
+    .cs-side-card .big {
+      font-size: 30px;
+      font-weight: 700;
+      letter-spacing: -.02em;
+      font-variant-numeric: tabular-nums;
+      margin: 8px 0 6px;
+      color: var(--text);
+    }
+    .cs-side-card .sub {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+    .cs-side-card .sub.pos {
+      color: var(--pos);
+    }
+    .cs-phase-badge {
+      display: inline-block;
+      margin-top: 10px;
+      padding: 5px 12px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--surface-2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      align-self: flex-start;
+    }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -25,20 +250,510 @@
 
   <div class="marketing-layout">
     <nav class="subtabs" id="marketingNav"></nav>
+
     <main class="content">
-      <h1 style="margin:0 0 6px;font-size:24px">Content &amp; Social</h1>
-      <p class="muted" style="margin:0 0 22px;font-size:14px">Part of the new Marketing layout.</p>
-      <div class="card">
-        <div class="needs-setup"><strong>Coming soon</strong><span>This tab is a placeholder — its content will be added here.</span></div>
+      <!-- Controls bar (same per-FY top toggle filter as marketing.html) -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="mkt-controls">
+          <span class="ctl-label">Financial year</span>
+          <div class="segmented" id="fySeg">
+            <button data-fy="all">All years</button>
+            <button data-fy="fy22">FY22</button>
+            <button data-fy="fy23">FY23</button>
+            <button data-fy="fy24">FY24</button>
+            <button data-fy="fy25">FY25</button>
+            <button data-fy="fy26">FY26</button>
+            <button class="active" data-fy="fy27">FY27</button>
+          </div>
+          <div class="spacer" style="flex:1"></div>
+          <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
+        </div>
+      </div>
+
+      <!-- Top KPI row -->
+      <div class="cs-kpi-grid" id="csKpis"></div>
+
+      <!-- Followers per platform (live, FY-aware) -->
+      <h3 class="cs-block-title" id="followersHeading">Followers by platform</h3>
+      <div class="cs-kpi-grid" id="followerCards"></div>
+
+      <!-- Platforms table -->
+      <div class="card cs-platforms-card">
+        <div class="card-head block-head">
+          <h3 id="platformsHeading">Platforms</h3>
+          <div class="chart-cap" id="platformsCap">October 2026 · Meta Business Suite and LinkedIn</div>
+        </div>
+        <div class="cs-table-wrap" tabindex="0" role="region" aria-labelledby="platformsHeading">
+          <table class="cs-table">
+            <thead>
+              <tr>
+                <th>Platform</th>
+                <th>Posts</th>
+                <th>Avg engagement/post</th>
+                <th>Engagement rate</th>
+              </tr>
+            </thead>
+            <tbody id="platformsBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Lower section: Engagement by platform chart (left, LIVE) + 3 stacked cards (right) -->
+      <div class="cs-lower">
+        <div class="card cs-chart-card">
+          <div class="card-head block-head">
+            <h3>Engagement by platform</h3>
+            <div class="chart-cap" id="impressionsCap">Recent-post engagement · live</div>
+          </div>
+          <div class="cs-chart-box">
+            <canvas id="impressionsCanvas"></canvas>
+          </div>
+        </div>
+
+        <div class="cs-stack">
+          <div class="card cs-side-card">
+            <div class="label-sm">Newsletter subscribers</div>
+            <div class="big" id="newsletterVal">2,480</div>
+            <div class="sub pos" id="newsletterSub">▲ 65 · Cas' Tips for High Performers</div>
+          </div>
+
+          <div class="card cs-side-card">
+            <div class="label-sm">Article views</div>
+            <div class="big" id="articleVal">1,900</div>
+            <div class="sub pos" id="articleSub">2 articles this month</div>
+          </div>
+
+          <div class="card cs-side-card">
+            <div class="label-sm">By format and pillar</div>
+            <div><span class="cs-phase-badge" id="formatBadge">Phase 2 — needs a post-level log</span></div>
+          </div>
+        </div>
       </div>
     </main>
   </div>
 
-  <script src="app.js?v=10"></script>
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js?v=11"></script>
   <script>
+    /* Content & Social — Frontend-only mock data view.
+       Default active FY (FY27) renders the exact figures from the reference design. */
+
+    var MOCK_BY_FY = {
+      fy27: {
+        periodCap: 'October 2026 · Meta Business Suite and LinkedIn',
+        chartCap: 'MAG pages vs James · last 12 months',
+        kpis: [
+          { label: 'Cadence slots delivered', value: '21 of 22', sub: '95%', pos: true },
+          { label: 'Delivered on time',       value: '20 of 22', sub: '91%', pos: true },
+          { label: 'Extra timely posts',      value: '3',        sub: 'Outside the plan', pos: false },
+          { label: 'Pillar mix · Offer & Booking', value: '7%',  sub: 'Within 10% cap', pos: true }
+        ],
+        platforms: [
+          { name: 'MyAdventure Group LinkedIn page', posts: 15, impressions: 9000,  perPost: 600,  engRate: '4.2%', followers: 3850,  change: '+45' },
+          { name: 'MyAdventure Group Facebook',      posts: 15, impressions: 4500,  perPost: 300,  engRate: '1.8%', followers: 2900,  change: '+8' },
+          { name: 'MyAdventure Group Instagram',     posts: 15, impressions: 6000,  perPost: 400,  engRate: '3.1%', followers: 1700,  change: '+22' },
+          { name: "James's personal LinkedIn",       posts: 8,  impressions: 42000, perPost: 5250, engRate: '3.5%', followers: 11200, change: '+310' }
+        ],
+        chart: {
+          labels: ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
+          mag:   [16, 15, 14, 15, 17, 18, 16, 17, 16, 18, 18, 19.5],
+          james: [30, 31, 28, 33, 35, 36, 34, 37, 36, 39, 40, 42]
+        },
+        newsletter: { value: '2,480', sub: "▲ 65 · Cas' Tips for High Performers" },
+        articles:   { value: '1,900', sub: '2 articles this month' },
+        phaseBadge: 'Phase 2 — needs a post-level log'
+      },
+      fy26: {
+        periodCap: 'June 2026 · Meta Business Suite and LinkedIn',
+        chartCap: 'MAG pages vs James · FY26 by month',
+        kpis: [
+          { label: 'Cadence slots delivered', value: '20 of 22', sub: '91%', pos: true },
+          { label: 'Delivered on time',       value: '19 of 22', sub: '86%', pos: true },
+          { label: 'Extra timely posts',      value: '2',        sub: 'Outside the plan', pos: false },
+          { label: 'Pillar mix · Offer & Booking', value: '8%',  sub: 'Within 10% cap', pos: true }
+        ],
+        platforms: [
+          { name: 'MyAdventure Group LinkedIn page', posts: 14, impressions: 8120,  perPost: 580,  engRate: '3.9%', followers: 3680,  change: '+38' },
+          { name: 'MyAdventure Group Facebook',      posts: 14, impressions: 4060,  perPost: 290,  engRate: '1.7%', followers: 2860,  change: '+6' },
+          { name: 'MyAdventure Group Instagram',     posts: 14, impressions: 5320,  perPost: 380,  engRate: '2.9%', followers: 1610,  change: '+18' },
+          { name: "James's personal LinkedIn",       posts: 7,  impressions: 36400, perPost: 5200, engRate: '3.3%', followers: 9980,  change: '+260' }
+        ],
+        chart: {
+          labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+          mag:   [13, 14, 14, 15, 16, 15, 14, 15, 17, 18, 16, 17],
+          james: [26, 27, 29, 30, 30, 31, 28, 33, 35, 36, 34, 37]
+        },
+        newsletter: { value: '2,230', sub: "▲ 52 · Cas' Tips for High Performers" },
+        articles:   { value: '1,640', sub: '2 articles this month' },
+        phaseBadge: 'Phase 2 — needs a post-level log'
+      },
+      fy25: {
+        periodCap: 'June 2025 · Meta Business Suite and LinkedIn',
+        chartCap: 'MAG pages vs James · FY25 by month',
+        kpis: [
+          { label: 'Cadence slots delivered', value: '18 of 20', sub: '90%', pos: true },
+          { label: 'Delivered on time',       value: '17 of 20', sub: '85%', pos: true },
+          { label: 'Extra timely posts',      value: '2',        sub: 'Outside the plan', pos: false },
+          { label: 'Pillar mix · Offer & Booking', value: '9%',  sub: 'Within 10% cap', pos: true }
+        ],
+        platforms: [
+          { name: 'MyAdventure Group LinkedIn page', posts: 12, impressions: 6600,  perPost: 550,  engRate: '3.6%', followers: 3240,  change: '+30' },
+          { name: 'MyAdventure Group Facebook',      posts: 12, impressions: 3360,  perPost: 280,  engRate: '1.6%', followers: 2780,  change: '+5' },
+          { name: 'MyAdventure Group Instagram',     posts: 12, impressions: 4320,  perPost: 360,  engRate: '2.7%', followers: 1420,  change: '+14' },
+          { name: "James's personal LinkedIn",       posts: 6,  impressions: 28800, perPost: 4800, engRate: '3.1%', followers: 7400,  change: '+195' }
+        ],
+        chart: {
+          labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+          mag:   [10, 11, 11, 12, 12, 11, 11, 12, 13, 13, 14, 14.3],
+          james: [20, 21, 22, 23, 24, 23, 22, 25, 26, 27, 28, 28.8]
+        },
+        newsletter: { value: '1,720', sub: "▲ 41 · Cas' Tips for High Performers" },
+        articles:   { value: '1,380', sub: '1 article this month' },
+        phaseBadge: 'Phase 2 — needs a post-level log'
+      },
+      fy24: {
+        periodCap: 'June 2024 · Meta Business Suite and LinkedIn',
+        chartCap: 'MAG pages vs James · FY24 by month',
+        kpis: [
+          { label: 'Cadence slots delivered', value: '16 of 18', sub: '89%', pos: true },
+          { label: 'Delivered on time',       value: '15 of 18', sub: '83%', pos: true },
+          { label: 'Extra timely posts',      value: '1',        sub: 'Outside the plan', pos: false },
+          { label: 'Pillar mix · Offer & Booking', value: '8%',  sub: 'Within 10% cap', pos: true }
+        ],
+        platforms: [
+          { name: 'MyAdventure Group LinkedIn page', posts: 11, impressions: 5500,  perPost: 500,  engRate: '3.4%', followers: 2890,  change: '+24' },
+          { name: 'MyAdventure Group Facebook',      posts: 11, impressions: 2970,  perPost: 270,  engRate: '1.5%', followers: 2710,  change: '+4' },
+          { name: 'MyAdventure Group Instagram',     posts: 11, impressions: 3520,  perPost: 320,  engRate: '2.5%', followers: 1260,  change: '+11' },
+          { name: "James's personal LinkedIn",       posts: 5,  impressions: 22500, perPost: 4500, engRate: '2.9%', followers: 5300,  change: '+140' }
+        ],
+        chart: {
+          labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+          mag:   [8, 9, 9, 10, 10, 9, 9, 10, 11, 11, 12, 12],
+          james: [15, 16, 17, 18, 19, 18, 17, 19, 20, 21, 22, 22.5]
+        },
+        newsletter: { value: '1,290', sub: "▲ 34 · Cas' Tips for High Performers" },
+        articles:   { value: '1,120', sub: '1 article this month' },
+        phaseBadge: 'Phase 2 — needs a post-level log'
+      },
+      fy23: {
+        periodCap: 'June 2023 · Meta Business Suite and LinkedIn',
+        chartCap: 'MAG pages vs James · FY23 by month',
+        kpis: [
+          { label: 'Cadence slots delivered', value: '14 of 16', sub: '88%', pos: true },
+          { label: 'Delivered on time',       value: '13 of 16', sub: '81%', pos: true },
+          { label: 'Extra timely posts',      value: '1',        sub: 'Outside the plan', pos: false },
+          { label: 'Pillar mix · Offer & Booking', value: '9%',  sub: 'Within 10% cap', pos: true }
+        ],
+        platforms: [
+          { name: 'MyAdventure Group LinkedIn page', posts: 10, impressions: 4500,  perPost: 450,  engRate: '3.1%', followers: 2540,  change: '+19' },
+          { name: 'MyAdventure Group Facebook',      posts: 10, impressions: 2500,  perPost: 250,  engRate: '1.4%', followers: 2630,  change: '+3' },
+          { name: 'MyAdventure Group Instagram',     posts: 10, impressions: 2900,  perPost: 290,  engRate: '2.3%', followers: 1120,  change: '+9' },
+          { name: "James's personal LinkedIn",       posts: 5,  impressions: 18500, perPost: 3700, engRate: '2.7%', followers: 3800,  change: '+110' }
+        ],
+        chart: {
+          labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+          mag:   [7, 7, 8, 8, 8, 8, 7, 8, 9, 9, 10, 9.9],
+          james: [12, 13, 14, 14, 15, 14, 13, 15, 16, 17, 18, 18.5]
+        },
+        newsletter: { value: '940', sub: "▲ 28 · Cas' Tips for High Performers" },
+        articles:   { value: '890', sub: '1 article this month' },
+        phaseBadge: 'Phase 2 — needs a post-level log'
+      },
+      fy22: {
+        periodCap: 'June 2022 · Meta Business Suite and LinkedIn',
+        chartCap: 'MAG pages vs James · FY22 by month',
+        kpis: [
+          { label: 'Cadence slots delivered', value: '12 of 14', sub: '86%', pos: true },
+          { label: 'Delivered on time',       value: '11 of 14', sub: '79%', pos: true },
+          { label: 'Extra timely posts',      value: '1',        sub: 'Outside the plan', pos: false },
+          { label: 'Pillar mix · Offer & Booking', value: '8%',  sub: 'Within 10% cap', pos: true }
+        ],
+        platforms: [
+          { name: 'MyAdventure Group LinkedIn page', posts: 8,  impressions: 3200,  perPost: 400,  engRate: '2.9%', followers: 2210,  change: '+15' },
+          { name: 'MyAdventure Group Facebook',      posts: 8,  impressions: 1920,  perPost: 240,  engRate: '1.3%', followers: 2560,  change: '+2' },
+          { name: 'MyAdventure Group Instagram',     posts: 8,  impressions: 2160,  perPost: 270,  engRate: '2.1%', followers: 980,   change: '+7' },
+          { name: "James's personal LinkedIn",       posts: 4,  impressions: 13200, perPost: 3300, engRate: '2.5%', followers: 2650,  change: '+85' }
+        ],
+        chart: {
+          labels: ['Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+          mag:   [5, 5, 6, 6, 6, 6, 5, 6, 7, 7, 7, 7.3],
+          james: [9, 10, 10, 11, 11, 10, 10, 11, 12, 12, 13, 13.2]
+        },
+        newsletter: { value: '620', sub: "▲ 22 · Cas' Tips for High Performers" },
+        articles:   { value: '640', sub: '1 article this month' },
+        phaseBadge: 'Phase 2 — needs a post-level log'
+      },
+      all: {
+        periodCap: 'All years (monthly average) · Meta Business Suite and LinkedIn',
+        chartCap: 'MAG pages vs James · last 12 months',
+        kpis: [
+          { label: 'Cadence slots delivered', value: '21 of 22', sub: '95%', pos: true },
+          { label: 'Delivered on time',       value: '20 of 22', sub: '91%', pos: true },
+          { label: 'Extra timely posts',      value: '3',        sub: 'Outside the plan', pos: false },
+          { label: 'Pillar mix · Offer & Booking', value: '7%',  sub: 'Within 10% cap', pos: true }
+        ],
+        platforms: [
+          { name: 'MyAdventure Group LinkedIn page', posts: 15, impressions: 9000,  perPost: 600,  engRate: '4.2%', followers: 3850,  change: '+45' },
+          { name: 'MyAdventure Group Facebook',      posts: 15, impressions: 4500,  perPost: 300,  engRate: '1.8%', followers: 2900,  change: '+8' },
+          { name: 'MyAdventure Group Instagram',     posts: 15, impressions: 6000,  perPost: 400,  engRate: '3.1%', followers: 1700,  change: '+22' },
+          { name: "James's personal LinkedIn",       posts: 8,  impressions: 42000, perPost: 5250, engRate: '3.5%', followers: 11200, change: '+310' }
+        ],
+        chart: {
+          labels: ['Nov', 'Dec', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'],
+          mag:   [16, 15, 14, 15, 17, 18, 16, 17, 16, 18, 18, 19.5],
+          james: [30, 31, 28, 33, 35, 36, 34, 37, 36, 39, 40, 42]
+        },
+        newsletter: { value: '2,480', sub: "▲ 65 · Cas' Tips for High Performers" },
+        articles:   { value: '1,900', sub: '2 articles this month' },
+        phaseBadge: 'Phase 2 — needs a post-level log'
+      }
+    };
+
+    function selFyKey() {
+      var b = document.querySelector('#fySeg button.active');
+      return b ? b.getAttribute('data-fy') : 'fy27';
+    }
+
+    function currentData() {
+      var key = selFyKey();
+      return MOCK_BY_FY[key] || MOCK_BY_FY.fy27;
+    }
+
+    // These KPI tiles have no live data source yet → show a red "pending" chip
+    // (design-guide standard) instead of fabricated sample numbers. Labels stay so the
+    // reader knows what each tile will track.
+    function renderKpiRow() {
+      var d = currentData();
+      var html = d.kpis.map(function (k) {
+        return '<div class="cs-kpi">' +
+          '<div class="label">' + esc(k.label) + '</div>' +
+          '<div class="value"><span class="chip warn">pending</span></div>' +
+        '</div>';
+      }).join('');
+      document.getElementById('csKpis').innerHTML = html;
+    }
+
+    /* Platforms — LIVE from /api/marketing/platforms (public.social_platform_stats,
+       filled weekly by the apify-platforms-sync edge function). The endpoint returns
+       the latest snapshot per platform PER financial year; this view is driven by the
+       #fySeg toggle. Followers render as per-platform cards; the table holds Posts /
+       Avg engagement/post / Engagement rate. (The rest of the page is still sample.) */
+    var ALL_PLATFORM_ROWS = null;   // null = loading, [] = loaded-empty, [...] = per-FY rows
+
+    function fmtNum(n) { return (n == null) ? '—' : fmt(n, 'count'); }
+    function fmtRate(n) { return (n == null) ? '—' : (Math.round(n * 10) / 10) + '%'; }
+
+    // Selected FY as an END-year number, or 'all'.
+    function curFyEnd() {
+      var k = selFyKey();
+      var m = /^fy(\d{2})$/.exec(k);
+      return m ? 2000 + parseInt(m[1], 10) : 'all';
+    }
+
+    // Rows for the selected FY: that FY's latest snapshot per platform, or — for
+    // "All years" — the newest snapshot per platform across every FY.
+    function platformRowsForFy() {
+      if (!ALL_PLATFORM_ROWS || !ALL_PLATFORM_ROWS.length) return [];
+      var fy = curFyEnd();
+      var rows;
+      if (fy === 'all') {
+        var byKey = {};
+        ALL_PLATFORM_ROWS.forEach(function (r) {
+          var cur = byKey[r.platformKey];
+          if (!cur || r.snapshotDate > cur.snapshotDate) byKey[r.platformKey] = r;
+        });
+        rows = Object.keys(byKey).map(function (k) { return byKey[k]; });
+      } else {
+        rows = ALL_PLATFORM_ROWS.filter(function (r) { return r.fyEnd === fy; });
+      }
+      return rows.sort(function (a, b) { return (b.followers || 0) - (a.followers || 0); });
+    }
+
+    function renderPlatforms() {
+      var cap = document.getElementById('platformsCap');
+      var body = document.getElementById('platformsBody');
+      var cards = document.getElementById('followerCards');
+      if (ALL_PLATFORM_ROWS === null) {
+        cap.textContent = 'Loading…';
+        cards.innerHTML = '';
+        body.innerHTML = '<tr><td colspan="4" class="muted">Loading…</td></tr>';
+        return;
+      }
+      var rows = platformRowsForFy();
+      if (!rows.length) {
+        cap.textContent = 'No snapshot for the selected financial year';
+        cards.innerHTML = '<div class="cs-kpi"><div class="label">No data</div>' +
+          '<div class="sub">No snapshot for the selected financial year</div></div>';
+        body.innerHTML = '<tr><td colspan="4" class="muted">No data for the selected financial year.</td></tr>';
+        return;
+      }
+      cap.textContent = 'Snapshot · ' + esc(rows[0].snapshotDate) + ' · live, updated weekly';
+      cards.innerHTML = rows.map(function (p) {
+        return '<div class="cs-kpi">' +
+          '<div class="label">' + esc(p.platformName) + '</div>' +
+          '<div class="value">' + fmtNum(p.followers) + '</div>' +
+          '<div class="sub">followers</div>' +
+        '</div>';
+      }).join('');
+      body.innerHTML = rows.map(function (p) {
+        return '<tr>' +
+          '<td>' + esc(p.platformName) + '</td>' +
+          '<td>' + fmtNum(p.posts) + '</td>' +
+          '<td>' + fmtNum(p.avgEngagementPerPost) + '</td>' +
+          '<td>' + fmtRate(p.engagementRate) + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function loadPlatforms() {
+      fetchJSON('/api/marketing/platforms').then(function (d) {
+        ALL_PLATFORM_ROWS = (d && d.data) || [];
+        renderPlatforms();
+        renderEngagementChart();
+      }).catch(function (err) {
+        console.error('platforms', err);
+        ALL_PLATFORM_ROWS = [];
+        document.getElementById('followerCards').innerHTML = '';
+        document.getElementById('platformsCap').textContent = 'Could not load platform stats';
+        document.getElementById('platformsBody').innerHTML =
+          '<tr><td colspan="4" class="muted">Failed to load — try again later.</td></tr>';
+      });
+    }
+
+    // LIVE login-gated content metrics (newsletter subscribers, etc.) from
+    // /api/marketing/content-metrics — set manually or by a cookie-authenticated sync.
+    var CONTENT_METRICS = null;
+
+    function applyLiveContentMetrics() {
+      if (!CONTENT_METRICS) return;
+      var m = CONTENT_METRICS['li_newsletter_subscribers_james'];
+      if (m && m.value != null) {
+        document.getElementById('newsletterVal').textContent = fmt(m.value, 'count');
+        document.getElementById('newsletterSub').textContent =
+          'LinkedIn newsletter · ' + (m.source === 'manual' ? 'manual' : 'auto') +
+          (m.asOf ? ' · as of ' + m.asOf : '');
+      } else {
+        // Live metric exists but no value set yet — be honest rather than show sample.
+        document.getElementById('newsletterVal').textContent = '—';
+        document.getElementById('newsletterSub').textContent = 'LinkedIn newsletter · not set yet';
+      }
+    }
+
+    function loadContentMetrics() {
+      fetchJSON('/api/marketing/content-metrics').then(function (d) {
+        CONTENT_METRICS = (d && d.data) || {};
+        applyLiveContentMetrics();
+      }).catch(function (err) { console.error('content-metrics', err); });
+    }
+
+    function renderSideCards() {
+      // Newsletter subscribers — LIVE (applyLiveContentMetrics overrides below).
+      document.getElementById('newsletterVal').textContent = '…';
+      document.getElementById('newsletterSub').textContent = 'LinkedIn newsletter';
+      // Article views — no live source yet → red "pending" chip, no fabricated number.
+      document.getElementById('articleVal').innerHTML = '<span class="chip warn">pending</span>';
+      var as = document.getElementById('articleSub'); as.className = 'sub'; as.textContent = 'Not tracked yet';
+      // By format and pillar — no live source yet → pending.
+      var fb = document.getElementById('formatBadge'); fb.className = 'chip warn'; fb.textContent = 'pending';
+      applyLiveContentMetrics();   // live newsletter value wins, FY-toggle-safe
+    }
+
+    var _impChart = null;
+    var NET_COLORS = { instagram: '#c13584', facebook: '#1877f2', linkedin: '#0a66c2' };
+
+    function shortPlatform(name) {
+      return String(name || '')
+        .replace('MyAdventure Group ', 'MAG ')
+        .replace("James's personal LinkedIn", 'James (LinkedIn)');
+    }
+
+    // LIVE "Engagement by platform" — recent-post engagement per platform from
+    // social_platform_stats (via /api/marketing/platforms), for the selected FY.
+    // (social_platform_stats has no impressions — those are private analytics — so this
+    // shows engagement, the closest scrapable reach signal.) FY-toggle + theme aware.
+    function renderEngagementChart() {
+      var el = document.getElementById('impressionsCanvas');
+      if (!el) return;
+      var cap = document.getElementById('impressionsCap');
+      var tc = themeColors();
+      if (_impChart) { _impChart.destroy(); _impChart = null; }
+
+      var rows = platformRowsForFy();
+      if (!rows.length) {
+        cap.textContent = (ALL_PLATFORM_ROWS === null)
+          ? 'Loading…'
+          : 'No snapshot for the selected financial year';
+        return;
+      }
+      cap.textContent = 'Recent-post engagement by platform · ' + esc(rows[0].snapshotDate) + ' · live';
+
+      _impChart = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: rows.map(function (p) { return shortPlatform(p.platformName); }),
+          datasets: [{
+            label: 'Total engagement (recent posts)',
+            data: rows.map(function (p) { return p.totalEngagement; }),
+            backgroundColor: rows.map(function (p) { return NET_COLORS[p.network] || tc.accent; }),
+            borderRadius: 4,
+            maxBarThickness: 64
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 }, maxRotation: 0, autoSkip: false } },
+            y: { beginAtZero: true, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 }, grid: { color: tc.grid } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                title: function (items) { return (rows[items[0].dataIndex] || {}).platformName || items[0].label; },
+                label: function (ctx) {
+                  var v = ctx.parsed.y;
+                  return (v == null ? 'No post data' : v + ' engagements') + ' (likes + comments + shares, recent posts)';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    // NB: the Platforms table + engagement chart are LIVE; they read ALL_PLATFORM_ROWS
+    // (loaded by loadPlatforms) and the FY toggle. renderAll is the FY-toggle path.
+    function renderAll() {
+      renderKpiRow();
+      renderSideCards();
+      renderEngagementChart();
+    }
+
+    function wireSeg(id, onChange) {
+      var seg = document.getElementById(id);
+      if (!seg) return;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (onChange) onChange();
+        });
+      });
+    }
+
     initPage('marketing');
-    renderMarketingHead();
+    renderMarketingHead(true);        // live page (Platforms/followers/engagement/newsletter live; others show "pending") → no sample badge
     renderMarketingSidebar('content-social');
+    renderAll();
+    renderPlatforms();                // paint "Loading…" immediately
+    loadPlatforms();                  // then fetch the live per-FY snapshots + re-render
+    loadContentMetrics();             // live newsletter-subscriber card (cookie sync / manual)
+    wireSeg('fySeg', function () {    // FY toggle drives the pending KPIs AND the live platforms + chart
+      renderAll();
+      renderPlatforms();
+    });
+    window.onThemeChange = renderEngagementChart;
   </script>
 </body>
 </html>

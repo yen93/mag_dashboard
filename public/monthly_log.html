@@ -6,6 +6,193 @@
   <title>Monthly Log — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    /* ============================================================
+       Monthly Log — bespoke visual layer following
+       DESIGN_GUIDE.md and marketing.html. Mock data only.
+       ============================================================ */
+    :root {
+      --mkt-accent: var(--accent);
+      --mkt-accent-2: #6a4bf5;
+      --mkt-accent-soft: #eef2fe;
+      --mkt-shadow:      0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --mkt-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+      --ml-done-bg: color-mix(in srgb, var(--pos) 15%, transparent);
+      --ml-done-fg: #156e4e;
+      --ml-late-bg: color-mix(in srgb, #f0a63b 20%, transparent);
+      --ml-late-fg: #8c5312;
+      --ml-pend-bg: var(--surface-2);
+      --ml-pend-fg: var(--text);
+      --ml-btn-border: #2a6f57;
+    }
+    html[data-theme='dark'] {
+      --mkt-accent-2: #9b7dff;
+      --mkt-accent-soft: #1b2440;
+      --mkt-shadow:      0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --mkt-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+      --ml-done-fg: var(--pos);
+      --ml-late-fg: #f0a63b;
+      --ml-btn-border: var(--pos);
+    }
+
+    /* Full-width layout matching marketing.html */
+    .content { max-width: none; }
+    #marketingNav { max-width: none; }
+    .mkt-head { max-width: none; }
+
+    /* Cards */
+    .card {
+      border-radius: 16px;
+      box-shadow: var(--mkt-shadow);
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+    }
+    .card-head.block-head {
+      display: block;
+      margin-bottom: 14px;
+    }
+    .card-head h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      color: var(--text);
+    }
+    .chart-cap {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 3px;
+    }
+
+    /* Controls bar + segmented toggles (same as marketing.html) */
+    .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: linear-gradient(135deg, var(--mkt-accent), var(--mkt-accent-2));
+      color: #fff;
+      box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
+    }
+
+    /* Top 2-column row: Update status (left) + October notes (right) */
+    .ml-top {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      align-items: stretch;
+      margin-bottom: 16px;
+    }
+    @media (max-width: 900px) {
+      .ml-top { grid-template-columns: 1fr; }
+    }
+    .ml-card {
+      padding: 22px 24px;
+    }
+
+    /* Tables */
+    .ml-table-wrap {
+      overflow-x: auto;
+    }
+    table.ml-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 14px;
+    }
+    table.ml-table th,
+    table.ml-table td {
+      padding: 12px 10px;
+      text-align: right;
+      white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+    table.ml-table th:first-child,
+    table.ml-table td:first-child {
+      text-align: left;
+      padding-left: 4px;
+    }
+    table.ml-table th:last-child,
+    table.ml-table td:last-child {
+      padding-right: 4px;
+    }
+    table.ml-table thead th {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      padding-top: 6px;
+      padding-bottom: 10px;
+    }
+    table.ml-table tbody td {
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+    }
+
+    /* Status badges in Update status table */
+    .ml-badge {
+      display: inline-block;
+      padding: 3px 10px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.3;
+    }
+    .ml-badge.done {
+      background: var(--ml-done-bg);
+      color: var(--ml-done-fg);
+    }
+    .ml-badge.late {
+      background: var(--ml-late-bg);
+      color: var(--ml-late-fg);
+    }
+    .ml-badge.pending {
+      background: var(--ml-pend-bg);
+      color: var(--ml-pend-fg);
+      border: 1px solid var(--border);
+    }
+
+    /* Notes card items */
+    .ml-notes-list {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .ml-note-item .note-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text);
+      margin-bottom: 4px;
+    }
+    .ml-note-item .note-body {
+      font-size: 14px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
+
+    /* Bottom action row */
+    .ml-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 16px;
+    }
+    .ml-download-btn {
+      background: var(--surface);
+      color: var(--text);
+      border: 1.5px solid var(--ml-btn-border);
+      border-radius: 10px;
+      padding: 10px 18px;
+      font-size: 13px;
+      font-weight: 600;
+      font-family: inherit;
+      cursor: pointer;
+      transition: background .16s ease, transform .16s ease, box-shadow .16s ease;
+    }
+    .ml-download-btn:hover {
+      background: var(--surface-2);
+      transform: translateY(-1px);
+      box-shadow: var(--mkt-shadow);
+    }
+  </style>
 </head>
 <body>
   <header class="topbar">
@@ -25,20 +212,295 @@
 
   <div class="marketing-layout">
     <nav class="subtabs" id="marketingNav"></nav>
+
     <main class="content">
-      <h1 style="margin:0 0 6px;font-size:24px">Monthly Log</h1>
-      <p class="muted" style="margin:0 0 22px;font-size:14px">Part of the new Marketing layout.</p>
-      <div class="card">
-        <div class="needs-setup"><strong>Coming soon</strong><span>This tab is a placeholder — its content will be added here.</span></div>
+      <!-- Controls bar (same per-FY top toggle filter as marketing.html) -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="mkt-controls">
+          <span class="ctl-label">Financial year</span>
+          <div class="segmented" id="fySeg">
+            <button data-fy="all">All years</button>
+            <button data-fy="fy22">FY22</button>
+            <button data-fy="fy23">FY23</button>
+            <button data-fy="fy24">FY24</button>
+            <button data-fy="fy25">FY25</button>
+            <button data-fy="fy26">FY26</button>
+            <button class="active" data-fy="fy27">FY27</button>
+          </div>
+          <div class="spacer" style="flex:1"></div>
+          <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
+        </div>
+      </div>
+
+      <!-- Top 2-column row: Update status (left) + Notes (right) -->
+      <div class="ml-top">
+        <div class="card ml-card">
+          <div class="card-head block-head">
+            <h3 id="statusHeading">Update status</h3>
+            <div class="chart-cap">Each month is due by the 8th of the following month</div>
+          </div>
+          <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="statusHeading">
+            <table class="ml-table">
+              <thead>
+                <tr>
+                  <th>Month</th>
+                  <th>Due</th>
+                  <th>Updated</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="statusBody"></tbody>
+            </table>
+          </div>
+        </div>
+
+        <div class="card ml-card">
+          <div class="card-head block-head">
+            <h3 id="notesHeading">October notes</h3>
+            <div class="chart-cap">From the tracker's Notes rows</div>
+          </div>
+          <div class="ml-notes-list" id="notesList"></div>
+        </div>
+      </div>
+
+      <!-- Yearly summary table card -->
+      <div class="card ml-card">
+        <div class="card-head block-head">
+          <h3 id="summaryHeading">Yearly summary</h3>
+          <div class="chart-cap">Same rows as the tracker's Yearly Summary tab</div>
+        </div>
+        <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="summaryHeading">
+          <table class="ml-table" style="min-width:680px">
+            <thead>
+              <tr>
+                <th>Measure</th>
+                <th>FY25</th>
+                <th>FY26</th>
+                <th>FY27 (to Oct)</th>
+                <th>FY26 vs FY25</th>
+                <th>CY2025</th>
+                <th>CY2026 (to Oct)</th>
+              </tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="ml-actions">
+        <button type="button" class="ml-download-btn" id="downloadExcelBtn">Download as Excel (tracker layout)</button>
       </div>
     </main>
   </div>
 
   <script src="app.js?v=10"></script>
   <script>
+    /* Monthly Log — Frontend-only mock data view.
+       Default active FY (FY27) renders the exact figures from the reference design. */
+
+    var YEARLY_SUMMARY_ROWS = [
+      { measure: 'Keynote enquiries', fy25: '137',      fy26: '165',      fy27: '56',       diff: '+20%',    cy25: '160',      cy26: '139' },
+      { measure: 'Keynote bookings',  fy25: '38',       fy26: '43',       fy27: '16',       diff: '+13%',    cy25: '42',       cy26: '37' },
+      { measure: 'Marketing revenue', fy25: '$312,000', fy26: '$374,500', fy27: '$137,500', diff: '+20%',    cy25: '$350,000', cy26: '$317,000' },
+      { measure: 'Marketing spend',   fy25: '$118,000', fy26: '$147,675', fy27: '$40,465',  diff: '+25%',    cy25: '$131,500', cy26: '$111,400' },
+      { measure: 'Marketing ROI',     fy25: '164%',     fy26: '154%',     fy27: '240%',     diff: '−10 pts', cy25: '166%',     cy26: '185%' },
+      { measure: 'Cadence delivered', fy25: '—',        fy26: '95%',      fy27: '96%',      diff: '—',       cy25: '—',        cy26: '95%' }
+    ];
+
+    var MOCK_BY_FY = {
+      fy27: {
+        notesTitle: 'October notes',
+        statusRows: [
+          { month: 'Jul 2026', due: '8 Aug 2026', updated: '6 Aug',  status: 'Done',        cls: 'done' },
+          { month: 'Aug 2026', due: '8 Sep 2026', updated: '8 Sep',  status: 'Done',        cls: 'done' },
+          { month: 'Sep 2026', due: '8 Oct 2026', updated: '10 Oct', status: 'Done late',   cls: 'late' },
+          { month: 'Oct 2026', due: '8 Nov 2026', updated: '—',      status: 'Not due yet', cls: 'pending' }
+        ],
+        notes: [
+          { title: 'What happened',                 body: 'Bureau send landed a booking; one reel slipped a week.' },
+          { title: 'Decisions made',                body: 'Hold LinkedIn spend one more month.' },
+          { title: "What we'll change next month", body: 'Test event-day content at the next keynote.' }
+        ]
+      },
+      fy26: {
+        notesTitle: 'June 2026 notes',
+        statusRows: [
+          { month: 'Mar 2026', due: '8 Apr 2026', updated: '6 Apr', status: 'Done',      cls: 'done' },
+          { month: 'Apr 2026', due: '8 May 2026', updated: '7 May', status: 'Done',      cls: 'done' },
+          { month: 'May 2026', due: '8 Jun 2026', updated: '9 Jun', status: 'Done late', cls: 'late' },
+          { month: 'Jun 2026', due: '8 Jul 2026', updated: '7 Jul', status: 'Done',      cls: 'done' }
+        ],
+        notes: [
+          { title: 'What happened',                 body: 'Executive X follow-ups converted two keynote bookings in June.' },
+          { title: 'Decisions made',                body: 'Lock FY27 social cadence at 22 slots per month.' },
+          { title: "What we'll change next month", body: 'Introduce 1st Tuesday bureau outreach tracking.' }
+        ]
+      },
+      fy25: {
+        notesTitle: 'June 2025 notes',
+        statusRows: [
+          { month: 'Mar 2025', due: '8 Apr 2025', updated: '7 Apr', status: 'Done',      cls: 'done' },
+          { month: 'Apr 2025', due: '8 May 2025', updated: '8 May', status: 'Done',      cls: 'done' },
+          { month: 'May 2025', due: '8 Jun 2025', updated: '6 Jun', status: 'Done',      cls: 'done' },
+          { month: 'Jun 2025', due: '8 Jul 2025', updated: '9 Jul', status: 'Done late', cls: 'late' }
+        ],
+        notes: [
+          { title: 'What happened',                 body: 'Strong EOFY search demand lifted June keynote enquiries.' },
+          { title: 'Decisions made',                body: 'Increase Google Ads exact-match budget for FY26.' },
+          { title: "What we'll change next month", body: 'Start tracking monthly social cadence compliance.' }
+        ]
+      },
+      fy24: {
+        notesTitle: 'June 2024 notes',
+        statusRows: [
+          { month: 'Mar 2024', due: '8 Apr 2024', updated: '5 Apr', status: 'Done', cls: 'done' },
+          { month: 'Apr 2024', due: '8 May 2024', updated: '7 May', status: 'Done', cls: 'done' },
+          { month: 'May 2024', due: '8 Jun 2024', updated: '8 Jun', status: 'Done', cls: 'done' },
+          { month: 'Jun 2024', due: '8 Jul 2024', updated: '8 Jul', status: 'Done', cls: 'done' }
+        ],
+        notes: [
+          { title: 'What happened',                 body: 'April Executive X dinner drove four qualified org enquiries.' },
+          { title: 'Decisions made',                body: 'Keep bi-annual Executive X dinner format for FY25.' },
+          { title: "What we'll change next month", body: 'Consolidate bureau contact list before Q1.' }
+        ]
+      },
+      fy23: {
+        notesTitle: 'June 2023 notes',
+        statusRows: [
+          { month: 'Mar 2023', due: '8 Apr 2023', updated: '7 Apr', status: 'Done',      cls: 'done' },
+          { month: 'Apr 2023', due: '8 May 2023', updated: '10 May', status: 'Done late', cls: 'late' },
+          { month: 'May 2023', due: '8 Jun 2023', updated: '7 Jun', status: 'Done',      cls: 'done' },
+          { month: 'Jun 2023', due: '8 Jul 2023', updated: '6 Jul', status: 'Done',      cls: 'done' }
+        ],
+        notes: [
+          { title: 'What happened',                 body: 'LinkedIn personal profile posts outperformed company page 4×.' },
+          { title: 'Decisions made',                body: 'Prioritise James personal LinkedIn cadence.' },
+          { title: "What we'll change next month", body: 'Tag all inbound web enquiries by source in ActiveCampaign.' }
+        ]
+      },
+      fy22: {
+        notesTitle: 'June 2022 notes',
+        statusRows: [
+          { month: 'Mar 2022', due: '8 Apr 2022', updated: '8 Apr', status: 'Done', cls: 'done' },
+          { month: 'Apr 2022', due: '8 May 2022', updated: '6 May', status: 'Done', cls: 'done' },
+          { month: 'May 2022', due: '8 Jun 2022', updated: '7 Jun', status: 'Done', cls: 'done' },
+          { month: 'Jun 2022', due: '8 Jul 2022', updated: '8 Jul', status: 'Done', cls: 'done' }
+        ],
+        notes: [
+          { title: 'What happened',                 body: 'Baseline year for paid search and speaker bureau tracking.' },
+          { title: 'Decisions made',                body: 'Standardise monthly reporting cut-off to the 8th.' },
+          { title: "What we'll change next month", body: 'Add Xero marketing account reconciliation.' }
+        ]
+      },
+      all: {
+        notesTitle: 'October notes',
+        statusRows: [
+          { month: 'Jul 2026', due: '8 Aug 2026', updated: '6 Aug',  status: 'Done',        cls: 'done' },
+          { month: 'Aug 2026', due: '8 Sep 2026', updated: '8 Sep',  status: 'Done',        cls: 'done' },
+          { month: 'Sep 2026', due: '8 Oct 2026', updated: '10 Oct', status: 'Done late',   cls: 'late' },
+          { month: 'Oct 2026', due: '8 Nov 2026', updated: '—',      status: 'Not due yet', cls: 'pending' }
+        ],
+        notes: [
+          { title: 'What happened',                 body: 'Bureau send landed a booking; one reel slipped a week.' },
+          { title: 'Decisions made',                body: 'Hold LinkedIn spend one more month.' },
+          { title: "What we'll change next month", body: 'Test event-day content at the next keynote.' }
+        ]
+      }
+    };
+
+    function selFyKey() {
+      var b = document.querySelector('#fySeg button.active');
+      return b ? b.getAttribute('data-fy') : 'fy27';
+    }
+
+    function currentData() {
+      var key = selFyKey();
+      return MOCK_BY_FY[key] || MOCK_BY_FY.fy27;
+    }
+
+    function renderStatusTable() {
+      var d = currentData();
+      var html = d.statusRows.map(function (r) {
+        return '<tr>' +
+          '<td>' + esc(r.month) + '</td>' +
+          '<td>' + esc(r.due) + '</td>' +
+          '<td>' + esc(r.updated) + '</td>' +
+          '<td><span class="ml-badge ' + esc(r.cls) + '">' + esc(r.status) + '</span></td>' +
+        '</tr>';
+      }).join('');
+      document.getElementById('statusBody').innerHTML = html;
+    }
+
+    function renderNotes() {
+      var d = currentData();
+      document.getElementById('notesHeading').textContent = d.notesTitle;
+      var html = d.notes.map(function (n) {
+        return '<div class="ml-note-item">' +
+          '<div class="note-title">' + esc(n.title) + '</div>' +
+          '<div class="note-body">' + esc(n.body) + '</div>' +
+        '</div>';
+      }).join('');
+      document.getElementById('notesList').innerHTML = html;
+    }
+
+    function renderSummaryTable() {
+      var html = YEARLY_SUMMARY_ROWS.map(function (r) {
+        return '<tr>' +
+          '<td>' + esc(r.measure) + '</td>' +
+          '<td>' + esc(r.fy25) + '</td>' +
+          '<td>' + esc(r.fy26) + '</td>' +
+          '<td>' + esc(r.fy27) + '</td>' +
+          '<td>' + esc(r.diff) + '</td>' +
+          '<td>' + esc(r.cy25) + '</td>' +
+          '<td>' + esc(r.cy26) + '</td>' +
+        '</tr>';
+      }).join('');
+      document.getElementById('summaryBody').innerHTML = html;
+    }
+
+    function renderAll() {
+      renderStatusTable();
+      renderNotes();
+      renderSummaryTable();
+    }
+
+    function wireSeg(id, onChange) {
+      var seg = document.getElementById(id);
+      if (!seg) return;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (onChange) onChange();
+        });
+      });
+    }
+
+    document.getElementById('downloadExcelBtn').addEventListener('click', function () {
+      var lines = [
+        ['Measure', 'FY25', 'FY26', 'FY27 (to Oct)', 'FY26 vs FY25', 'CY2025', 'CY2026 (to Oct)'].join(',')
+      ];
+      YEARLY_SUMMARY_ROWS.forEach(function (r) {
+        lines.push([r.measure, r.fy25, r.fy26, r.fy27, r.diff, r.cy25, r.cy26].map(function (cell) {
+          return '"' + String(cell).replace(/"/g, '""') + '"';
+        }).join(','));
+      });
+      var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'mag_marketing_monthly_log_tracker.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    });
+
     initPage('marketing');
     renderMarketingHead();
     renderMarketingSidebar('monthly-log');
+    renderAll();
+    wireSeg('fySeg', renderAll);
   </script>
 </body>
 </html>
