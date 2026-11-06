@@ -56,14 +56,18 @@ Cloud Run.
   ("Marketing" h1 + the framing question; `.mkt-head` CSS now in `app.css`); it injects the head just
   before `#marketingNav`. **As of 2026-11-05 it takes a `live` arg:** the h1 + framing question ALWAYS
   render; the amber **"Sample data — layout only"** badge is emitted only when `live` is falsy (ternary).
-  It is now called on **ALL** primary sub-tabs: the Overview + the 5 still-sample sub-tabs call it with
-  **no arg** (badge shows), and the two LIVE pages `leads_bookings.html`/`spend_roi.html` call it with
+  It is now called on **ALL** primary sub-tabs: the Overview + the still-sample sub-tabs
+  (`website_search.html`, `nurture_events.html`, `monthly_log.html`) call it with **no arg** (badge shows),
+  and the **four LIVE pages** `leads_bookings.html` / `spend_roi.html` / `content_social.html` /
+  **`email_partners.html` (now LIVE as of 2026-11-06, see its own paragraph below)** call it with
   **`true`** (badge suppressed). Still **NOT** called on the live More tools (they keep their own
-  headers). **The Overview + the 5 still-sample sub-tabs are LAYOUT-ONLY with hardcoded sample data**
+  headers). **The Overview + the still-sample sub-tabs are LAYOUT-ONLY with hardcoded sample data**
   (no API calls; `initPage('marketing')` with no renderFn; charts drawn inline with Chart.js) —
-  **EXCEPT `leads_bookings.html` + `spend_roi.html`, now LIVE (their own paragraphs below)**. The 15
-  Marketing pages were bumped to **`app.js?v=10`**, then **`leads_bookings.html` + `spend_roi.html` to
-  `?v=11` (2026-11-05)** when `renderMarketingHead` gained the `live` arg (the only two pages depending
+  **EXCEPT `leads_bookings.html`, `spend_roi.html`, `content_social.html` + `email_partners.html`, now
+  LIVE (their own paragraphs below)**. The 15
+  Marketing pages were bumped to **`app.js?v=10`**, then **`leads_bookings.html`, `spend_roi.html`,
+  `content_social.html` + `email_partners.html` to
+  `?v=11`** when `renderMarketingHead` gained the `live` arg (the pages depending
   on it; the backward-compatible no-arg call means the rest stay `?v=10`). Home/Sales/Operations and all
   non-Marketing pages deliberately stay `?v=9`. Frontend-only → needs a Cloud Run redeploy. The paragraph
   below still documents each live tool's backend.
@@ -217,6 +221,32 @@ Cloud Run.
   frontend change → folds into the same **Cloud Run redeploy**. GOTCHA: `.gitignore` gained `*cookie*`/`*li_at*`
   (both recursive) so a cookie file can't be committed. **No `config.js` / Cloud Run secret change** — the server only SELECTs the cache; the Apify
   token lives only in the edge function.
+  **Email & Partners page (`email_partners.html` = Marketing sub-tab "Email & Partners", now LIVE as of
+  2026-11-06):** a self-rendering page (`initPage('marketing')` with no renderFn +
+  `renderMarketingHead(true)` + `renderMarketingSidebar('email-partners')` + its own `fetchJSON`) → the
+  shared Marketing head, **NO "Sample data" badge** (so it needs the `live` arg → bumped to **`app.js?v=11`**).
+  Standard `#fySeg` FY toggle (All years + FY22–FY27, default = current FY from the payload), plus an
+  **"All years" send-weighted aggregate** computed client-side. Backed by **`GET /api/marketing/email-partners`**
+  → **`server/metrics/email-partner-metrics.js`** (`getEmailPartnerMetrics`, requireAuth, cached 10 min) — a
+  plain `DISTINCT ON (fy_end) … ORDER BY fy_end, captured_at DESC` over the NEW cache
+  **`public.email_partner_metrics`** (migration `20261106160000`): the **latest snapshot row per FY**.
+  **The cache is APPEND-ONLY** (user requirement): the weekly routine INSERTs one row per FY per run under a
+  shared `run_id`; a trigger **`email_partner_metrics_append_only()` BLOCKS UPDATE/DELETE** so the table can
+  only ever grow (never upsert/truncate). RLS on, service-role only (read via the direct `pg` owner
+  connection). **5 KPI cards:** Subscribed contacts (AC active contacts), EDM sends (+ total sends; open-rate
+  on hover), Click rate (pts delta vs prior FY), **Replies (`pending` chip — NOT tracked in ActiveCampaign)**,
+  Unsubscribes (+ rate). **Partner table** (The Tailor / Speaker bureaus): Contacts / Enquiries / Bookings /
+  Revenue (won) / Prior-FY live from the snapshot; **"Sent on time" + "Replies" show a `pending` chip** (not
+  AC metrics). **Filled WEEKLY** by the NEW Claude Code cloud routine **`email-partners-sync`**
+  (`routines/email-partners-sync.md`; routine id `trig_01KHNc3jpp27VePeheDqk2FA`, cron `0 22 * * 0` = Mon
+  06:00 Manila; connectors **ActiveCampaign + Supabase**): email KPIs from the **AC MCP**
+  `run_campaign_performance_report` (`all_campaigns_performance` → per-FY account-level `summaryData` — the
+  sanctioned AC aggregate) + `list_contacts status=1` meta.total + SPEAKERS BUREAUS list (id 3)
+  `active_subscribers`; partner enquiries/bookings/won-revenue computed inline from
+  **`public.ac_indirect_deals`** (`is_tailor` split). **Seeded FY22–FY27 at build time.** Server + frontend +
+  new route/metrics module → needs a **Cloud Run redeploy**; weekly *data* refreshes thereafter need no
+  redeploy (the server only SELECTs the cache). **GOTCHA:** AC does **not** track email replies or send-cadence
+  — don't try to source "Replies"/"Sent on time" from AC; they stay `pending`.
   **DESIGN GUIDE (as of 2026-11-05):** `DESIGN_GUIDE.md` (repo root) is the dev-facing styling
   standard for the whole dashboard — **`public/roas.html` is the reference**. It codifies the color
   tokens (+ page-local `--x-accent`/`--x-shadow` pattern), typography, the **horizontal segmented

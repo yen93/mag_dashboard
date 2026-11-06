@@ -1,6 +1,20 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-06 (CONTENT & SOCIAL "PLATFORMS" BUILT LIVE VIA APIFY + LINKEDIN NEWSLETTER SUBSCRIBER
+Last updated: 2026-11-06 (EMAIL & PARTNERS PAGE (public/email_partners.html) WIRED LIVE. NEW append-only cache
+public.email_partner_metrics (migration 20261106160000; one row per (run_id, fy_end); trigger
+email_partner_metrics_append_only() BLOCKS UPDATE/DELETE so the table can only ever GROW; RLS on, service-role
+only). Email KPIs come from the ActiveCampaign MCP run_campaign_performance_report (per-FY account-level
+summaryData: campaigns / sends / open-rate / click-rate / unsubscribes) + list_contacts status=1 (active
+contacts) + SPEAKERS BUREAUS list (id 3); partner enquiries / bookings / won-revenue from public.ac_indirect_deals
+(is_tailor split). Seeded FY22–FY27 at build time. Read via NEW server/metrics/email-partner-metrics.js + route
+GET /api/marketing/email-partners (DISTINCT ON fy_end = latest row per FY, cached 10 min; registered in
+server/index.js). Page rewritten to render live (FY toggle incl. an "All years" send-weighted aggregate, 5 KPI
+cards, partner table), renderMarketingHead(true) drops the "Sample data" badge, bumped to app.js?v=11. Replies +
+"sent on time" are NOT tracked in ActiveCampaign, so those tiles show a `pending` chip. Filled WEEKLY by NEW
+Claude Code cloud routine email-partners-sync (routines/email-partners-sync.md; routine id
+trig_01KHNc3jpp27VePeheDqk2FA, cron 0 22 * * 0 = Mon 06:00 Manila; connectors ActiveCampaign + Supabase). Needs a
+manual Cloud Run redeploy for the new route+page+module; data refreshes thereafter need no redeploy. Previously
+same day: CONTENT & SOCIAL "PLATFORMS" BUILT LIVE VIA APIFY + LINKEDIN NEWSLETTER SUBSCRIBER
 COUNT VIA A COOKIE FETCH. (A) NEW cache public.social_platform_stats (PK (platform_key, snapshot_date), RLS on;
 migration 20261106120000) + RPC reload_social_platform_stats(_rows jsonb) (security definer, empty-payload
 refusal, UPSERT on the PK — never truncates). Filled WEEKLY (upsert-only) by NEW edge fn apify-platforms-sync
@@ -1173,6 +1187,15 @@ PENDING METRICS (flagged "needs setup" in the UI, not silently faked)
   Keynote Management boards — real data exists there, just not wired in).
 
 AUTOMATIONS / ROUTINES
+- email-partners-sync (Claude cloud routine, trig_01KHNc3jpp27VePeheDqk2FA) —
+  runs weekly, Mon 06:00 Asia/Manila (cron `0 22 * * 0` UTC), connectors
+  ActiveCampaign + Supabase. Pulls per-FY email KPIs from the ActiveCampaign MCP
+  (run_campaign_performance_report summaryData) + active-contact / bureau-list
+  subscriber counts, and INSERTs one APPEND-ONLY snapshot row per FY into
+  public.email_partner_metrics (partner enquiries/bookings/revenue computed inline
+  from public.ac_indirect_deals). INSERT-only — never upsert/truncate (a trigger
+  blocks UPDATE/DELETE). Procedure + SQL in routines/email-partners-sync.md.
+  Backs the Email & Partners page (/api/marketing/email-partners). NEW this session.
 - sales-topline-sync (Claude cloud routine, trig_011z2MX6Sh5gsBY6JncmDmss) —
   runs weekly, Mon 06:00 Asia/Manila (cron `0 22 * * 0` UTC), via the Supabase
   MCP connector. Recomputes public.sales_topline (idempotent UPSERTs over a

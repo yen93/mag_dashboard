@@ -1,0 +1,150 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-06
+Session: Wired the Marketing → Email & Partners page (public/email_partners.html)
+LIVE. Built a new APPEND-ONLY Supabase cache (public.email_partner_metrics), a
+weekly Claude Code cloud routine that fills it from the ActiveCampaign MCP +
+ac_indirect_deals, a read endpoint (/api/marketing/email-partners +
+server/metrics/email-partner-metrics.js), and rewrote the page to render live.
+Seeded FY22–FY27 at build time. Replies and send-cadence aren't trackable in
+ActiveCampaign, so those tiles show a 'pending' chip. Needs a manual Cloud Run
+redeploy to go live on the hosted dashboard.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/token/credential/connection string was
+pasted into this chat. All ActiveCampaign and Supabase access went through
+pre-connected MCP connectors; no credential values appeared in any message or
+tool output.
+
+--------------------------------------------------------------------------------
+USER:
+(/q) "for the cards in email_partners.html, can we get these data via ac mcp?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran in read-only /q mode. Read public/email_partners.html (all sample/mock data:
+5 KPI cards — Subscribed contacts, EDM sends, Click rate, Replies, Unsubscribes —
+plus a partner-outreach table for The Tailor + Speaker bureaus with Sent-on-time /
+Contacts / Replies / Enquiries / Bookings / Revenue / Last-FY columns).
+
+Checked Supabase for any existing AC email-campaign mirror — found none (only
+activecampaign_contacts/_accounts/_deals; no campaigns/sends/opens table, no list
+subscription table).
+
+Verdict given: PARTLY.
+- Two framing points: (1) the dashboard server can't call the AC MCP — every live
+  card reads Supabase (mirrored from AC by edge fns); (2) no AC email mirror exists
+  yet, so the email KPIs had no live source.
+- Email-performance KPIs (sends, open/click rate, unsubscribes) = exactly what AC
+  provides → fetchable. Subscribed contacts ≈ fetchable (list/active total).
+- Replies = NOT in AC (replies go to the sender's inbox). "Sent on time" cadence =
+  not an AC metric.
+- Partner Enquiries/Bookings/Revenue = deal AGGREGATES the AC MCP refuses, but
+  already live-able from Supabase public.ac_indirect_deals (is_tailor/bureau).
+Offered to sketch the mirror+endpoint.
+
+--------------------------------------------------------------------------------
+USER:
+"update email_partners.html cards only
+1. create claude code routine that will use the ac mcp and fetch data needed for
+   the cards.
+2. this should run once a week and fetched data to be saved into a new dedicated
+   db table.
+3. make sure the table never deletes but only inserts new rows per run."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Treated this as cancelling read-only mode. Grounded the build with live MCP
+probes before writing anything:
+
+- Studied the existing pattern: routines/sales-topline-sync.md (weekly Claude Code
+  cloud routine writing a Supabase cache via MCP), server/metrics/
+  marketing-leads-by-source.js, and the marketing route wiring in server/index.js.
+- AC MCP probes (learning the real schemas + confirming data):
+  * list_contacts {params:{limit:1,status:1}} → meta.total = 6,528 ACTIVE contacts
+    account-wide.
+  * run_campaign_performance_report (module:campaigns, explore:
+    all_campaigns_performance) returns an account-level `summaryData` aggregate for
+    any date window — number_of_campaigns, total_sends, open_rate, click_rate,
+    click_to_open_rate, unsubscribe_rate, total_unsubscribes, bounce_rate,
+    total_bounces, total_unique_opens, total_unique_clicks. This IS the sanctioned
+    AC aggregate and is exactly the email-KPI source.
+  * list_lists (email channel) → found SPEAKERS BUREAUS list (id 3), active=72.
+  * Pulled summaryData for all 6 FY windows (FY22..FY27):
+    FY22 31 campaigns/34,860 sends/26.7 open/5.22 click/0.88 unsub/308 unsubs;
+    FY23 96/121,538/31.11/2.97/0.84/1018; FY24 68/131,322/36.08/8.54/0.76/992;
+    FY25 74/100,406/35.4/3.19/0.69/697; FY26 90/156,960/38.47/2.78/0.78/1218;
+    FY27 (to today) 52/54,012/34.69/3.3/0.73/395.
+- Supabase probes: ac_indirect_deals columns, then per-FY tailor/bureau enquiries
+  (all deals), bookings (status=1 won), won revenue (value_aud) — e.g. FY27 bureau
+  24 enq/5 won/$24,100; tailor 11/1/$9,240. All clean.
+
+Then built:
+
+1. MIGRATION supabase/migrations/20261106160000_create_email_partner_metrics.sql —
+   table public.email_partner_metrics: one row per (run_id, fy_end). Email columns
+   from AC summaryData; subscriber snapshot (active_contacts, bureau_list_
+   subscribers); partner columns (bureau_/tailor_ enquiries/bookings/revenue/
+   contacts); summary jsonb + note. RLS enabled (service-role only, like the other
+   caches). APPEND-ONLY guard: a trigger email_partner_metrics_append_only() raises
+   on UPDATE/DELETE so the table can only grow. Applied via Supabase MCP.
+
+2. SEEDED the first snapshot — one INSERT...SELECT writing 6 FY rows under one
+   run_id: email metrics as VALUES tuples from the AC reports, subscribers 6528/72,
+   partner figures computed inline from ac_indirect_deals (is_tailor split).
+   Verified all 6 rows.
+
+3. server/metrics/email-partner-metrics.js — getEmailPartnerMetrics(): DISTINCT ON
+   (fy_end) latest row per FY, mapped to {data:[{fyEnd,email,subscribers,partners}],
+   defaultFy, capturedAt, meta}. Registered marketing.get('/email-partners') in
+   server/index.js (import + route, cached 10 min). node --check passed on both.
+
+4. Rewrote public/email_partners.html to render live from /api/marketing/
+   email-partners: kept the FY toggle, added an "All years" send-weighted
+   aggregate, 5 KPI cards (Subscribed contacts, EDM sends w/ open-rate hover, Click
+   rate w/ pts delta vs prior FY, Replies=pending chip, Unsubscribes w/ rate), and
+   the partner table (Sent-on-time + Replies = pending chips; Contacts/Enquiries/
+   Bookings/Revenue/Prior-FY live). Switched to renderMarketingHead(true) (drops
+   the "Sample data" badge) and bumped the script to app.js?v=11 (needs the live
+   arg). Confirmed app.js already defines renderMarketingHead(live) and the
+   'email-partners' sidebar key.
+
+5. routines/email-partners-sync.md — the weekly routine doc: AC MCP calls per FY,
+   subscriber snapshot, and the exact append-only INSERT SQL template; notes that
+   Replies/cadence aren't in AC and the table is INSERT-only.
+
+Scheduling (requirement #2): used the /schedule skill. Confirmed git remote =
+github.com/yen93/mag_dashboard. Asked the user (create? which time?) — they chose
+"Create it" + "Mon 06:00 Manila". Created a cloud routine via RemoteTrigger:
+id trig_01KHNc3jpp27VePeheDqk2FA, cron 0 22 * * 0 (Sun 22:00 UTC = Mon 06:00 PH),
+model claude-sonnet-5-5, connectors ActiveCampaign + Supabase, self-contained
+prompt that reads the routine doc and inserts the weekly snapshot. Next run
+2026-11-08 22:02 UTC.
+
+Hardening: ran the Supabase security advisors. Two flags on the new objects — (a)
+RLS-enabled-no-policies (intentional, matches every other cache table), (b) the
+trigger function had a mutable search_path → pinned it with `set search_path = ''`
+(updated both the migration file and the live function). Verified the append-only
+guard by attempting an UPDATE on a real row → it errored
+("email_partner_metrics is append-only: UPDATE is not permitted") and changed
+nothing.
+
+Saved a project memory (email-partners-live-feature.md) + MEMORY.md pointer.
+
+Told the user the one remaining manual step is a Cloud Run redeploy (new route +
+page + metrics module), per the project rule that Claude never deploys; data
+refreshes thereafter need no redeploy. Nothing committed/pushed.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (document the session — chat history, as_built.txt, CLAUDE.md, .gitignore;
+no git commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file; updated as_built.txt with the new
+table, endpoint, routine, and page; updated CLAUDE.md with the now-live Email &
+Partners feature; checked .gitignore. Did not run any git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================

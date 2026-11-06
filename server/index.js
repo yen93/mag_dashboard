@@ -21,6 +21,7 @@ import { getRoasCounted } from './metrics/roas-counted.js';
 import { getMarketingRoi } from './metrics/marketing-roi.js';
 import { getMarketingOverview } from './metrics/marketing-overview.js';
 import { getMarketingLeadsBySource } from './metrics/marketing-leads-by-source.js';
+import { getEmailPartnerMetrics } from './metrics/email-partner-metrics.js';
 import { getMarketingPlatforms } from './metrics/marketing-platforms.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
@@ -375,6 +376,19 @@ marketing.get('/leads-by-source', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:leads-by-source]', err);
     res.status(502).json({ error: 'Failed to load leads by source from data source.', detail: err.message });
+  }
+});
+// Email & Partners — latest weekly snapshot per FY (email KPIs + partner deal figures)
+// behind public/email_partners.html. Plain SELECT of public.email_partner_metrics,
+// filled weekly by the email-partners-sync routine (AC MCP + ac_indirect_deals).
+// See server/metrics/email-partner-metrics.js. Cached briefly.
+marketing.get('/email-partners', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:email-partners', getEmailPartnerMetrics, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:email-partners]', err);
+    res.status(502).json({ error: 'Failed to load email & partner metrics from data source.', detail: err.message });
   }
 });
 // Platforms — latest weekly snapshot per social platform (followers / posts / engagement)
