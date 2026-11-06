@@ -1,6 +1,25 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-06 (EMAIL & PARTNERS PAGE (public/email_partners.html) WIRED LIVE. NEW append-only cache
+Last updated: 2026-11-06 (WEBSITE & SEARCH PAGE (public/website_search.html) WIRED PARTIALLY LIVE. The ONLY
+website-traffic data in Supabase is public.ga4_events_staging — a rolling ~60-day window of GA4 *conversion*
+events (form submits / opt-ins); it holds NO pageview/session_start rows, so true "sessions" are NOT available
+here (they'd need a new GA4-sessions sync). What IS now live: website FORM ENQUIRIES (total + organic + paid-
+search), computed at request time. (1) NEW server/metrics/marketing-website-search.js (getWebsiteSearch) — ONE
+parameterized query over ga4_events_staging summing the genuine enquiry events (form_submit,
+Contact_Form_Submit_Alt, form_submissions, Form_submission_thankyou_1 — deliberately EXCLUDING
+free_gifts_opt_ins lead-magnets + subscribe newsletter, matching the GA4 & Ads Leads page), split by medium via
+FILTER into total/organic/cpc/referral/email/direct, + the live window start/end. Returns {enquiries{...},
+window{start,end}, meta}. (2) NEW route GET /api/marketing/website-search (cached 10 min, 502 on error) on the
+`marketing` router in server/index.js. (3) public/website_search.html — removed ALL the mock/sample FY data
+(the MOCK_BY_FY object) + old render fns; now renders from the live fetch. 3 LIVE KPI cards (Website form
+enquiries / Organic form enquiries / Paid-search form enquiries); the other tiles (Website sessions, Organic
+search sessions, Visits from AI tools, New Google reviews, Phone enquiries) show the red "pending" chip
+(<span class="chip warn">pending</span>) — no fabricated numbers. Because the GA4 window is rolling ~60 days
+all inside FY27, the live cards fill only under FY27 / All years and show "—" + a note under FY22–26 (same as
+Content & Social). "Sample data — layout only" badge REMOVED (renderMarketingHead(true)); bumped app.js?v=10→?v=11.
+Validated live window 2026-09-06→2026-11-05: 313 total form enquiries (organic 67 · cpc 65). Server+frontend+new
+route/module → NEEDS a manual Cloud Run redeploy; no new secrets (server only SELECTs). Previously same day:
+EMAIL & PARTNERS PAGE (public/email_partners.html) WIRED LIVE. NEW append-only cache
 public.email_partner_metrics (migration 20261106160000; one row per (run_id, fy_end); trigger
 email_partner_metrics_append_only() BLOCKS UPDATE/DELETE so the table can only ever GROW; RLS on, service-role
 only). Email KPIs come from the ActiveCampaign MCP run_campaign_performance_report (per-FY account-level
@@ -314,12 +333,23 @@ SCRIPTS / APP CODE
   GET /api/marketing/platforms → server/metrics/marketing-platforms.js (latest
   social_platform_stats snapshot per platform per FY) and GET /api/marketing/content-metrics
   → server/metrics/content-metrics.js (login-gated figures from content_social_metrics,
-  e.g. the newsletter subscriber count). Both plain SELECTs, 10-min cache.)
+  e.g. the newsletter subscriber count). Both plain SELECTs, 10-min cache. Plus
+  GET /api/marketing/website-search → server/metrics/marketing-website-search.js
+  (website form enquiries total + organic/cpc/referral/email/direct split, from the
+  ga4_events_staging ~60-day GA4 conversion-event window; 10-min cache).)
 - public/content_social.html — Marketing → Content & Social page, now LIVE: FY-driven
   Platforms table + per-platform follower cards + a live "Engagement by platform" bar
   chart (all from /api/marketing/platforms) + a live "Newsletter subscribers" card (from
   /api/marketing/content-metrics); non-live tiles show a red "pending" chip; no sample
   badge (renderMarketingHead(true), app.js?v=11).
+- public/website_search.html — Marketing → Website & Search page, now PARTIALLY LIVE:
+  3 live KPI cards (Website form enquiries / Organic / Paid-search) from
+  /api/marketing/website-search (ga4_events_staging form-submit events, rolling ~60-day
+  window); the other tiles (Website sessions, Organic search sessions, Visits from AI
+  tools, New Google reviews, Phone enquiries) show the red "pending" chip — no fabricated
+  numbers (there are no session/pageview rows in Supabase). Live cards fill only under
+  FY27 / All years (the GA4 window is rolling, not FY-sliceable). No sample badge
+  (renderMarketingHead(true), app.js?v=11).
 - server/auth.js / server/users.js — unchanged: JWT login, 3 bcrypt-hashed
   seed users (see README for demo credentials).
 - server/config.js — reads every data-source credential from env vars

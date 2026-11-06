@@ -28,6 +28,7 @@ import { getMarketingInsight } from './marketingInsight.js';
 import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
 import { getMarketingChannelResults } from './metrics/marketing-channel-results.js';
 import { getAdPlatforms } from './metrics/ad-platforms.js';
+import { getWebsiteSearch } from './metrics/marketing-website-search.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
@@ -376,6 +377,19 @@ marketing.get('/leads-by-source', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:leads-by-source]', err);
     res.status(502).json({ error: 'Failed to load leads by source from data source.', detail: err.message });
+  }
+});
+// Website & Search — live website FORM ENQUIRIES (total + source/medium split) from
+// public.ga4_events_staging, a rolling ~60-day GA4 conversion-event window. No session /
+// pageview data is retained in Supabase, so the page shows sessions etc. as "pending".
+// See server/metrics/marketing-website-search.js. Cached briefly.
+marketing.get('/website-search', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:website-search', getWebsiteSearch, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:website-search]', err);
+    res.status(502).json({ error: 'Failed to load website & search data from data source.', detail: err.message });
   }
 });
 // Email & Partners — latest weekly snapshot per FY (email KPIs + partner deal figures)

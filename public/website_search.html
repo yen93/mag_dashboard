@@ -168,7 +168,7 @@
             <button class="active" data-fy="fy27">FY27</button>
           </div>
           <div class="spacer" style="flex:1"></div>
-          <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
+          <span class="muted" id="fyNote" style="font-size:13px">Website form enquiries are a rolling ~60-day GA4 window</span>
         </div>
       </div>
 
@@ -180,138 +180,102 @@
     </main>
   </div>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
   <script>
-    /* Website & Search — Frontend-only mock data view.
-       Default active FY (FY27) renders the exact figures from the reference design. */
+    /* Website & Search — PARTIALLY LIVE.
+       The only website-traffic data in Supabase is public.ga4_events_staging, a
+       rolling ~60-day window of GA4 *conversion* events (form submits). There are
+       NO pageview/session rows, so true "sessions" can't be shown here — those,
+       plus AI-tool visits, Google reviews and phone enquiries, render as a red
+       "pending" chip (design-guide standard) rather than a fabricated number.
+       LIVE from /api/marketing/website-search: website form enquiries (total +
+       organic + paid-search), computed at request time from the GA4 events.
 
-    var MOCK_BY_FY = {
-      fy27: {
-        top: [
-          { label: 'Website sessions',        value: '3,400', sub: '▲ 11% vs Sep',              tone: 'pos' },
-          { label: 'Organic search sessions', value: '1,150', sub: '▲ 13% vs Sep',              tone: 'pos' },
-          { label: 'Visits from AI tools',    value: '42',    sub: '▲ 14 · ChatGPT, Perplexity', tone: 'pos' },
-          { label: 'Form enquiries',          value: '9',     sub: '▲ 2 vs Sep',                tone: 'pos' },
-          { label: 'Demos booked',            value: '6',     sub: '▲ 2 vs Sep',                tone: 'pos' }
-        ],
-        bottom: [
-          { label: 'AI answer check',    value: '2 of 5', sub: '▲ from 1 of 5 · e.g. "adventure keynote speaker Australia"', tone: 'pos' },
-          { label: 'New Google reviews', value: '3',      sub: 'Average rating 4.9',                                        tone: 'pos' },
-          { label: 'Phone enquiries',    badge: 'Not tracked yet', sub: 'Counted once the phone-click tag is live',         tone: 'muted' }
-        ]
-      },
-      fy26: {
-        top: [
-          { label: 'Website sessions',        value: '3,050', sub: '▲ 9% vs May',               tone: 'pos' },
-          { label: 'Organic search sessions', value: '1,020', sub: '▲ 10% vs May',              tone: 'pos' },
-          { label: 'Visits from AI tools',    value: '28',    sub: '▲ 9 · ChatGPT, Perplexity',  tone: 'pos' },
-          { label: 'Form enquiries',          value: '8',     sub: '▲ 1 vs May',                tone: 'pos' },
-          { label: 'Demos booked',            value: '5',     sub: '▲ 1 vs May',                tone: 'pos' }
-        ],
-        bottom: [
-          { label: 'AI answer check',    value: '1 of 5', sub: '▲ from 0 of 5 · e.g. "adventure keynote speaker Australia"', tone: 'pos' },
-          { label: 'New Google reviews', value: '2',      sub: 'Average rating 4.9',                                        tone: 'pos' },
-          { label: 'Phone enquiries',    badge: 'Not tracked yet', sub: 'Counted once the phone-click tag is live',         tone: 'muted' }
-        ]
-      },
-      fy25: {
-        top: [
-          { label: 'Website sessions',        value: '2,680', sub: '▲ 8% vs May',               tone: 'pos' },
-          { label: 'Organic search sessions', value: '890',   sub: '▲ 9% vs May',               tone: 'pos' },
-          { label: 'Visits from AI tools',    value: '14',    sub: '▲ 5 · ChatGPT, Perplexity',  tone: 'pos' },
-          { label: 'Form enquiries',          value: '7',     sub: '▲ 1 vs May',                tone: 'pos' },
-          { label: 'Demos booked',            value: '4',     sub: '▲ 1 vs May',                tone: 'pos' }
-        ],
-        bottom: [
-          { label: 'AI answer check',    value: '1 of 5', sub: 'e.g. "adventure keynote speaker Australia"',                tone: 'pos' },
-          { label: 'New Google reviews', value: '2',      sub: 'Average rating 4.8',                                        tone: 'pos' },
-          { label: 'Phone enquiries',    badge: 'Not tracked yet', sub: 'Counted once the phone-click tag is live',         tone: 'muted' }
-        ]
-      },
-      fy24: {
-        top: [
-          { label: 'Website sessions',        value: '2,310', sub: '▲ 7% vs May',               tone: 'pos' },
-          { label: 'Organic search sessions', value: '760',   sub: '▲ 8% vs May',               tone: 'pos' },
-          { label: 'Visits from AI tools',    value: '6',     sub: '▲ 2 · ChatGPT',              tone: 'pos' },
-          { label: 'Form enquiries',          value: '6',     sub: '▲ 1 vs May',                tone: 'pos' },
-          { label: 'Demos booked',            value: '4',     sub: '▲ 1 vs May',                tone: 'pos' }
-        ],
-        bottom: [
-          { label: 'AI answer check',    value: '1 of 5', sub: 'e.g. "adventure keynote speaker Australia"',                tone: 'pos' },
-          { label: 'New Google reviews', value: '2',      sub: 'Average rating 4.8',                                        tone: 'pos' },
-          { label: 'Phone enquiries',    badge: 'Not tracked yet', sub: 'Counted once the phone-click tag is live',         tone: 'muted' }
-        ]
-      },
-      fy23: {
-        top: [
-          { label: 'Website sessions',        value: '1,940', sub: '▲ 6% vs May',               tone: 'pos' },
-          { label: 'Organic search sessions', value: '640',   sub: '▲ 7% vs May',               tone: 'pos' },
-          { label: 'Visits from AI tools',    value: '2',     sub: '▲ 1 · ChatGPT',              tone: 'pos' },
-          { label: 'Form enquiries',          value: '5',     sub: '▲ 1 vs May',                tone: 'pos' },
-          { label: 'Demos booked',            value: '3',     sub: '▲ 1 vs May',                tone: 'pos' }
-        ],
-        bottom: [
-          { label: 'AI answer check',    value: '0 of 5', sub: 'Baseline check not yet started',                            tone: 'muted' },
-          { label: 'New Google reviews', value: '1',      sub: 'Average rating 4.8',                                        tone: 'pos' },
-          { label: 'Phone enquiries',    badge: 'Not tracked yet', sub: 'Counted once the phone-click tag is live',         tone: 'muted' }
-        ]
-      },
-      fy22: {
-        top: [
-          { label: 'Website sessions',        value: '1,620', sub: '▲ 5% vs May',               tone: 'pos' },
-          { label: 'Organic search sessions', value: '520',   sub: '▲ 6% vs May',               tone: 'pos' },
-          { label: 'Visits from AI tools',    value: '0',     sub: 'Pre-AI referral tracking',   tone: 'muted' },
-          { label: 'Form enquiries',          value: '4',     sub: '▲ 1 vs May',                tone: 'pos' },
-          { label: 'Demos booked',            value: '2',     sub: '▲ 1 vs May',                tone: 'pos' }
-        ],
-        bottom: [
-          { label: 'AI answer check',    value: '0 of 5', sub: 'Baseline check not yet started',                            tone: 'muted' },
-          { label: 'New Google reviews', value: '1',      sub: 'Average rating 4.7',                                        tone: 'pos' },
-          { label: 'Phone enquiries',    badge: 'Not tracked yet', sub: 'Counted once the phone-click tag is live',         tone: 'muted' }
-        ]
-      },
-      all: {
-        top: [
-          { label: 'Website sessions',        value: '3,400', sub: '▲ 11% vs Sep',              tone: 'pos' },
-          { label: 'Organic search sessions', value: '1,150', sub: '▲ 13% vs Sep',              tone: 'pos' },
-          { label: 'Visits from AI tools',    value: '42',    sub: '▲ 14 · ChatGPT, Perplexity', tone: 'pos' },
-          { label: 'Form enquiries',          value: '9',     sub: '▲ 2 vs Sep',                tone: 'pos' },
-          { label: 'Demos booked',            value: '6',     sub: '▲ 2 vs Sep',                tone: 'pos' }
-        ],
-        bottom: [
-          { label: 'AI answer check',    value: '2 of 5', sub: '▲ from 1 of 5 · e.g. "adventure keynote speaker Australia"', tone: 'pos' },
-          { label: 'New Google reviews', value: '3',      sub: 'Average rating 4.9',                                        tone: 'pos' },
-          { label: 'Phone enquiries',    badge: 'Not tracked yet', sub: 'Counted once the phone-click tag is live',         tone: 'muted' }
-        ]
-      }
-    };
+       The GA4 window is rolling (~60 days, all within FY27), so it is NOT
+       FY-sliceable: the live cards fill only for FY27 / All years and show "—"
+       with a note under the older FYs (same behaviour as Content & Social). */
+
+    // Card models. kind:'live' pulls from the fetched payload by `key`; kind:'pending'
+    // always shows the pending chip. No fabricated sample numbers remain.
+    var TOP_CARDS = [
+      { label: 'Website sessions',          kind: 'pending' },
+      { label: 'Organic search sessions',   kind: 'pending' },
+      { label: 'Website form enquiries',    kind: 'live', key: 'total',
+        sub: function (w) { return w ? ('Rolling GA4 window · ' + w.start + ' → ' + w.end) : 'Rolling ~60-day GA4 window'; } },
+      { label: 'Organic form enquiries',    kind: 'live', key: 'organic',
+        sub: function () { return 'Medium = organic'; } },
+      { label: 'Paid-search form enquiries', kind: 'live', key: 'cpc',
+        sub: function () { return 'Medium = cpc (Google / Bing)'; } }
+    ];
+    var BOTTOM_CARDS = [
+      { label: 'Visits from AI tools', kind: 'pending' },
+      { label: 'New Google reviews',  kind: 'pending' },
+      { label: 'Phone enquiries',     kind: 'pending' }
+    ];
+
+    var WS = null;        // live payload once fetched (null = loading, false = failed)
 
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
       return b ? b.getAttribute('data-fy') : 'fy27';
     }
 
-    function currentData() {
-      var key = selFyKey();
-      return MOCK_BY_FY[key] || MOCK_BY_FY.fy27;
+    // The GA4 window sits entirely in FY27, so the live cards only have data to show
+    // for FY27 or "All years"; under the older FYs they render "—" + a note.
+    function fyHasGa4Window() {
+      var k = selFyKey();
+      return k === 'fy27' || k === 'all';
     }
 
-    function cardHtml(k) {
-      var subCls = k.tone === 'pos' ? 'sub pos' : 'sub';
-      var midHtml = k.badge
-        ? '<div class="badge-wrap"><span class="ws-badge">' + esc(k.badge) + '</span></div>'
-        : '<div class="value">' + esc(k.value) + '</div>';
-      return '<article class="ws-kpi">' +
-        '<div class="label">' + esc(k.label) + '</div>' +
-        midHtml +
-        '<div class="' + subCls + '">' + esc(k.sub) + '</div>' +
+    function fmtNum(n) {
+      if (n == null || isNaN(n)) return '—';
+      return Number(n).toLocaleString();
+    }
+
+    // A single KPI card. Pending → red "pending" chip. Live → number + sub (or, when the
+    // selected FY has no GA4 window, a dash + note instead of a fabricated figure).
+    function cardHtml(c) {
+      var label = '<div class="label">' + esc(c.label) + '</div>';
+      if (c.kind === 'pending') {
+        return '<article class="ws-kpi">' + label +
+          '<div class="value" style="margin-top:14px"><span class="chip warn">pending</span></div>' +
+          '<div class="sub">Not tracked in the dashboard yet</div>' +
+        '</article>';
+      }
+      // live
+      if (WS === false) {
+        return '<article class="ws-kpi">' + label +
+          '<div class="value">—</div>' +
+          '<div class="sub">Couldn’t load live data</div>' +
+        '</article>';
+      }
+      if (WS === null) {
+        return '<article class="ws-kpi">' + label +
+          '<div class="value">…</div><div class="sub">Loading…</div>' +
+        '</article>';
+      }
+      if (!fyHasGa4Window()) {
+        return '<article class="ws-kpi">' + label +
+          '<div class="value">—</div>' +
+          '<div class="sub">No GA4 history — rolling ~60-day window</div>' +
+        '</article>';
+      }
+      var val = WS.enquiries ? WS.enquiries[c.key] : null;
+      var sub = typeof c.sub === 'function' ? c.sub(WS.window) : (c.sub || '');
+      return '<article class="ws-kpi">' + label +
+        '<div class="value">' + esc(fmtNum(val)) + '</div>' +
+        '<div class="sub">' + esc(sub) + '</div>' +
       '</article>';
     }
 
     function renderAll() {
-      var d = currentData();
-      document.getElementById('wsTopKpis').innerHTML = d.top.map(cardHtml).join('');
-      document.getElementById('wsBottomKpis').innerHTML = d.bottom.map(cardHtml).join('');
+      document.getElementById('wsTopKpis').innerHTML = TOP_CARDS.map(cardHtml).join('');
+      document.getElementById('wsBottomKpis').innerHTML = BOTTOM_CARDS.map(cardHtml).join('');
+      // Reflect the real GA4 window in the FY note once loaded.
+      var note = document.getElementById('fyNote');
+      if (note && WS && WS.window && WS.window.start) {
+        note.textContent = 'Website form enquiries: live GA4 window ' + WS.window.start + ' → ' + WS.window.end + ' (rolling ~60 days)';
+      }
     }
 
     function wireSeg(id, onChange) {
@@ -327,10 +291,15 @@
     }
 
     initPage('marketing');
-    renderMarketingHead();
+    renderMarketingHead(true);        // partially live (form enquiries) → no "Sample data" badge
     renderMarketingSidebar('website-search');
-    renderAll();
+    renderAll();                      // initial render (loading state)
     wireSeg('fySeg', renderAll);
+
+    // Load the live website form-enquiry figures.
+    fetchJSON('/api/marketing/website-search')
+      .then(function (d) { WS = d || false; renderAll(); })
+      .catch(function () { WS = false; renderAll(); });
   </script>
 </body>
 </html>

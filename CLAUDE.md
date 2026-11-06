@@ -57,16 +57,18 @@ Cloud Run.
   before `#marketingNav`. **As of 2026-11-05 it takes a `live` arg:** the h1 + framing question ALWAYS
   render; the amber **"Sample data — layout only"** badge is emitted only when `live` is falsy (ternary).
   It is now called on **ALL** primary sub-tabs: the Overview + the still-sample sub-tabs
-  (`website_search.html`, `nurture_events.html`, `monthly_log.html`) call it with **no arg** (badge shows),
-  and the **four LIVE pages** `leads_bookings.html` / `spend_roi.html` / `content_social.html` /
-  **`email_partners.html` (now LIVE as of 2026-11-06, see its own paragraph below)** call it with
+  (`nurture_events.html`, `monthly_log.html`) call it with **no arg** (badge shows),
+  and the **five LIVE pages** `leads_bookings.html` / `spend_roi.html` / `content_social.html` /
+  **`email_partners.html` (now LIVE as of 2026-11-06, see its own paragraph below)** /
+  **`website_search.html` (now PARTIALLY LIVE as of 2026-11-06, see its own paragraph below)** call it with
   **`true`** (badge suppressed). Still **NOT** called on the live More tools (they keep their own
   headers). **The Overview + the still-sample sub-tabs are LAYOUT-ONLY with hardcoded sample data**
   (no API calls; `initPage('marketing')` with no renderFn; charts drawn inline with Chart.js) —
-  **EXCEPT `leads_bookings.html`, `spend_roi.html`, `content_social.html` + `email_partners.html`, now
+  **EXCEPT `leads_bookings.html`, `spend_roi.html`, `content_social.html`, `email_partners.html` +
+  `website_search.html` (partially live), now
   LIVE (their own paragraphs below)**. The 15
   Marketing pages were bumped to **`app.js?v=10`**, then **`leads_bookings.html`, `spend_roi.html`,
-  `content_social.html` + `email_partners.html` to
+  `content_social.html`, `email_partners.html` + `website_search.html` to
   `?v=11`** when `renderMarketingHead` gained the `live` arg (the pages depending
   on it; the backward-compatible no-arg call means the rest stay `?v=10`). Home/Sales/Operations and all
   non-Marketing pages deliberately stay `?v=9`. Frontend-only → needs a Cloud Run redeploy. The paragraph
@@ -247,6 +249,28 @@ Cloud Run.
   new route/metrics module → needs a **Cloud Run redeploy**; weekly *data* refreshes thereafter need no
   redeploy (the server only SELECTs the cache). **GOTCHA:** AC does **not** track email replies or send-cadence
   — don't try to source "Replies"/"Sent on time" from AC; they stay `pending`.
+  **Website & Search page (`website_search.html` = Marketing sub-tab "Website & Search", now PARTIALLY LIVE as
+  of 2026-11-06):** a self-rendering page (`initPage('marketing')` + `renderMarketingHead(true)` +
+  `renderMarketingSidebar('website-search')` + its own `fetchJSON`) → shared Marketing head, **NO "Sample data"
+  badge** (so bumped to **`app.js?v=11`**). **KEY CONSTRAINT:** the ONLY website-traffic data in Supabase is
+  **`public.ga4_events_staging`** — a rolling **~60-day** window of GA4 ***conversion*** events (form submits /
+  opt-ins), truncate-reloaded from GA4. It has **NO pageview / session_start rows**, so true **"sessions" are
+  NOT available** here (they'd need a new GA4-sessions sync — a real build, not wired). **What IS live:** website
+  **FORM ENQUIRIES** (total + organic + paid-search) via **`GET /api/marketing/website-search`** →
+  **`server/metrics/marketing-website-search.js`** (`getWebsiteSearch`, cached 10 min): ONE parameterized query
+  over `ga4_events_staging` summing the genuine enquiry events (`form_submit`, `Contact_Form_Submit_Alt`,
+  `form_submissions`, `Form_submission_thankyou_1` — **deliberately EXCLUDING `free_gifts_opt_ins`** lead-magnets
+  **+ `subscribe`** newsletter, matching how the GA4 & Ads Leads page treats opt-ins), split by **medium** via
+  FILTER into `total`/`organic`/`cpc`/`referral`/`email`/`direct`, plus the live `window{start,end}`. The 3 live
+  KPI cards (Website form enquiries / Organic / Paid-search); the **other 5 tiles** (Website sessions, Organic
+  search sessions, Visits from AI tools, New Google reviews, Phone enquiries) show the **red `pending` chip**
+  (`<span class="chip warn">pending</span>`, DESIGN_GUIDE §8) — **no fabricated numbers** (the old `MOCK_BY_FY`
+  sample object was removed entirely). **FY behaviour:** the GA4 window is rolling ~60 days (all inside FY27) and
+  is **NOT FY-sliceable**, so the live cards fill only under **FY27 / All years** and show `—` + a "No GA4 history"
+  note under FY22–26 (same pattern as Content & Social); the FY-note line updates to the real live window dates
+  once loaded. Validated 2026-09-06→2026-11-05: **313** total form enquiries (organic 67 · cpc 65). Server +
+  frontend + new route/module → needs a **Cloud Run redeploy**; **no new secrets** (server only SELECTs
+  `ga4_events_staging`).
   **DESIGN GUIDE (as of 2026-11-05):** `DESIGN_GUIDE.md` (repo root) is the dev-facing styling
   standard for the whole dashboard — **`public/roas.html` is the reference**. It codifies the color
   tokens (+ page-local `--x-accent`/`--x-shadow` pattern), typography, the **horizontal segmented

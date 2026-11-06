@@ -1,0 +1,128 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-06
+Session: Wired the Marketing → Website & Search page (public/website_search.html)
+to live data where it genuinely exists and marked the rest "pending". The only
+website-traffic data in Supabase is public.ga4_events_staging (a rolling ~60-day
+window of GA4 *conversion* events — form submits/opt-ins, NO pageviews/sessions),
+so website FORM ENQUIRIES (total + organic + paid-search) are now live via a new
+endpoint/metrics module, and true sessions / AI-tool visits / Google reviews /
+phone enquiries show a red "pending" chip instead of fabricated sample numbers.
+Server + frontend change → needs a manual Cloud Run redeploy. No git run.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret, token, password, or connection string
+was pasted into this chat. All DB access was via the Supabase MCP (read-only
+SELECTs); no credentials were handled.
+
+--------------------------------------------------------------------------------
+USER:
+(/q — read-only question mode) "is there a wordpress connector we can use to see
+website sessions?"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Answered in investigate-only mode (no changes). Findings:
+
+  - A WordPress.com connector IS present in this session, but only as auth stubs
+    (WordPress_com__authenticate / complete_authentication) — i.e. configured but
+    not signed in, so none of its data tools are loaded. (The genuinely broken
+    MCP servers this session are "Loom" 502 and "MAG Google Ads Custom MCP" 404;
+    WordPress is just un-authenticated.)
+  - Even once connected, WordPress.com/Jetpack Stats reports views / visitors /
+    referrers / top content — it has NO "sessions" metric. "Sessions" is a GA4
+    concept, not a WordPress one, so a WP connector fundamentally can't provide it.
+  - The dashboard already pulls website traffic from GA4 into Supabase
+    (ga4_events_staging, ga4_conversion_events, ga4_ac_contact_source, etc.). GA4
+    is the correct sessions source. Verified ga4_events_staging schema
+    (event_time_utc, event_name, source, medium, campaign, event_count, page_path).
+  - Noted website_search.html was open and still "Mock data only".
+
+Bottom line given: use GA4 (already connected) for true sessions; WordPress would
+only get page views/visitors and needs signing in first. Offered to scope a GA4
+sessions build if wanted.
+
+--------------------------------------------------------------------------------
+USER:
+"update website_search.html using alr available db data or sync. the rest just
+tag them as pending"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated exactly what GA4 data is available, then built the live wiring.
+
+Data reality (verified by SELECTs on project aivitcomiywiysrfwqxt / MAGTestProject):
+  - public.ga4_events_staging holds ONLY conversion events — event_name ∈
+    {free_gifts_opt_ins, form_submit, Contact_Form_Submit_Alt, form_submissions,
+    subscribe, Form_submission_thankyou_1}. No session_start / page_view rows.
+  - Rolling ~60-day window: 2026-09-06 → 2026-11-05, 588 rows, all within FY27.
+  - Medium split present: referral/none/cpc/organic/email/partner_email.
+  - So true "sessions" and "organic search sessions" are NOT in the DB; what IS
+    available is website FORM ENQUIRIES and their source/medium split.
+
+Validated the live figures (enquiry events = form_submit, Contact_Form_Submit_Alt,
+form_submissions, Form_submission_thankyou_1 — deliberately EXCLUDING
+free_gifts_opt_ins lead-magnets and subscribe newsletter, matching how the GA4 &
+Ads Leads page treats opt-ins): TOTAL 313 · organic 67 · cpc 65 · referral 26 ·
+email 10 · direct/none 145.
+
+Reviewed existing patterns before building: server/metrics/marketing-leads-by-
+source.js (cached metric template), server/index.js marketing router (imports +
+cached routes), app.js fetchJSON helper, and content_social.html's "pending"-chip
+convention (<span class="chip warn">pending</span>, .chip.warn already in app.css)
+plus its renderMarketingHead(true)/partially-live precedent.
+
+Changes made (3 files):
+
+  1. server/metrics/marketing-website-search.js (NEW) — getWebsiteSearch():
+     a single parameterized query over ga4_events_staging summing the enquiry
+     events, split into total/organic/cpc/referral/email/direct via FILTER, plus
+     the live window start/end dates. Returns {enquiries{...}, window{start,end},
+     meta{status:'live',...}}; notConfigured-style pending fallback when Supabase
+     isn't set. Documented clearly that sessions aren't retained in the DB.
+
+  2. server/index.js — added `import { getWebsiteSearch }` and a cached route
+     `marketing.get('/website-search')` (10-min cache, 502 on error), same shape
+     as the other marketing routes.
+
+  3. public/website_search.html — removed ALL the mock/sample FY data (the whole
+     MOCK_BY_FY object with fabricated per-FY session/enquiry numbers) and the old
+     render functions. New inline script:
+       - Card models: TOP_CARDS (Website sessions [pending], Organic search
+         sessions [pending], Website form enquiries [live/total], Organic form
+         enquiries [live/organic], Paid-search form enquiries [live/cpc]) and
+         BOTTOM_CARDS (Visits from AI tools, New Google reviews, Phone enquiries —
+         all pending).
+       - cardHtml() renders a red "pending" chip for pending cards; for live cards
+         it shows number + sub, with loading (…) and failure (—) states, and —
+         because the GA4 window is rolling ~60 days all inside FY27 — shows "—"
+         with a "No GA4 history" note under FY22–FY26 (same behaviour as Content
+         & Social). Live cards fill under FY27 / All years.
+       - Fetches /api/marketing/website-search on load; FY-note line updates to the
+         real live window dates once loaded.
+       - Dropped the "Sample data — layout only" badge (renderMarketingHead(true))
+         and bumped the page to app.js?v=11, following the content_social partially-
+         live precedent.
+
+Verification: `node --check` passed on the new metric module and server/index.js;
+extracted the page's inline <script> and compiled it with vm.compileFunction (OK);
+grep confirmed no leftover references to the removed mock vars.
+
+Told the user this is a server+frontend change needing a manual Cloud Run redeploy
+(I don't deploy per project rules), no new secrets (server only SELECTs existing
+data), and that real sessions would be a separate GA4-sessions-sync build if wanted.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat history, update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation steps: wrote this chat-history file; updated as_built.txt
+to add the new Website & Search endpoint/metrics module and note the GA4-events
+limitation; updated CLAUDE.md with the new live-wiring paragraph; reviewed
+.gitignore (already comprehensive — no new sensitive files, left as-is). Did NOT
+run any git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================
