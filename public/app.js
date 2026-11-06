@@ -183,6 +183,41 @@ function metaChips(meta) {
   return out;
 }
 
+// ── Info tool (THE standard, promoted from the ROI/ROAS tabs) ───────────────
+// ONE ⓘ icon per card / table / chart that reveals a hover/focus card saying
+// WHAT the widget is (desc) and WHERE it comes from (source). This is the single
+// place provenance + a plain-language description live — never print either in the
+// widget body itself (see DESIGN_GUIDE §6). Reuses the global .src-info/.src-tip CSS.
+// Either part may be empty; returns '' if both are.
+function infoTip(desc, source) {
+  desc = desc || ''; source = source || '';
+  if (!desc && !source) return '';
+  var tip = desc ? esc(desc) : '';
+  if (source) {
+    tip += '<span class="src-tip-label"' + (desc ? ' style="margin-top:6px"' : '') +
+      '>Source</span>' + esc(source);
+  }
+  var aria = desc || ('Data source: ' + source);
+  return '<span class="src-info" tabindex="0" role="button" aria-label="' + esc(aria) + '">' +
+    '<svg class="src-info-icon" viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" focusable="false">' +
+    '<circle cx="8" cy="8" r="7" fill="none" stroke="currentColor" stroke-width="1.5"/>' +
+    '<rect x="7.15" y="6.7" width="1.7" height="5" rx="0.85" fill="currentColor"/>' +
+    '<circle cx="8" cy="4.2" r="1.05" fill="currentColor"/></svg>' +
+    '<span class="src-tip">' + tip + '</span></span>';
+}
+
+// Fill every `<span class="head-info" data-info="…" data-src="…">` placeholder with
+// an infoTip (description from data-info, source from data-src; either optional).
+// Call once after the static markup is in the DOM. Skips already-filled spans so it's
+// safe to re-run. Pass a root element to scope it.
+function fillHeadInfo(root) {
+  (root || document).querySelectorAll('.head-info').forEach(function (el) {
+    if (el.querySelector('.src-info')) return;              // already filled
+    var html = infoTip(el.getAttribute('data-info') || '', el.getAttribute('data-src') || '');
+    if (html) el.innerHTML = html;
+  });
+}
+
 // Render "needs setup" placeholder body into a card element (returns true if it did).
 function renderPendingBody(elId, meta) {
   var el = document.getElementById(elId);

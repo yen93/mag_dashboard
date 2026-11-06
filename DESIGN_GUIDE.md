@@ -256,21 +256,37 @@ Grid: `.kpi-grid` (auto-fit, `minmax(192px, 1fr)`, `gap:14px`). Tile anatomy:
 
 ---
 
-## 6. Info tools / tooltips
+## 6. Info tools / tooltips  ⭐ (MANDATORY)
 
-Three sanctioned patterns — pick by purpose:
+**THE RULE:** every **card, table, and chart/graph** carries **exactly one info tool**
+(a small ⓘ icon) that, on hover/focus, says **what the widget is** and **where its data
+comes from**. This descriptive + provenance text lives **ONLY** in the info tool —
+**never print "what it is" or "where it's from" in the widget body itself** (no source
+captions under a chart, no "Medium = organic" sub-lines under a KPI, no "Live from Xero"
+strap-lines). The widget shows the number / the visual; the ⓘ explains it. `roas.html`
+and `roi.html` are the reference implementations.
 
-1. **Metric note (inline ⓘ):** `.kpi-info` with a native `title=` attribute — for a
-   short note on a KPI label. `tabindex="0"` so it's focusable. Cheapest option.
-2. **Data source (hover card):** the shared **`srcInfo(source)`** helper in
-   `app.js` renders a small circular ℹ icon that reveals a styled `.src-tip`
-   tooltip (classes `.src-info` / `.src-tip` / `.src-tip-label` in `app.css`). This
-   is the **single source of truth for provenance** — it's what `metaChips()` emits.
-   Use it (via `metaChips`) to show where a number comes from.
-3. **Arbitrary rich tooltip:** the ROI tab's `infoTip(text)` pattern — same
-   `.src-info`/`.src-tip` CSS but carries custom text and no "Source" label. Use
-   when you want a hover explanation that isn't a data source (e.g. a chart
-   caption or a card description tucked behind an icon).
+**The one helper — `infoTip(desc, source)` (shared, in `app.js`):** renders the single
+circular ℹ icon that reveals a styled `.src-tip` card with the description on top and a
+"Source" line beneath (classes `.src-info` / `.src-tip` / `.src-tip-label` in `app.css`;
+either arg may be empty). Use it for **every** widget:
+
+- **Static card/chart/table heading** → put a placeholder next to the title and let
+  `fillHeadInfo()` fill it once at init:
+  `<div class="card-head"><h3>Revenue vs spend</h3><span class="head-info"
+  data-info="What it is…" data-src="public.xero_expenses_monthly"></span></div>`
+  (`.head-info` is the inline wrapper; `fillHeadInfo()` reads `data-info` + `data-src`).
+- **JS-built KPI card / dynamic widget** → call `infoTip(desc, source)` inline and drop
+  the returned span next to the card's `.label` (one icon per card).
+- **A metric that already carries a `meta`** → fold its `meta.source` into the SAME icon
+  (don't add a second one); `metaChips()`/`srcInfo()` still emit the provenance icon, but
+  a widget must end up with **one** combined ⓘ, not two. (The ROI tab's `tuckKpiSubs()`
+  shows the merge: pull the description sub-line + the `metaChips` source into one
+  `infoTip` next to the label and remove both originals.)
+
+**Don't** use native-`title` ⓘ (`.kpi-info`) for new work — it was the cheap first pass;
+migrate those to `infoTip` so the hover card is consistent and legible. **Don't** leave a
+widget with no info tool, and **don't** duplicate the description as visible body text.
 
 **Gotcha:** a hover-`transform` on a card/KPI creates a stacking context that can
 **clip** an escaping tooltip behind a sticky bar. If a tile with an info tooltip

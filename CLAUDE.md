@@ -252,25 +252,28 @@ Cloud Run.
   **Website & Search page (`website_search.html` = Marketing sub-tab "Website & Search", now PARTIALLY LIVE as
   of 2026-11-06):** a self-rendering page (`initPage('marketing')` + `renderMarketingHead(true)` +
   `renderMarketingSidebar('website-search')` + its own `fetchJSON`) → shared Marketing head, **NO "Sample data"
-  badge** (so bumped to **`app.js?v=11`**). **KEY CONSTRAINT:** the ONLY website-traffic data in Supabase is
-  **`public.ga4_events_staging`** — a rolling **~60-day** window of GA4 ***conversion*** events (form submits /
-  opt-ins), truncate-reloaded from GA4. It has **NO pageview / session_start rows**, so true **"sessions" are
-  NOT available** here (they'd need a new GA4-sessions sync — a real build, not wired). **What IS live:** website
-  **FORM ENQUIRIES** (total + organic + paid-search) via **`GET /api/marketing/website-search`** →
-  **`server/metrics/marketing-website-search.js`** (`getWebsiteSearch`, cached 10 min): ONE parameterized query
-  over `ga4_events_staging` summing the genuine enquiry events (`form_submit`, `Contact_Form_Submit_Alt`,
-  `form_submissions`, `Form_submission_thankyou_1` — **deliberately EXCLUDING `free_gifts_opt_ins`** lead-magnets
-  **+ `subscribe`** newsletter, matching how the GA4 & Ads Leads page treats opt-ins), split by **medium** via
-  FILTER into `total`/`organic`/`cpc`/`referral`/`email`/`direct`, plus the live `window{start,end}`. The 3 live
-  KPI cards (Website form enquiries / Organic / Paid-search); the **other 5 tiles** (Website sessions, Organic
-  search sessions, Visits from AI tools, New Google reviews, Phone enquiries) show the **red `pending` chip**
-  (`<span class="chip warn">pending</span>`, DESIGN_GUIDE §8) — **no fabricated numbers** (the old `MOCK_BY_FY`
-  sample object was removed entirely). **FY behaviour:** the GA4 window is rolling ~60 days (all inside FY27) and
-  is **NOT FY-sliceable**, so the live cards fill only under **FY27 / All years** and show `—` + a "No GA4 history"
-  note under FY22–26 (same pattern as Content & Social); the FY-note line updates to the real live window dates
-  once loaded. Validated 2026-09-06→2026-11-05: **313** total form enquiries (organic 67 · cpc 65). Server +
-  frontend + new route/module → needs a **Cloud Run redeploy**; **no new secrets** (server only SELECTs
-  `ga4_events_staging`).
+  badge** (so bumped to **`app.js?v=11`**). **KEY CONSTRAINT:** there is **NO pageview / session data in
+  Supabase** (`ga4_events_staging` holds only a rolling ~60-day window of GA4 *conversion* events, no
+  `session_start`/`page_view`), so true **"sessions" are NOT available** here (they'd need a new GA4-sessions
+  sync — a real build, not wired). **ENQUIRY DEFINITION (owner's, as of 2026-11-06):** an enquiry counts
+  **ONLY when it has an EXISTING saved ActiveCampaign contact** — so the source is **`public.ga4_ac_contact_source`**
+  (the GA4 & Ads leads matched to AC) **JOINed to `public.activecampaign_contacts`**, kept only where
+  `contact_id` **exists** in `activecampaign_contacts` (this drops the synthetic `roas-<deal_id>` rows; 197 of
+  209 rows qualify). **One matched contact = one enquiry.** Wired via **`GET /api/marketing/website-search`** →
+  **`server/metrics/marketing-website-search.js`** (`getWebsiteSearch`, cached 10 min): ONE query
+  `ga4_ac_contact_source cs JOIN activecampaign_contacts c ON c.id::text = cs.contact_id`, `GROUP BY cs.fy`;
+  **organic** = `medium = 'organic'`, **paid-search** = `medium ILIKE '%cpc%'` (same defs as the Leads &
+  Bookings metric). Returns `{ byFy:{"FY27":{total,organic,cpc,fyEnd},…}, total:{total,organic,cpc}, meta }`.
+  **Because `ga4_ac_contact_source` ACCUMULATES history + carries a generated AU FY, the page's `#fySeg` toggle is
+  now genuinely LIVE for EVERY FY** (the client's `selData()` picks the selected FY's record; `'all'` → the
+  all-years `total`). The 3 live KPI cards are relabeled **"Enquiries (in ActiveCampaign)" / "Organic enquiries"
+  / "Paid-search enquiries"**; the **other 5 tiles** (Website sessions, Organic search sessions, Visits from AI
+  tools, New Google reviews, Phone enquiries) show the **red `pending` chip** (`<span class="chip warn">pending
+  </span>`, DESIGN_GUIDE §8) — **no fabricated numbers** (the old `MOCK_BY_FY` sample object was removed).
+  **GOTCHA:** the GA4 `medium` is only captured for the **current FY**, so the organic/cpc split reads **0 for
+  older retained contacts** (card subs note "(current FY)") — the **TOTAL is accurate for every FY**. Validated
+  per-FY (AC-matched): FY22 11 · FY23 8 · FY24 17 · FY25 33 · FY26 26 · FY27 **102** (organic 4 · cpc 6). Server +
+  frontend + the route/module → needs a **Cloud Run redeploy**; **no new secrets** (server only SELECTs).
   **DESIGN GUIDE (as of 2026-11-05):** `DESIGN_GUIDE.md` (repo root) is the dev-facing styling
   standard for the whole dashboard — **`public/roas.html` is the reference**. It codifies the color
   tokens (+ page-local `--x-accent`/`--x-shadow` pattern), typography, the **horizontal segmented

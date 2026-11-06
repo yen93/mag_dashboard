@@ -26,6 +26,8 @@ env.json
 *_token
 *-token.*
 *token*.txt
+*cookie*
+*li_at*
 
 # ── Keys & certificates ─────────────────────────────────────
 *.pem
@@ -79,6 +81,8 @@ supabase/functions/**/.env.*
 **/*_token
 **/*-token.*
 **/*token*.txt
+**/*cookie*
+**/*li_at*
 # Keys & certificates
 **/*.pem
 **/*.key
@@ -113,6 +117,10 @@ scratch_*
 scratch/
 tmp/
 *.tmp
+
+# ── Local financial / P&L spreadsheets (keep out of git) ────
+FY22 - FY23 PNL/
+**/*Profit_and_Loss*.xlsx
 
 # ── Logs ────────────────────────────────────────────────────
 *.log

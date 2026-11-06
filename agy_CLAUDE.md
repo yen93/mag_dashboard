@@ -89,6 +89,27 @@ Cloud Run.
   re-rendered client-side on FY change. Note: raw monthly P&L carries year-end accrual reversals,
   so a few months (e.g. Jun 2024) show a **negative spend bar** — kept as-is (annual FY totals net
   correctly). The 6 other Marketing pages' `app.js` was bumped to `?v=7` so the ROI link shows.
+  **Website & Search page (`website_search.html` = Marketing sidebar "Website & Search",
+  `/api/marketing/website-search`, `server/metrics/marketing-website-search.js`):** self-rendering
+  page framed by Australian FY (`All years`, `FY22`–`FY27`). As of 2026-11-06, **7 of the 8 cards
+  are LIVE** (only **Phone enquiries** remains pending):
+  - **Website sessions** (Top card) & **Visits from AI tools** (Bottom card): read from the
+    upsert-only snapshot table **`public.ga4_website_traffic_snapshots`** (`SELECT DISTINCT ON
+    (fy_end) ... ORDER BY fy_end, snapshot_date DESC, synced_at DESC`), populated weekly by the
+    **`ga4-website-traffic-sync` Supabase Edge Function** (`verify_jwt: false`, `pg_cron` jobid 34
+    `ga4-website-traffic-sync-weekly`, `15 20 * * 0` UTC = Mon 04:15 AM PH) from the GA4 Data API
+    (`properties/363754280:runReport` using `GOOGLE_ADS_SA_KEY`). Protected by a `BEFORE DELETE`
+    trigger (`trg_prevent_ga4_traffic_snapshots_delete`) and upserted via
+    `public.reload_ga4_website_traffic_snapshots(_rows, _snapshot_date)`. (Note: BigQuery
+    `claudegwscli-502400.analytics_363754280` cannot be used for sessions — it only started
+    2026-10-14 and excludes `session_start`/`page_view`.)
+  - **New Google reviews** (Bottom card): read live from **`public.google_reviews`** grouped by AU
+    FY of `review_create_time` + average `star_rating` (`round(avg(stars), 2)`), with `All years`
+    showing all 653 rows (`4.98 ★`, including 65 historical rows with null `review_create_time`).
+  - **Organic enquiries (incl. unmatched)**, **Enquiries (in ActiveCampaign)**, **Organic
+    enquiries**, and **Paid-search enquiries**: read live from `public.ga4_organic_events_staging`
+    and `public.ga4_ac_contact_source` (excluding Uniting, `free_gifts_opt_ins`, and excluded
+    conversion links).
   **Operations left sidebar (as of 2026-10-22):** `mag_buyer_sheet.html` (nav "Buyer Analysis" —
   in-page `<h3>`/`<title>` still read "Buyer Sheet") and `invoice_tracking.html` ("Invoices")
   are **no longer top tabs** either — they moved UNDER **Operations**, reached via an

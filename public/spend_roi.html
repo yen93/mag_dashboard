@@ -41,7 +41,6 @@
       content: ""; width: 4px; height: 17px; border-radius: 3px; flex: none;
       background: linear-gradient(var(--mkt-accent), var(--mkt-accent-2));
     }
-    .chart-cap { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
 
     /* Controls bar + segmented toggle (DESIGN_GUIDE §4) */
     .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
@@ -85,8 +84,6 @@
     .delta.pos { color: var(--pos); }
     .delta.neg { color: var(--neg); }
     .delta.muted { color: var(--text-muted); }
-    .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
-    .kpi-info:hover, .kpi-info:focus { color: var(--mkt-accent); outline: none; }
 
     /* Lower section: Spend by type (left) + Channel results (right) */
     .sr-lower { display: grid; grid-template-columns: minmax(260px, .82fr) 1.7fr; gap: 16px; align-items: start; }
@@ -149,16 +146,18 @@
       <div class="sr-lower">
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>Spend by type</h3>
-            <div class="chart-cap" id="spendCap">from Xero</div>
+            <h3>Spend by type <span class="head-info"
+              data-info="Marketing spend for the selected FY broken down by spend type (Wages, Digital Ads, Agency, Software, Tools, Printed Collaterals), summed over the FY's calendar months."
+              data-src="GET /api/marketing/channel-summary (type series) ← public.marketing_channel_monthly, live from Xero"></span></h3>
           </div>
           <div class="chart-box" id="spendBox" style="height:320px"><canvas id="spendCanvas"></canvas></div>
         </div>
 
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>Channel results</h3>
-            <div class="chart-cap" id="channelCap">ROAS on total cost and on ad spend alone</div>
+            <h3>Channel results <span class="head-info"
+              data-info="Per-channel spend, enquiries, bookings, revenue and ROAS (on total cost and on ad spend alone) for the two tracked channels: Paid (Google/Bing/Agency) and Executive X."
+              data-src="GET /api/marketing/channel-results — Paid via the ROAS metric; Executive X via public.exec_x_revenue"></span></h3>
           </div>
           <div class="sr-table-wrap">
             <table class="sr-table">
@@ -196,10 +195,6 @@
     }
     function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
     function fyName(key) { return key === 'all' ? 'All years' : key.toUpperCase(); }
-    function infoSpan(text) {
-      if (!text) return '';
-      return ' <span class="kpi-info" tabindex="0" role="img" aria-label="' + esc(text) + '" title="' + esc(text) + '">ⓘ</span>';
-    }
     function fmtCur(v) { return (v == null) ? '<span class="muted">—</span>' : fmt(v, 'currency'); }
 
     // ===================================================================
@@ -233,8 +228,11 @@
       return '<div class="delta ' + cls + '">' + arrow + ' ' + fmt(Math.abs(d), 'currency') + ' vs ' + prevLabel + '</div>';
     }
 
-    function kpiCard(label, info, valueStr, extraHtml) {
-      return '<div class="kpi"><div class="label">' + esc(label) + infoSpan(info) + '</div>' +
+    // ONE info tool per card (DESIGN_GUIDE §6): the ⓘ carries WHAT the tile is (desc)
+    // and WHERE it comes from (source); never printed in the card body.
+    function kpiCard(label, desc, source, valueStr, extraHtml) {
+      return '<div class="kpi"><div class="label">' + esc(label) +
+        '<span class="head-info">' + infoTip(desc, source) + '</span></div>' +
         '<div class="value">' + valueStr + '</div>' + (extraHtml || '') + '</div>';
     }
 
@@ -242,9 +240,9 @@
       var box = document.getElementById('kpis');
       if (!box) return;
       if (!ROI.loaded) {
-        box.innerHTML = kpiCard('Marketing spend', '', '…') + kpiCard('Net return', '', '…') +
-          kpiCard('Marketing ROI', '', '…') + kpiCard('Marketing CAC', '', '…') +
-          kpiCard('Cost per enquiry', '', '…');
+        box.innerHTML = kpiCard('Marketing spend', '', '', '…') + kpiCard('Net return', '', '', '…') +
+          kpiCard('Marketing ROI', '', '', '…') + kpiCard('Marketing CAC', '', '', '…') +
+          kpiCard('Cost per enquiry', '', '', '…');
         return;
       }
       var key = selFyKey();
@@ -274,28 +272,33 @@
       var html = '';
       // 1 — Marketing spend
       html += kpiCard('Marketing spend',
-        'Xero marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST. Same figure as the ROI tab.',
+        'Total marketing spend for the selected FY — Xero marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST. Same figure as the ROI tab.',
+        'GET /api/marketing/roi (row.totalSpend) ← public.marketing_channel_monthly, live from Xero',
         fmtCur(spend),
         deltaHtml(spend, pSpend, 'neutral', prevFyEnd));
       // 2 — Net return (marketing revenue − marketing spend)
       html += kpiCard('Net return',
         'Marketing-attributed won revenue minus marketing spend. Revenue = ROAS-paid + organic + bureau/tailor + Exec X (deduped), same as the ROI tab.',
+        'GET /api/marketing/roi (marketingRevenue − totalSpend)',
         fmtCur(netReturn),
         deltaHtml(netReturn, pNetReturn, 'up-good', prevFyEnd));
       // 3 — Marketing ROI (net ROI %)
       html += kpiCard('Marketing ROI',
         'Net return on marketing spend = (marketing revenue ÷ marketing spend − 1). Same definition as the ROI tab’s "Net ROI".',
+        'GET /api/marketing/roi (marketingRevenue ÷ totalSpend − 1)',
         (marketingRoi != null ? (marketingRoi > 0 ? '+' : '') + marketingRoi + '%' : '<span class="muted">—</span>'),
         ros != null ? '<div class="sub">Return on spend ' + ros.toFixed(2) + '×</div>' : '');
       // 4 — Marketing CAC
       html += kpiCard('Marketing CAC',
         'Cost to acquire a client = marketing spend ÷ clients won (all AC deals won this FY). Same as the ROI tab’s "Cost per client".',
+        'GET /api/marketing/roi (totalSpend ÷ dealsWon)',
         fmtCur(cac),
         (dealsWon ? '<div class="sub">Marketing spend ÷ ' + dealsWon + ' clients won</div>'
                   : (spend != null ? '<div class="sub">No clients won this FY</div>' : '')));
       // 5 — Cost per enquiry
       html += kpiCard('Cost per enquiry',
         'Marketing spend ÷ enquiries (deals created this FY across the two deal sources, deduped — same count as the Overview).',
+        'GET /api/marketing/roi (totalSpend) ÷ GET /api/marketing/overview (enquiries.total)',
         fmtCur(costPerEnq),
         deltaHtml(costPerEnq, pCostPerEnq, 'down-good', prevFyEnd));
 
@@ -336,8 +339,6 @@
     function renderSpendByType() {
       var el = document.getElementById('spendCanvas');
       if (!el) return;
-      var cap = document.getElementById('spendCap');
-      if (cap) cap.textContent = fyName(selFyKey()) + ' · from Xero';
       var rows = CH.loaded ? spendByTypeForFy(selFyKey()) : [];
       var tc = themeColors();
       // Size the box to the number of bars so they stay readable.
@@ -397,8 +398,6 @@
     }
     function renderChannelResults() {
       var body = document.getElementById('channelBody');
-      var cap = document.getElementById('channelCap');
-      if (cap) cap.textContent = 'ROAS on total cost and on ad spend alone · ' + fyName(selFyKey());
       if (!body) return;
       if (!CR.loaded) { body.innerHTML = '<tr><td colspan="8" class="muted">Loading…</td></tr>'; return; }
       var row = crRowFor(selFyKey());
@@ -463,6 +462,7 @@
     initPage('marketing');
     renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('spend-roi');
+    fillHeadInfo();            // fill the static card-head ⓘ placeholders once
     renderCards();              // initial (…)
     renderChannelResults();     // initial (Loading…)
     try { renderSpendByType(); } catch (e) {}

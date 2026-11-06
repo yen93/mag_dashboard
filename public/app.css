@@ -336,6 +336,9 @@ table.data tr.acs-fee-review td:first-child { box-shadow: inset 3px 0 0 #e0556b;
   display: block; margin-bottom: 2px; font-size: 10px; font-weight: 600;
   text-transform: uppercase; letter-spacing: .04em; color: var(--text-muted);
 }
+/* Inline wrapper for an info tool sitting next to a card/chart/table heading or a
+   KPI label. Filled by fillHeadInfo() or an inline infoTip() call. */
+.head-info { display: inline-flex; align-items: center; margin-left: 6px; vertical-align: middle; }
 .chip.warn { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); border: none; font-size: 11px; padding: 2px 8px; cursor: help; }
 .chip.partial { background: color-mix(in srgb, #f0a63b 18%, transparent); color: #b9791d; border: none; font-size: 11px; padding: 2px 8px; cursor: help; }
 html[data-theme='dark'] .chip.partial { color: #f0a63b; }

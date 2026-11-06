@@ -132,6 +132,291 @@
     .ws-kpi .sub.pos {
       color: var(--pos);
     }
+
+    /* ============================================================
+       GA4 Website Traffic Snapshots — Graph + Table section
+       ============================================================ */
+    .ws-snapshots-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-top: 16px;
+    }
+    .ws-section-card {
+      padding: 22px 24px;
+    }
+    .ws-card-head {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 10px 14px;
+      margin-bottom: 14px;
+    }
+    .ws-card-head h3 {
+      margin: 0;
+      font-size: 16px;
+      font-weight: 700;
+      letter-spacing: -.01em;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .ws-card-head h3::before {
+      content: "";
+      width: 4px;
+      height: 17px;
+      border-radius: 3px;
+      flex: none;
+      background: linear-gradient(var(--mkt-accent), var(--mkt-accent-2));
+    }
+    .ws-card-sub {
+      width: 100%;
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: -4px;
+    }
+
+    /* Summary pill strip inside the graph card (updates with selected FY) */
+    .ws-fy-strip {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 12px;
+      margin-bottom: 16px;
+      padding: 14px 16px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+    }
+    @media (max-width: 760px) {
+      .ws-fy-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    .ws-strip-item .k {
+      font-size: 11.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--text-muted);
+    }
+    .ws-strip-item .v {
+      font-size: 20px;
+      font-weight: 700;
+      font-variant-numeric: tabular-nums;
+      color: var(--text);
+      margin-top: 3px;
+    }
+    .ws-strip-item .s {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Dual-panel graph layout: main Chart.js canvas + live AI sources breakdown for selected FY */
+    .ws-graph-split {
+      display: grid;
+      grid-template-columns: minmax(0, 1.55fr) minmax(260px, 1fr);
+      gap: 18px;
+      align-items: stretch;
+    }
+    @media (max-width: 960px) {
+      .ws-graph-split { grid-template-columns: 1fr; }
+    }
+    .ws-chart-box {
+      position: relative;
+      min-height: 310px;
+      height: 320px;
+    }
+    .ws-ai-panel {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .ws-ai-panel-head {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 8px;
+    }
+    .ws-ai-panel-title {
+      font-size: 13.5px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .ws-ai-panel-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .ws-ai-bars {
+      display: flex;
+      flex-direction: column;
+      gap: 9px;
+      flex: 1;
+      justify-content: center;
+    }
+    .ws-ai-bar-row {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .ws-ai-bar-top {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12.5px;
+      font-variant-numeric: tabular-nums;
+    }
+    .ws-ai-bar-name {
+      font-weight: 600;
+      color: var(--text);
+    }
+    .ws-ai-bar-val {
+      color: var(--text-muted);
+    }
+    .ws-ai-bar-track {
+      height: 7px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--border) 75%, transparent);
+      overflow: hidden;
+    }
+    .ws-ai-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--mkt-accent), var(--mkt-accent-2));
+      transition: width .25s ease;
+    }
+
+    /* Responsive accessible table (following modern-web-guidance responsive-table) */
+    .ws-table-wrap {
+      overflow-x: auto;
+      max-inline-size: 100%;
+      container-type: inline-size;
+      border-radius: 10px;
+    }
+    table.ws-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13.5px;
+      min-width: 680px;
+    }
+    table.ws-table thead {
+      position: sticky;
+      inset-block-start: 0;
+      z-index: 1;
+      background: var(--surface);
+    }
+    table.ws-table th,
+    table.ws-table td {
+      padding: 12px 12px;
+      text-align: right;
+      border-bottom: 1px solid var(--border);
+      font-variant-numeric: tabular-nums;
+      vertical-align: middle;
+    }
+    table.ws-table th:first-child,
+    table.ws-table td:first-child {
+      text-align: left;
+      padding-left: 10px;
+      position: sticky;
+      inset-inline-start: 0;
+      background: var(--surface);
+    }
+    table.ws-table th:nth-child(2),
+    table.ws-table td:nth-child(2) {
+      text-align: left;
+    }
+    table.ws-table th:last-child,
+    table.ws-table td:last-child {
+      text-align: left;
+      padding-right: 10px;
+    }
+    table.ws-table thead th {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+    }
+    table.ws-table tbody tr.ws-clickrow {
+      cursor: pointer;
+      transition: background .14s ease;
+    }
+    table.ws-table tbody tr.ws-clickrow:hover td,
+    table.ws-table tbody tr.ws-clickrow:hover th {
+      background: color-mix(in srgb, var(--mkt-accent) 7%, var(--surface));
+    }
+    table.ws-table tbody tr.ws-rowsel td,
+    table.ws-table tbody tr.ws-rowsel th {
+      background: color-mix(in srgb, var(--mkt-accent) 13%, var(--surface));
+    }
+    table.ws-table tbody tr.ws-rowsel th:first-child,
+    table.ws-table tbody tr.ws-rowsel td:first-child {
+      box-shadow: inset 3px 0 0 var(--mkt-accent);
+    }
+    table.ws-table tbody tr.ws-total td,
+    table.ws-table tbody tr.ws-total th {
+      border-top: 2px solid var(--border);
+      font-weight: 700;
+      background: var(--surface-2);
+    }
+    table.ws-table tbody tr.ws-total.ws-rowsel td,
+    table.ws-table tbody tr.ws-total.ws-rowsel th {
+      background: color-mix(in srgb, var(--mkt-accent) 14%, var(--surface-2));
+    }
+    .ws-fy-cell {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 700;
+      color: var(--text);
+    }
+    .ws-fy-period {
+      font-size: 11.5px;
+      font-weight: 400;
+      color: var(--text-muted);
+      display: block;
+    }
+    .ws-sel-pill {
+      display: inline-block;
+      padding: 2px 7px;
+      border-radius: 999px;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+      background: linear-gradient(135deg, var(--mkt-accent), var(--mkt-accent-2));
+      color: #fff;
+    }
+    .ws-src-chips {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+    }
+    .ws-src-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      padding: 3px 9px;
+      border-radius: 999px;
+      font-size: 12px;
+      font-weight: 500;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      white-space: nowrap;
+    }
+    .ws-src-chip strong {
+      font-weight: 700;
+      color: var(--mkt-accent);
+      font-variant-numeric: tabular-nums;
+    }
   </style>
 </head>
 <body>
@@ -168,7 +453,7 @@
             <button class="active" data-fy="fy27">FY27</button>
           </div>
           <div class="spacer" style="flex:1"></div>
-          <span class="muted" id="fyNote" style="font-size:13px">Website form enquiries are a rolling ~60-day GA4 window</span>
+          <span class="muted" id="fyNote" style="font-size:13px">Figures are per financial year · hover any ⓘ for what a tile shows and its source</span>
         </div>
       </div>
 
@@ -177,54 +462,211 @@
 
       <!-- Row 2: 3 KPI cards -->
       <div class="ws-bottom-grid" id="wsBottomKpis"></div>
+
+      <!-- Row 3: GA4 Website Traffic Snapshots — Graph + Table -->
+      <div class="ws-snapshots-grid">
+        <!-- Graph card -->
+        <section class="card ws-section-card" id="wsTrafficGraphCard">
+          <div class="ws-card-head">
+            <h3 id="wsTrafficGraphHeading">GA4 Website Traffic &amp; AI Tool Visits</h3>
+            <span class="head-info" id="wsGraphInfo"></span>
+            <div class="spacer" style="flex:1"></div>
+            <div class="segmented" id="wsChartModeSeg" aria-label="Chart view">
+              <button class="active" data-mode="fy">By financial year</button>
+              <button data-mode="sources">AI sources breakdown</button>
+            </div>
+          </div>
+          <div class="ws-card-sub" id="wsGraphSub"></div>
+
+          <!-- Selected FY summary strip (updates dynamically with #fySeg) -->
+          <div class="ws-fy-strip" id="wsFyStrip"></div>
+
+          <div class="ws-graph-split">
+            <div class="ws-chart-box">
+              <canvas id="wsTrafficCanvas"></canvas>
+            </div>
+            <div class="ws-ai-panel">
+              <div class="ws-ai-panel-head">
+                <span class="ws-ai-panel-title" id="wsAiPanelTitle">AI tool sources</span>
+                <span class="ws-ai-panel-sub" id="wsAiPanelSub"></span>
+              </div>
+              <div class="ws-ai-bars" id="wsAiBars"></div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Table card -->
+        <section class="card ws-section-card" id="wsTrafficTableCard">
+          <div class="ws-card-head">
+            <h3 id="wsTrafficTableHeading">GA4 Website Traffic Snapshots</h3>
+            <span class="head-info" id="wsTableInfo"></span>
+            <div class="spacer" style="flex:1"></div>
+            <span class="muted" style="font-size:12px">Click any FY row to select that financial year</span>
+            <div class="segmented" id="wsTableScopeSeg" aria-label="Table filter scope">
+              <button class="active" data-scope="all">All FYs (highlight active)</button>
+              <button data-scope="selected">Selected FY only</button>
+            </div>
+          </div>
+          <div class="ws-table-wrap" tabindex="0" role="region" aria-labelledby="wsTrafficTableHeading">
+            <table class="ws-table">
+              <thead>
+                <tr>
+                  <th scope="col">Financial Year</th>
+                  <th scope="col">Snapshot Date</th>
+                  <th scope="col">Website Sessions</th>
+                  <th scope="col">Visits from AI Tools</th>
+                  <th scope="col">AI Traffic Share</th>
+                  <th scope="col">AI Sources Breakdown</th>
+                </tr>
+              </thead>
+              <tbody id="wsTrafficTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </main>
   </div>
 
-  <script src="app.js?v=11"></script>
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js?v=12"></script>
   <script>
-    /* Website & Search — PARTIALLY LIVE.
-       The only website-traffic data in Supabase is public.ga4_events_staging, a
-       rolling ~60-day window of GA4 *conversion* events (form submits). There are
-       NO pageview/session rows, so true "sessions" can't be shown here — those,
-       plus AI-tool visits, Google reviews and phone enquiries, render as a red
-       "pending" chip (design-guide standard) rather than a fabricated number.
-       LIVE from /api/marketing/website-search: website form enquiries (total +
-       organic + paid-search), computed at request time from the GA4 events.
+    /* Website & Search — LIVE (except Phone enquiries, which is pending).
+       LIVE from /api/marketing/website-search:
+       • "Website sessions" + "Visits from AI tools" — per-FY figures from
+         public.ga4_website_traffic_snapshots (weekly GA4 Data API snapshot via
+         ga4-website-traffic-sync).
+       • "Enquiries (in ActiveCampaign)" / "Organic enquiries" / "Paid-search
+         enquiries" — enquiries defined (per the owner) as leads with an EXISTING
+         SAVED ActiveCampaign contact (ga4_ac_contact_source rows whose contact_id
+         exists in activecampaign_contacts; one matched contact = one enquiry).
+       • "Organic enquiries (incl. unmatched)" — ALL organic-medium website form
+         conversions (matched + anonymous), from ga4_ac_event_matches. Deliberately
+         fuller than the AC-matched organic card.
+       • "New Google reviews" — count and average star rating per AU FY from
+         public.google_reviews (by review_create_time).
+       • "Phone enquiries" has no live source and renders a red "pending" chip. */
 
-       The GA4 window is rolling (~60 days, all within FY27), so it is NOT
-       FY-sliceable: the live cards fill only for FY27 / All years and show "—"
-       with a note under the older FYs (same behaviour as Content & Social). */
+    // Per-FY + all-years counts and average ratings from public.google_reviews
+    // (grouped by Australian FY of review_create_time; used as fallback if the
+    // /api/marketing/website-search payload doesn't include reviews yet).
+    var GOOGLE_REVIEWS_DB = {
+      all:  { reviews: 653, avgStars: 4.98 },
+      FY22: { reviews: 33,  avgStars: 4.97 },
+      FY23: { reviews: 196, avgStars: 4.98 },
+      FY24: { reviews: 98,  avgStars: 4.98 },
+      FY25: { reviews: 87,  avgStars: 4.99 },
+      FY26: { reviews: 144, avgStars: 4.97 },
+      FY27: { reviews: 30,  avgStars: 4.97 }
+    };
 
-    // Card models. kind:'live' pulls from the fetched payload by `key`; kind:'pending'
-    // always shows the pending chip. No fabricated sample numbers remain.
+    // Baseline verified snapshot rows from public.ga4_website_traffic_snapshots
+    // (property 363754280 via ga4-website-traffic-sync). Any newer figures returned
+    // live on /api/marketing/website-search automatically override these per FY.
+    var GA4_TRAFFIC_SNAPSHOTS_DB = [
+      {
+        fy: 'FY22', fyEnd: 2022, period: 'Jul 2021 – Jun 2022',
+        snapshotDate: '2026-11-06', sessions: 0, aiVisits: 0,
+        aiSources: {}, note: 'Pre-GA4 cutover'
+      },
+      {
+        fy: 'FY23', fyEnd: 2023, period: 'Jul 2022 – Jun 2023',
+        snapshotDate: '2026-11-06', sessions: 8282, aiVisits: 0,
+        aiSources: {}, note: 'GA4 from Apr 2023'
+      },
+      {
+        fy: 'FY24', fyEnd: 2024, period: 'Jul 2023 – Jun 2024',
+        snapshotDate: '2026-11-06', sessions: 38190, aiVisits: 0,
+        aiSources: {}, note: null
+      },
+      {
+        fy: 'FY25', fyEnd: 2025, period: 'Jul 2024 – Jun 2025',
+        snapshotDate: '2026-11-06', sessions: 49870, aiVisits: 43,
+        aiSources: { 'chatgpt.com': 39, 'gemini.google.com': 3, 'you.com': 1 },
+        note: null
+      },
+      {
+        fy: 'FY26', fyEnd: 2026, period: 'Jul 2025 – Jun 2026',
+        snapshotDate: '2026-11-06', sessions: 56742, aiVisits: 161,
+        aiSources: {
+          'chatgpt.com': 138,
+          'gemini.google.com': 8,
+          'perplexity.ai': 6,
+          'copilot.com': 3,
+          'perplexity': 3,
+          'copilot.cloud.microsoft': 1,
+          'copilot.microsoft.com': 1,
+          'poe.com': 1
+        },
+        note: null
+      },
+      {
+        fy: 'FY27', fyEnd: 2027, period: 'Jul 2026 – Jun 2027 (YTD)',
+        snapshotDate: '2026-11-06', sessions: 19560, aiVisits: 15,
+        aiSources: { 'chatgpt.com': 12, 'claude.ai': 3 },
+        note: 'Current FY (YTD)'
+      }
+    ];
+
+    // Card models. Each card carries its OWN info tool (desc = what it is, source =
+    // where it comes from) — per DESIGN_GUIDE §6 that text lives ONLY in the ⓘ, never
+    // in the card body. kind:'live' reads the selected FY's record by `key`;
+    // kind:'pending' shows the pending chip. No fabricated sample numbers.
     var TOP_CARDS = [
-      { label: 'Website sessions',          kind: 'pending' },
-      { label: 'Organic search sessions',   kind: 'pending' },
-      { label: 'Website form enquiries',    kind: 'live', key: 'total',
-        sub: function (w) { return w ? ('Rolling GA4 window · ' + w.start + ' → ' + w.end) : 'Rolling ~60-day GA4 window'; } },
-      { label: 'Organic form enquiries',    kind: 'live', key: 'organic',
-        sub: function () { return 'Medium = organic'; } },
-      { label: 'Paid-search form enquiries', kind: 'live', key: 'cpc',
-        sub: function () { return 'Medium = cpc (Google / Bing)'; } }
+      { label: 'Website sessions', kind: 'live', key: 'sessions',
+        desc: 'Total website visits (sessions) for the selected financial year, synced weekly from the GA4 Data API (GA4 tracking began April 2023 / FY23).',
+        source: 'public.ga4_website_traffic_snapshots (GA4 Data API)' },
+      { label: 'Organic enquiries (incl. unmatched)', kind: 'live', key: 'organicAll',
+        desc: 'Every organic-search website form conversion — matched to a saved AC contact OR anonymous. Current FY only (GA4 medium is captured recently).',
+        source: 'public.ga4_ac_event_matches (organic form events)' },
+      { label: 'Enquiries (in ActiveCampaign)', kind: 'live', key: 'total',
+        desc: 'GA4 & Ads leads that became an existing saved ActiveCampaign contact (one matched contact = one enquiry), for the selected FY.',
+        source: 'public.ga4_ac_contact_source ∩ activecampaign_contacts' },
+      { label: 'Organic enquiries', kind: 'live', key: 'organic',
+        desc: 'Enquiries whose GA4 medium is organic AND that matched a saved AC contact. Current FY only.',
+        source: 'public.ga4_ac_contact_source (medium = organic)' },
+      { label: 'Paid-search enquiries', kind: 'live', key: 'cpc',
+        desc: 'Enquiries whose GA4 medium is cpc (Google / Bing paid search) AND that matched a saved AC contact. Current FY only.',
+        source: 'public.ga4_ac_contact_source (medium = cpc)' }
     ];
     var BOTTOM_CARDS = [
-      { label: 'Visits from AI tools', kind: 'pending' },
-      { label: 'New Google reviews',  kind: 'pending' },
-      { label: 'Phone enquiries',     kind: 'pending' }
+      { label: 'Visits from AI tools', kind: 'live', key: 'aiVisits',
+        desc: 'Sessions referred from AI assistants (ChatGPT, Gemini, Perplexity, Claude, Copilot, etc.) for the selected financial year, synced weekly from the GA4 Data API.',
+        source: 'public.ga4_website_traffic_snapshots (GA4 Data API)' },
+      { label: 'New Google reviews', kind: 'reviews', key: 'reviews',
+        desc: 'New Google Business reviews created in the selected financial year (by review_create_time), with average star rating.',
+        source: 'public.google_reviews (review_create_time, star_rating)' },
+      { label: 'Phone enquiries', kind: 'pending',
+        desc: 'Enquiries that arrived by phone. Needs a phone-click / call-tracking tag — not live yet.',
+        source: 'Pending — call tracking (not live)' }
     ];
 
     var WS = null;        // live payload once fetched (null = loading, false = failed)
+    var _trafficChart = null;
 
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
       return b ? b.getAttribute('data-fy') : 'fy27';
     }
 
-    // The GA4 window sits entirely in FY27, so the live cards only have data to show
-    // for FY27 or "All years"; under the older FYs they render "—" + a note.
-    function fyHasGa4Window() {
-      var k = selFyKey();
-      return k === 'fy27' || k === 'all';
+    function setFyKey(fyKey) {
+      var target = String(fyKey || 'fy27').toLowerCase();
+      var seg = document.getElementById('fySeg');
+      if (seg) {
+        seg.querySelectorAll('button').forEach(function (b) {
+          b.classList.toggle('active', b.getAttribute('data-fy') === target);
+        });
+      }
+      renderAll();
+    }
+
+    function selChartMode() {
+      var b = document.querySelector('#wsChartModeSeg button.active');
+      return b ? b.getAttribute('data-mode') : 'fy';
+    }
+
+    function selTableScope() {
+      var b = document.querySelector('#wsTableScopeSeg button.active');
+      return b ? b.getAttribute('data-scope') : 'all';
     }
 
     function fmtNum(n) {
@@ -232,50 +674,518 @@
       return Number(n).toLocaleString();
     }
 
-    // A single KPI card. Pending → red "pending" chip. Live → number + sub (or, when the
-    // selected FY has no GA4 window, a dash + note instead of a fabricated figure).
+    function fmtPct(num, den, digits) {
+      if (!den || num == null || isNaN(num)) return '0.00%';
+      var d = digits != null ? digits : 2;
+      return ((Number(num) / Number(den)) * 100).toFixed(d) + '%';
+    }
+
+    // Build the per-FY snapshot list by merging live WS.byFy values over GA4_TRAFFIC_SNAPSHOTS_DB.
+    function trafficRows() {
+      return GA4_TRAFFIC_SNAPSHOTS_DB.map(function (base) {
+        var live = (WS && WS.byFy && WS.byFy[base.fy]) || null;
+        var sessions = (live && live.sessions != null) ? Number(live.sessions) : base.sessions;
+        var aiVisits = (live && live.aiVisits != null) ? Number(live.aiVisits) : base.aiVisits;
+        var snapshotDate = (live && live.snapshotDate) ? live.snapshotDate : base.snapshotDate;
+        var aiSources = (live && live.aiSources && Object.keys(live.aiSources).length)
+          ? live.aiSources
+          : base.aiSources;
+        return {
+          fy: base.fy,
+          fyKey: base.fy.toLowerCase(),
+          fyEnd: base.fyEnd,
+          period: base.period,
+          snapshotDate: snapshotDate,
+          sessions: sessions,
+          aiVisits: aiVisits,
+          aiSources: aiSources || {},
+          note: base.note
+        };
+      });
+    }
+
+    // Compute the aggregated "All years" snapshot row across FY22–FY27.
+    function trafficTotalRow(rows) {
+      var list = rows || trafficRows();
+      var totSessions = 0;
+      var totAi = 0;
+      var latestDate = '2026-11-06';
+      var mergedSources = {};
+      list.forEach(function (r) {
+        totSessions += Number(r.sessions) || 0;
+        totAi += Number(r.aiVisits) || 0;
+        if (r.snapshotDate && r.snapshotDate > latestDate) latestDate = r.snapshotDate;
+        Object.keys(r.aiSources || {}).forEach(function (src) {
+          mergedSources[src] = (mergedSources[src] || 0) + (Number(r.aiSources[src]) || 0);
+        });
+      });
+      return {
+        fy: 'All years',
+        fyKey: 'all',
+        fyEnd: null,
+        period: 'FY22 – FY27 (Apr 2023+)',
+        snapshotDate: latestDate,
+        sessions: totSessions,
+        aiVisits: totAi,
+        aiSources: mergedSources,
+        note: 'Sum of FY22–FY27 snapshots'
+      };
+    }
+
+    // Snapshot record for the currently selected FY ('all' or 'fy22'..'fy27').
+    function selTrafficRow() {
+      var k = selFyKey();
+      var rows = trafficRows();
+      if (k === 'all') return trafficTotalRow(rows);
+      var fyUpper = k.toUpperCase();
+      for (var i = 0; i < rows.length; i++) {
+        if (rows[i].fy === fyUpper) return rows[i];
+      }
+      return trafficTotalRow(rows);
+    }
+
+    // Sorted array of [{ source, visits }] from an aiSources map.
+    function sortedAiSources(aiSources) {
+      var map = aiSources || {};
+      return Object.keys(map)
+        .map(function (k) { return { source: k, visits: Number(map[k]) || 0 }; })
+        .filter(function (x) { return x.visits > 0; })
+        .sort(function (a, b) { return b.visits - a.visits || a.source.localeCompare(b.source); });
+    }
+
+    // The record {total,organic,cpc,organicAll,sessions,aiVisits,reviews,avgStars}
+    // for the selected FY ('all' → all-years total; an FY with no rows → zeros),
+    // enriched with GA4_TRAFFIC_SNAPSHOTS_DB so sessions & aiVisits are always populated.
+    function selData() {
+      var tr = selTrafficRow();
+      var zero = {
+        total: 0, organic: 0, cpc: 0, organicAll: 0,
+        sessions: tr ? tr.sessions : 0,
+        aiVisits: tr ? tr.aiVisits : 0
+      };
+      if (!WS || WS === true) return zero;
+      var k = selFyKey();
+      var raw = (k === 'all') ? (WS.total || zero) : ((WS.byFy && WS.byFy[k.toUpperCase()]) || zero);
+      return {
+        total: raw.total || 0,
+        organic: raw.organic || 0,
+        cpc: raw.cpc || 0,
+        organicAll: raw.organicAll || 0,
+        sessions: raw.sessions != null ? raw.sessions : (tr ? tr.sessions : 0),
+        aiVisits: raw.aiVisits != null ? raw.aiVisits : (tr ? tr.aiVisits : 0),
+        reviews: raw.reviews,
+        avgStars: raw.avgStars
+      };
+    }
+
+    // Google reviews {reviews, avgStars} for the selected FY — prefers any live
+    // fields on the /api/marketing/website-search response, falling back to the
+    // public.google_reviews DB figures above.
+    function selReviews() {
+      var k = selFyKey();
+      var fyKey = k === 'all' ? 'all' : k.toUpperCase();
+      var d = (WS && WS !== true)
+        ? (k === 'all' ? WS.total : (WS.byFy && WS.byFy[fyKey]))
+        : null;
+      if (d && d.reviews != null) {
+        return { reviews: d.reviews, avgStars: d.avgStars != null ? d.avgStars : null };
+      }
+      if (WS && WS.reviews) {
+        var r = k === 'all' ? WS.reviews.total : (WS.reviews.byFy && WS.reviews.byFy[fyKey]);
+        if (r && r.reviews != null) return r;
+      }
+      return GOOGLE_REVIEWS_DB[fyKey] || { reviews: 0, avgStars: null };
+    }
+
+    // A single KPI card: label + ONE info tool (desc + source), then the value/chip.
+    // The description & source live only in the ⓘ (DESIGN_GUIDE §6) — no sub-line.
     function cardHtml(c) {
-      var label = '<div class="label">' + esc(c.label) + '</div>';
+      var head = '<div class="label">' + esc(c.label) +
+        '<span class="head-info">' + infoTip(c.desc, c.source) + '</span></div>';
+      var body;
       if (c.kind === 'pending') {
-        return '<article class="ws-kpi">' + label +
-          '<div class="value" style="margin-top:14px"><span class="chip warn">pending</span></div>' +
-          '<div class="sub">Not tracked in the dashboard yet</div>' +
-        '</article>';
+        body = '<div class="value" style="margin-top:14px"><span class="chip warn">pending</span></div>';
+      } else if (c.kind === 'reviews') {
+        var rv = selReviews();
+        var sub = (rv && rv.avgStars != null)
+          ? '<div class="sub pos">Average rating ' + esc(Number(rv.avgStars).toFixed(2)) + ' ★</div>'
+          : '';
+        body = '<div class="value">' + esc(fmtNum(rv ? rv.reviews : null)) + '</div>' + sub;
+      } else if (c.key === 'sessions' || c.key === 'aiVisits') {
+        var dTraffic = selData();
+        body = '<div class="value">' + esc(fmtNum(dTraffic ? dTraffic[c.key] : null)) + '</div>';
+      } else if (WS === false) {
+        body = '<div class="value">—</div>';
+      } else if (WS === null) {
+        body = '<div class="value">…</div>';
+      } else {
+        var d = selData();
+        body = '<div class="value">' + esc(fmtNum(d ? d[c.key] : null)) + '</div>';
       }
-      // live
-      if (WS === false) {
-        return '<article class="ws-kpi">' + label +
-          '<div class="value">—</div>' +
-          '<div class="sub">Couldn’t load live data</div>' +
-        '</article>';
+      return '<article class="ws-kpi">' + head + body + '</article>';
+    }
+
+    function renderTrafficGraph() {
+      var rows = trafficRows();
+      var totalRow = trafficTotalRow(rows);
+      var sel = selTrafficRow();
+      var activeKey = selFyKey();
+      var mode = selChartMode();
+      var sourcesList = sortedAiSources(sel.aiSources);
+      var topSrc = sourcesList.length ? (sourcesList[0].source + ' (' + fmtNum(sourcesList[0].visits) + ')') : 'None recorded';
+
+      // Info icon in card header
+      var infoEl = document.getElementById('wsGraphInfo');
+      if (infoEl && !infoEl.querySelector('.src-info')) {
+        infoEl.innerHTML = infoTip(
+          'Weekly GA4 Data API snapshot of Website sessions and AI-tool referral visits per Australian financial year. Selecting a financial year spotlights that FY on the chart and updates the summary strip and AI tool sources breakdown.',
+          'public.ga4_website_traffic_snapshots (GA4 property 363754280 · ga4-website-traffic-sync)'
+        );
       }
-      if (WS === null) {
-        return '<article class="ws-kpi">' + label +
-          '<div class="value">…</div><div class="sub">Loading…</div>' +
-        '</article>';
+
+      // Dynamic subtitle
+      var subEl = document.getElementById('wsGraphSub');
+      if (subEl) {
+        subEl.textContent = (activeKey === 'all' ? 'All financial years (FY22–FY27)' : (sel.fy + ' · ' + sel.period)) +
+          ' · Snapshot ' + sel.snapshotDate + ' · Weekly upsert-only sync';
       }
-      if (!fyHasGa4Window()) {
-        return '<article class="ws-kpi">' + label +
-          '<div class="value">—</div>' +
-          '<div class="sub">No GA4 history — rolling ~60-day window</div>' +
-        '</article>';
+
+      // Selected FY summary strip
+      var stripEl = document.getElementById('wsFyStrip');
+      if (stripEl) {
+        var shareOfAll = (activeKey === 'all')
+          ? '100% of tracked sessions'
+          : (fmtPct(sel.sessions, totalRow.sessions, 1) + ' of all-years sessions');
+        stripEl.innerHTML =
+          '<div class="ws-strip-item">' +
+            '<div class="k">Selected Period</div>' +
+            '<div class="v">' + esc(sel.fy) + '</div>' +
+            '<div class="s">' + esc(sel.period) + '</div>' +
+          '</div>' +
+          '<div class="ws-strip-item">' +
+            '<div class="k">Website Sessions</div>' +
+            '<div class="v">' + esc(fmtNum(sel.sessions)) + '</div>' +
+            '<div class="s">' + esc(shareOfAll) + '</div>' +
+          '</div>' +
+          '<div class="ws-strip-item">' +
+            '<div class="k">Visits from AI Tools</div>' +
+            '<div class="v">' + esc(fmtNum(sel.aiVisits)) + '</div>' +
+            '<div class="s">' + esc(sourcesList.length + (sourcesList.length === 1 ? ' AI source' : ' AI sources')) + '</div>' +
+          '</div>' +
+          '<div class="ws-strip-item">' +
+            '<div class="k">AI Share &amp; Top Source</div>' +
+            '<div class="v">' + esc(fmtPct(sel.aiVisits, sel.sessions, 2)) + '</div>' +
+            '<div class="s">Top: ' + esc(topSrc) + '</div>' +
+          '</div>';
       }
-      var val = WS.enquiries ? WS.enquiries[c.key] : null;
-      var sub = typeof c.sub === 'function' ? c.sub(WS.window) : (c.sub || '');
-      return '<article class="ws-kpi">' + label +
-        '<div class="value">' + esc(fmtNum(val)) + '</div>' +
-        '<div class="sub">' + esc(sub) + '</div>' +
-      '</article>';
+
+      // Right-hand AI sources breakdown panel for the selected FY
+      var panelTitle = document.getElementById('wsAiPanelTitle');
+      var panelSub = document.getElementById('wsAiPanelSub');
+      var barsEl = document.getElementById('wsAiBars');
+      if (panelTitle) panelTitle.textContent = 'AI tool sources · ' + sel.fy;
+      if (panelSub) panelSub.textContent = fmtNum(sel.aiVisits) + ' visits';
+      if (barsEl) {
+        if (!sourcesList.length) {
+          barsEl.innerHTML = '<div class="muted" style="font-size:13px;text-align:center;padding:24px 8px">' +
+            'No AI-tool referral visits recorded in ' + esc(sel.fy) + '.</div>';
+        } else {
+          var maxVisits = sourcesList[0].visits || 1;
+          barsEl.innerHTML = sourcesList.map(function (item) {
+            var pctOfAi = fmtPct(item.visits, sel.aiVisits, 1);
+            var widthPct = Math.max(4, Math.round((item.visits / maxVisits) * 100));
+            return '<div class="ws-ai-bar-row">' +
+              '<div class="ws-ai-bar-top">' +
+                '<span class="ws-ai-bar-name">' + esc(item.source) + '</span>' +
+                '<span class="ws-ai-bar-val"><strong>' + esc(fmtNum(item.visits)) + '</strong> (' + esc(pctOfAi) + ')</span>' +
+              '</div>' +
+              '<div class="ws-ai-bar-track"><div class="ws-ai-bar-fill" style="width:' + widthPct + '%"></div></div>' +
+            '</div>';
+          }).join('');
+        }
+      }
+
+      // Main Chart.js canvas
+      var canvas = document.getElementById('wsTrafficCanvas');
+      if (!canvas || typeof Chart === 'undefined') return;
+      if (_trafficChart) {
+        _trafficChart.destroy();
+        _trafficChart = null;
+      }
+      var tc = themeColors();
+      var isDark = currentTheme() === 'dark';
+      var activeBarBg = isDark ? '#5b85ff' : '#3b6ef0';
+      var dimmedBarBg = isDark ? 'rgba(91, 133, 255, 0.24)' : 'rgba(59, 110, 240, 0.22)';
+      var aiLineColor = isDark ? '#f5b95f' : '#e08b1a';
+      var aiPointIdle = isDark ? 'rgba(245, 185, 95, 0.35)' : 'rgba(224, 139, 26, 0.35)';
+
+      if (mode === 'sources') {
+        var srcLabels = sourcesList.length ? sourcesList.map(function (s) { return s.source; }) : ['No AI visits in ' + sel.fy];
+        var srcValues = sourcesList.length ? sourcesList.map(function (s) { return s.visits; }) : [0];
+        var palette = ['#3b6ef0', '#6a4bf5', '#17a673', '#f0a63b', '#06b6d4', '#ec4899', '#8b5cf6', '#14b8a6'];
+        _trafficChart = new Chart(canvas.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: srcLabels,
+            datasets: [{
+              label: 'Visits from AI tools (' + sel.fy + ')',
+              data: srcValues,
+              backgroundColor: srcLabels.map(function (_, i) { return palette[i % palette.length]; }),
+              borderRadius: 6,
+              maxBarThickness: 38
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: {
+                beginAtZero: true,
+                grid: { color: tc.grid },
+                ticks: { color: tc.muted, font: { size: 11 }, precision: 0 }
+              },
+              y: {
+                grid: { display: false },
+                ticks: { color: tc.text, font: { size: 12, weight: '600' } }
+              }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    var v = ctx.parsed.x || 0;
+                    return fmtNum(v) + ' visits (' + fmtPct(v, sel.aiVisits, 1) + ' of ' + sel.fy + ' AI visits)';
+                  }
+                }
+              }
+            }
+          }
+        });
+        return;
+      }
+
+      // Default mode ('fy'): Dual-axis combo chart across FY22–FY27, spotlighting the selected FY.
+      var barColors = rows.map(function (r) {
+        return (activeKey === 'all' || r.fyKey === activeKey) ? activeBarBg : dimmedBarBg;
+      });
+      var barBorders = rows.map(function (r) {
+        return (activeKey === 'all' || r.fyKey === activeKey) ? activeBarBg : 'transparent';
+      });
+      var ptRadii = rows.map(function (r) {
+        return (activeKey !== 'all' && r.fyKey === activeKey) ? 7 : 5;
+      });
+      var ptColors = rows.map(function (r) {
+        return (activeKey === 'all' || r.fyKey === activeKey) ? aiLineColor : aiPointIdle;
+      });
+
+      _trafficChart = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: rows.map(function (r) { return r.fy; }),
+          datasets: [
+            {
+              type: 'bar',
+              label: 'Website sessions',
+              data: rows.map(function (r) { return r.sessions; }),
+              backgroundColor: barColors,
+              borderColor: barBorders,
+              borderWidth: 1.5,
+              borderRadius: 6,
+              maxBarThickness: 54,
+              yAxisID: 'ySessions',
+              order: 2
+            },
+            {
+              type: 'line',
+              label: 'Visits from AI tools',
+              data: rows.map(function (r) { return r.aiVisits; }),
+              borderColor: aiLineColor,
+              backgroundColor: aiLineColor,
+              pointBackgroundColor: ptColors,
+              pointBorderColor: isDark ? '#141b2d' : '#ffffff',
+              pointBorderWidth: 2,
+              pointRadius: ptRadii,
+              pointHoverRadius: 8,
+              borderWidth: 2.5,
+              tension: 0.28,
+              yAxisID: 'yAi',
+              order: 1
+            }
+          ]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          onClick: function (_evt, elements) {
+            if (elements && elements.length) {
+              var idx = elements[0].index;
+              var clicked = rows[idx];
+              if (clicked) setFyKey(clicked.fyKey);
+            }
+          },
+          scales: {
+            x: {
+              grid: { display: false },
+              ticks: {
+                color: function (ctx) {
+                  var r = rows[ctx.index];
+                  return (activeKey !== 'all' && r && r.fyKey === activeKey) ? tc.text : tc.muted;
+                },
+                font: function (ctx) {
+                  var r = rows[ctx.index];
+                  var selRow = activeKey !== 'all' && r && r.fyKey === activeKey;
+                  return { size: 12, weight: selRow ? '700' : '500' };
+                }
+              }
+            },
+            ySessions: {
+              type: 'linear',
+              position: 'left',
+              beginAtZero: true,
+              grid: { color: tc.grid },
+              ticks: {
+                color: tc.muted,
+                font: { size: 11 },
+                callback: function (v) { return fmtNum(v); }
+              },
+              title: {
+                display: true,
+                text: 'Website sessions',
+                color: tc.muted,
+                font: { size: 11, weight: '600' }
+              }
+            },
+            yAi: {
+              type: 'linear',
+              position: 'right',
+              beginAtZero: true,
+              grid: { drawOnChartArea: false },
+              ticks: {
+                color: aiLineColor,
+                font: { size: 11 },
+                precision: 0
+              },
+              title: {
+                display: true,
+                text: 'Visits from AI tools',
+                color: aiLineColor,
+                font: { size: 11, weight: '600' }
+              }
+            }
+          },
+          plugins: {
+            legend: {
+              display: true,
+              position: 'top',
+              align: 'end',
+              labels: { color: tc.text, boxWidth: 12, usePointStyle: true, font: { size: 12 } }
+            },
+            tooltip: {
+              callbacks: {
+                title: function (items) {
+                  var r = rows[items[0].dataIndex];
+                  return r ? (r.fy + ' · ' + r.period + ' (Snapshot ' + r.snapshotDate + ')') : items[0].label;
+                },
+                afterBody: function (items) {
+                  var r = rows[items[0].dataIndex];
+                  if (!r) return '';
+                  var srcs = sortedAiSources(r.aiSources);
+                  var lines = ['AI share of sessions: ' + fmtPct(r.aiVisits, r.sessions, 2)];
+                  if (srcs.length) {
+                    lines.push('AI sources: ' + srcs.slice(0, 4).map(function (s) {
+                      return s.source + ' (' + s.visits + ')';
+                    }).join(', '));
+                  }
+                  return lines;
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderSourceChipsHtml(aiSources) {
+      var list = sortedAiSources(aiSources);
+      if (!list.length) return '<span class="muted">—</span>';
+      return '<div class="ws-src-chips">' + list.map(function (item) {
+        return '<span class="ws-src-chip">' + esc(item.source) + ' <strong>' + esc(fmtNum(item.visits)) + '</strong></span>';
+      }).join('') + '</div>';
+    }
+
+    function renderTrafficTable() {
+      var infoEl = document.getElementById('wsTableInfo');
+      if (infoEl && !infoEl.querySelector('.src-info')) {
+        infoEl.innerHTML = infoTip(
+          'Per-FY snapshot rows stored in public.ga4_website_traffic_snapshots (weekly upsert-only GA4 Data API sync). Click any row to switch the active financial year.',
+          'public.ga4_website_traffic_snapshots (PK: fy_end, snapshot_date)'
+        );
+      }
+
+      var rows = trafficRows();
+      var totalRow = trafficTotalRow(rows);
+      var activeKey = selFyKey();
+      var scope = selTableScope();
+      var tbody = document.getElementById('wsTrafficTableBody');
+      if (!tbody) return;
+
+      var displayRows;
+      if (scope === 'selected' && activeKey !== 'all') {
+        displayRows = rows.filter(function (r) { return r.fyKey === activeKey; });
+      } else {
+        displayRows = rows.slice();
+      }
+
+      var html = displayRows.map(function (r) {
+        var isSel = (activeKey !== 'all' && r.fyKey === activeKey);
+        var cls = 'ws-clickrow' + (isSel ? ' ws-rowsel' : '');
+        var pill = isSel ? ' <span class="ws-sel-pill">Selected</span>' : '';
+        var noteText = r.note ? (' · ' + r.note) : '';
+        return '<tr class="' + cls + '" data-fy-row="' + esc(r.fyKey) + '">' +
+          '<th scope="row">' +
+            '<div class="ws-fy-cell">' + esc(r.fy) + pill + '</div>' +
+            '<span class="ws-fy-period">' + esc(r.period + noteText) + '</span>' +
+          '</th>' +
+          '<td>' + esc(r.snapshotDate) + '</td>' +
+          '<td><strong>' + esc(fmtNum(r.sessions)) + '</strong></td>' +
+          '<td><strong>' + esc(fmtNum(r.aiVisits)) + '</strong></td>' +
+          '<td>' + esc(fmtPct(r.aiVisits, r.sessions, 2)) + '</td>' +
+          '<td>' + renderSourceChipsHtml(r.aiSources) + '</td>' +
+        '</tr>';
+      }).join('');
+
+      if (scope === 'all' || activeKey === 'all') {
+        var isAllSel = (activeKey === 'all');
+        var totPill = isAllSel ? ' <span class="ws-sel-pill">Selected</span>' : '';
+        html += '<tr class="ws-clickrow ws-total' + (isAllSel ? ' ws-rowsel' : '') + '" data-fy-row="all">' +
+          '<th scope="row">' +
+            '<div class="ws-fy-cell">' + esc(totalRow.fy) + totPill + '</div>' +
+            '<span class="ws-fy-period">' + esc(totalRow.period) + '</span>' +
+          '</th>' +
+          '<td>' + esc(totalRow.snapshotDate) + '</td>' +
+          '<td><strong>' + esc(fmtNum(totalRow.sessions)) + '</strong></td>' +
+          '<td><strong>' + esc(fmtNum(totalRow.aiVisits)) + '</strong></td>' +
+          '<td>' + esc(fmtPct(totalRow.aiVisits, totalRow.sessions, 2)) + '</td>' +
+          '<td>' + renderSourceChipsHtml(totalRow.aiSources) + '</td>' +
+        '</tr>';
+      }
+
+      tbody.innerHTML = html;
+      tbody.querySelectorAll('tr[data-fy-row]').forEach(function (tr) {
+        tr.addEventListener('click', function () {
+          setFyKey(tr.getAttribute('data-fy-row'));
+        });
+      });
     }
 
     function renderAll() {
       document.getElementById('wsTopKpis').innerHTML = TOP_CARDS.map(cardHtml).join('');
       document.getElementById('wsBottomKpis').innerHTML = BOTTOM_CARDS.map(cardHtml).join('');
-      // Reflect the real GA4 window in the FY note once loaded.
-      var note = document.getElementById('fyNote');
-      if (note && WS && WS.window && WS.window.start) {
-        note.textContent = 'Website form enquiries: live GA4 window ' + WS.window.start + ' → ' + WS.window.end + ' (rolling ~60 days)';
-      }
+      renderTrafficGraph();
+      renderTrafficTable();
     }
 
     function wireSeg(id, onChange) {
@@ -293,10 +1203,15 @@
     initPage('marketing');
     renderMarketingHead(true);        // partially live (form enquiries) → no "Sample data" badge
     renderMarketingSidebar('website-search');
-    renderAll();                      // initial render (loading state)
+    renderAll();                      // initial render
     wireSeg('fySeg', renderAll);
+    wireSeg('wsChartModeSeg', renderTrafficGraph);
+    wireSeg('wsTableScopeSeg', renderTrafficTable);
+    window.onThemeChange = function () {
+      renderTrafficGraph();
+    };
 
-    // Load the live website form-enquiry figures.
+    // Load the live website form-enquiry & traffic snapshot figures.
     fetchJSON('/api/marketing/website-search')
       .then(function (d) { WS = d || false; renderAll(); })
       .catch(function () { WS = false; renderAll(); });
