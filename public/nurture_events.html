@@ -79,6 +79,7 @@
       .ne-kpi-grid { grid-template-columns: 1fr; }
     }
     .ne-kpi {
+      position: relative;                 /* for the §6 infoTip z-index lift */
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
@@ -90,10 +91,12 @@
       transform: translateY(-2px);
       box-shadow: var(--mkt-shadow-lift);
     }
+    .ne-kpi:hover, .ne-kpi:focus-within { z-index: 2; }  /* keep ⓘ tooltip above neighbours (§6 gotcha) */
     .ne-kpi .label {
       font-size: 13px;
       color: var(--text-muted);
       font-weight: 500;
+      display: flex; align-items: center; gap: 5px;
     }
     .ne-kpi .value {
       font-size: 30px;
@@ -208,8 +211,9 @@
       <!-- Executive X table card -->
       <div class="card ne-events-card">
         <div class="card-head block-head">
-          <h3 id="eventsHeading">Executive X</h3>
-          <div class="chart-cap" id="eventsCap">One row per Executive X session · source: Executive X ROI Report (Google Sheet)</div>
+          <h3 id="eventsHeading">Executive X <span class="head-info"
+            data-info="One row per Executive X session: internal cost, attendees, cost per attendee, bookings, revenue, and return (revenue ÷ cost). Filtered by the session's own date."
+            data-src="Executive X ROI Report (Google Sheet) — static, re-seeded when the sheet changes; FY by session date (Spring Sep–Nov, Autumn Mar)."></span></h3>
         </div>
         <div class="ne-table-wrap" tabindex="0" role="region" aria-labelledby="eventsHeading">
           <table class="ne-table">
@@ -269,6 +273,19 @@
 
     function numFmt(n) { return (Number(n) || 0).toLocaleString('en-AU'); }
 
+    // One ⓘ info tool per KPI card (DESIGN_GUIDE §6) — what it is + where it comes from.
+    // Indexed to match the four cards below.
+    var NE_INFO = [
+      { desc: 'Past keynote clients now in the nurture base: won keynote deals (Keynotes / Workshops / Immersive LIV) for the selected period.',
+        source: 'GET /api/marketing/nurture-events — WON pipeline-3 deals in activecampaign_deals; FY by deal cdate.' },
+      { desc: 'Post-conference offsite enquiries from past clients: all offsite deals (any status) for the selected period.',
+        source: 'GET /api/marketing/nurture-events — ALL pipeline-17 (Trojan Horse: Post-Conf) deals in post_conference_deals; FY by deal cdate.' },
+      { desc: 'Offsites actually booked by past clients: won post-conference offsite deals for the selected period.',
+        source: 'GET /api/marketing/nurture-events — WON pipeline-17 deals in post_conference_deals; FY by deal cdate.' },
+      { desc: 'Share of past keynote clients who booked an offsite = offsites booked ÷ keynote clients in nurture.',
+        source: 'Computed client-side from the two cards above.' }
+    ];
+
     function renderKpiRow() {
       var cards;
       if (NE_ERR) {
@@ -298,10 +315,11 @@
             sub: hasKey ? (numFmt(d.offsiteBooked) + ' of ' + numFmt(d.keynoteClients) + ' keynote clients') : 'No keynote clients in period', pos: hasKey }
         ];
       }
-      var html = cards.map(function (k) {
+      var html = cards.map(function (k, i) {
         var subCls = k.pos ? 'sub pos' : 'sub';
+        var info = NE_INFO[i] || {};
         return '<div class="ne-kpi">' +
-          '<div class="label">' + esc(k.label) + '</div>' +
+          '<div class="label">' + esc(k.label) + infoTip(info.desc, info.source) + '</div>' +
           '<div class="value">' + esc(k.value) + '</div>' +
           '<div class="' + subCls + '">' + esc(k.sub) + '</div>' +
         '</div>';
@@ -353,8 +371,6 @@
     }
 
     function renderEventsTable() {
-      document.getElementById('eventsCap').textContent =
-        'One row per Executive X session · source: Executive X ROI Report (Google Sheet)';
       var rows = execXRows();
       if (!rows.length) {
         document.getElementById('eventsBody').innerHTML =
@@ -411,6 +427,7 @@
     renderMarketingHead(true);
     renderMarketingSidebar('nurture-events');
     renderDateRange();
+    fillHeadInfo();        // fill the static table ⓘ info tool (§6); KPI cards get theirs in renderKpiRow
     renderAll();
     loadLiveCards();
     wireSeg('fySeg', renderAll);

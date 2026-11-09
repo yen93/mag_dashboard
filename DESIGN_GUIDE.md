@@ -288,20 +288,33 @@ either arg may be empty). Use it for **every** widget:
 migrate those to `infoTip` so the hover card is consistent and legible. **Don't** leave a
 widget with no info tool, and **don't** duplicate the description as visible body text.
 
-**Scope:** this is NOT just for new pages — **every existing card, table and chart on every
-tab must carry one** (marketing / leads_bookings / spend_roi / content_social / email_partners /
-website_search and the rest). Auditing a page = one ⓘ per widget, provenance/description text
-pulled out of the body and into it.
+**Scope:** this is NOT just for new pages — **every card, every table and every chart/graph on
+every tab must carry one, with no exceptions** (marketing / leads_bookings / spend_roi /
+content_social / email_partners / website_search / nurture_events / monthly_log / roi / roas and
+the rest). A pending/sample widget still gets one (its ⓘ says what it *will* show and that it's
+not tracked yet). Auditing a page = one ⓘ per widget, provenance/description text pulled out of
+the body and into it. **Row-level detail inside a scrolling table** (a per-row ⓘ in a
+`overflow:auto` wrap) is the one place to keep a native `title` instead of `infoTip` — an
+`infoTip` hover card would be clipped/scrolled by the wrap; that native-`title` row icon does
+**not** count as, or replace, the table's one widget-level ⓘ in its heading.
 
 **Cache-bust gotcha:** `infoTip` / `fillHeadInfo` live in `app.js`. When a page **starts**
 using them, bump that page's `app.js?v=` query — otherwise a returning visitor can be served a
 **cached older `app.js` without `infoTip`** (→ `infoTip is not defined`). Bump to a version at or
 above the newest already in use.
 
-**Gotcha:** a hover-`transform` on a card/KPI creates a stacking context that can
+**Gotcha (z-index):** a hover-`transform` on a card/KPI creates a stacking context that can
 **clip** an escaping tooltip behind a sticky bar. If a tile with an info tooltip
 lifts on hover, add a matching `z-index` lift (`.kpi:hover, .kpi:focus-within
 { z-index: 40 }`) — see the ROI tab note in `CLAUDE.md`.
+
+**Gotcha (overflow:hidden):** the `.src-tip` tooltip is absolutely positioned and escapes
+**above** its tile, so any ancestor with `overflow: hidden` **clips it**. Cards/KPIs often set
+`overflow: hidden` only to give a 3px top accent bar (`::before`/`::after`) clean corners —
+that **must not** stay once the widget carries an ⓘ. Drop `overflow: hidden` and instead round
+the accent bar to the card radius (`border-radius: 16px 16px 0 0`) so it still sits flush in the
+rounded corners. Reference: the fix applied to `marketing.html` + `spend_roi.html` (and the
+non-`overflow:hidden` `.kpi`/`.ne-kpi` tiles elsewhere).
 
 ---
 

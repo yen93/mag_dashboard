@@ -236,8 +236,9 @@
       <div class="ml-top">
         <div class="card ml-card">
           <div class="card-head block-head">
-            <h3 id="statusHeading">Update status</h3>
-            <div class="chart-cap">Each month is due by the 8th of the following month</div>
+            <h3 id="statusHeading">Update status <span class="head-info"
+              data-info="Whether each month's log was filled in by its due date (the 8th of the following month). Not tracked live yet."
+              data-src="pending — no data source wired yet."></span></h3>
           </div>
           <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="statusHeading">
             <table class="ml-table">
@@ -256,8 +257,9 @@
 
         <div class="card ml-card">
           <div class="card-head block-head">
-            <h3 id="notesHeading">October notes</h3>
-            <div class="chart-cap">From the tracker's Notes rows</div>
+            <h3 id="notesHeading">October notes <span class="head-info"
+              data-info="Free-text notes captured for the month from the tracker's Notes rows. Not tracked live yet."
+              data-src="pending — no data source wired yet."></span></h3>
           </div>
           <div class="ml-notes-list" id="notesList"></div>
         </div>
@@ -266,8 +268,9 @@
       <!-- Yearly summary table card -->
       <div class="card ml-card">
         <div class="card-head block-head">
-          <h3 id="summaryHeading">Yearly summary</h3>
-          <div class="chart-cap">Live — FY and calendar-year totals from the Marketing Overview + ROI sources</div>
+          <h3 id="summaryHeading">Yearly summary <span class="head-info"
+            data-info="FY and calendar-year totals for each marketing measure, with the FY26-vs-FY25 change. Per-measure definitions are on each row's ⓘ."
+            data-src="GET /api/marketing/overview (Keynote enquiries / bookings) + GET /api/marketing/roi (Marketing revenue / spend / ROI); Cadence delivered pending."></span></h3>
         </div>
         <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="summaryHeading">
           <table class="ml-table" style="min-width:680px">
@@ -558,6 +561,7 @@
     renderMarketingHead();
     renderMarketingSidebar('monthly-log');
     renderDateRange();
+    fillHeadInfo();              // fill the three table ⓘ info tools (§6)
     renderAll();                 // status + notes (mock) + Yearly summary (Loading… until fetched)
     loadSummaryOverview();       // live Keynote enquiries + bookings (same source as marketing.html)
     loadSummaryRoi();            // live Marketing revenue + spend + ROI (same source as marketing.html / spend_roi.html)

@@ -57,13 +57,15 @@
     /* KPI tiles — identical look to marketing.html (shared .kpi class + its §5 styling,
        so the cards inherit app.css's .kpi surface/border/padding base). */
     .kpi-grid { gap: 14px; margin: 18px 0 8px; grid-template-columns: repeat(auto-fit, minmax(192px, 1fr)); }
+    /* NB: NOT overflow:hidden (§6) — would clip the KPI label's infoTip tooltip. */
     .kpi {
-      position: relative; border-radius: 16px; padding: 18px 18px 16px; overflow: hidden;
+      position: relative; border-radius: 16px; padding: 18px 18px 16px;
       box-shadow: var(--mkt-shadow);
       transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
     }
     .kpi::after {
       content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: 16px 16px 0 0;
       background: linear-gradient(90deg, var(--mkt-accent), var(--mkt-accent-2));
       opacity: 0; transition: opacity .2s ease;
     }
