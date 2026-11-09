@@ -21,6 +21,7 @@ import { getRoasCounted } from './metrics/roas-counted.js';
 import { getMarketingRoi } from './metrics/marketing-roi.js';
 import { getMarketingOverview } from './metrics/marketing-overview.js';
 import { getMarketingLeadsBySource } from './metrics/marketing-leads-by-source.js';
+import { getMarketingNurtureEvents } from './metrics/marketing-nurture-events.js';
 import { getEmailPartnerMetrics } from './metrics/email-partner-metrics.js';
 import { getMarketingPlatforms } from './metrics/marketing-platforms.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
@@ -428,6 +429,19 @@ marketing.get('/content-metrics', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:content-metrics]', err);
     res.status(502).json({ error: 'Failed to load content metrics from data source.', detail: err.message });
+  }
+});
+// Nurture & Events — three live FY-aware cards on nurture_events.html: keynote clients
+// (WON pipeline-3 deals from activecampaign_deals) + offsite enquiries (ALL) / offsite
+// bookings (WON) in pipeline 17 (public.post_conference_deals). The page computes the 4th
+// card, the keynote→offsite ratio, from these. See server/metrics/marketing-nurture-events.js.
+marketing.get('/nurture-events', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:nurture-events', getMarketingNurtureEvents, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:nurture-events]', err);
+    res.status(502).json({ error: 'Failed to load nurture & events data from data source.', detail: err.message });
   }
 });
 // Live AI Insight — a one-shot OpenAI insight over the live Overview + ROI figures for the

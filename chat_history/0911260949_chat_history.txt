@@ -1,0 +1,143 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-09
+Session: Nurture & Events page (public/nurture_events.html) — wired the four KPI
+cards LIVE + FY-aware from AC pipelines 3 (keynotes) and 17 (post-conference),
+including a NEW upsert-only Supabase cache table `post_conference_deals` + daily
+pg_cron rebuild; then replaced the Executive X sample table with REAL per-session
+data sourced from the "Executive X ROI Report" Google Sheet (6 tabs). Server +
+frontend + new route/migrations; needs a manual Cloud Run redeploy.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. The Supabase project ref (aivitcomiywiysrfwqxt) and the
+Google Sheet id are non-secret identifiers already recorded in CLAUDE.md.
+
+--------------------------------------------------------------------------------
+USER:
+(pasted brief) Update nurture_events.html cards only:
+  1. "Past keynote clients in nurture" = all won deals in pipeline 3 /
+     "Keynotes // Workshops // Immersive (LIV)".
+  2. "Offsite enquiries from past clients" = all won deals in pipeline 17 /
+     "PROJECT TROJAN HORSE: POST CONFERENCE (JAYCEL)". Create a new cache table
+     called post_conference_deals.
+  3. "Offsites booked by past clients" = all won deals from post_conference_deals.
+  4. "Offsites booked by past clients" = ratio between card 1 and card 3.
+  5. Everything should sync from AC daily.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read nurture_events.html — a self-rendering Marketing sub-tab page, cards + an
+Executive X table all driven by a hardcoded MOCK_BY_FY object (sample data, with
+the "Sample data — layout only" head badge). Confirmed pipeline ids in
+marketing-roi.js: 3 = Keynotes/Workshops/Immersive (LIV), 17 = Trojan Horse:
+Post-Conf. Queried the DB (activecampaign_deals): status 0=open/1=won/2=lost;
+pipeline 3 has 388 won, pipeline 17 has 21 won / 100 total.
+
+Flagged that cards 2 and 3 as literally written ("won deals in pipeline 17") would
+be identical, and asked two clarifying questions. User answered:
+  - Card 2 "enquiries" = ALL pipeline-17 deals (any status), so it differs from
+    card 3 (WON only).
+  - All four cards are FY-aware (filter by deal cdate to the page's FY toggle).
+
+Studied the closest precedent, ac_indirect_deals (filtered/enriched daily deal
+cache): its table migration, the UPSERT-ONLY reload RPC (migration …150000), and
+its daily cron. Key realization: pipeline membership (the "group" column) is
+ALREADY in the daily-synced activecampaign_deals mirror, so post_conference_deals
+needs NO AC REST call / edge function — a pure-SQL rebuild from the mirror
+suffices, and a pure pg_cron job (precedent: update-deals-daily-7am-pht) can call
+the RPC directly. It still "syncs from AC daily" transitively (mirror refreshed
+05:00 PH by activecampaign-deals-sync).
+
+Previewed the card numbers per FY and confirmed totals reconcile (keynote 388,
+offsite enq 100, offsite booked 21).
+
+BUILT:
+  • Migration 20261109170000_create_post_conference_deals.sql — table
+    public.post_conference_deals (same shape as ac_indirect_deals minus
+    deal_source/is_tailor) + reload_post_conference_deals() (no-arg, security
+    definer, UPSERT-ONLY per the global "never truncate" rule; rebuilds from
+    activecampaign_deals where "group"='17', joined to contacts/accounts; derives
+    value_aud/fy/cal_yr via the shared helpers). RLS enabled.
+  • Migration 20261109171000_schedule_post_conference_deals_sync.sql — pg_cron
+    job post-conference-deals-sync-daily, '30 22 * * *' UTC = 06:30 PH daily
+    (after the mirror + indirect syncs), calling the RPC directly.
+  • server/metrics/marketing-nurture-events.js — getMarketingNurtureEvents():
+    one SQL query returning per-FY { keynoteClients (won pipeline-3 from the
+    mirror), offsiteEnquiries (all pipeline-17 from the cache), offsiteBooked
+    (won pipeline-17) } + an all-years total, FY by cdate END-year.
+  • server/index.js — imported it and mounted GET /api/marketing/nurture-events
+    (requireAuth, cached 10 min).
+  • public/nurture_events.html — rewrote the card script: NE_LIVE state fetched
+    from the endpoint, renderKpiRow() builds the 4 cards for the selected FY
+    (loading/error states), card 4 = booked ÷ keynote clients computed
+    client-side. Left the Executive X table on its sample data for the moment, so
+    the page kept the sample badge and app.js?v=10. Removed the now-unused kpis
+    arrays from MOCK_BY_FY.
+
+Applied both migrations to project aivitcomiywiysrfwqxt via the Supabase MCP, ran
+the first reload (100 rows), verified the cache reconciles (FY24 14/3, FY25 39/6,
+FY26 40/11, FY27 7/1), validated the exact endpoint SQL, and confirmed the cron
+job registered + active. node --check passed on the new module and index.js.
+Saved a project memory and updated the memory index. Told the user it needs a
+manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+Update the "Executive X" table in nurture_events.html based on
+https://docs.google.com/spreadsheets/d/1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg
+(gid=1563889555).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the Google Sheet "Executive X ROI Report" (via the Google Sheets MCP). It has
+6 season tabs, one per Executive X session: SPRING 2023, AUTUMN 2024, SPRING 2024,
+MAR - AUTUMN 2025, NOV - SPRING 2025, MAR - AUTUMN 2026. Each tab lists attendees
+(one person/row, fixed per-head internal cost), with the REVENUE column filled on
+the rows whose org later booked, plus a bottom total row (internal cost + revenue).
+This is the same sheet behind public.exec_x_revenue (a static load of revenue lines
+only), so the full cost/attendee data only lives in the sheet.
+
+Compiled the per-session summary:
+  Spring 2023 — cost $29,940, 12 attendees, $2,495/head, 3 bookings, rev $48,400
+  Autumn 2024 — cost $22,455,  9 attendees, $2,495/head, 3 bookings, rev $93,970
+  Spring 2024 — cost $11,000, 11 attendees, $1,000/head, 1 booking,  rev $4,500
+  Autumn 2025 — cost $14,066, 12 attendees, $1,173/head, 4 bookings, rev $111,700
+  Spring 2025 — cost $14,167, 13 attendees, $1,090/head, 4 bookings, rev $49,950
+  Autumn 2026 — cost $14,264, 10 attendees, $1,426/head, 2 bookings, rev $14,500
+
+Noted the sheet has no "enquiry" step, so the table's existing "Orgs that enquired"
+column had no source; asked the user what to do. User chose: DROP the column.
+
+BUILT (frontend-only):
+  • Replaced the sample MOCK_BY_FY table data + renderEventsTable with a real
+    EXEC_X array (the 6 sessions above) and a new renderer. New columns:
+    Session · Internal cost · Attendees · Cost/attendee · Bookings · Revenue ·
+    Return (Revenue ÷ Cost, ×). Dropped the "Orgs that enquired" <th>.
+  • Table is FY-filtered by SESSION date (Spring = Sep–Nov, Autumn = Mar): FY24 =
+    Spring 2023 + Autumn 2024; FY25 = Spring 2024 + Autumn 2025; FY26 = Spring
+    2025 + Autumn 2026; no FY27 session yet → empty-state row; "All years" shows
+    all six. Data is STATIC/hardcoded (re-seed when the sheet changes; no live
+    Sheets access), documented in a code comment + caption.
+  • Since the cards are live and the table is now real, nothing on the page is
+    placeholder anymore → switched to renderMarketingHead(true) (sample badge
+    gone) and bumped the page to app.js?v=11.
+
+Flagged the caveat that this table groups revenue by SESSION date, whereas
+exec_x_revenue/the ROI tab attribute by the later booking/event date, so a
+session's revenue here can include bookings that closed in a later FY (by design).
+Updated the project memory + index to reflect the now-real table. Reiterated the
+change folds into the same pending Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation skill (no git): wrote this chat-history file, updated
+as_built.txt and CLAUDE.md to reflect the new cache table / cron / route / page,
+and checked .gitignore.
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -1,6 +1,27 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-09 (MONTHLY LOG PAGE (public/monthly_log.html) — "YEARLY SUMMARY" TABLE WIRED LIVE; the two
+Last updated: 2026-11-09 (NURTURE & EVENTS PAGE (public/nurture_events.html) — 4 KPI CARDS WIRED LIVE + FY-AWARE,
+and the EXECUTIVE X TABLE replaced with REAL per-session data. (A) Cards from a NEW route GET
+/api/marketing/nurture-events (server/metrics/marketing-nurture-events.js, requireAuth, cached 10 min): "Past
+keynote clients in nurture" = WON pipeline-3 deals (read from activecampaign_deals); "Offsite enquiries from past
+clients" = ALL pipeline-17 deals; "Offsites booked by past clients" = WON pipeline-17 deals (both from the NEW cache
+public.post_conference_deals); "Keynote → Offsite conversion" = booked ÷ keynote-clients (computed client-side). All
+FY-aware by deal cdate (AU END-year). Validated totals: keynote 388 · offsite enq 100 · offsite booked 21. (B) NEW
+cache public.post_conference_deals (migration 20261109170000) = every pipeline-17 ("Trojan Horse: Post-Conf") deal,
+same shape as ac_indirect_deals minus deal_source/is_tailor; rebuilt by reload_post_conference_deals() — a no-arg,
+security-definer, UPSERT-ONLY (never truncates, per the global rule) RPC that reads the daily-synced
+activecampaign_deals mirror where "group"='17' (NO AC REST call / edge fn — pipeline membership is already mirrored).
+Daily pg_cron post-conference-deals-sync-daily '30 22 * * *' UTC = 06:30 PH calls the RPC directly (migration
+20261109171000), after the mirror (05:00 PH) + indirect (06:15 PH) syncs. Applied to aivitcomiywiysrfwqxt; first
+reload = 100 rows. (C) Executive X table: replaced the sample MOCK_BY_FY with a hardcoded EXEC_X array of the 6 real
+sessions from the "Executive X ROI Report" Google Sheet (1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg, same sheet
+behind exec_x_revenue) — columns Session / Internal cost / Attendees / Cost-per-attendee / Bookings / Revenue /
+Return (Rev÷Cost ×); DROPPED the "Orgs that enquired" column (no sheet source). FY-filtered by SESSION date
+(Spring=Sep–Nov, Autumn=Mar): FY24 = Spring 2023 + Autumn 2024; FY25 = Spring 2024 + Autumn 2025; FY26 = Spring 2025
++ Autumn 2026; no FY27 session yet. STATIC — re-seed EXEC_X when the sheet changes (no live Sheets access). Since
+nothing on the page is sample anymore → renderMarketingHead(true) (badge dropped) + app.js bumped to ?v=11. NEEDS a
+manual Cloud Run redeploy (server + frontend + new route/migrations); weekly data refreshes thereafter need no
+redeploy. Previously 2026-11-09 (MONTHLY LOG PAGE (public/monthly_log.html) — "YEARLY SUMMARY" TABLE WIRED LIVE; the two
 remaining mock sections turned into pending placeholders. Frontend-only (no DB/server/migration/app.js change).
 (1) Yearly summary table: replaced the hardcoded YEARLY_SUMMARY_ROWS sample array with LIVE data from the SAME
 sources as the named Marketing cards — Keynote enquiries + Keynote bookings ← GET /api/marketing/overview (same as
@@ -859,6 +880,20 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     20261105131000 (rpc body re-created vs renamed table) → 20261105140000 (add
     is_tailor col + backfill) → 20261105150000 (rpc rewritten to upsert-only).
     Filled by the ac-indirect-deals-sync edge fn (see AUTOMATIONS).
+  - public.post_conference_deals (NEW 2026-11-09; migration 20261109170000) — cache of
+    every POST-CONFERENCE AC deal = pipeline (dealGroups) id 17 "Trojan Horse: Post-Conf"
+    (100 rows at first load). Same shape as ac_indirect_deals minus deal_source/is_tailor:
+    PK deal_id; cols title, pipeline_id/name, stage_id, status/status_label,
+    contact_id/name/email, account_id, organization, value_raw (cents), value_aud,
+    currency, cdate, mdate, event_date, cal_yr, fy (AU END-year), synced_at. RLS enabled;
+    indexes on cdate/status/fy. Rebuilt by RPC reload_post_conference_deals() — NO ARGS,
+    security definer, UPSERT-ONLY on the deal_id PK (never deletes/truncates), reading the
+    daily-synced activecampaign_deals mirror WHERE "group"='17' (+ contacts/accounts + the
+    pipeline map; value_aud/fy/cal_yr via the shared helpers). NO AC REST call / edge fn
+    needed — pipeline membership is already mirrored. Read by
+    server/metrics/marketing-nurture-events.js (offsite enquiries = all rows, bookings =
+    status=1, per FY). Filled by the pg_cron job post-conference-deals-sync-daily (see
+    AUTOMATIONS). Schedule migration 20261109171000.
   - public.social_platform_stats (NEW 2026-11-06; migration 20261106120000) — weekly
     snapshots of each social platform's PUBLIC stats for the Content & Social "Platforms"
     table. PK (platform_key, snapshot_date); cols platform_name, network, profile_url,
@@ -1421,6 +1456,16 @@ AUTOMATIONS / ROUTINES
   20261105131000_reload_ac_indirect_deals_body.sql,
   20261105140000_ac_indirect_deals_is_tailor.sql,
   20261105150000_reload_ac_indirect_deals_upsert.sql (uncommitted).
+- post-conference-deals-sync-daily (NEW 2026-11-09; pg_cron job in the MAG project, NO
+  edge function) — '30 22 * * *' UTC = 06:30 AM PH DAILY, AFTER the deal/contact mirrors
+  (05:00/05:30 PH) and ac-indirect-deals-sync (06:15 PH). Rebuilds public.post_conference_deals
+  (cache of pipeline-17 "Trojan Horse: Post-Conf" deals) by calling the RPC directly:
+  `select public.reload_post_conference_deals();`. No AC REST call is needed because pipeline
+  membership ("group") is already on the daily-synced activecampaign_deals mirror — the RPC
+  just UPSERTs every group-17 deal from the mirror (never truncates, so an empty/stale mirror
+  can't wipe the cache). Backs the Nurture & Events cards (via /api/marketing/nurture-events).
+  Files: supabase/migrations/20261109170000_create_post_conference_deals.sql (table + RPC),
+  20261109171000_schedule_post_conference_deals_sync.sql (uncommitted).
 - apify-platforms-sync (NEW 2026-11-06; Supabase Edge Function, MAG project; pg_cron
   `apify-platforms-sync-weekly`, '0 20 * * 0' = Mon 04:00 PH) — weekly snapshot of each
   social platform's PUBLIC stats into public.social_platform_stats (upsert-only). Scrapes

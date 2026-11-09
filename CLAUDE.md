@@ -56,22 +56,23 @@ Cloud Run.
   ("Marketing" h1 + the framing question; `.mkt-head` CSS now in `app.css`); it injects the head just
   before `#marketingNav`. **As of 2026-11-05 it takes a `live` arg:** the h1 + framing question ALWAYS
   render; the amber **"Sample data — layout only"** badge is emitted only when `live` is falsy (ternary).
-  It is now called on **ALL** primary sub-tabs: the Overview + the still-sample sub-tabs
-  (`nurture_events.html`, `monthly_log.html`) call it with **no arg** (badge shows —
+  It is now called on **ALL** primary sub-tabs: the Overview + the still-sample sub-tab
+  `monthly_log.html` call it with **no arg** (badge shows —
   note `monthly_log.html` is now PARTIALLY LIVE as of 2026-11-09 (see its own paragraph below):
   its Yearly summary table is live, but the badge stays because its Update-status + notes
   sections are `pending`),
-  and the **five LIVE pages** `leads_bookings.html` / `spend_roi.html` / `content_social.html` /
+  and the **LIVE pages** `leads_bookings.html` / `spend_roi.html` / `content_social.html` /
   **`email_partners.html` (now LIVE as of 2026-11-06, see its own paragraph below)** /
-  **`website_search.html` (now PARTIALLY LIVE as of 2026-11-06, see its own paragraph below)** call it with
+  **`website_search.html` (now PARTIALLY LIVE as of 2026-11-06, see its own paragraph below)** /
+  **`nurture_events.html` (now LIVE as of 2026-11-09, see its own paragraph below)** call it with
   **`true`** (badge suppressed). Still **NOT** called on the live More tools (they keep their own
   headers). **The Overview + the still-sample sub-tabs are LAYOUT-ONLY with hardcoded sample data**
   (no API calls; `initPage('marketing')` with no renderFn; charts drawn inline with Chart.js) —
-  **EXCEPT `leads_bookings.html`, `spend_roi.html`, `content_social.html`, `email_partners.html` +
-  `website_search.html` (partially live), now
+  **EXCEPT `leads_bookings.html`, `spend_roi.html`, `content_social.html`, `email_partners.html`,
+  `website_search.html` (partially live) + `nurture_events.html`, now
   LIVE (their own paragraphs below)**. The 15
   Marketing pages were bumped to **`app.js?v=10`**, then **`leads_bookings.html`, `spend_roi.html`,
-  `content_social.html`, `email_partners.html` + `website_search.html` to
+  `content_social.html`, `email_partners.html`, `website_search.html` + `nurture_events.html` to
   `?v=11`** when `renderMarketingHead` gained the `live` arg (the pages depending
   on it; the backward-compatible no-arg call means the rest stay `?v=10`). Home/Sales/Operations and all
   non-Marketing pages deliberately stay `?v=9`. Frontend-only → needs a Cloud Run redeploy. The paragraph
@@ -294,6 +295,36 @@ Cloud Run.
   the page keeps `renderMarketingHead()` with **no `live` arg** (the "Sample data — layout only" badge still shows),
   and the top `#fySeg` FY toggle is now **inert** (every section is either live or pending). Frontend-only → needs a
   **Cloud Run redeploy**.
+  **Nurture & Events page (`nurture_events.html` = Marketing sub-tab "Nurture & Events", now LIVE as of
+  2026-11-09):** self-rendering page (`initPage('marketing')` + `renderMarketingHead(true)` — **NO sample
+  badge**, so bumped to **`app.js?v=11`** + `renderMarketingSidebar('nurture-events')` + its own `fetchJSON`).
+  **Four FY-aware KPI cards** (standard `#fySeg` toggle, 'all' + FY22–FY27, default FY27) from a NEW endpoint
+  **`GET /api/marketing/nurture-events`** → **`server/metrics/marketing-nurture-events.js`**
+  (`getMarketingNurtureEvents`, requireAuth, cached 10 min): (1) **Past keynote clients in nurture** = WON
+  (status=1) deals in **pipeline 3** (Keynotes/Workshops/Immersive LIV), read straight from
+  `activecampaign_deals` (no cache); (2) **Offsite enquiries from past clients** = **ALL** deals (any status)
+  in **pipeline 17** (Trojan Horse: Post-Conf); (3) **Offsites booked by past clients** = **WON** pipeline-17
+  deals — both from the NEW cache **`public.post_conference_deals`**; (4) **Keynote → Offsite conversion** =
+  card 3 ÷ card 1, computed **client-side**. All FY by the deal `cdate` (AU END-year). Owner's call: card 2 =
+  ALL deals (enquiries), not won. Endpoint returns `{byFy:[{fyEnd,fy,keynoteClients,offsiteEnquiries,
+  offsiteBooked}], total, meta}`; the page's `neSel()` picks the selected FY ('all' → total). Validated totals:
+  keynote 388 · enq 100 · booked 21. **`public.post_conference_deals`** (migration `20261109170000`) = every
+  pipeline-17 deal; same shape as `ac_indirect_deals` minus deal_source/is_tailor. Rebuilt by
+  **`reload_post_conference_deals()`** — a **no-arg, UPSERT-ONLY** (never truncates) RPC reading the daily-synced
+  `activecampaign_deals` mirror `WHERE "group"='17'` (+ contacts/accounts; value_aud/fy/cal_yr via the shared
+  helpers). **NO AC REST call / edge fn needed** — pipeline membership is already mirrored — so a **pure pg_cron
+  job** `post-conference-deals-sync-daily` (`30 22 * * *` UTC = 06:30 PH daily, migration `20261109171000`) calls
+  the RPC **directly**. **Executive X table = REAL data** (no longer sample): the sample `MOCK_BY_FY` was replaced
+  with a hardcoded **`EXEC_X`** array of the 6 sessions from the **"Executive X ROI Report" Google Sheet**
+  (`1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg`, same sheet behind `exec_x_revenue`) — columns Session /
+  Internal cost / Attendees / Cost-per-attendee / Bookings / Revenue / Return (Rev÷Cost ×); the old "Orgs that
+  enquired" column was **DROPPED** (no sheet source). FY-filtered by **session date** (Spring=Sep–Nov, Autumn=Mar):
+  FY24 = Spring 2023 + Autumn 2024; FY25 = Spring 2024 + Autumn 2025; FY26 = Spring 2025 + Autumn 2026; no FY27
+  session yet (empty-state). **STATIC — re-seed `EXEC_X` in the page when the sheet changes** (no live Sheets
+  access). NB this table groups revenue by SESSION date, whereas `exec_x_revenue`/the ROI tab attribute by the
+  later booking/event date, so a session's revenue here can span later FYs (by design). Server + frontend + new
+  route/migrations → needs a **Cloud Run redeploy**; daily *data* refreshes thereafter need none (server only
+  SELECTs the cache/mirror).
   **DESIGN GUIDE (as of 2026-11-05):** `DESIGN_GUIDE.md` (repo root) is the dev-facing styling
   standard for the whole dashboard — **`public/roas.html` is the reference**. It codifies the color
   tokens (+ page-local `--x-accent`/`--x-shadow` pattern), typography, the **horizontal segmented

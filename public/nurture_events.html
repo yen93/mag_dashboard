@@ -195,7 +195,7 @@
             <button class="active" data-fy="fy27">FY27</button>
           </div>
           <div class="spacer" style="flex:1"></div>
-          <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
+          <!-- <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span> -->
         </div>
       </div>
 
@@ -209,17 +209,16 @@
       <div class="card ne-events-card">
         <div class="card-head block-head">
           <h3 id="eventsHeading">Executive X</h3>
-          <div class="chart-cap" id="eventsCap">Per event · follow-through within 6 months</div>
+          <div class="chart-cap" id="eventsCap">One row per Executive X session · source: Executive X ROI Report (Google Sheet)</div>
         </div>
         <div class="ne-table-wrap" tabindex="0" role="region" aria-labelledby="eventsHeading">
           <table class="ne-table">
             <thead>
               <tr>
-                <th>Event</th>
-                <th>Cost</th>
+                <th>Session</th>
+                <th>Internal cost</th>
                 <th>Attendees</th>
                 <th>Cost per attendee</th>
-                <th>Orgs that enquired</th>
                 <th>Bookings</th>
                 <th>Revenue</th>
                 <th>Return</th>
@@ -232,116 +231,67 @@
     </main>
   </div>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=11"></script>
   <script>
-    /* Nurture & Events — Frontend-only mock data view.
-       Default active FY (FY27) renders the exact figures from the reference design. */
+    /* Nurture & Events.
+       The TOP 4 KPI CARDS are LIVE + FY-aware (GET /api/marketing/nurture-events):
+         1. Past keynote clients in nurture  = WON pipeline-3 deals (activecampaign_deals)
+         2. Offsite enquiries from past clients = ALL pipeline-17 deals (post_conference_deals)
+         3. Offsites booked by past clients   = WON pipeline-17 deals (post_conference_deals)
+         4. Keynote → Offsite conversion      = card 3 ÷ card 1 (computed client-side)
+       The Executive X table below is still SAMPLE data (page keeps its "Sample data" badge). */
 
-    var MOCK_BY_FY = {
-      fy27: {
-        eventsCap: 'Per event · follow-through within 6 months',
-        kpis: [
-          { label: 'Past keynote clients in nurture',    value: '64', sub: 'Keynote-client tag',                   pos: true },
-          { label: 'Offsite enquiries from past clients', value: '1',  sub: '6 in last 12 months',                  pos: true },
-          { label: 'Offsites booked by past clients',     value: '0',  sub: '3 in last 12 months · $126,000',       pos: true },
-          { label: 'Keynote → Offsite conversion',        value: '8%', sub: '3 of 38 keynote clients · rolling 12 mo', pos: true }
-        ],
-        events: [
-          { event: 'April 2026',    cost: '$14,066',          attendees: '22',                 costPerAttendee: '$639', orgsEnquired: '5', bookings: '2', revenue: '$23,000', returnVal: '1.6×' },
-          { event: 'November 2026', cost: '$14,000 budgeted', attendees: '14 of 25 confirmed', costPerAttendee: '—',    orgsEnquired: '—', bookings: '—', revenue: '—',       returnVal: 'Upcoming' }
-        ]
-      },
-      fy26: {
-        eventsCap: 'Per event · follow-through within 6 months (FY26)',
-        kpis: [
-          { label: 'Past keynote clients in nurture',    value: '56', sub: 'Keynote-client tag',                   pos: true },
-          { label: 'Offsite enquiries from past clients', value: '5',  sub: '5 in FY26',                            pos: true },
-          { label: 'Offsites booked by past clients',     value: '3',  sub: '3 in FY26 · $126,000',                 pos: true },
-          { label: 'Keynote → Offsite conversion',        value: '8%', sub: '3 of 36 keynote clients · rolling 12 mo', pos: true }
-        ],
-        events: [
-          { event: 'October 2025', cost: '$13,400', attendees: '20', costPerAttendee: '$670', orgsEnquired: '4', bookings: '2', revenue: '$21,500', returnVal: '1.6×' },
-          { event: 'April 2026',   cost: '$14,066', attendees: '22', costPerAttendee: '$639', orgsEnquired: '5', bookings: '2', revenue: '$23,000', returnVal: '1.6×' }
-        ]
-      },
-      fy25: {
-        eventsCap: 'Per event · follow-through within 6 months (FY25)',
-        kpis: [
-          { label: 'Past keynote clients in nurture',    value: '44', sub: 'Keynote-client tag',                   pos: true },
-          { label: 'Offsite enquiries from past clients', value: '4',  sub: '4 in FY25',                            pos: true },
-          { label: 'Offsites booked by past clients',     value: '2',  sub: '2 in FY25 · $84,000',                  pos: true },
-          { label: 'Keynote → Offsite conversion',        value: '7%', sub: '2 of 29 keynote clients · rolling 12 mo', pos: true }
-        ],
-        events: [
-          { event: 'November 2024', cost: '$12,800', attendees: '19', costPerAttendee: '$674', orgsEnquired: '4', bookings: '1', revenue: '$14,500', returnVal: '1.1×' },
-          { event: 'May 2025',      cost: '$13,100', attendees: '21', costPerAttendee: '$624', orgsEnquired: '5', bookings: '2', revenue: '$22,000', returnVal: '1.7×' }
-        ]
-      },
-      fy24: {
-        eventsCap: 'Per event · follow-through within 6 months (FY24)',
-        kpis: [
-          { label: 'Past keynote clients in nurture',    value: '35', sub: 'Keynote-client tag',                   pos: true },
-          { label: 'Offsite enquiries from past clients', value: '3',  sub: '3 in FY24',                            pos: true },
-          { label: 'Offsites booked by past clients',     value: '2',  sub: '2 in FY24 · $78,000',                  pos: true },
-          { label: 'Keynote → Offsite conversion',        value: '7%', sub: '2 of 27 keynote clients · rolling 12 mo', pos: true }
-        ],
-        events: [
-          { event: 'November 2023', cost: '$11,900', attendees: '18', costPerAttendee: '$661', orgsEnquired: '3', bookings: '1', revenue: '$13,500', returnVal: '1.1×' },
-          { event: 'April 2024',    cost: '$12,400', attendees: '20', costPerAttendee: '$620', orgsEnquired: '4', bookings: '2', revenue: '$19,000', returnVal: '1.5×' }
-        ]
-      },
-      fy23: {
-        eventsCap: 'Per event · follow-through within 6 months (FY23)',
-        kpis: [
-          { label: 'Past keynote clients in nurture',    value: '26', sub: 'Keynote-client tag',                   pos: true },
-          { label: 'Offsite enquiries from past clients', value: '2',  sub: '2 in FY23',                            pos: true },
-          { label: 'Offsites booked by past clients',     value: '1',  sub: '1 in FY23 · $38,000',                  pos: true },
-          { label: 'Keynote → Offsite conversion',        value: '6%', sub: '1 of 18 keynote clients · rolling 12 mo', pos: true }
-        ],
-        events: [
-          { event: 'March 2023', cost: '$11,200', attendees: '17', costPerAttendee: '$659', orgsEnquired: '3', bookings: '1', revenue: '$13,000', returnVal: '1.2×' }
-        ]
-      },
-      fy22: {
-        eventsCap: 'Per event · follow-through within 6 months (FY22)',
-        kpis: [
-          { label: 'Past keynote clients in nurture',    value: '18', sub: 'Keynote-client tag',                   pos: true },
-          { label: 'Offsite enquiries from past clients', value: '2',  sub: '2 in FY22',                            pos: true },
-          { label: 'Offsites booked by past clients',     value: '1',  sub: '1 in FY22 · $35,000',                  pos: true },
-          { label: 'Keynote → Offsite conversion',        value: '6%', sub: '1 of 16 keynote clients · rolling 12 mo', pos: true }
-        ],
-        events: [
-          { event: 'April 2022', cost: '$10,500', attendees: '16', costPerAttendee: '$656', orgsEnquired: '2', bookings: '1', revenue: '$12,000', returnVal: '1.1×' }
-        ]
-      },
-      all: {
-        eventsCap: 'Per event · follow-through within 6 months',
-        kpis: [
-          { label: 'Past keynote clients in nurture',    value: '64', sub: 'Keynote-client tag',                   pos: true },
-          { label: 'Offsite enquiries from past clients', value: '1',  sub: '6 in last 12 months',                  pos: true },
-          { label: 'Offsites booked by past clients',     value: '0',  sub: '3 in last 12 months · $126,000',       pos: true },
-          { label: 'Keynote → Offsite conversion',        value: '8%', sub: '3 of 38 keynote clients · rolling 12 mo', pos: true }
-        ],
-        events: [
-          { event: 'April 2026',    cost: '$14,066',          attendees: '22',                 costPerAttendee: '$639', orgsEnquired: '5', bookings: '2', revenue: '$23,000', returnVal: '1.6×' },
-          { event: 'November 2026', cost: '$14,000 budgeted', attendees: '14 of 25 confirmed', costPerAttendee: '—',    orgsEnquired: '—', bookings: '—', revenue: '—',       returnVal: 'Upcoming' }
-        ]
-      }
-    };
+    // ---- Live KPI state ------------------------------------------------------
+    var NE_LIVE = null;        // { byFy:[{fyEnd,fy,keynoteClients,offsiteEnquiries,offsiteBooked}], total }
+    var NE_ERR  = false;
 
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
       return b ? b.getAttribute('data-fy') : 'fy27';
     }
 
-    function currentData() {
+    // The live card figures for the selected FY ('all' → the roll-up total).
+    function neSel() {
+      if (!NE_LIVE) return null;
       var key = selFyKey();
-      return MOCK_BY_FY[key] || MOCK_BY_FY.fy27;
+      if (key === 'all') return NE_LIVE.total;
+      var end = 2000 + parseInt(key.slice(2), 10);           // 'fy27' → 2027
+      var row = (NE_LIVE.byFy || []).find(function (r) { return r.fyEnd === end; });
+      return row || { keynoteClients: 0, offsiteEnquiries: 0, offsiteBooked: 0 };
     }
 
+    function numFmt(n) { return (Number(n) || 0).toLocaleString('en-AU'); }
+
     function renderKpiRow() {
-      var d = currentData();
-      var html = d.kpis.map(function (k) {
+      var cards;
+      if (NE_ERR) {
+        var errSub = 'Could not load';
+        cards = [
+          { label: 'Past keynote clients in nurture',     value: '—', sub: errSub },
+          { label: 'Offsite enquiries from past clients', value: '—', sub: errSub },
+          { label: 'Offsites booked by past clients',     value: '—', sub: errSub },
+          { label: 'Keynote → Offsite conversion',        value: '—', sub: errSub }
+        ];
+      } else if (!NE_LIVE) {
+        cards = [
+          { label: 'Past keynote clients in nurture',     value: '—', sub: 'Loading…' },
+          { label: 'Offsite enquiries from past clients', value: '—', sub: 'Loading…' },
+          { label: 'Offsites booked by past clients',     value: '—', sub: 'Loading…' },
+          { label: 'Keynote → Offsite conversion',        value: '—', sub: 'Loading…' }
+        ];
+      } else {
+        var d = neSel();
+        var hasKey = d.keynoteClients > 0;
+        var ratio = hasKey ? Math.round((d.offsiteBooked / d.keynoteClients) * 100) + '%' : '—';
+        cards = [
+          { label: 'Past keynote clients in nurture',     value: numFmt(d.keynoteClients),   sub: 'Won keynote deals · Keynotes/Workshops/Immersive (LIV)', pos: true },
+          { label: 'Offsite enquiries from past clients', value: numFmt(d.offsiteEnquiries), sub: 'All deals · Trojan Horse: Post-Conf',                     pos: true },
+          { label: 'Offsites booked by past clients',     value: numFmt(d.offsiteBooked),    sub: 'Won deals · Trojan Horse: Post-Conf',                     pos: true },
+          { label: 'Keynote → Offsite conversion',        value: ratio,
+            sub: hasKey ? (numFmt(d.offsiteBooked) + ' of ' + numFmt(d.keynoteClients) + ' keynote clients') : 'No keynote clients in period', pos: hasKey }
+        ];
+      }
+      var html = cards.map(function (k) {
         var subCls = k.pos ? 'sub pos' : 'sub';
         return '<div class="ne-kpi">' +
           '<div class="label">' + esc(k.label) + '</div>' +
@@ -352,19 +302,61 @@
       document.getElementById('neKpis').innerHTML = html;
     }
 
+    function loadLiveCards() {
+      fetchJSON('/api/marketing/nurture-events').then(function (d) {
+        NE_LIVE = d || { byFy: [], total: { keynoteClients: 0, offsiteEnquiries: 0, offsiteBooked: 0 } };
+        NE_ERR = false;
+        renderKpiRow();
+      }).catch(function () {
+        NE_ERR = true;
+        renderKpiRow();
+      });
+    }
+
+    // ---- Executive X table — REAL data, one row per session --------------------
+    // Source: "Executive X ROI Report" Google Sheet (one tab per session). Each
+    // attendee pays a fixed per-head internal cost; a session's revenue is the sum
+    // of bookings its attendees' orgs generated. STATIC — re-seed from the sheet
+    // when it changes (the dashboard has no live Google Sheets access).
+    // FY = the session's own date (AU FY, Jul–Jun, END-year): Spring = Sep–Nov,
+    // Autumn = Mar. Bookings themselves may land in later FYs.
+    var EXEC_X = [
+      { session: 'Spring 2023', fy: 'fy24', cost: 29940, attendees: 12, perPerson: 2495, bookings: 3, revenue: 48400 },
+      { session: 'Autumn 2024', fy: 'fy24', cost: 22455, attendees: 9,  perPerson: 2495, bookings: 3, revenue: 93970 },
+      { session: 'Spring 2024', fy: 'fy25', cost: 11000, attendees: 11, perPerson: 1000, bookings: 1, revenue: 4500 },
+      { session: 'Autumn 2025', fy: 'fy25', cost: 14066, attendees: 12, perPerson: 1173, bookings: 4, revenue: 111700 },
+      { session: 'Spring 2025', fy: 'fy26', cost: 14167, attendees: 13, perPerson: 1090, bookings: 4, revenue: 49950 },
+      { session: 'Autumn 2026', fy: 'fy26', cost: 14264, attendees: 10, perPerson: 1426, bookings: 2, revenue: 14500 }
+    ];
+
+    function aud(n) { return '$' + (Number(n) || 0).toLocaleString('en-AU'); }
+
+    function execXRows() {
+      var key = selFyKey();
+      if (key === 'all') return EXEC_X;
+      return EXEC_X.filter(function (e) { return e.fy === key; });
+    }
+
     function renderEventsTable() {
-      var d = currentData();
-      document.getElementById('eventsCap').textContent = d.eventsCap;
-      var rowsHtml = d.events.map(function (ev) {
+      document.getElementById('eventsCap').textContent =
+        'One row per Executive X session · source: Executive X ROI Report (Google Sheet)';
+      var rows = execXRows();
+      if (!rows.length) {
+        document.getElementById('eventsBody').innerHTML =
+          '<tr><td colspan="7" style="text-align:center;color:var(--text-muted);padding:18px">' +
+          'No Executive X sessions in this period.</td></tr>';
+        return;
+      }
+      var rowsHtml = rows.map(function (ev) {
+        var ret = ev.cost > 0 ? (ev.revenue / ev.cost).toFixed(1) + '×' : '—';
         return '<tr>' +
-          '<td>' + esc(ev.event) + '</td>' +
-          '<td>' + esc(ev.cost) + '</td>' +
+          '<td>' + esc(ev.session) + '</td>' +
+          '<td>' + esc(aud(ev.cost)) + '</td>' +
           '<td>' + esc(ev.attendees) + '</td>' +
-          '<td>' + esc(ev.costPerAttendee) + '</td>' +
-          '<td>' + esc(ev.orgsEnquired) + '</td>' +
+          '<td>' + esc(aud(ev.perPerson)) + '</td>' +
           '<td>' + esc(ev.bookings) + '</td>' +
-          '<td>' + esc(ev.revenue) + '</td>' +
-          '<td>' + esc(ev.returnVal) + '</td>' +
+          '<td>' + esc(aud(ev.revenue)) + '</td>' +
+          '<td>' + esc(ret) + '</td>' +
         '</tr>';
       }).join('');
       document.getElementById('eventsBody').innerHTML = rowsHtml;
@@ -388,9 +380,10 @@
     }
 
     initPage('marketing');
-    renderMarketingHead();
+    renderMarketingHead(true);
     renderMarketingSidebar('nurture-events');
     renderAll();
+    loadLiveCards();
     wireSeg('fySeg', renderAll);
   </script>
 </body>
