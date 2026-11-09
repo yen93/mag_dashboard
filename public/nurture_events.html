@@ -231,7 +231,7 @@
     </main>
   </div>
 
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=14"></script>
   <script>
     /* Nurture & Events.
        The TOP 4 KPI CARDS are LIVE + FY-aware (GET /api/marketing/nurture-events):
@@ -243,6 +243,8 @@
 
     // ---- Live KPI state ------------------------------------------------------
     var NE_LIVE = null;        // { byFy:[{fyEnd,fy,keynoteClients,offsiteEnquiries,offsiteBooked}], total }
+    var NE_RANGE = null;       // custom date-range roll-up (from GET …/nurture-events?from=&to=)
+    var CUSTOM  = false;       // true while a custom date range is active (overrides the FY toggle)
     var NE_ERR  = false;
 
     function selFyKey() {
@@ -250,8 +252,13 @@
       return b ? b.getAttribute('data-fy') : 'fy27';
     }
 
-    // The live card figures for the selected FY ('all' → the roll-up total).
+    // Still waiting on the data the current mode needs.
+    function neLoading() { return CUSTOM ? !NE_RANGE : !NE_LIVE; }
+
+    // The card figures for the current view: the custom range when active, else the
+    // selected FY ('all' → the roll-up total).
     function neSel() {
+      if (CUSTOM) return NE_RANGE || { keynoteClients: 0, offsiteEnquiries: 0, offsiteBooked: 0 };
       if (!NE_LIVE) return null;
       var key = selFyKey();
       if (key === 'all') return NE_LIVE.total;
@@ -272,7 +279,7 @@
           { label: 'Offsites booked by past clients',     value: '—', sub: errSub },
           { label: 'Keynote → Offsite conversion',        value: '—', sub: errSub }
         ];
-      } else if (!NE_LIVE) {
+      } else if (neLoading()) {
         cards = [
           { label: 'Past keynote clients in nurture',     value: '—', sub: 'Loading…' },
           { label: 'Offsite enquiries from past clients', value: '—', sub: 'Loading…' },
@@ -320,18 +327,26 @@
     // when it changes (the dashboard has no live Google Sheets access).
     // FY = the session's own date (AU FY, Jul–Jun, END-year): Spring = Sep–Nov,
     // Autumn = Mar. Bookings themselves may land in later FYs.
+    // `date` = the session's nominal date (Spring ≈ Oct of its year, Autumn ≈ Mar) —
+    // used only to filter by a custom date range; FY filtering still uses `fy`.
     var EXEC_X = [
-      { session: 'Spring 2023', fy: 'fy24', cost: 29940, attendees: 12, perPerson: 2495, bookings: 3, revenue: 48400 },
-      { session: 'Autumn 2024', fy: 'fy24', cost: 22455, attendees: 9,  perPerson: 2495, bookings: 3, revenue: 93970 },
-      { session: 'Spring 2024', fy: 'fy25', cost: 11000, attendees: 11, perPerson: 1000, bookings: 1, revenue: 4500 },
-      { session: 'Autumn 2025', fy: 'fy25', cost: 14066, attendees: 12, perPerson: 1173, bookings: 4, revenue: 111700 },
-      { session: 'Spring 2025', fy: 'fy26', cost: 14167, attendees: 13, perPerson: 1090, bookings: 4, revenue: 49950 },
-      { session: 'Autumn 2026', fy: 'fy26', cost: 14264, attendees: 10, perPerson: 1426, bookings: 2, revenue: 14500 }
+      { session: 'Spring 2023', fy: 'fy24', date: '2023-10-01', cost: 29940, attendees: 12, perPerson: 2495, bookings: 3, revenue: 48400 },
+      { session: 'Autumn 2024', fy: 'fy24', date: '2024-03-01', cost: 22455, attendees: 9,  perPerson: 2495, bookings: 3, revenue: 93970 },
+      { session: 'Spring 2024', fy: 'fy25', date: '2024-10-01', cost: 11000, attendees: 11, perPerson: 1000, bookings: 1, revenue: 4500 },
+      { session: 'Autumn 2025', fy: 'fy25', date: '2025-03-01', cost: 14066, attendees: 12, perPerson: 1173, bookings: 4, revenue: 111700 },
+      { session: 'Spring 2025', fy: 'fy26', date: '2025-10-01', cost: 14167, attendees: 13, perPerson: 1090, bookings: 4, revenue: 49950 },
+      { session: 'Autumn 2026', fy: 'fy26', date: '2026-03-01', cost: 14264, attendees: 10, perPerson: 1426, bookings: 2, revenue: 14500 }
     ];
 
     function aud(n) { return '$' + (Number(n) || 0).toLocaleString('en-AU'); }
 
     function execXRows() {
+      if (CUSTOM) {
+        var r = getDateRange();
+        return EXEC_X.filter(function (e) {
+          return (!r.from || e.date >= r.from) && (!r.to || e.date <= r.to);
+        });
+      }
       var key = selFyKey();
       if (key === 'all') return EXEC_X;
       return EXEC_X.filter(function (e) { return e.fy === key; });
@@ -367,6 +382,19 @@
       renderEventsTable();
     }
 
+    // Custom date range (beside the FY toggle). When a range is set it overrides the FY
+    // toggle: refetch the day-level roll-up with ?from=&to= and render it; clearing the
+    // range restores FY mode. All of this page's data is day-level, so nothing is greyed.
+    function applyRange() {
+      CUSTOM = dateRangeActive();
+      if (!CUSTOM) { renderAll(); return; }
+      NE_RANGE = null; NE_ERR = false; renderAll();   // show "Loading…"
+      fetchJSON('/api/marketing/nurture-events' + dateRangeQS()).then(function (d) {
+        NE_RANGE = (d && d.range) || { keynoteClients: 0, offsiteEnquiries: 0, offsiteBooked: 0 };
+        renderAll();
+      }).catch(function () { NE_ERR = true; renderAll(); });
+    }
+
     function wireSeg(id, onChange) {
       var seg = document.getElementById(id);
       if (!seg) return;
@@ -382,9 +410,11 @@
     initPage('marketing');
     renderMarketingHead(true);
     renderMarketingSidebar('nurture-events');
+    renderDateRange();
     renderAll();
     loadLiveCards();
     wireSeg('fySeg', renderAll);
+    wireDateRange({ onChange: applyRange });
   </script>
 </body>
 </html>

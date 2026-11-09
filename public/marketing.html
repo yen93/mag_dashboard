@@ -31,13 +31,18 @@
     /* ---------- Cards (§3) ---------- */
     .card { border-radius: 16px; box-shadow: var(--mkt-shadow);
       transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease; }
-    .grid .card { position: relative; overflow: hidden; }
+    /* NB: deliberately NOT overflow:hidden — the §6 infoTip (.src-tip) tooltips live
+       inside card heads and would be clipped. Accent bar is rounded to the card radius
+       instead (same approach as roi.html). */
+    .grid .card { position: relative; }
     .grid .card::before {
       content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: 16px 16px 0 0;
       background: linear-gradient(90deg, var(--mkt-accent), var(--mkt-accent-2));
       opacity: 0; transition: opacity .25s ease;
     }
     .grid .card:hover { transform: translateY(-3px); box-shadow: var(--mkt-shadow-lift); }
+    .grid .card:hover, .grid .card:focus-within { z-index: 3; }  /* lift tooltip above neighbours (§6 gotcha) */
     .grid .card:hover::before { opacity: .95; }
     .card-head h3 {
       font-size: 15px; font-weight: 700; letter-spacing: -.01em;
@@ -72,13 +77,15 @@
 
     /* ---------- KPI tiles (§5) ---------- */
     .kpi-grid { gap: 14px; margin: 18px 0 8px; grid-template-columns: repeat(auto-fit, minmax(192px, 1fr)); }
+    /* NB: NOT overflow:hidden (§6) — would clip the KPI label's infoTip tooltip. */
     .kpi {
-      position: relative; border-radius: 16px; padding: 18px 18px 16px; overflow: hidden;
+      position: relative; border-radius: 16px; padding: 18px 18px 16px;
       box-shadow: var(--mkt-shadow);
       transition: transform .2s ease, box-shadow .2s ease, border-color .2s ease;
     }
     .kpi::after {
       content: ""; position: absolute; top: 0; left: 0; right: 0; height: 3px;
+      border-radius: 16px 16px 0 0;
       background: linear-gradient(90deg, var(--mkt-accent), var(--mkt-accent-2));
       opacity: 0; transition: opacity .2s ease;
     }
@@ -203,7 +210,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
   <script>
     /* Sample-data mockup — this Overview is "layout only" (see the head badge).
        The KPIs, charts and notes are illustrative placeholders, not live metrics. */
@@ -222,8 +229,19 @@
 
     // Live per-FY state (counts across the two sources, deduped by deal).
     // byMonth = [{ month:'YYYY-MM', fyEnd, total }] feeding the Enquiries vs bookings chart.
-    var ENQ = { byFy: {}, byMonth: [], total: null, loaded: false };      // all deals
-    var BOOKINGS = { byFy: {}, byMonth: [], total: null, loaded: false };  // won deals
+    var ENQ = { byFy: {}, byMonth: [], total: null, loaded: false, range: null };      // all deals
+    var BOOKINGS = { byFy: {}, byMonth: [], total: null, loaded: false, range: null };  // won deals
+
+    // Custom date range (beside the FY toggle). While active it overrides the FY toggle:
+    // the count cards (enquiries/bookings/rate) use the day-level /overview?from=&to= roll-up;
+    // the $ cards + both monthly charts aggregate the already-loaded monthly series (month-level);
+    // the AI insight (FY-keyed) is greyed. monthInRange() tests a 'YYYY-MM' against the range.
+    var CUSTOM = false;
+    function monthInRange(ym) {
+      var r = getDateRange();
+      var fm = r.from ? r.from.slice(0, 7) : '', tm = r.to ? r.to.slice(0, 7) : '';
+      return (!fm || ym >= fm) && (!tm || ym <= tm);
+    }
 
     // Live per-FY ROI data (marketing revenue + marketing spend), from
     // GET /api/marketing/roi — the SAME DB-backed source the ROI tab uses.
@@ -231,6 +249,17 @@
     var MROI = { byFy: {}, total: null, loaded: false, revSource: '', byMonth: [] };
     function mroiRow(key) {
       if (!MROI.loaded) return null;
+      if (CUSTOM) {   // synthesize a row from the monthly series within the range (month-level)
+        var ms = (MROI.byMonth || []).filter(function (m) { return monthInRange(m.month); });
+        var sum = function (f) { return ms.reduce(function (a, m) { return a + (f(m) || 0); }, 0); };
+        return {
+          marketingRevenue: sum(function (m) { return m.marketingRevenue; }),
+          marketingRevenueParts: null,
+          totalSpend: sum(function (m) { return m.spend; }),
+          hasSpend: ms.length > 0,
+          revenue: sum(function (m) { return m.revenue; }),
+        };
+      }
       return key === 'all' ? MROI.total : (MROI.byFy[fyEndOf(key)] || null);
     }
     // A currency delta line vs the prior FY (directional colour, same as the count cards).
@@ -263,20 +292,22 @@
     }
     function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
     function rowFor(state, key) {
+      if (CUSTOM) return state.range || { ads: 0, indirect: 0, total: 0 };
       if (key === 'all') return state.total;
       return state.byFy[fyEndOf(key)] || { ads: 0, indirect: 0, total: 0 };
     }
     // Generic live KPI card. cfg: { state, title, unloadedInfo, loadedInfo(fyName,r) }.
     function liveCard(cfg) {
       var key = selFyKey();
-      var fyName = key === 'all' ? 'all years' : key.toUpperCase();
+      var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '', info = cfg.unloadedInfo;
-      if (cfg.state.loaded) {
+      var loaded = CUSTOM ? !!cfg.state.range : cfg.state.loaded;
+      if (loaded) {
         var r = rowFor(cfg.state, key);
         val = r ? String(r.total) : '—';
         if (r) {
           info = cfg.loadedInfo(fyName, r);
-          if (key !== 'all') {
+          if (!CUSTOM && key !== 'all') {
             var prev = cfg.state.byFy[fyEndOf(key) - 1];
             if (prev) {
               var d = r.total - prev.total;
@@ -320,7 +351,7 @@
     // computed from the two live states above (same FY selection, same sources).
     function rateCard() {
       var key = selFyKey();
-      var fyName = key === 'all' ? 'all years' : key.toUpperCase();
+      var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
       var info = 'Keynote bookings ÷ keynote enquiries for the selected FY — the ' +
         'share of created deals that are won. Both counts deduped by deal across ' +
@@ -330,14 +361,15 @@
         var enq = e ? e.total : 0, book = b ? b.total : 0;
         return enq > 0 ? { pct: book / enq * 100, enq: enq, book: book } : { pct: null, enq: enq, book: book };
       }
-      if (ENQ.loaded && BOOKINGS.loaded) {
+      var loaded = CUSTOM ? (ENQ.range && BOOKINGS.range) : (ENQ.loaded && BOOKINGS.loaded);
+      if (loaded) {
         var cur = rateOf(key);
         val = cur.pct === null ? '—' : (Math.round(cur.pct) + '%');
         info = 'Keynote bookings ÷ keynote enquiries in ' + fyName + ' — ' + cur.book +
           ' won ÷ ' + cur.enq + ' created' +
           (cur.pct === null ? ' (no enquiries)' : ' = ' + cur.pct.toFixed(1) + '%') +
           '. Both counts deduped by deal across the ads + indirect sources.';
-        if (key !== 'all' && cur.pct !== null) {
+        if (!CUSTOM && key !== 'all' && cur.pct !== null) {
           var prevKey = 'fy' + String(fyEndOf(key) - 1).slice(-2);
           var prev = rateOf(prevKey);
           if (prev.pct !== null) {
@@ -357,7 +389,7 @@
     // ROI payload. Same figure the ROI tab's headline card shows.
     function revenueCard() {
       var key = selFyKey();
-      var fyName = key === 'all' ? 'all years' : key.toUpperCase();
+      var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
       var info = 'Won revenue from marketing-sourced deals (ROAS-paid + organic search + ' +
         'bureau/tailor + Exec X), deduped by deal. Live from /api/marketing/roi.';
@@ -371,7 +403,7 @@
             'ROAS-paid ' + fmt(mp.roas || 0, 'currency') + ' · Organic ' + fmt(mp.organic || 0, 'currency') +
             ' · Bureau/Tailor ' + fmt(mp.bureauTailor || 0, 'currency') + ' · Exec X ' + fmt(mp.execX || 0, 'currency') +
             '.' + (MROI.revSource ? ' Source: ' + MROI.revSource : '');
-          if (key !== 'all' && mRev != null) {
+          if (!CUSTOM && key !== 'all' && mRev != null) {
             var prev = MROI.byFy[fyEndOf(key) - 1];
             if (prev && prev.marketingRevenue != null) deltaHtml = currencyDelta(mRev - prev.marketingRevenue, fyEndOf(key) - 1);
           }
@@ -383,7 +415,7 @@
     // Printing, WrkPod), ex-GST — row.totalSpend from the ROI payload (same as the ROI tab).
     function spendCard() {
       var key = selFyKey();
-      var fyName = key === 'all' ? 'all years' : key.toUpperCase();
+      var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
       var info = 'Marketing spend — Xero marketing accounts only (Advertising, Website, ' +
         'Software, Printing, WrkPod), ex-GST. Live from /api/marketing/roi.';
@@ -394,7 +426,7 @@
         if (r && !r.hasSpend) info = 'No marketing spend recorded for ' + fyName + '.';
         else info = 'Xero marketing accounts only (Advertising, Website, Software, Printing, ' +
           'WrkPod), ex-GST, in ' + fyName + '.';
-        if (key !== 'all' && spend != null) {
+        if (!CUSTOM && key !== 'all' && spend != null) {
           var prev = MROI.byFy[fyEndOf(key) - 1];
           if (prev && prev.hasSpend) deltaHtml = currencyDelta(spend - prev.totalSpend, fyEndOf(key) - 1);
         }
@@ -406,7 +438,7 @@
     // "Net ROI" card). A value of +218% means revenue is 3.18× spend.
     function roiCard() {
       var key = selFyKey();
-      var fyName = key === 'all' ? 'all years' : key.toUpperCase();
+      var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
       var info = 'Net return on marketing spend = (marketing revenue ÷ marketing spend − 1) × 100. ' +
         'Both inputs live from /api/marketing/roi — same figures as the Marketing revenue and spend cards.';
@@ -424,7 +456,7 @@
           info = 'Marketing revenue ' + fmt(r.marketingRevenue, 'currency') + ' ÷ marketing spend ' +
             fmt(r.totalSpend, 'currency') + ' − 1 in ' + fyName + ' = ' + (cur > 0 ? '+' : '') + cur +
             '% net return on marketing spend.';
-          if (key !== 'all') {
+          if (!CUSTOM && key !== 'all') {
             var prev = netRoiOf('fy' + String(fyEndOf(key) - 1).slice(-2));
             if (prev != null) {
               var d = cur - prev;
@@ -489,7 +521,8 @@
       var val = document.getElementById('cpeValue');
       var sub = document.getElementById('cpeSub');
       if (!val) return;
-      if (!(MROI.loaded && ENQ.loaded)) { val.textContent = '…'; if (sub) sub.innerHTML = ''; return; }
+      var ready = MROI.loaded && (CUSTOM ? !!ENQ.range : ENQ.loaded);
+      if (!ready) { val.textContent = '…'; if (sub) sub.innerHTML = ''; return; }
       var key = selFyKey();
       var r = mroiRow(key), e = rowFor(ENQ, key);
       var spend = (r && r.hasSpend) ? r.totalSpend : null;
@@ -497,7 +530,7 @@
       var cpe = (spend != null && enq > 0) ? spend / enq : null;
       val.textContent = (cpe == null) ? '—' : fmt(Math.round(cpe), 'currency');
       var html = '';
-      if (cpe != null && key !== 'all') {
+      if (!CUSTOM && cpe != null && key !== 'all') {
         var pr = MROI.byFy[fyEndOf(key) - 1], pe = ENQ.byFy[fyEndOf(key) - 1];
         if (pr && pr.hasSpend && pe && pe.total > 0) {
           html = costDelta(Math.round(cpe) - Math.round(pr.totalSpend / pe.total), fyEndOf(key) - 1);
@@ -513,6 +546,8 @@
     function loadInsight() {
       var el = document.getElementById('aiInsight');
       if (!el) return;
+      // The insight endpoint is FY-keyed; it can't honor a custom date range.
+      if (CUSTOM) { el.textContent = 'Not available for custom ranges — switch to a financial year for the AI insight.'; return; }
       el.textContent = 'Generating insight…';
       fetchJSON('/api/marketing/insight?fy=' + encodeURIComponent(selFyKey()))
         .then(function (d) {
@@ -532,12 +567,13 @@
     function currentEnqBookMonths() {
       var key = selFyKey();
       var fyEnd = key === 'all' ? null : fyEndOf(key);
+      var keep = function (m) { return CUSTOM ? monthInRange(m.month) : (fyEnd == null || m.fyEnd === fyEnd); };
       var map = {};
       (ENQ.byMonth || []).forEach(function (m) {
-        if (fyEnd == null || m.fyEnd === fyEnd) { (map[m.month] = map[m.month] || { month: m.month }).enq = m.total; }
+        if (keep(m)) { (map[m.month] = map[m.month] || { month: m.month }).enq = m.total; }
       });
       (BOOKINGS.byMonth || []).forEach(function (m) {
-        if (fyEnd == null || m.fyEnd === fyEnd) { (map[m.month] = map[m.month] || { month: m.month }).book = m.total; }
+        if (keep(m)) { (map[m.month] = map[m.month] || { month: m.month }).book = m.total; }
       });
       return Object.keys(map).sort().map(function (k) { return { month: k, enq: map[k].enq || 0, book: map[k].book || 0 }; });
     }
@@ -595,6 +631,7 @@
     // byMonth rows for the current FY selection (filtered by fyEnd, or every month for 'all').
     function currentMroiMonths() {
       var all = MROI.byMonth || [];
+      if (CUSTOM) return all.filter(function (m) { return monthInRange(m.month); });
       var key = selFyKey();
       if (key === 'all') return all.slice();
       var fyEnd = fyEndOf(key);
@@ -672,9 +709,35 @@
       });
     }
 
+    // Custom date range (beside the FY toggle). The count cards refetch the day-level
+    // /overview roll-up; the $ cards + both monthly charts re-aggregate the already-loaded
+    // monthly series (month-level); the AI insight is greyed. Clearing restores FY mode.
+    function applyRange() {
+      CUSTOM = dateRangeActive();
+      if (!CUSTOM) {
+        renderMktKpis(); renderBottomCards();
+        try { renderMonthChart(); renderEnqBookChart(); } catch (e) { console.error('chart', e); }
+        loadInsight();
+        return;
+      }
+      ENQ.range = BOOKINGS.range = null;   // count cards show … until the roll-up returns
+      renderMktKpis(); renderBottomCards();
+      try { renderMonthChart(); renderEnqBookChart(); } catch (e) { console.error('chart', e); }
+      loadInsight();                        // shows the "not available for custom ranges" note
+      fetchJSON('/api/marketing/overview' + dateRangeQS()).then(function (d) {
+        ENQ.range = (d && d.enquiries && d.enquiries.range) || { ads: 0, indirect: 0, total: 0 };
+        BOOKINGS.range = (d && d.bookings && d.bookings.range) || { ads: 0, indirect: 0, total: 0 };
+        renderMktKpis(); renderBottomCards();
+      }).catch(function (e) {
+        ENQ.range = BOOKINGS.range = { ads: 0, indirect: 0, total: 0 };
+        renderMktKpis(); renderBottomCards();
+      });
+    }
+
     initPage('marketing');               // wires top bar / theme (no data fetch)
     renderMarketingHead(true);
     renderMarketingSidebar('overview');
+    renderDateRange();                   // inject the Custom date range control beside #fySeg
     fillHeadInfo();                      // fill the static chart/bottom-card ⓘ placeholders once (§6)
     renderMktKpis();                     // initial paint (enquiries shows … until loaded)
     renderBottomCards();                 // initial paint (cost per enquiry shows … until loaded)
@@ -687,6 +750,7 @@
       try { renderMonthChart(); renderEnqBookChart(); } catch (e) { console.error('chart', e); }
       scheduleInsight();                 // debounced; server caches per FY
     });
+    wireDateRange({ onChange: applyRange });
     try {                                // a chart error must never block the live KPI load above
       drawCharts();
       window.onThemeChange = drawCharts; // recolor charts on light/dark toggle

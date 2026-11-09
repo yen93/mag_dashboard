@@ -1,6 +1,24 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-09 (NURTURE & EVENTS PAGE (public/nurture_events.html) — 4 KPI CARDS WIRED LIVE + FY-AWARE,
+Last updated: 2026-11-09 (CUSTOM DATE RANGE FILTER added beside the FY toggle on ALL 8 primary Marketing
+sub-tabs (marketing / leads_bookings / spend_roi / content_social / email_partners / website_search /
+nurture_events / monthly_log). A shared From/To + quick-range (30d/90d/12m/All) popover — like the Lead
+Tracker's — is injected right after #fySeg by new app.js helpers renderDateRange()/wireDateRange()
+(+ getDateRange/dateRangeActive/dateRangeQS/setFySegDisabled); its CSS (.dr-* + .segmented.seg-disabled +
+.range-na) lives in app.css. While a range is set it OVERRIDES the FY toggle (which dims). Each widget
+filters at the finest granularity its data supports, and snapshot-only widgets GREY OUT ("Not available for
+custom ranges"). BACKEND: a new reqRange() in server/index.js threads optional ?from=&to= (validated, folded
+into the cache key) into 4 producers — marketing-overview.js, marketing-leads-by-source.js,
+marketing-nurture-events.js, marketing-website-search.js — each adding a day-level `range` payload section
+(filtered on cdate / event_time / review_create_time). ROI + channel-summary need NO backend change (the
+pages aggregate their existing monthly series client-side). PER PAGE: leads_bookings + nurture_events filter
+day-level everywhere; marketing filters count cards day-level + $ cards/charts month-level (AI insight
+greyed); spend_roi filters KPIs + spend-by-type month-level (Channel-results table greyed); website_search
+filters enquiries/organic/reviews day-level (Sessions/AI-visits/traffic chart+table greyed); monthly_log adds
+a "Selected range" column to the Yearly summary (month-level); content_social + email_partners grey their live
+widgets entirely (snapshot / FY-aggregate only). All 8 pages bumped to app.js?v=14. Frontend + server change,
+NO DB migration, NO new secrets (producers only SELECT) → needs a manual Cloud Run redeploy. Previously same
+day: NURTURE & EVENTS PAGE (public/nurture_events.html) — 4 KPI CARDS WIRED LIVE + FY-AWARE,
 and the EXECUTIVE X TABLE replaced with REAL per-session data. (A) Cards from a NEW route GET
 /api/marketing/nurture-events (server/metrics/marketing-nurture-events.js, requireAuth, cached 10 min): "Past
 keynote clients in nurture" = WON pipeline-3 deals (read from activecampaign_deals); "Offsite enquiries from past
@@ -375,6 +393,11 @@ SCRIPTS / APP CODE
   GET /api/marketing/website-search → server/metrics/marketing-website-search.js
   (enquiries = GA4 & Ads leads with an EXISTING saved AC contact: ga4_ac_contact_source
   JOIN activecampaign_contacts, per AU FY, total + organic/cpc medium split; 10-min cache).)
+  (NEW 2026-11-09: a reqRange(req) helper validates optional ?from=&to= (YYYY-MM-DD) date-range
+  params and folds them into the cache key; 4 marketing routes pass them through —
+  /overview, /leads-by-source, /website-search, /nurture-events — so each producer can return a
+  day-level `range` section for the Custom Date Range filter. /roi + /channel-summary are
+  unchanged — those pages aggregate the existing monthly series client-side.)
 - public/content_social.html — Marketing → Content & Social page, now LIVE: FY-driven
   Platforms table + per-platform follower cards + a live "Engagement by platform" bar
   chart (all from /api/marketing/platforms) + a live "Newsletter subscribers" card (from

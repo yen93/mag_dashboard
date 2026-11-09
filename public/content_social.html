@@ -333,7 +333,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
   <script>
     /* Content & Social — Frontend-only mock data view.
        Default active FY (FY27) renders the exact figures from the reference design. */
@@ -509,6 +509,12 @@
       }
     };
 
+    // Content & Social is fed by weekly / point-in-time snapshots (followers, engagement,
+    // newsletter) with no sub-FY history, so a custom date range can't filter it — the live
+    // widgets grey out while a range is active. (The other tiles are already pending.)
+    var CUSTOM = false;
+    var RANGE_NA = 'Not available for custom ranges — this is a weekly snapshot. Clear the date range to view it.';
+
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
       return b ? b.getAttribute('data-fy') : 'fy27';
@@ -580,6 +586,12 @@
       var cap = document.getElementById('platformsCap');
       var body = document.getElementById('platformsBody');
       var cards = document.getElementById('followerCards');
+      if (CUSTOM) {
+        cap.textContent = 'Not available for custom ranges';
+        cards.innerHTML = '<div class="range-na">' + RANGE_NA + '</div>';
+        body.innerHTML = '<tr><td colspan="4" class="range-na">' + RANGE_NA + '</td></tr>';
+        return;
+      }
       if (ALL_PLATFORM_ROWS === null) {
         cap.textContent = 'Loading…';
         cards.innerHTML = '';
@@ -632,6 +644,7 @@
     var CONTENT_METRICS = null;
 
     function applyLiveContentMetrics() {
+      if (CUSTOM) return;   // newsletter is greyed under a custom range (handled in renderSideCards)
       if (!CONTENT_METRICS) return;
       var m = CONTENT_METRICS['li_newsletter_subscribers_james'];
       var sub = document.getElementById('newsletterSub');
@@ -654,9 +667,14 @@
     }
 
     function renderSideCards() {
-      // Newsletter subscribers — LIVE (applyLiveContentMetrics overrides below).
-      document.getElementById('newsletterVal').textContent = '…';
-      document.getElementById('newsletterSub').textContent = '';
+      // Newsletter subscribers — LIVE, but a point-in-time snapshot → greyed under a custom range.
+      if (CUSTOM) {
+        document.getElementById('newsletterVal').textContent = '—';
+        var nsub = document.getElementById('newsletterSub'); nsub.className = 'sub'; nsub.textContent = 'Not available for custom ranges';
+      } else {
+        document.getElementById('newsletterVal').textContent = '…';
+        document.getElementById('newsletterSub').textContent = '';
+      }
       // Article views — no live source yet → red "pending" chip, no fabricated number
       // (what it is / why pending lives in the card's ⓘ).
       document.getElementById('articleVal').innerHTML = '<span class="chip warn">pending</span>';
@@ -685,6 +703,8 @@
       var cap = document.getElementById('impressionsCap');
       var tc = themeColors();
       if (_impChart) { _impChart.destroy(); _impChart = null; }
+
+      if (CUSTOM) { cap.textContent = 'Not available for custom ranges'; return; }
 
       var rows = platformRowsForFy();
       if (!rows.length) {
@@ -750,18 +770,22 @@
       });
     }
 
+    function renderCS() { renderAll(); renderPlatforms(); }
+    // Custom date range: every live widget here is a weekly/point-in-time snapshot, so a range
+    // can't filter it — grey them all out. Clearing restores the FY-driven view.
+    function applyRange() { CUSTOM = dateRangeActive(); renderCS(); }
+
     initPage('marketing');
     renderMarketingHead(true);        // live page (Platforms/followers/engagement/newsletter live; others show "pending") → no sample badge
     renderMarketingSidebar('content-social');
+    renderDateRange();
     fillHeadInfo();                   // fill the static card/table/chart ⓘ info tools (DESIGN_GUIDE §6)
     renderAll();
     renderPlatforms();                // paint "Loading…" immediately
     loadPlatforms();                  // then fetch the live per-FY snapshots + re-render
     loadContentMetrics();             // live newsletter-subscriber card (cookie sync / manual)
-    wireSeg('fySeg', function () {    // FY toggle drives the pending KPIs AND the live platforms + chart
-      renderAll();
-      renderPlatforms();
-    });
+    wireSeg('fySeg', renderCS);       // FY toggle drives the pending KPIs AND the live platforms + chart
+    wireDateRange({ onChange: applyRange });
     window.onThemeChange = renderEngagementChart;
   </script>
 </body>

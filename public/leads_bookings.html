@@ -168,7 +168,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
   <script>
     /* Leads & Bookings — LIVE.
        • "Enquiries by source" chart + "By source" table  ← GET /api/marketing/leads-by-source
@@ -192,7 +192,8 @@
     // =====================================================================
     //  By-source data (chart + table)
     // =====================================================================
-    var BYSRC = { rows: [], loaded: false };   // rows: [{source, month, fyEnd, enquiries, bookings}]
+    var BYSRC = { rows: [], loaded: false, rangeRows: null };   // rows: [{source, month, fyEnd, enquiries, bookings}]
+    var CUSTOM = false;   // true while a custom date range is active (overrides the FY toggle)
 
     function loadBySource() {
       fetchJSON('/api/marketing/leads-by-source').then(function (d) {
@@ -207,8 +208,9 @@
       });
     }
 
-    // Rows for the current FY selection.
+    // Rows for the current view: the custom date range when active, else the selected FY.
     function currentSrcRows() {
+      if (CUSTOM) return BYSRC.rangeRows || [];
       var key = selFyKey();
       if (key === 'all') return BYSRC.rows;
       var fyEnd = fyEndOf(key);
@@ -220,7 +222,7 @@
       var body = document.getElementById('sourceTableBody');
       var foot = document.getElementById('sourceTableFoot');
       if (!body) return;
-      if (!BYSRC.loaded) { body.innerHTML = '<tr><td colspan="4" class="muted">Loading…</td></tr>'; foot.innerHTML = ''; return; }
+      if (CUSTOM ? !BYSRC.rangeRows : !BYSRC.loaded) { body.innerHTML = '<tr><td colspan="4" class="muted">Loading…</td></tr>'; foot.innerHTML = ''; return; }
 
       var rows = currentSrcRows();
       var totals = {};
@@ -291,6 +293,7 @@
     var BOOKINGS = { byFy: {}, total: null, loaded: false };   // won deals (bookings)
 
     function rowFor(state, key) {
+      if (CUSTOM) return state.range || { ads: 0, indirect: 0, total: 0 };
       if (key === 'all') return state.total;
       return state.byFy[fyEndOf(key)] || { ads: 0, indirect: 0, total: 0 };
     }
@@ -302,13 +305,14 @@
       var dEl = document.getElementById(cfg.deltaEl);
       var lEl = document.getElementById(cfg.labelEl);
       if (!valEl) return;
-      if (!cfg.state.loaded) { valEl.textContent = '…'; if (dEl) dEl.innerHTML = ''; return; }
+      var loadingNow = CUSTOM ? !cfg.state.range : !cfg.state.loaded;
+      if (loadingNow) { valEl.textContent = '…'; if (dEl) dEl.innerHTML = ''; return; }
       var r = rowFor(cfg.state, key);
       valEl.textContent = r ? String(r.total) : '—';
-      var desc = r ? cfg.loadedInfo(fName, r) : cfg.title;
+      var desc = r ? cfg.loadedInfo(CUSTOM ? 'the selected range' : fName, r) : cfg.title;
       if (lEl) lEl.innerHTML = esc(cfg.title) + ' ' + infoTip(desc, cfg.source);
       var deltaHtml = '';
-      if (r && key !== 'all') {
+      if (r && !CUSTOM && key !== 'all') {
         var prev = cfg.state.byFy[fyEndOf(key) - 1];
         if (prev) {
           var d = r.total - prev.total;
@@ -361,19 +365,45 @@
       });
     }
 
+    // Custom date range (beside the FY toggle). Every widget here is day-level, so a
+    // range overrides the FY toggle: refetch both sources with ?from=&to= and render
+    // the range result; clearing the range restores FY mode.
+    function renderLB() {
+      renderSourceTable();
+      renderCards();
+      try { renderSourceChart(); } catch (e) { console.error('chart', e); }
+    }
+    function applyRange() {
+      CUSTOM = dateRangeActive();
+      if (!CUSTOM) { renderLB(); return; }
+      BYSRC.rangeRows = null; ENQ.range = BOOKINGS.range = null;   // loading
+      renderLB();
+      Promise.all([
+        fetchJSON('/api/marketing/leads-by-source' + dateRangeQS()),
+        fetchJSON('/api/marketing/overview' + dateRangeQS()),
+      ]).then(function (res) {
+        BYSRC.rangeRows = (res[0] && res[0].range && res[0].range.data) || [];
+        ENQ.range = (res[1] && res[1].enquiries && res[1].enquiries.range) || { ads: 0, indirect: 0, total: 0 };
+        BOOKINGS.range = (res[1] && res[1].bookings && res[1].bookings.range) || { ads: 0, indirect: 0, total: 0 };
+        renderLB();
+      }).catch(function (err) {
+        console.error('range', err);
+        BYSRC.rangeRows = []; ENQ.range = BOOKINGS.range = { ads: 0, indirect: 0, total: 0 };
+        renderLB();
+      });
+    }
+
     initPage('marketing');
     renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('leads-bookings');
+    renderDateRange();
     fillHeadInfo();        // fill the static card/chart/table ⓘ info tools
     renderSourceTable();   // initial (shows Loading…)
     renderCards();         // initial (shows …)
     loadBySource();
     loadOverview();
-    wireSeg('fySeg', function () {
-      renderSourceTable();
-      renderCards();
-      try { renderSourceChart(); } catch (e) { console.error('chart', e); }
-    });
+    wireSeg('fySeg', renderLB);
+    wireDateRange({ onChange: applyRange });
     window.onThemeChange = function () { try { renderSourceChart(); } catch (e) {} };
   </script>
 </body>

@@ -109,7 +109,62 @@ const REVIEWS_SQL = `
   GROUP BY fy_end
   ORDER BY fy_end`;
 
-export async function getWebsiteSearch() {
+// ---- Custom date-range variants (day-level; $1=from, $2=to, 'YYYY-MM-DD' or null) ----
+// Only the genuinely dated sources are range-filterable: AC-matched enquiries (cs.cdate),
+// organic-incl-unmatched (event_time), Google reviews (review_create_time). The weekly
+// cumulative traffic snapshot (sessions / AI-tool visits) has no sub-FY history, so it is
+// NOT computed here — the page greys those tiles while a custom range is active.
+const MATCHED_RANGE_SQL = `
+  WITH e AS (
+    SELECT lower(coalesce(cs.medium, '')) AS med
+    FROM public.ga4_ac_contact_source cs
+    JOIN public.activecampaign_contacts c ON c.id::text = cs.contact_id
+    WHERE cs.cdate IS NOT NULL
+      AND ($1::date IS NULL OR cs.cdate::date >= $1::date)
+      AND ($2::date IS NULL OR cs.cdate::date <= $2::date)
+  )
+  SELECT count(*)                                 AS total,
+         count(*) FILTER (WHERE med = 'organic')  AS organic,
+         count(*) FILTER (WHERE med LIKE '%cpc%') AS cpc
+  FROM e`;
+
+const ORGANIC_ALL_RANGE_SQL = `
+  SELECT coalesce(sum(event_count), 0) AS organic_all
+  FROM public.ga4_ac_event_matches
+  WHERE medium = 'organic' AND event_kind = 'ga4_form'
+    AND event_name IN ('form_submit', 'Contact_Form_Submit_Alt', 'form_submissions', 'Form_submission_thankyou_1')
+    AND ($1::date IS NULL OR event_time::date >= $1::date)
+    AND ($2::date IS NULL OR event_time::date <= $2::date)`;
+
+const REVIEWS_RANGE_SQL = `
+  WITH r AS (
+    SELECT NULLIF(star_rating, '')::numeric AS stars
+    FROM public.google_reviews
+    WHERE review_create_time IS NOT NULL
+      AND ($1::date IS NULL OR review_create_time::date >= $1::date)
+      AND ($2::date IS NULL OR review_create_time::date <= $2::date)
+  )
+  SELECT count(*) AS reviews, round(avg(stars), 2) AS "avgStars" FROM r`;
+
+async function rangeRollup(from, to) {
+  const n = (v) => Number(v) || 0;
+  const [m, oa, rv] = await Promise.all([
+    q(MATCHED_RANGE_SQL, [from, to]).then((r) => r[0] || {}).catch(() => ({})),
+    q(ORGANIC_ALL_RANGE_SQL, [from, to]).then((r) => r[0] || {}).catch(() => ({})),
+    q(REVIEWS_RANGE_SQL, [from, to]).then((r) => r[0] || {}).catch(() => ({})),
+  ]);
+  return {
+    from, to,
+    total: n(m.total), organic: n(m.organic), cpc: n(m.cpc),
+    organicAll: n(oa.organic_all),
+    reviews: n(rv.reviews),
+    avgStars: rv.avgStars != null ? Number(rv.avgStars) : null,
+    sessions: null, aiVisits: null, // snapshot-only — greyed on the page under a custom range
+  };
+}
+
+export async function getWebsiteSearch(opts = {}) {
+  const { from = null, to = null } = opts || {};
   if (!supabaseConfigured()) {
     return {
       byFy: {},
@@ -183,5 +238,7 @@ export async function getWebsiteSearch() {
     total.avgStars = Math.round((weightedStars / total.reviews) * 100) / 100;
   }
 
-  return { byFy, total, meta: { status: 'live', source: SRC, note: null } };
+  const range = (from || to) ? await rangeRollup(from, to) : null;
+
+  return { byFy, total, range, meta: { status: 'live', source: SRC, note: null } };
 }

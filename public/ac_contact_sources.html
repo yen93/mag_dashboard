@@ -771,7 +771,7 @@
       else if (from && to) label = fmtDate(from) + ' – ' + fmtDate(to);
       else if (from) label = 'From ' + fmtDate(from);
       else if (to) label = 'Until ' + fmtDate(to);
-      else { label = 'All dates'; active = false; }
+      else { label = 'Set Range'; active = false; }
       btn.textContent = label;
       btn.classList.toggle('active', active);
     }

@@ -183,6 +183,41 @@ html[data-theme='dark'] .mkt-sample { color: #f0a63b; }
   font-size: 13px; font-weight: 600; border-radius: 6px; cursor: pointer;
 }
 .segmented button.active { background: var(--surface); color: var(--text); box-shadow: var(--shadow); }
+/* FY toggle dimmed while a custom date range is active (range takes precedence) */
+.segmented.seg-disabled { opacity: .45; pointer-events: none; }
+
+/* Custom date-range control (shared; mirrors the Lead Tracker popover). Injected
+   by renderDateRange()/wireDateRange() in app.js right after the #fySeg toggle so
+   it sits beside the FY filter in a .mkt-controls bar. Quick ranges 30d/90d/12m/All. */
+.dr-daterange { position: relative; display: inline-flex; align-items: center; gap: 8px; }
+.dr-btn {
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 9px; padding: 6px 12px; font: inherit; font-size: 13px; font-weight: 600;
+  cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.dr-btn::after { content: '▾'; font-size: 11px; color: var(--text-muted); }
+.dr-btn.active { border-color: var(--accent); color: var(--accent); }
+.dr-popup {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+  background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+  box-shadow: 0 10px 28px rgba(0,0,0,.28); padding: 14px; min-width: 240px;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.dr-popup[hidden] { display: none; }
+.dr-field { display: flex; flex-direction: column; gap: 4px; }
+.dr-field label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.dr-field input[type="date"] {
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 10px; padding: 7px 10px; font: inherit;
+}
+.dr-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+.dr-quick button, .dr-reset {
+  background: var(--surface); color: var(--text); border: 1px solid var(--border);
+  border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.dr-quick button.active, .dr-reset.active { background: var(--accent); color: #fff; border-color: transparent; }
+/* Placeholder shown in a widget whose snapshot-only data can't honor a custom range */
+.range-na { color: var(--text-muted); font-style: italic; padding: 14px; font-size: 13px; }
 
 /* KPI cards */
 .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 20px; }

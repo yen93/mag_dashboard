@@ -527,7 +527,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
   <script>
     /* Website & Search — LIVE (except Phone enquiries, which is pending).
        LIVE from /api/marketing/website-search:
@@ -640,6 +640,8 @@
     ];
 
     var WS = null;        // live payload once fetched (null = loading, false = failed)
+    var WS_RANGE = null;  // custom date-range roll-up (null = not loaded yet)
+    var CUSTOM = false;   // true while a custom date range is active (overrides the FY toggle)
     var _trafficChart = null;
 
     function selFyKey() {
@@ -756,6 +758,17 @@
     // for the selected FY ('all' → all-years total; an FY with no rows → zeros),
     // enriched with GA4_TRAFFIC_SNAPSHOTS_DB so sessions & aiVisits are always populated.
     function selData() {
+      // Custom date range: the day-level enquiry/review fields come from the range roll-up;
+      // the snapshot sessions / AI-visit fields are null (greyed in the tiles).
+      if (CUSTOM) {
+        var rr = WS_RANGE || {};
+        return {
+          total: rr.total || 0, organic: rr.organic || 0, cpc: rr.cpc || 0,
+          organicAll: rr.organicAll || 0,
+          sessions: null, aiVisits: null,
+          reviews: rr.reviews, avgStars: rr.avgStars
+        };
+      }
       var tr = selTrafficRow();
       var zero = {
         total: 0, organic: 0, cpc: 0, organicAll: 0,
@@ -781,6 +794,10 @@
     // fields on the /api/marketing/website-search response, falling back to the
     // public.google_reviews DB figures above.
     function selReviews() {
+      if (CUSTOM) {
+        var rr = WS_RANGE || {};
+        return { reviews: rr.reviews != null ? rr.reviews : null, avgStars: rr.avgStars != null ? rr.avgStars : null };
+      }
       var k = selFyKey();
       var fyKey = k === 'all' ? 'all' : k.toUpperCase();
       var d = (WS && WS !== true)
@@ -804,6 +821,12 @@
       var body;
       if (c.kind === 'pending') {
         body = '<div class="value" style="margin-top:14px"><span class="chip warn">pending</span></div>';
+      } else if (CUSTOM && (c.key === 'sessions' || c.key === 'aiVisits')) {
+        // Weekly per-FY snapshot — no sub-FY history, so a custom range can't filter it.
+        body = '<div class="value" style="margin-top:14px"><span class="chip warn">FY only</span></div>' +
+          '<div class="sub">Not available for custom ranges</div>';
+      } else if (CUSTOM && !WS_RANGE) {
+        body = '<div class="value">…</div>';
       } else if (c.kind === 'reviews') {
         var rv = selReviews();
         var sub = (rv && rv.avgStars != null)
@@ -825,6 +848,16 @@
     }
 
     function renderTrafficGraph() {
+      // Snapshot-only (weekly per-FY) — greyed while a custom date range is active.
+      var split = document.querySelector('#wsTrafficGraphCard .ws-graph-split');
+      var stripNA = document.getElementById('wsFyStrip');
+      if (CUSTOM) {
+        if (_trafficChart) { _trafficChart.destroy(); _trafficChart = null; }
+        if (split) split.style.display = 'none';
+        if (stripNA) stripNA.innerHTML = '<div class="range-na">Not available for custom ranges — GA4 traffic is a weekly per-FY snapshot. Clear the date range to view it.</div>';
+        return;
+      }
+      if (split) split.style.display = '';
       var rows = trafficRows();
       var totalRow = trafficTotalRow(rows);
       var sel = selTrafficRow();
@@ -1117,12 +1150,16 @@
         );
       }
 
+      var tbody = document.getElementById('wsTrafficTableBody');
+      if (!tbody) return;
+      if (CUSTOM) {   // snapshot-only — no sub-FY history to filter
+        tbody.innerHTML = '<tr><td colspan="6" class="range-na">Not available for custom ranges — these are weekly per-FY snapshots. Clear the date range to view them.</td></tr>';
+        return;
+      }
       var rows = trafficRows();
       var totalRow = trafficTotalRow(rows);
       var activeKey = selFyKey();
       var scope = selTableScope();
-      var tbody = document.getElementById('wsTrafficTableBody');
-      if (!tbody) return;
 
       var displayRows;
       if (scope === 'selected' && activeKey !== 'all') {
@@ -1192,13 +1229,26 @@
       });
     }
 
+    // Custom date range: enquiry / organic / reviews tiles filter day-level (refetch with
+    // ?from=&to=); the GA4-traffic snapshot tiles + chart + table grey out. Clearing restores FY.
+    function applyRange() {
+      CUSTOM = dateRangeActive();
+      if (!CUSTOM) { renderAll(); return; }
+      WS_RANGE = null; renderAll();   // tiles show … while the roll-up loads
+      fetchJSON('/api/marketing/website-search' + dateRangeQS())
+        .then(function (d) { WS_RANGE = (d && d.range) || {}; renderAll(); })
+        .catch(function () { WS_RANGE = {}; renderAll(); });
+    }
+
     initPage('marketing');
     renderMarketingHead(true);        // partially live (form enquiries) → no "Sample data" badge
     renderMarketingSidebar('website-search');
+    renderDateRange();
     renderAll();                      // initial render
     wireSeg('fySeg', renderAll);
     wireSeg('wsChartModeSeg', renderTrafficGraph);
     wireSeg('wsTableScopeSeg', renderTrafficTable);
+    wireDateRange({ onChange: applyRange });
     window.onThemeChange = function () {
       renderTrafficGraph();
     };

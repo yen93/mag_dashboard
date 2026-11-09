@@ -272,7 +272,7 @@
         <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="summaryHeading">
           <table class="ml-table" style="min-width:680px">
             <thead>
-              <tr>
+              <tr id="summaryHead">
                 <th>Measure</th>
                 <th>FY25</th>
                 <th>FY26</th>
@@ -293,7 +293,7 @@
     </main>
   </div>
 
-  <script src="app.js?v=10"></script>
+  <script src="app.js?v=14"></script>
   <script>
     /* Monthly Log — Frontend-only mock data view.
        Default active FY (FY27) renders the exact figures from the reference design. */
@@ -314,11 +314,29 @@
     var ROIS = { byFy: {}, byMon: [], loaded: false };                            // /api/marketing/roi
     var SUMMARY_RENDER = [];   // the rows last rendered (for the CSV download)
 
+    // Custom date range (beside the inert FY toggle). When active, a "Selected range" column
+    // is added to the Yearly summary, each live measure summed over the months in the range
+    // (month-level, from the overview + ROI monthly series). The pending rows stay pending.
+    var CUSTOM = false;
+    function monthInRange(ym) {
+      var r = getDateRange();
+      var fm = r.from ? r.from.slice(0, 7) : '', tm = r.to ? r.to.slice(0, 7) : '';
+      return (!fm || ym >= fm) && (!tm || ym <= tm);
+    }
+
     // Sum a per-month series ([{ month:'YYYY-MM', ... }]) over one calendar year.
     function cySum(months, year, key) {
       var yr = String(year), total = 0, any = false;
       (months || []).forEach(function (m) {
         if (String(m.month).slice(0, 4) === yr) { total += (m[key] || 0); any = true; }
+      });
+      return any ? total : null;
+    }
+    // Sum a per-month series over the active custom date range (month-level).
+    function rangeSum(months, key) {
+      var total = 0, any = false;
+      (months || []).forEach(function (m) {
+        if (monthInRange(m.month)) { total += (m[key] || 0); any = true; }
       });
       return any ? total : null;
     }
@@ -337,39 +355,49 @@
       if (!a) return null;   // avoid divide-by-zero
       return { type: 'pct', v: (b - a) / Math.abs(a) * 100 };
     }
-    function mkRow(measure, kind, fy25, fy26, fy27, cy25, cy26, info) {
+    function mkRow(measure, kind, fy25, fy26, fy27, cy25, cy26, info, rng) {
       return {
         measure: measure, kind: kind, info: info,
         fy25: fy25, fy26: fy26, fy27: fy27, cy25: cy25, cy26: cy26,
         diff: diffFor(kind, fy25, fy26),
+        rng: (rng === undefined ? null : rng),
       };
     }
 
     function buildSummaryRows() {
       var rows = [];
+      var rEnq = CUSTOM ? rangeSum(OVS.enqMon, 'total') : null;
+      var rBook = CUSTOM ? rangeSum(OVS.bookMon, 'total') : null;
+      var rRev = CUSTOM ? rangeSum(ROIS.byMon, 'marketingRevenue') : null;
+      var rSpend = CUSTOM ? rangeSum(ROIS.byMon, 'spend') : null;
       rows.push(mkRow('Keynote enquiries', 'count',
         enqFy(2025), enqFy(2026), enqFy(2027),
         cySum(OVS.enqMon, 2025, 'total'), cySum(OVS.enqMon, 2026, 'total'),
-        'Deals created per period across two sources (ads = roas_counted_deals, indirect = ac_indirect_deals), deduped by deal. Same source as the Overview "Keynote enquiries" card. GET /api/marketing/overview.'));
+        'Deals created per period across two sources (ads = roas_counted_deals, indirect = ac_indirect_deals), deduped by deal. Same source as the Overview "Keynote enquiries" card. GET /api/marketing/overview.',
+        rEnq));
       rows.push(mkRow('Keynote bookings', 'count',
         bookFy(2025), bookFy(2026), bookFy(2027),
         cySum(OVS.bookMon, 2025, 'total'), cySum(OVS.bookMon, 2026, 'total'),
-        'WON deals created per period across the same two sources, deduped by deal. Same source as the Overview "Keynote bookings" card. GET /api/marketing/overview.'));
+        'WON deals created per period across the same two sources, deduped by deal. Same source as the Overview "Keynote bookings" card. GET /api/marketing/overview.',
+        rBook));
       rows.push(mkRow('Marketing revenue', 'currency',
         revFy(2025), revFy(2026), revFy(2027),
         cySum(ROIS.byMon, 2025, 'marketingRevenue'), cySum(ROIS.byMon, 2026, 'marketingRevenue'),
-        'Marketing-attributed won revenue (ROAS-paid + organic + bureau/tailor + Exec X, deduped). Same source as the Overview "Marketing revenue" card. GET /api/marketing/roi.'));
+        'Marketing-attributed won revenue (ROAS-paid + organic + bureau/tailor + Exec X, deduped). Same source as the Overview "Marketing revenue" card. GET /api/marketing/roi.',
+        rRev));
       rows.push(mkRow('Marketing spend', 'currency',
         spendFy(2025), spendFy(2026), spendFy(2027),
         cySum(ROIS.byMon, 2025, 'spend'), cySum(ROIS.byMon, 2026, 'spend'),
-        'Xero marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST. Same source as the Overview "Marketing spend" card. GET /api/marketing/roi.'));
+        'Xero marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST. Same source as the Overview "Marketing spend" card. GET /api/marketing/roi.',
+        rSpend));
       var roi25 = roiFrom(revFy(2025), spendFy(2025));
       var roi26 = roiFrom(revFy(2026), spendFy(2026));
       var roi27 = roiFrom(revFy(2027), spendFy(2027));
       var roiCy25 = roiFrom(cySum(ROIS.byMon, 2025, 'marketingRevenue'), cySum(ROIS.byMon, 2025, 'spend'));
       var roiCy26 = roiFrom(cySum(ROIS.byMon, 2026, 'marketingRevenue'), cySum(ROIS.byMon, 2026, 'spend'));
       rows.push(mkRow('Marketing ROI', 'roi', roi25, roi26, roi27, roiCy25, roiCy26,
-        'Net return = (marketing revenue ÷ marketing spend − 1) × 100. Same definition as the Spend & ROI tab\'s "Marketing ROI" card.'));
+        'Net return = (marketing revenue ÷ marketing spend − 1) × 100. Same definition as the Spend & ROI tab\'s "Marketing ROI" card.',
+        CUSTOM ? roiFrom(rRev, rSpend) : null));
       rows.push({ measure: 'Cadence delivered', pending: true });
       return rows;
     }
@@ -411,17 +439,30 @@
     function renderSummaryTable() {
       var body = document.getElementById('summaryBody');
       if (!body) return;
+      // Add / remove the trailing "Selected range" header cell to match the active mode.
+      var head = document.getElementById('summaryHead');
+      var rangeTh = document.getElementById('rangeTh');
+      if (head) {
+        if (CUSTOM && !rangeTh) {
+          var th = document.createElement('th'); th.id = 'rangeTh'; th.textContent = 'Selected range';
+          head.appendChild(th);
+        } else if (!CUSTOM && rangeTh) {
+          rangeTh.remove();
+        }
+      }
+      var cols = CUSTOM ? 8 : 7;
       if (!(OVS.loaded && ROIS.loaded)) {
-        body.innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>';
+        body.innerHTML = '<tr><td colspan="' + cols + '" class="muted">Loading…</td></tr>';
         return;
       }
       var rows = buildSummaryRows();
       SUMMARY_RENDER = rows;
       var html = rows.map(function (r) {
+        var rangeCell = CUSTOM ? ('<td>' + (r.pending ? _muted : dispVal(r.kind, r.rng)) + '</td>') : '';
         if (r.pending) {
           return '<tr><td>' + esc(r.measure) + ' <span class="chip warn">pending</span></td>' +
             '<td>' + _muted + '</td><td>' + _muted + '</td><td>' + _muted + '</td>' +
-            '<td>' + _muted + '</td><td>' + _muted + '</td><td>' + _muted + '</td></tr>';
+            '<td>' + _muted + '</td><td>' + _muted + '</td><td>' + _muted + '</td>' + rangeCell + '</tr>';
         }
         return '<tr>' +
           '<td>' + esc(r.measure) + infoIcon(r.info) + '</td>' +
@@ -431,6 +472,7 @@
           '<td>' + dispDiff(r.diff) + '</td>' +
           '<td>' + dispVal(r.kind, r.cy25) + '</td>' +
           '<td>' + dispVal(r.kind, r.cy26) + '</td>' +
+          rangeCell +
         '</tr>';
       }).join('');
       body.innerHTML = html;
@@ -508,13 +550,19 @@
       URL.revokeObjectURL(url);
     });
 
+    // Custom date range: adds a "Selected range" column to the Yearly summary (month-level,
+    // from the overview + ROI monthly series). The FY toggle is inert here either way.
+    function applyRange() { CUSTOM = dateRangeActive(); renderSummaryTable(); }
+
     initPage('marketing');
     renderMarketingHead();
     renderMarketingSidebar('monthly-log');
+    renderDateRange();
     renderAll();                 // status + notes (mock) + Yearly summary (Loading… until fetched)
     loadSummaryOverview();       // live Keynote enquiries + bookings (same source as marketing.html)
     loadSummaryRoi();            // live Marketing revenue + spend + ROI (same source as marketing.html / spend_roi.html)
     wireSeg('fySeg', renderAll);
+    wireDateRange({ onChange: applyRange });
   </script>
 </body>
 </html>

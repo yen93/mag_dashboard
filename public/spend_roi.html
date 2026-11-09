@@ -176,7 +176,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
   <script>
     /* Spend & ROI — LIVE.
        • 5 KPI cards        ← GET /api/marketing/roi (same source as roi.html) +
@@ -200,18 +200,42 @@
     // ===================================================================
     //  State
     // ===================================================================
-    var ROI = { rows: [], total: null, loaded: false };          // /api/marketing/roi
-    var OV  = { byFy: {}, total: null, loaded: false };           // /api/marketing/overview (enquiries)
+    var ROI = { rows: [], total: null, loaded: false, byMonth: [], pipelineMonths: [] }; // /api/marketing/roi
+    var OV  = { byFy: {}, total: null, loaded: false, range: null };  // /api/marketing/overview (enquiries)
     var CH  = { months: [], type: [], loaded: false };           // /api/marketing/channel-summary
     var CR  = { rows: [], total: null, loaded: false };          // /api/marketing/channel-results
 
+    // Custom date range (beside the FY toggle). When active it overrides the FY toggle:
+    // the KPI cards + Spend-by-type aggregate the already-loaded MONTHLY series within the
+    // range (month-level); the Channel results table is FY-snapshot only and is greyed.
+    var CUSTOM = false;
+    function monthInRange(ym) {
+      var r = getDateRange();
+      var fm = r.from ? r.from.slice(0, 7) : '', tm = r.to ? r.to.slice(0, 7) : '';
+      return (!fm || ym >= fm) && (!tm || ym <= tm);
+    }
+
     function roiRowFor(key) {
       if (!ROI.loaded) return null;
+      if (CUSTOM) {   // synthesize a per-range row from the monthly series (month-level)
+        var ms = (ROI.byMonth || []).filter(function (m) { return monthInRange(m.month); });
+        var pm = (ROI.pipelineMonths || []).filter(function (m) { return monthInRange(m.month); });
+        var sum = function (arr, f) { return arr.reduce(function (a, m) { return a + (f(m) || 0); }, 0); };
+        return {
+          totalSpend: sum(ms, function (m) { return m.spend; }),
+          hasSpend: ms.length > 0,
+          marketingRevenue: sum(ms, function (m) { return m.marketingRevenue; }),
+          dealsWon: sum(pm, function (m) { return m.won; }),
+        };
+      }
       if (key === 'all') return ROI.total;
       var fe = fyEndOf(key);
       return ROI.rows.find(function (r) { return r.fyEnd === fe; }) || null;
     }
-    function enqObj(key) { return key === 'all' ? OV.total : OV.byFy[fyEndOf(key)]; }
+    function enqObj(key) {
+      if (CUSTOM) return OV.range;
+      return key === 'all' ? OV.total : OV.byFy[fyEndOf(key)];
+    }
     function enqCount(key) { var o = enqObj(key); return o ? o.total : null; }
 
     // ===================================================================
@@ -247,7 +271,7 @@
       }
       var key = selFyKey();
       var row = roiRowFor(key);
-      var prevKey = (key === 'all') ? null : 'fy' + String(fyEndOf(key) - 1).slice(-2);
+      var prevKey = (CUSTOM || key === 'all') ? null : 'fy' + String(fyEndOf(key) - 1).slice(-2);
       var prevRow = prevKey ? roiRowFor(prevKey) : null;
       var prevFyEnd = prevKey ? fyEndOf(prevKey) : null;
 
@@ -316,10 +340,18 @@
       if (!m || !y) return null;
       return m >= 7 ? y + 1 : y;
     }
+    // 'Mon-YYYY' channel label → 'YYYY-MM' (for custom date-range month filtering).
+    function channelMonthYM(label) {
+      var p = String(label).split('-'), m = MON_IDX[p[0]], y = Number(p[1]);
+      if (!m || !y) return '';
+      return y + '-' + (m < 10 ? '0' + m : '' + m);
+    }
     function spendByTypeForFy(key) {
       var months = CH.months || [], type = CH.type || [];
       var idxs = months.map(function (_, i) { return i; });
-      if (key !== 'all') {
+      if (CUSTOM) {
+        idxs = idxs.filter(function (i) { return monthInRange(channelMonthYM(months[i])); });
+      } else if (key !== 'all') {
         var fe = fyEndOf(key);
         idxs = idxs.filter(function (i) { return channelMonthFyEnd(months[i]) === fe; });
       }
@@ -399,6 +431,10 @@
     function renderChannelResults() {
       var body = document.getElementById('channelBody');
       if (!body) return;
+      if (CUSTOM) {   // FY-snapshot data (ROAS + Exec X) — no sub-FY history to filter
+        body.innerHTML = '<tr><td colspan="8" class="range-na">Not available for custom ranges — this table is reported by financial year. Clear the date range to view it.</td></tr>';
+        return;
+      }
       if (!CR.loaded) { body.innerHTML = '<tr><td colspan="8" class="muted">Loading…</td></tr>'; return; }
       var row = crRowFor(selFyKey());
       if (!row) {
@@ -417,6 +453,8 @@
       return fetchJSON('/api/marketing/roi').then(function (d) {
         ROI.rows = (d && d.rows && d.rows.data) || [];
         ROI.total = d && d.total;
+        ROI.byMonth = (d && d.byMonth && d.byMonth.data) || [];
+        ROI.pipelineMonths = (d && d.pipelineMonths && d.pipelineMonths.data) || [];
         ROI.loaded = true;
         renderCards();
       }).catch(function (err) { console.error('roi', err); ROI.loaded = true; renderCards(); });
@@ -428,6 +466,14 @@
         OV.loaded = true;
         renderCards();   // re-render so Cost per enquiry fills in
       }).catch(function (err) { console.error('overview', err); OV.loaded = true; });
+    }
+    // Enquiry count for the active custom range (day-level), for the Cost-per-enquiry card.
+    function loadOverviewRange() {
+      OV.range = null; renderCards();
+      return fetchJSON('/api/marketing/overview' + dateRangeQS()).then(function (d) {
+        OV.range = (d && d.enquiries && d.enquiries.range) || { total: 0 };
+        renderCards();
+      }).catch(function (err) { console.error('overview range', err); OV.range = { total: 0 }; renderCards(); });
     }
     function loadChannelSummary() {
       return fetchJSON('/api/marketing/channel-summary').then(function (d) {
@@ -459,9 +505,24 @@
       });
     }
 
+    function renderSR() {
+      renderCards();
+      renderChannelResults();
+      try { renderSpendByType(); } catch (e) { console.error('chart', e); }
+    }
+    // Custom date range: KPIs + Spend-by-type aggregate the monthly series (month-level);
+    // the Channel results table greys out; the enquiry count refetches day-level. Clearing
+    // restores FY mode.
+    function applyRange() {
+      CUSTOM = dateRangeActive();
+      renderSR();
+      if (CUSTOM) loadOverviewRange();
+    }
+
     initPage('marketing');
     renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('spend-roi');
+    renderDateRange();
     fillHeadInfo();            // fill the static card-head ⓘ placeholders once
     renderCards();              // initial (…)
     renderChannelResults();     // initial (Loading…)
@@ -470,11 +531,8 @@
     loadOverview();
     loadChannelSummary();
     loadChannelResults();
-    wireSeg('fySeg', function () {
-      renderCards();
-      renderChannelResults();
-      try { renderSpendByType(); } catch (e) { console.error('chart', e); }
-    });
+    wireSeg('fySeg', renderSR);
+    wireDateRange({ onChange: applyRange });
     window.onThemeChange = function () { try { renderSpendByType(); } catch (e) {} };
   </script>
 </body>

@@ -82,7 +82,39 @@ const OVERVIEW_MONTH_SQL = `
   GROUP BY month
   ORDER BY month`;
 
-export async function getMarketingOverview() {
+// Custom date-range variant — the SAME deduped-deal set, filtered to an arbitrary
+// [from,to] (inclusive) on each deal's effective creation date (min(cdate) across the
+// two sources). Day-level. $1=from, $2=to ('YYYY-MM-DD' or null). ads/indirect mirror
+// the per-FY breakdown (a deal in both sources counts in both; total is deal-distinct).
+const OVERVIEW_RANGE_SQL = `
+  WITH ads AS (
+    SELECT DISTINCT deal_id::text AS deal_id, cdate, 'ads' AS grp, (status = 'won') AS won
+    FROM public.roas_counted_deals WHERE cdate IS NOT NULL AND deal_id IS NOT NULL
+  ),
+  indirect AS (
+    SELECT DISTINCT deal_id::text AS deal_id, cdate, 'indirect' AS grp, (status = 1) AS won
+    FROM public.ac_indirect_deals WHERE cdate IS NOT NULL AND deal_id IS NOT NULL
+  ),
+  u AS ( SELECT * FROM ads UNION ALL SELECT * FROM indirect ),
+  dedup AS (
+    SELECT deal_id, min(cdate) AS cdate,
+      bool_or(grp = 'ads')      AS in_ads,
+      bool_or(grp = 'indirect') AS in_indirect,
+      bool_or(won)              AS won
+    FROM u GROUP BY deal_id
+  )
+  SELECT count(*)                                       AS total,
+         count(*) FILTER (WHERE in_ads)                 AS ads,
+         count(*) FILTER (WHERE in_indirect)            AS indirect,
+         count(*) FILTER (WHERE won)                    AS "totalWon",
+         count(*) FILTER (WHERE won AND in_ads)         AS "adsWon",
+         count(*) FILTER (WHERE won AND in_indirect)    AS "indirectWon"
+  FROM dedup
+  WHERE ($1::date IS NULL OR cdate::date >= $1::date)
+    AND ($2::date IS NULL OR cdate::date <= $2::date)`;
+
+export async function getMarketingOverview(opts = {}) {
+  const { from = null, to = null } = opts || {};
   if (!supabaseConfigured()) {
     const pending = (source) => ({
       byFy: [], byMonth: [], total: null,
@@ -114,8 +146,16 @@ export async function getMarketingOverview() {
     { ads: 0, indirect: 0, total: 0 },
   );
 
+  // Custom date-range roll-up (day-level), only when a range was requested.
+  let enqRange = null, bookRange = null;
+  if (from || to) {
+    const rr = (await q(OVERVIEW_RANGE_SQL, [from, to]))[0] || {};
+    enqRange = { from, to, ads: n(rr.ads), indirect: n(rr.indirect), total: n(rr.total) };
+    bookRange = { from, to, ads: n(rr.adsWon), indirect: n(rr.indirectWon), total: n(rr.totalWon) };
+  }
+
   return {
-    enquiries: { byFy: enqByFy, byMonth: enqByMonth, total: sum(enqByFy), meta: { status: 'live', source: SRC_ENQ, note: null } },
-    bookings: { byFy: bookByFy, byMonth: bookByMonth, total: sum(bookByFy), meta: { status: 'live', source: SRC_BOOK, note: null } },
+    enquiries: { byFy: enqByFy, byMonth: enqByMonth, total: sum(enqByFy), range: enqRange, meta: { status: 'live', source: SRC_ENQ, note: null } },
+    bookings: { byFy: bookByFy, byMonth: bookByMonth, total: sum(bookByFy), range: bookRange, meta: { status: 'live', source: SRC_BOOK, note: null } },
   };
 }

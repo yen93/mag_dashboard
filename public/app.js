@@ -380,6 +380,133 @@ function renderSalesSidebar(active) {
   }).join('');
 }
 
+/* ---------- Shared Custom Date Range control ---------- */
+/* Mirrors the Lead Tracker (ac_contact_sources.html) From/To + quick-range popover,
+   but packaged as a shared helper so the 8 Marketing sub-tabs don't hand-duplicate it.
+   renderDateRange() injects the trigger + popover right AFTER the #fySeg toggle so it
+   sits beside the FY filter. wireDateRange({onChange}) wires open/close + the inputs and
+   calls onChange(range) on every change. getDateRange() -> {from,to} ('' when unset);
+   dateRangeActive() -> bool; dateRangeQS() -> '?from=..&to=..' (or ''). While a range is
+   set the #fySeg toggle is dimmed (range takes precedence). Quick ranges: 30d/90d/12m/All. */
+function renderDateRange(opts) {
+  opts = opts || {};
+  var seg = document.getElementById(opts.after || 'fySeg');
+  if (!seg || document.getElementById('drWrap')) return;
+  var wrap = document.createElement('div');
+  wrap.className = 'dr-daterange';
+  wrap.id = 'drWrap';
+  wrap.innerHTML =
+    '<span class="ctl-label">Custom date range</span>' +
+    '<button type="button" class="dr-btn" id="drBtn" aria-haspopup="true" aria-expanded="false">Set range</button>' +
+    '<div class="dr-popup" id="drPopup" hidden>' +
+      '<div class="dr-field"><label for="drFrom">From</label><input type="date" id="drFrom" /></div>' +
+      '<div class="dr-field"><label for="drTo">To</label><input type="date" id="drTo" /></div>' +
+      '<div class="dr-quick" id="drQuick">' +
+        '<button type="button" data-days="30">30d</button>' +
+        '<button type="button" data-days="90">90d</button>' +
+        '<button type="button" data-days="365">12m</button>' +
+        '<button type="button" data-days="0" class="active">All</button>' +
+      '</div>' +
+      '<button type="button" class="dr-reset" id="drReset">Reset</button>' +
+    '</div>';
+  seg.parentNode.insertBefore(wrap, seg.nextSibling);   // right beside the FY toggle
+}
+
+function getDateRange() {
+  var f = document.getElementById('drFrom'), t = document.getElementById('drTo');
+  return { from: (f && f.value) || '', to: (t && t.value) || '' };
+}
+function dateRangeActive() {
+  var r = getDateRange();
+  return !!(r.from || r.to);
+}
+function dateRangeQS() {
+  var r = getDateRange(), q = [];
+  if (r.from) q.push('from=' + encodeURIComponent(r.from));
+  if (r.to) q.push('to=' + encodeURIComponent(r.to));
+  return q.length ? ('?' + q.join('&')) : '';
+}
+function setFySegDisabled(disabled) {
+  var seg = document.getElementById('fySeg');
+  if (!seg) return;
+  seg.classList.toggle('seg-disabled', !!disabled);
+  seg.setAttribute('aria-disabled', String(!!disabled));
+}
+
+function wireDateRange(cfg) {
+  cfg = cfg || {};
+  var onChange = cfg.onChange || function () {};
+  var btn = document.getElementById('drBtn');
+  var popup = document.getElementById('drPopup');
+  var fromEl = document.getElementById('drFrom');
+  var toEl = document.getElementById('drTo');
+  if (!btn || !popup) return;
+
+  function fmtShort(iso) {               // 'YYYY-MM-DD' -> 'D Mon YYYY'
+    if (!iso) return '';
+    var p = String(iso).split('-'); if (p.length !== 3) return iso;
+    var mon = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][(+p[1]) - 1] || p[1];
+    return (+p[2]) + ' ' + mon + ' ' + p[0];
+  }
+  function clearQuick() {
+    popup.querySelectorAll('#drQuick button').forEach(function (b) { b.classList.remove('active'); });
+  }
+  function updateLabel() {
+    var r = getDateRange();
+    var quick = popup.querySelector('#drQuick button.active');
+    var days = quick ? quick.getAttribute('data-days') : null;
+    var label, active = true;
+    if (days && days !== '0') label = 'Last ' + quick.textContent;
+    else if (r.from && r.to) label = fmtShort(r.from) + ' – ' + fmtShort(r.to);
+    else if (r.from) label = 'From ' + fmtShort(r.from);
+    else if (r.to) label = 'Until ' + fmtShort(r.to);
+    else { label = 'Set range'; active = false; }
+    btn.textContent = label;
+    btn.classList.toggle('active', active);
+    setFySegDisabled(active);
+  }
+  function fire() { updateLabel(); onChange(getDateRange()); }
+  function setQuick(days) {
+    if (!days) { fromEl.value = ''; toEl.value = ''; }
+    else {
+      var end = new Date();
+      var start = new Date(); start.setDate(start.getDate() - days);
+      toEl.value = end.toISOString().slice(0, 10);
+      fromEl.value = start.toISOString().slice(0, 10);
+    }
+    fire();
+  }
+
+  btn.addEventListener('click', function (e) {
+    e.stopPropagation();
+    var willOpen = popup.hidden;
+    popup.hidden = !willOpen;
+    btn.setAttribute('aria-expanded', String(willOpen));
+  });
+  popup.addEventListener('click', function (e) { e.stopPropagation(); });
+  document.addEventListener('click', function (e) {
+    if (!popup.hidden && e.target !== btn) { popup.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+  });
+  document.addEventListener('keydown', function (e) {
+    if (e.key === 'Escape' && !popup.hidden) { popup.hidden = true; btn.setAttribute('aria-expanded', 'false'); }
+  });
+  fromEl.addEventListener('change', function () { clearQuick(); fire(); });
+  toEl.addEventListener('change', function () { clearQuick(); fire(); });
+  popup.querySelectorAll('#drQuick button').forEach(function (b) {
+    b.addEventListener('click', function () {
+      clearQuick(); b.classList.add('active');
+      setQuick(Number(b.getAttribute('data-days')));
+    });
+  });
+  document.getElementById('drReset').addEventListener('click', function () {
+    clearQuick();
+    popup.querySelector('#drQuick button[data-days="0"]').classList.add('active');
+    fromEl.value = ''; toEl.value = '';
+    fire();
+  });
+  updateLabel();
+}
+
 /* Sortable + searchable table. Builds its own search box and re-renders on
    header click / typing. columns: [{key,label,unit,render}] (same shape as
    renderTable; `unit:'date'` sorts chronologically). opts:

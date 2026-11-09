@@ -51,7 +51,31 @@ const CARDS_SQL = `
   FROM keynote FULL OUTER JOIN offsite ON keynote.fy_end = offsite.fy_end
   ORDER BY 1`;
 
-export async function getMarketingNurtureEvents() {
+// Custom date-range variant — same counts, but filtered to an arbitrary [from,to]
+// (inclusive) on the deal cdate instead of grouped by FY. Day-level: both deal
+// tables are row-per-deal with a real cdate. $1=from, $2=to ('YYYY-MM-DD' or null).
+const RANGE_SQL = `
+  WITH keynote AS (
+    SELECT count(*) FILTER (WHERE status = 1) AS keynote_clients
+    FROM public.activecampaign_deals
+    WHERE "group" = '3' AND cdate IS NOT NULL
+      AND ($1::date IS NULL OR cdate::date >= $1::date)
+      AND ($2::date IS NULL OR cdate::date <= $2::date)
+  ),
+  offsite AS (
+    SELECT count(*) AS enquiries, count(*) FILTER (WHERE status = 1) AS booked
+    FROM public.post_conference_deals
+    WHERE cdate IS NOT NULL
+      AND ($1::date IS NULL OR cdate::date >= $1::date)
+      AND ($2::date IS NULL OR cdate::date <= $2::date)
+  )
+  SELECT keynote.keynote_clients AS "keynoteClients",
+         offsite.enquiries       AS "offsiteEnquiries",
+         offsite.booked          AS "offsiteBooked"
+  FROM keynote, offsite`;
+
+export async function getMarketingNurtureEvents(opts = {}) {
+  const { from = null, to = null } = opts || {};
   if (!supabaseConfigured()) {
     return {
       byFy: [], total: { keynoteClients: 0, offsiteEnquiries: 0, offsiteBooked: 0 },
@@ -60,6 +84,18 @@ export async function getMarketingNurtureEvents() {
   }
   const n = (v) => Number(v) || 0;
   const rows = await q(CARDS_SQL);
+
+  // Custom date-range roll-up (day-level), only when a range was requested.
+  let range = null;
+  if (from || to) {
+    const rr = (await q(RANGE_SQL, [from, to]))[0] || {};
+    range = {
+      from, to,
+      keynoteClients: n(rr.keynoteClients),
+      offsiteEnquiries: n(rr.offsiteEnquiries),
+      offsiteBooked: n(rr.offsiteBooked),
+    };
+  }
 
   const byFy = rows.map((r) => ({
     fyEnd: n(r.fyEnd),
@@ -80,5 +116,5 @@ export async function getMarketingNurtureEvents() {
     { keynoteClients: 0, offsiteEnquiries: 0, offsiteBooked: 0 },
   );
 
-  return { byFy, total, meta: { status: 'live', source: SRC, note: null } };
+  return { byFy, total, range, meta: { status: 'live', source: SRC, note: null } };
 }

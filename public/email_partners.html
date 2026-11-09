@@ -241,7 +241,7 @@
     </main>
   </div>
 
-  <script src="app.js?v=13"></script>
+  <script src="app.js?v=14"></script>
   <script>
     /* Email & Partners — LIVE.
        Email KPIs come from ActiveCampaign (run_campaign_performance_report), and
@@ -252,6 +252,10 @@
        'pending' chip. */
 
     var EP = { byFy: {}, all: null, loaded: false, capturedAt: null };
+    // Email & Partners is stored only as FY-aggregate rows (one row = whole-FY KPIs), so a
+    // custom date range narrower than an FY can't be computed. While a range is active the
+    // whole page greys out (the FY toggle is dimmed by the shared control).
+    var CUSTOM = false;
 
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
@@ -324,6 +328,7 @@
     function renderKpiRow() {
       var grid = document.getElementById('epKpis');
       if (!grid) return;
+      if (CUSTOM) { grid.innerHTML = '<div class="range-na">Not available for custom ranges — Email &amp; Partners is reported by financial year. Clear the date range to view it.</div>'; return; }
       if (!EP.loaded) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">Loading…</div>'; return; }
       var r = curRow();
       if (!r) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">No snapshot for ' + esc(fyName(selFyKey())) + ' yet.</div>'; return; }
@@ -369,6 +374,7 @@
     function renderOutreachTable() {
       var body = document.getElementById('outreachBody');
       if (!body) return;
+      if (CUSTOM) { body.innerHTML = '<tr><td colspan="8" class="range-na">Not available for custom ranges — reported by financial year. Clear the date range to view it.</td></tr>'; return; }
       if (!EP.loaded) { body.innerHTML = '<tr><td colspan="8" class="muted">Loading…</td></tr>'; return; }
       var r = curRow(), prev = prevRow();
       if (!r) { body.innerHTML = '<tr><td colspan="8" class="muted">No snapshot for ' + esc(fyName(selFyKey())) + ' yet.</td></tr>'; return; }
@@ -436,11 +442,15 @@
       });
     }
 
+    function applyRange() { CUSTOM = dateRangeActive(); renderAll(); }
+
     initPage('marketing');
     renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('email-partners');
+    renderDateRange();
     fillHeadInfo();              // fill the static table-heading info tool(s)
     wireSeg('fySeg', renderAll);
+    wireDateRange({ onChange: applyRange });
     renderAll();                 // loading placeholders
     load();
   </script>

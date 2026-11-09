@@ -348,6 +348,32 @@ Cloud Run.
   `.kpi-info`/`infoSpan` ⓘ on `marketing.html`/`leads_bookings.html` were migrated to `infoTip`, and two
   dead-wiring bugs were fixed (`email_partners.html` had `head-info` spans but never called
   `fillHeadInfo()`). Frontend-only → needs a **Cloud Run redeploy**.
+  **CUSTOM DATE RANGE filter — shared control on ALL 8 Marketing sub-tabs (as of 2026-11-09):** a From/To +
+  quick-range (**30d/90d/12m/All**) popover (modelled on the Lead Tracker's `.acs-daterange`) sits **beside the
+  `#fySeg` toggle** on every primary Marketing sub-tab. It is a **single source of truth in `app.js`** (same
+  ethos as `renderMarketingSidebar` — **don't hand-duplicate**): `renderDateRange()` injects the control right
+  **after `#fySeg`** (so no per-page control markup), `wireDateRange({onChange})` wires it, and
+  `getDateRange()` / `dateRangeActive()` / `dateRangeQS()` / `setFySegDisabled()` are the accessors. CSS is in
+  `app.css` (`.dr-*` + `.segmented.seg-disabled` to dim the FY toggle + `.range-na` for greyed widgets);
+  `ac_contact_sources.html` keeps its own inline `.acs-*` copy and is **untouched**. **Interaction:** while a
+  range is set it **OVERRIDES the FY toggle** (dimmed); clearing/Reset restores FY mode. Each page defines a
+  `CUSTOM` flag + an `applyRange` passed as the `onChange`. **Granularity is per widget — the data dictates it,
+  not the UI:** widgets with per-row dates filter at **day** level, month-aggregated widgets at **month** level,
+  and **snapshot / FY-aggregate-only widgets GREY OUT** (`.range-na` "Not available for custom ranges") rather
+  than show a misleading number. Per page: `leads_bookings` + `nurture_events` = day-level everywhere;
+  `marketing` = count cards day-level + $ cards/charts month-level (**AI insight greyed** — it's FY-keyed);
+  `spend_roi` = KPIs + spend-by-type month-level (**Channel results table greyed**); `website_search` =
+  enquiries/organic/reviews day-level (**Sessions / AI-visits / traffic chart+table greyed**); `monthly_log` =
+  adds a **"Selected range" column** to the Yearly summary (month-level; FY toggle is inert here either way);
+  `content_social` + `email_partners` = **all live widgets greyed** (weekly-snapshot / FY-aggregate only).
+  **Backend:** a `reqRange(req)` helper in `server/index.js` validates optional **`?from=&to=`** (YYYY-MM-DD)
+  and folds them into the cache key; it threads them into **4 producers** — `marketing-overview.js`,
+  `marketing-leads-by-source.js`, `marketing-nurture-events.js`, `marketing-website-search.js` — each of which
+  adds a day-level **`range`** payload section (filtered on `cdate` / `event_time` / `review_create_time`).
+  **`/roi` + `/channel-summary` are NOT changed** — those pages aggregate their already-returned `byMonth` /
+  `months` series client-side (ROI also uses `pipelineMonths` for range `dealsWon`). **No DB migration, no new
+  secrets** (producers only SELECT). **All 8 pages bumped to `app.js?v=14`.** Server + frontend → needs a
+  **Cloud Run redeploy**.
   **Marketing OVERVIEW is now design-guide-styled + partly LIVE (as of 2026-11-05):** `marketing.html`
   follows `DESIGN_GUIDE.md` (page-local `--mkt-*` tokens, card/KPI hover polish, gradient-active
   `.segmented` toggles, `.kpi-info` ⓘ, `.mkt-take` callout). Its period filter is the **standard

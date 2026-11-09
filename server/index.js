@@ -310,6 +310,17 @@ app.use('/api/operations', operations);
 // deals from activecampaign_deals. See server/metrics/marketing-roi.js. Cached briefly.
 const marketing = express.Router();
 marketing.use(requireAuth);
+
+// Parse + validate the optional ?from=&to= (YYYY-MM-DD) date-range params shared by the
+// range-aware marketing routes (overview / leads-by-source / website-search / nurture-events).
+// Returns {from,to} (null when absent/invalid) and a cache-key `suffix` ('' when no range) so a
+// range response is cached under its own key and never collides with the default FY payload.
+function reqRange(req) {
+  const ok = (s) => (typeof s === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null);
+  const from = ok(req.query.from), to = ok(req.query.to);
+  const suffix = (from || to) ? `:${from || ''}~${to || ''}` : '';
+  return { from, to, suffix };
+}
 marketing.get('/roi', async (_req, res) => {
   try {
     const payload = await cached('marketing:roi', getMarketingRoi, 10 * 60 * 1000);
@@ -359,9 +370,10 @@ marketing.get('/ad-platforms', async (_req, res) => {
 // "Keynote enquiries" headline: per-FY count of deals created across the four
 // deal groups (ads / organic / bureau / tailor), deduped by deal. See
 // server/metrics/marketing-overview.js. Cached briefly.
-marketing.get('/overview', async (_req, res) => {
+marketing.get('/overview', async (req, res) => {
+  const { from, to, suffix } = reqRange(req);
   try {
-    const payload = await cached('marketing:overview', getMarketingOverview, 10 * 60 * 1000);
+    const payload = await cached('marketing:overview' + suffix, () => getMarketingOverview({ from, to }), 10 * 60 * 1000);
     res.json(payload);
   } catch (err) {
     console.error('[marketing:overview]', err);
@@ -371,9 +383,10 @@ marketing.get('/overview', async (_req, res) => {
 // Leads & Bookings by source — enquiries + bookings split across five fixed lead sources
 // (Google/Bing cpc, organic, Tailor, Bureau), per month + per FY, for the stacked chart and
 // "By source" table on leads_bookings.html. See server/metrics/marketing-leads-by-source.js.
-marketing.get('/leads-by-source', async (_req, res) => {
+marketing.get('/leads-by-source', async (req, res) => {
+  const { from, to, suffix } = reqRange(req);
   try {
-    const payload = await cached('marketing:leads-by-source', getMarketingLeadsBySource, 10 * 60 * 1000);
+    const payload = await cached('marketing:leads-by-source' + suffix, () => getMarketingLeadsBySource({ from, to }), 10 * 60 * 1000);
     res.json(payload);
   } catch (err) {
     console.error('[marketing:leads-by-source]', err);
@@ -384,9 +397,10 @@ marketing.get('/leads-by-source', async (_req, res) => {
 // public.ga4_events_staging, a rolling ~60-day GA4 conversion-event window. No session /
 // pageview data is retained in Supabase, so the page shows sessions etc. as "pending".
 // See server/metrics/marketing-website-search.js. Cached briefly.
-marketing.get('/website-search', async (_req, res) => {
+marketing.get('/website-search', async (req, res) => {
+  const { from, to, suffix } = reqRange(req);
   try {
-    const payload = await cached('marketing:website-search', getWebsiteSearch, 10 * 60 * 1000);
+    const payload = await cached('marketing:website-search' + suffix, () => getWebsiteSearch({ from, to }), 10 * 60 * 1000);
     res.json(payload);
   } catch (err) {
     console.error('[marketing:website-search]', err);
@@ -435,9 +449,10 @@ marketing.get('/content-metrics', async (_req, res) => {
 // (WON pipeline-3 deals from activecampaign_deals) + offsite enquiries (ALL) / offsite
 // bookings (WON) in pipeline 17 (public.post_conference_deals). The page computes the 4th
 // card, the keynote→offsite ratio, from these. See server/metrics/marketing-nurture-events.js.
-marketing.get('/nurture-events', async (_req, res) => {
+marketing.get('/nurture-events', async (req, res) => {
+  const { from, to, suffix } = reqRange(req);
   try {
-    const payload = await cached('marketing:nurture-events', getMarketingNurtureEvents, 10 * 60 * 1000);
+    const payload = await cached('marketing:nurture-events' + suffix, () => getMarketingNurtureEvents({ from, to }), 10 * 60 * 1000);
     res.json(payload);
   } catch (err) {
     console.error('[marketing:nurture-events]', err);

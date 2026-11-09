@@ -1,0 +1,151 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-09
+Session: Added a shared "Custom Date Range" filter (From/To + quick-range popover,
+like ac_contact_sources.html) beside the FY toggle on ALL 8 primary Marketing
+sub-tabs, wired to genuinely filter the data at whatever granularity each widget
+supports (day / month), and to gracefully grey out the snapshot-only widgets that
+have no sub-FY history. Shared control in app.js/app.css; new optional ?from=&to=
+params on 4 backend producers; per-page frontend wiring; all 8 pages → app.js?v=14.
+Server + frontend change → needs a manual Cloud Run redeploy. No DB migrations, no
+new secrets, no git (user handles that).
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret, token, password, or connection string
+was pasted into this chat. The loaded CLAUDE.md references credential *names*
+(SUPABASE_DB_URL, GMAIL_*, OPENAI_API_KEY, APIFY_API_TOKEN, LINKEDIN_LI_AT, etc.)
+but never their values, and nothing sensitive was echoed by any tool.
+
+--------------------------------------------------------------------------------
+USER:
+"update each of the 8 new tabs in Marketing. Add a Custom Date Range beside the FY
+toggle filters just like the one in ac_contact_sources.html"
+(Line 136 of public/ac_contact_sources.html — the "Custom Date Range" label — was
+selected as context.)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the reference control and the 8 target pages before building.
+
+Read the reference in public/ac_contact_sources.html: a .acs-daterange popover
+(trigger button #acsDateBtn → #acsDatePopup holding From/To date inputs + quick
+buttons 7d/30d/60d/All + Reset), its inline CSS (lines 8-42), and its JS
+(parseInput/inRange/filteredRows, wireToolbar open-close + click-away + Esc,
+updateDateLabel, setQuick) — a client-side row filter on contact cdate.
+
+Identified the 8 primary Marketing sub-tabs: marketing.html (Overview),
+leads_bookings.html, spend_roi.html, content_social.html, email_partners.html,
+website_search.html, nurture_events.html, monthly_log.html — all FY-driven by a
+shared #fySeg segmented toggle inside a .mkt-controls bar.
+
+Raised the key design issue: the reference filters ROW-level data by DAY, but the
+Marketing tabs are FY-aggregated, so "a date range that truly filters everywhere"
+is physically impossible for widgets whose sub-FY history was never collected.
+Asked the user (AskUserQuestion) how the range should behave → user chose
+"Full functional build" (add granularity even to snapshot pages).
+
+Entered plan mode and ran THREE Explore agents in parallel to map feasibility:
+  1. Deal/monthly backends (overview, leads-by-source, roi, channel-results,
+     channel-summary): overview + leads-by-source are day-level via cdate; roi is
+     mixed (deals day-level, revenue/spend month-only); channel-summary month-only;
+     channel-results is FY-snapshot (ROAS has no month breakdown).
+  2. Snapshot backends: nurture-events day-level (cdate on both deal tables);
+     website-search mixed (enquiries cdate / organicAll event_time / reviews
+     review_create_time = day-level; traffic snapshots = weekly cumulative);
+     email-partner-metrics = FY-aggregate rows (NOT filterable); content-metrics =
+     single key/value (NOT filterable); social platforms = weekly snapshots.
+  3. Frontend: FY toggle markup is byte-identical on all 8; wireSeg + selFyKey are
+     copy-pasted per page; every page holds its full multi-FY payload client-side;
+     no existing shared date-range helper in app.js; the .acs-* CSS is inline, not
+     in app.css; versions were 6×v13, nurture v11, monthly_log v10.
+
+Confirmed route/caching shape in server/index.js (each marketing route =
+cached('marketing:X', getX, 10min) with a parameterless producer) and that ROI's
+byMonth + channel-summary's full month series are already returned, so those can
+be aggregated client-side (no backend change for roi/channel-summary).
+
+Because a day-level build is genuinely impossible for email_partners (whole page),
+content_social (followers/newsletter), spend_roi Channel-results, and
+website_search traffic tiles, asked a second AskUserQuestion on how to handle those
+→ user chose "Hide range on those widgets" (grey them out / "Not available for
+custom ranges" when a custom range is active). Wrote the plan to the plan file and
+got it approved via ExitPlanMode.
+
+Implemented:
+
+SHARED CONTROL
+- public/app.css: new .dr-* rule set (trigger .dr-btn, .dr-popup, .dr-field date
+  inputs, .dr-quick pills, .dr-reset) mirroring the acs-* styles but theme-var
+  based; .segmented.seg-disabled (dims the FY toggle while a range is active);
+  .range-na (greyed-widget placeholder). ac_contact_sources.html left untouched.
+- public/app.js: new shared helpers — renderDateRange() injects the popover right
+  AFTER #fySeg (quick ranges tuned 30d/90d/12m/All); wireDateRange({onChange})
+  ports the proven open/close + click-away + Esc + From/To + quick + Reset logic
+  and calls onChange on every change; getDateRange()/dateRangeActive()/
+  dateRangeQS()/setFySegDisabled(). When a range is set the #fySeg toggle dims and
+  the range takes precedence; clearing restores FY mode.
+
+BACKEND (optional {from,to} → a `range` payload section; cache keys gain a suffix)
+- server/index.js: new reqRange(req) helper (validates YYYY-MM-DD, builds a cache
+  suffix) wired into 4 routes — /overview, /leads-by-source, /website-search,
+  /nurture-events — each now `cached('marketing:X'+suffix, () => getX({from,to}))`.
+- marketing-overview.js: OVERVIEW_RANGE_SQL — same deduped-deal set filtered to
+  [from,to] on each deal's min(cdate); attaches `range` to enquiries + bookings.
+- marketing-leads-by-source.js: factored the 5-source UNION into SRC_CTE; added a
+  RANGE_SQL bounded on cdate; returns `range.data` (per-source × month rows).
+- marketing-nurture-events.js: RANGE_SQL counting pipeline-3/17 deals in [from,to]
+  on cdate; returns a `range` object.
+- marketing-website-search.js: MATCHED/ORGANIC_ALL/REVIEWS range SQLs (cdate /
+  event_time / review_create_time) via a rangeRollup(); sessions/aiVisits left null
+  (snapshot — greyed on the page).
+- ROI + channel-summary: NO backend change — aggregated client-side from their
+  existing byMonth / months series.
+
+FRONTEND PER PAGE (all bumped to app.js?v=14; each adds renderDateRange() +
+wireDateRange({onChange: applyRange}) + a CUSTOM flag)
+- marketing.html: count cards (enquiries/bookings/rate) refetch day-level
+  /overview?from=&to=; revenue/spend/ROI/cost-per-enquiry + both monthly charts
+  re-aggregate the already-loaded monthly series via monthInRange(); AI insight
+  greyed (FY-keyed). mroiRow() synthesizes a month-level range row.
+- leads_bookings.html: all widgets day-level — refetches /leads-by-source +
+  /overview with the range; renders range.data.
+- spend_roi.html: 5 KPIs + Spend-by-type aggregate the monthly series (added
+  ROI.byMonth + ROI.pipelineMonths + channelMonthYM() month-range filter);
+  Channel-results table greyed; enquiry count refetched day-level for cost-per-enq.
+- nurture_events.html: 4 cards + conversion refetch day-level; Exec X table filters
+  the static EXEC_X rows by a new nominal `date` per session.
+- website_search.html: enquiries/organic/organicAll/reviews filter day-level
+  (refetch); Sessions / AI-visit tiles + traffic chart + traffic table greyed.
+- content_social.html: all live widgets (follower cards, Platforms table,
+  Engagement chart, Newsletter) greyed under a range (snapshot/point-in-time).
+- email_partners.html: whole page greyed under a range (FY-aggregate rows only).
+- monthly_log.html: adds a "Selected range" column to the Yearly summary (live rows
+  summed over months in range via rangeSum(); header th added/removed dynamically;
+  loading colspan adjusts). FY toggle here is inert either way.
+
+VERIFICATION
+- node --check passed on index.js + all 5 modified server modules + app.js.
+- Imported the 4 modified producers and ran them with {from,to} (no DB locally →
+  pending path) — all returned cleanly.
+- Booted the server on :8099: marketing.html 200, app.js 200, and
+  /api/marketing/overview?from=&to= returns 401 without auth (requireAuth runs
+  before the handler, as expected) — route exists and reqRange is safe.
+- Grep-confirmed all 8 pages have renderDateRange() + wireDateRange() + v14.
+
+Told the user a manual Cloud Run redeploy is required (server + frontend change),
+no new secrets, producers only SELECT, and that I did not deploy/commit/push.
+Offered to match the exact 7d/30d/60d quick ranges and to document the feature in
+CLAUDE.md if wanted.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (save chat history, update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp skill: wrote this chat-history file; reviewed as_built.txt, CLAUDE.md,
+and .gitignore and updated them to reflect the new Custom Date Range feature where
+warranted (details reported back to the user). Ran no git commands.
+
+================================================================================
+END OF EXPORT
+================================================================================
