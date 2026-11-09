@@ -588,7 +588,7 @@
       if (_c2) _c2.destroy();
       _c2 = new Chart(el.getContext('2d'), {
         type: 'line',
-        data: { labels: rows.map(function (r) { return monthLabel(r.month); }), datasets: [
+        data: { labels: rows.map(function (r) { return ymSpanLabel(r.month); }), datasets: [
           { label: 'Enquiries', data: rows.map(function (r) { return r.enq; }),  borderColor: C_ENQ,  backgroundColor: C_ENQ,  borderWidth: 2, tension: 0.3, pointRadius: 2, pointHoverRadius: 4 },
           { label: 'Bookings',  data: rows.map(function (r) { return r.book; }), borderColor: C_BOOK, backgroundColor: C_BOOK, borderWidth: 2, tension: 0.3, pointRadius: 2, pointHoverRadius: 4 },
         ] },

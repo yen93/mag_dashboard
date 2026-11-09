@@ -1,0 +1,92 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-09
+Session: Applied the "Revenue vs spend by month" month-label format
+([Month] 1-[last day], e.g. "Jul 1-31") to the live month-axis charts across the
+eight Marketing sub-tabs. Only two charts actually have a month-bucketed x-axis:
+marketing.html's "Enquiries vs bookings" and leads_bookings.html's "Enquiries by
+source" — both updated. The six other listed tabs have no live monthly chart.
+Frontend-only; needs a manual Cloud Run redeploy.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. Credentials were not involved in this session.
+
+--------------------------------------------------------------------------------
+USER:
+(Pasted task.) tabs_list = marketing.html, leads_bookings.html, spend_roi.html,
+content_social.html, email_partners.html, website_search.html, nurture_events.html,
+monthly_log.html. Main task: (1) update all graphs with a monthly tagging in
+tabs_list and display them as [Month] 1-[last day of the month]; (2) use the
+"Revenue vs spend by month" graph in marketing.html as reference.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Studied the reference first. In public/marketing.html, renderMonthChart() (the
+"Revenue vs spend by month" combo chart) already labels its x-axis with a full
+calendar-month span via two hoisted helpers:
+  - MON_ABBR = ['Jan'..'Dec']
+  - monthSpanLabel(year, m1) -> MON_ABBR[m1-1] + ' 1-' + <last day of month>,
+    where last = new Date(Date.UTC(year, m1, 0)).getUTCDate()
+  - ymSpanLabel(ym) -> splits "YYYY-MM" and calls monthSpanLabel
+So the target label format is e.g. "Jul 1-31".
+
+Surveyed every chart in all eight tabs (grep for new Chart / labels: / monthLabel /
+canvas / lineChart etc.) to find which ones actually have a MONTH x-axis:
+  - marketing.html: TWO charts. renderMonthChart() already uses ymSpanLabel
+    (reference, no change). renderEnqBookChart() ("Enquiries vs bookings") used
+    monthLabel(r.month) -> NEEDED the span format. r.month is "YYYY-MM".
+  - leads_bookings.html: _srcChart ("Enquiries by source", stacked bar per month)
+    used monthLabel(m), m = "YYYY-MM" -> NEEDED the span format. This file had no
+    span helper of its own.
+  - spend_roi.html: only chart is "Spend by type" — x-axis = spend-type names, not
+    months. Skipped (not a monthly graph).
+  - content_social.html: only LIVE chart is "Engagement by platform" (x-axis =
+    platform names). The hardcoded ['Jul','Aug',...] arrays in MOCK_BY_FY.chart are
+    DEAD sample data (per CLAUDE.md only kpis[].label is still read). No live
+    monthly chart -> skipped.
+  - website_search.html: traffic chart is keyed by FY (r.fy, "FY22".."FY27") in the
+    default mode, or by AI-source name in 'sources' mode — neither is a month axis.
+    Skipped.
+  - email_partners.html, nurture_events.html, monthly_log.html: no Chart.js charts
+    at all (KPI cards + tables only). Nothing to do.
+
+Confirmed app.js monthLabel(ym) expects "YYYY-MM" and returns "Jul 25", so the
+input format matched what ymSpanLabel needs.
+
+Made the edits:
+  1. public/marketing.html (renderEnqBookChart): changed the labels mapper from
+     monthLabel(r.month) to ymSpanLabel(r.month). ymSpanLabel/monthSpanLabel are
+     function declarations (hoisted), so calling from the earlier-defined
+     renderEnqBookChart is safe.
+  2. public/leads_bookings.html: added a self-contained helper block just above the
+     "Enquiries-by-source stacked chart" section —
+       var _SRC_MON_ABBR = ['Jan'..'Dec'];
+       function ymSpanLabel(ym) { ... MON_ABBR[m1-1] + ' 1-' + lastDay ... }
+     then changed renderSourceChart's labels mapper from monthLabel(m) to
+     ymSpanLabel(m).
+
+Verified with grep that ymSpanLabel now appears in both files at the chart label
+sites, and that no naming collision exists (leads_bookings had no prior ymSpanLabel).
+
+Reported: only app.js-independent inline page edits were made, so NO app.js?v= bump
+is needed; the change is frontend-only and needs a manual Cloud Run redeploy (per
+CLAUDE.md, Claude never deploys the dashboard). Offered to extend the format to the
+non-monthly charts (website_search FY chart, content_social sample charts) if that
+was actually intended.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history; update as_built.txt / CLAUDE.md / .gitignore as needed;
+no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps. Saved this transcript. Reviewed as_built.txt and CLAUDE.md:
+the change is a cosmetic x-axis label format on two existing charts and does not
+alter the project's built state, data pipeline, routes, env, or any documented
+convention, so neither file needed an edit. .gitignore already covers all sensitive
+patterns — left as is. No git commands run — user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

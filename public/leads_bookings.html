@@ -309,6 +309,14 @@
     }
 
     // ----- Enquiries-by-source stacked chart (per month) -----
+    // X-axis label = full calendar-month span "Mon 1-<last day>" (e.g. Jul 1-31),
+    // matching marketing.html's "Revenue vs spend by month" reference chart.
+    var _SRC_MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function ymSpanLabel(ym) {
+      var p = String(ym).split('-'), year = +p[0], m1 = +p[1];
+      var last = new Date(Date.UTC(year, m1, 0)).getUTCDate();
+      return _SRC_MON_ABBR[m1 - 1] + ' 1-' + last;
+    }
     var _srcChart = null;
     function renderSourceChart() {
       var el = document.getElementById('sourceCanvas');
@@ -333,7 +341,7 @@
       if (_srcChart) _srcChart.destroy();
       _srcChart = new Chart(el.getContext('2d'), {
         type: 'bar',
-        data: { labels: months.map(function (m) { return monthLabel(m); }), datasets: datasets },
+        data: { labels: months.map(function (m) { return ymSpanLabel(m); }), datasets: datasets },
         options: {
           responsive: true, maintainAspectRatio: false,
           interaction: { mode: 'index', intersect: false },
