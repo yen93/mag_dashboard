@@ -164,6 +164,23 @@
           </div> -->
         </div>
       </div>
+
+      <!-- All rows returned by the /leads-by-source DB query (raw per-source × per-month grain) -->
+      <div class="card" style="margin-top:16px">
+        <div class="card-head" style="display:block;margin-bottom:10px">
+          <h3>All query rows <span class="head-info" data-info="Every row returned by the leads-by-source DB query — one row per lead source per month, with its FY, enquiries and bookings (the raw grain the chart and By-source table aggregate). Not filtered by the FY toggle." data-src="GET /api/marketing/leads-by-source — roas_counted_deals (Paid Ads) + ga4_ac_contact_source (Organic) + ac_indirect_deals (Tailor/Bureau, excl. paid); one row per source × month, FY from the deal cdate."></span></h3>
+          <div class="muted" style="font-size:12px;margin-top:4px" id="allRowsCount"></div>
+        </div>
+        <div class="lb-table-wrap">
+          <table class="lb-table">
+            <thead>
+              <tr><th>Source</th><th>Month</th><th>FY</th><th>Enquiries</th><th>Bookings</th></tr>
+            </thead>
+            <tbody id="allRowsBody"></tbody>
+            <tfoot id="allRowsFoot"></tfoot>
+          </table>
+        </div>
+      </div>
     </main>
   </div>
 
@@ -204,11 +221,32 @@
         if (d && d.sources && d.sources.length) SOURCES = d.sources;
         BYSRC.loaded = true;
         renderSourceTable();
+        renderAllRowsTable();
         try { renderSourceChart(); } catch (e) { console.error('source chart', e); }
       }).catch(function (err) {
         console.error('leads-by-source', err);
-        BYSRC.loaded = true; renderSourceTable();
+        BYSRC.loaded = true; renderSourceTable(); renderAllRowsTable();
       });
+    }
+
+    // ----- All query rows (raw per-source × per-month grain; NOT FY-filtered) -----
+    function renderAllRowsTable() {
+      var body = document.getElementById('allRowsBody');
+      var foot = document.getElementById('allRowsFoot');
+      var cnt = document.getElementById('allRowsCount');
+      if (!body) return;
+      if (!BYSRC.loaded) { body.innerHTML = '<tr><td colspan="5" class="muted">Loading…</td></tr>'; foot.innerHTML = ''; if (cnt) cnt.textContent = ''; return; }
+      var rows = BYSRC.rows || [];
+      if (!rows.length) { body.innerHTML = '<tr><td colspan="5" class="muted">No rows.</td></tr>'; foot.innerHTML = ''; if (cnt) cnt.textContent = ''; return; }
+      body.innerHTML = rows.map(function (r) {
+        var dot = '<span class="src-dot" style="background:' + (SRC_COLOR[r.source] || '#9aa4b2') + '"></span>';
+        return '<tr><td>' + dot + esc(r.source) + '</td><td>' + esc(monthLabel(r.month)) +
+          '</td><td>FY' + String(r.fyEnd).slice(-2) + '</td><td>' + r.enquiries + '</td><td>' + r.bookings + '</td></tr>';
+      }).join('');
+      var gEnq = 0, gBook = 0;
+      rows.forEach(function (r) { gEnq += r.enquiries; gBook += r.bookings; });
+      foot.innerHTML = '<tr><td>Total</td><td></td><td></td><td>' + gEnq + '</td><td>' + gBook + '</td></tr>';
+      if (cnt) cnt.textContent = rows.length + ' row' + (rows.length === 1 ? '' : 's');
     }
 
     // Rows for the current view: the custom date range when active, else the selected FY.
@@ -404,6 +442,7 @@
     renderDateRange();
     fillHeadInfo();        // fill the static card/chart/table ⓘ info tools
     renderSourceTable();   // initial (shows Loading…)
+    renderAllRowsTable();  // initial (shows Loading…)
     renderCards();         // initial (shows …)
     loadBySource();
     loadOverview();
