@@ -178,8 +178,8 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Enquiries vs bookings <span class="head-info"
-              data-info="Keynote enquiries (all created deals) vs bookings (won deals) by month for the selected financial year, deduped by deal across the ads + indirect sources."
-              data-src="GET /api/marketing/overview (byMonth) — roas_counted_deals + ac_indirect_deals"></span></h3>
+              data-info="Keynote enquiries (all created deals) vs bookings (won deals) by month for the selected financial year, across the paid + organic + indirect sources."
+              data-src="GET /api/marketing/overview (byMonth) — roas_counted_deals + ga4 organic + ac_indirect_deals (excl. paid)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="enqBookCanvas"></canvas></div>
         </div>
@@ -217,8 +217,9 @@
 
     // ----- KPI cards -----
     // Cards 1–2 ("Keynote enquiries" and "Keynote bookings") are LIVE + FY-aware:
-    // per-FY counts across two sources (ads = roas_counted_deals, indirect =
-    // ac_indirect_deals), deduped by deal — from GET /api/marketing/overview.
+    // per-FY counts across three sources (ads = roas_counted_deals, organic =
+    // ga4 medium=organic, indirect = ac_indirect_deals excl. paid) — from
+    // GET /api/marketing/overview. Total == Leads & Bookings by-source total.
     //   • Enquiries = ALL deals created in the FY.
     //   • Bookings  = only WON deals created in the FY.
     // Cards 3–6 ("Enquiry → booking rate", "Marketing revenue", "Marketing spend",
@@ -325,25 +326,27 @@
     function enqCard() {
       return liveCard({
         state: ENQ, title: 'Keynote enquiries',
-        unloadedInfo: 'Total ActiveCampaign deals created across two sources — ads and ' +
-          'indirect/bureau — deduped by deal. Created = deal date (Australian FY, Jul–Jun).',
+        unloadedInfo: 'Total deals/leads created across three sources — paid ads, ' +
+          'organic search and indirect/bureau. Created = deal date (Australian FY, Jul–Jun).',
         loadedInfo: function (fyName, r) {
-          return 'Deals created in ' + fyName + ' across two sources — Ads ' + r.ads +
-            ', Indirect ' + r.indirect + ' (deduped by deal). Ads = roas_counted_deals · ' +
-            'Indirect = ac_indirect_deals (Deal Source? = Indirect, 2021→present). ' +
-            'Created = deal date, AU FY.';
+          return 'Deals/leads created in ' + fyName + ' across three sources — Paid ' + r.ads +
+            ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect + '. ' +
+            'Paid = roas_counted_deals · Organic = ga4_ac_contact_source (medium=organic) · ' +
+            'Indirect = ac_indirect_deals (Deal Source? = Indirect, excl. paid). ' +
+            'Equals the Leads & Bookings by-source total. Created = deal date, AU FY.';
         },
       });
     }
     function bookCard() {
       return liveCard({
         state: BOOKINGS, title: 'Keynote bookings',
-        unloadedInfo: 'WON ActiveCampaign deals created across two sources — ads and ' +
-          'indirect/bureau — deduped by deal. Created = deal date (Australian FY, Jul–Jun).',
+        unloadedInfo: 'WON deals/leads created across three sources — paid ads, organic ' +
+          'search and indirect/bureau. Created = deal date (Australian FY, Jul–Jun).',
         loadedInfo: function (fyName, r) {
-          return 'Won deals created in ' + fyName + ' across two sources — Ads ' + r.ads +
-            ', Indirect ' + r.indirect + ' (deduped by deal). Ads = roas_counted_deals (won) · ' +
-            'Indirect = ac_indirect_deals (status Won). Created = deal date, AU FY.';
+          return 'Won deals/leads created in ' + fyName + ' across three sources — Paid ' + r.ads +
+            ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect + '. ' +
+            'Paid = roas_counted_deals (won) · Organic = ga4 organic (deal_status=won) · ' +
+            'Indirect = ac_indirect_deals (status Won, excl. paid). Created = deal date, AU FY.';
         },
       });
     }
@@ -354,8 +357,8 @@
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
       var info = 'Keynote bookings ÷ keynote enquiries for the selected FY — the ' +
-        'share of created deals that are won. Both counts deduped by deal across ' +
-        'the ads + indirect sources.';
+        'share of created deals that are won. Both counts across the paid + organic ' +
+        '+ indirect sources.';
       function rateOf(k) {
         var e = rowFor(ENQ, k), b = rowFor(BOOKINGS, k);
         var enq = e ? e.total : 0, book = b ? b.total : 0;
@@ -368,7 +371,7 @@
         info = 'Keynote bookings ÷ keynote enquiries in ' + fyName + ' — ' + cur.book +
           ' won ÷ ' + cur.enq + ' created' +
           (cur.pct === null ? ' (no enquiries)' : ' = ' + cur.pct.toFixed(1) + '%') +
-          '. Both counts deduped by deal across the ads + indirect sources.';
+          '. Both counts across the paid + organic + indirect sources.';
         if (!CUSTOM && key !== 'all' && cur.pct !== null) {
           var prevKey = 'fy' + String(fyEndOf(key) - 1).slice(-2);
           var prev = rateOf(prevKey);

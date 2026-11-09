@@ -1,0 +1,119 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-09
+Session: Diagnose why marketing.html "Keynote enquiries" (40) ≠ leads_bookings.html
+         "By source" Enquiries total (44), then unify both to one definition
+         (roas_counted_deals + organic rows in ga4_ac_contact_source) so they
+         reconcile.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Asked (via /q, read-only mode): why is the "Keynote enquiries" card in
+marketing.html showing 40 while the Enquiries total is 44 in the "By source"
+table in leads_bookings.html?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated read-only. Read the two backend producers:
+  • server/metrics/marketing-overview.js  — "Keynote enquiries" card. Counted
+    distinct deals across TWO sources: ads (public.roas_counted_deals) + indirect
+    (public.ac_indirect_deals), deduped by deal_id. No organic bucket.
+  • server/metrics/marketing-leads-by-source.js — "By source" table. Summed FIVE
+    sources: Google/Bing (ga4_ac_contact_source cpc), Organic (ga4 medium=organic),
+    Tailor/Bureau (ac_indirect_deals), no cross-source dedup.
+
+Ran SELECTs against Supabase MAGTestProject (ref aivitcomiywiysrfwqxt) to pin the
+gap for FY27:
+  • Overview = 40 (ads 5 from roas_counted_deals + indirect 35 from ac_indirect_deals).
+  • Leads-by-source = 44 (Google 4 + Bing 1 + Organic 4 + Tailor 11 + Bureau 24).
+
+Reconciliation: the indirect/bureau side is IDENTICAL in both (35 = 35, same
+ac_indirect_deals table). The entire 4-deal gap is the paid/organic side —
+Overview uses roas_counted_deals (5 deals) and has NO organic bucket; leads-by-source
+uses ga4 cpc rows (Google 4 + Bing 1 = 5) PLUS organic (4), a different population.
+Explained it's by design (two different metrics), not a bug: 40 = 35 + 5 roas;
+44 = 35 + 9 ga4 cpc/organic rows.
+
+--------------------------------------------------------------------------------
+USER:
+"both should source from roas_counted_deals + organic rows in ga4_ac_contact_source"
+(i.e. unify the two metrics so they reconcile).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Treated the follow-up as an action request (cancels the /q no-action constraint).
+Investigated the schema before changing anything:
+  • roas_counted_deals columns — has a `source` column but it is the attribution
+    method (clover / ga4cpc / niki), NOT a Google-vs-Bing platform split. So the
+    paid side cannot be split into Google vs Bing rows.
+  • Deal-id overlap across buckets (all FYs): roas ∩ indirect = 7 deals;
+    roas ∩ organic = 0; indirect ∩ organic = 0.
+
+Asked two clarifying questions (AskUserQuestion):
+  1. Keep bureau/tailor in both totals, or make them ONLY roas+organic?
+     → USER: Keep bureau/tailor (both totals = roas + organic + Tailor + Bureau;
+       FY27 reconciles at 44 = 44).
+  2. How to show the paid side in the "By source" table given no Google/Bing split?
+     → USER: One "Paid Ads" row (= all roas_counted_deals).
+
+Defined ONE shared, disjoint partition for both pages (precedence paid > indirect,
+mirroring roi.js's marketing-revenue dedup):
+  • Paid Ads = roas_counted_deals (all rows, incl. Niki no-deal_id rows). Booking
+    = status='won'.
+  • Organic  = ga4_ac_contact_source medium='organic' (rows). Booking = deal_status='won'.
+  • Tailor   = ac_indirect_deals is_tailor=true,  EXCL. deal_ids present in roas.
+  • Bureau   = ac_indirect_deals is_tailor=false, EXCL. deal_ids present in roas.
+Buckets are disjoint (organic 0 overlap; indirect excludes paid), so the total is a
+plain sum and both endpoints compute identical totals.
+
+Validated with SELECTs that the two reconstructed queries (OVERVIEW_SQL and
+BY_SOURCE_SQL) produce IDENTICAL enquiries AND bookings per FY:
+  FY22 66/34 · FY23 142/44 · FY24 151/44 · FY25 180/40 · FY26 136/21 · FY27 44/9.
+FY27 Overview "Keynote enquiries" and leads_bookings "By source" total are both 44.
+(Organic only has rows in FY27 — GA4 ~60-day retention — expected.)
+
+Edited files (no app.js change, no DB migration, no new secrets — producers only SELECT):
+  • server/metrics/marketing-overview.js — replaced the 2-source dedup SQL with a
+    shared 3-bucket BUCKETS_CTE (paid/organic/indirect-excl-paid) used by the per-FY,
+    per-month, and custom-range queries; payload rows + range + sum() now carry an
+    `organic` field; updated SRC_ENQ/SRC_BOOK strings and the header doc.
+  • server/metrics/marketing-leads-by-source.js — LEAD_SOURCES 5→4
+    (['Paid Ads','Organic','Tailor','Bureau']); SRC_CTE rebuilt: Paid Ads from
+    roas_counted_deals (one row, no Google/Bing split), Tailor/Bureau now exclude
+    paid deal_ids; updated SRC string + header doc.
+  • public/leads_bookings.html — SOURCES/SRC_COLOR updated (added 'Paid Ads',
+    dropped Google/Bing); summary-card tooltips now cite three sources (Paid/Organic/
+    Indirect) + "equals the by-source table total"; two head-info data-src strings +
+    the doc comment updated.
+  • public/marketing.html — enqCard/bookCard/rateCard tooltips now cite three sources
+    and note the figure equals the Leads & Bookings by-source total; byMonth-chart
+    data-info/data-src + the ENQ/BOOKINGS state comment updated.
+  • public/monthly_log.html — "Keynote enquiries/bookings" provenance strings +
+    comment updated to three sources (reads .total/.byMonth, so it auto-reconciles).
+  • public/spend_roi.html — "Cost per enquiry" tooltip updated to three sources
+    (reads enquiries.total, so denominator now matches the new Overview).
+
+Ran `node --check` on both edited server files — SYNTAX OK.
+
+Flagged two consequences: (1) older-FY Overview numbers shift slightly (e.g. FY24
+147→151) because the unified definition counts the full roas_counted_deals view
+(incl. Niki no-deal_id rows) + organic, where the old card excluded both; (2) "Cost
+per enquiry" on marketing/spend_roi drops a touch (larger denominator). Reported
+that this is a server + frontend change needing a manual Cloud Run redeploy (Claude
+never deploys the dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history, update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps. Saved this transcript (no secrets in session — read-only
+SELECTs and code edits only, nothing redacted). Reviewed as_built.txt and CLAUDE.md
+for the metric-definition change and updated the relevant Marketing descriptions.
+Confirmed .gitignore already covers all sensitive patterns. No git commands run —
+user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

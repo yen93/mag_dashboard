@@ -1,6 +1,25 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-09 (CUSTOM DATE RANGE FILTER added beside the FY toggle on ALL 8 primary Marketing
+Last updated: 2026-11-09 (MARKETING ENQUIRY DEFINITION UNIFIED so marketing.html "Keynote enquiries/bookings"
+and leads_bookings.html "By source" reconcile EXACTLY. Both now count ONE disjoint 3-bucket population:
+Paid Ads = public.roas_counted_deals (all rows; booking=status='won') + Organic = public.ga4_ac_contact_source
+medium='organic' (booking=deal_status='won') + Indirect = public.ac_indirect_deals (booking=status=1),
+Tailor/Bureau EXCLUDING any deal_id already counted as Paid Ads (precedence paid > indirect, mirroring
+roi.js's marketing-revenue dedup). Organic has 0 overlap with the others so the total is a plain sum.
+server/metrics/marketing-overview.js — the per-FY, per-month and custom-range SQL all now use ONE shared
+BUCKETS_CTE; payload byFy/range rows + sum() carry a new `organic` field (was ads/indirect/total → now
+ads/organic/indirect/total). server/metrics/marketing-leads-by-source.js — LEAD_SOURCES went 5→4
+(['Paid Ads','Organic','Tailor','Bureau']): Google+Bing collapsed into ONE "Paid Ads" row fed by
+roas_counted_deals (the view has no Google/Bing platform split — its `source` col is the attribution method
+clover/ga4cpc/niki), and Tailor/Bureau now exclude paid deal_ids. Frontend: leads_bookings.html (SOURCES/
+SRC_COLOR, summary-card + head-info strings), marketing.html (card/rate tooltips + byMonth chart provenance),
+monthly_log.html + spend_roi.html (provenance strings only — both read .total so they auto-reconcile). Validated
+per FY, enquiries/bookings identical on both pages: FY22 66/34 · FY23 142/44 · FY24 151/44 · FY25 180/40 ·
+FY26 136/21 · FY27 44/9 (FY27 is the 44=44 the fix targeted; organic only has rows in FY27 — GA4 ~60-day
+retention). NB older-FY Overview totals shifted up slightly vs the old 2-source card (now count the full
+roas_counted_deals view incl. Niki no-deal_id rows + organic), and Cost-per-enquiry on marketing/spend_roi
+drops a touch (larger denominator). NO app.js change, NO DB migration, NO new secrets (producers only SELECT)
+→ needs a manual Cloud Run redeploy. Previously 2026-11-09: CUSTOM DATE RANGE FILTER added beside the FY toggle on ALL 8 primary Marketing
 sub-tabs (marketing / leads_bookings / spend_roi / content_social / email_partners / website_search /
 nurture_events / monthly_log). A shared From/To + quick-range (30d/90d/12m/All) popover — like the Lead
 Tracker's — is injected right after #fySeg by new app.js helpers renderDateRange()/wireDateRange()

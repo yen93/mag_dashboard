@@ -1,45 +1,50 @@
 // Marketing — Leads & Bookings by source.
 //
-// Enquiries and bookings split across FIVE fixed lead sources, for the
+// Enquiries and bookings split across FOUR fixed lead sources, for the
 // "Enquiries by source" stacked chart and the "By source" table on
 // public/leads_bookings.html. LIVE, computed at request time from Supabase.
 //
-// The five sources (exact definitions supplied by the owner):
-//   • Google  → ga4_ac_contact_source  WHERE medium ILIKE '%cpc%' AND source='google'
-//   • Bing    → ga4_ac_contact_source  WHERE medium ILIKE '%cpc%' AND source='bing'
-//   • Organic → ga4_ac_contact_source  WHERE medium='organic'
-//   • Tailor  → ac_indirect_deals      WHERE is_tailor=true
-//   • Bureau  → ac_indirect_deals      WHERE is_tailor=false
+// The four sources — the SAME population the Marketing Overview "Keynote
+// enquiries/bookings" cards count, so the two pages reconcile exactly:
+//   • Paid Ads → public.roas_counted_deals (the canonical ROAS-counted view —
+//                Google + Bing + any paid-attributed deal; it carries no
+//                Google-vs-Bing platform split, so it is shown as one row).
+//   • Organic  → ga4_ac_contact_source  WHERE medium='organic'
+//   • Tailor   → ac_indirect_deals      WHERE is_tailor=true  (excl. paid deals)
+//   • Bureau   → ac_indirect_deals      WHERE is_tailor=false (excl. paid deals)
 //
-// For the two ga4 sources a row is an enquiry; a BOOKING is a row whose
-// deal_status='won'. For the two indirect sources a deal is an enquiry; a
-// BOOKING is a deal with status=1 (Won). Month + Australian FY (END-year,
-// Jul–Jun) are both derived from cdate so they match the Overview/ROI tabs.
+// Paid Ads booking = roas_counted_deals.status='won'. Organic: a row is an
+// enquiry, booking = deal_status='won'. Tailor/Bureau: a deal is an enquiry,
+// booking = status=1 (Won); both EXCLUDE any deal already counted as Paid Ads
+// (precedence paid > indirect, mirroring the Overview/ROI dedup) so the four
+// buckets are disjoint. Month + Australian FY (END-year, Jul–Jun) are derived
+// from cdate so they match the Overview/ROI tabs. NB organic reads only within
+// GA4's ~60-day retention, so earlier FYs carry no organic rows (expected).
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 
-// Fixed display order (and the only sources shown — item #4 of the brief).
-export const LEAD_SOURCES = ['Google', 'Bing', 'Organic', 'Tailor', 'Bureau'];
+// Fixed display order (and the only sources shown).
+export const LEAD_SOURCES = ['Paid Ads', 'Organic', 'Tailor', 'Bureau'];
 
 const SRC =
-  'Live (Supabase): enquiries + bookings per source — Google/Bing/Organic from ' +
-  'ga4_ac_contact_source (cpc / organic), Tailor/Bureau from ac_indirect_deals. ' +
-  'Booking = won deal. Month + AU FY from the deal/contact cdate.';
+  'Live (Supabase): enquiries + bookings per source — Paid Ads from ' +
+  'roas_counted_deals, Organic from ga4_ac_contact_source (medium=organic), ' +
+  'Tailor/Bureau from ac_indirect_deals (excl. paid deals). Booking = won deal. ' +
+  'Month + AU FY from the deal/contact cdate.';
 
 // AU financial-year END year from a date column (calendar year + 1 if month >= July).
 const FY = (col) =>
   `extract(year FROM ${col})::int + CASE WHEN extract(month FROM ${col}) >= 7 THEN 1 ELSE 0 END`;
 
-// The five-source UNION, shared by the per-FY payload and the custom-range variant.
+// The four-source UNION, shared by the per-FY payload and the custom-range variant.
+// `roas` is the paid set and also excludes paid deal_ids from Tailor/Bureau.
 const SRC_CTE = `
-  WITH src AS (
-    SELECT 'Google'::text AS source, cdate, (deal_status = 'won') AS won
-      FROM public.ga4_ac_contact_source
-      WHERE medium ILIKE '%cpc%' AND source = 'google' AND cdate IS NOT NULL
-    UNION ALL
-    SELECT 'Bing', cdate, (deal_status = 'won')
-      FROM public.ga4_ac_contact_source
-      WHERE medium ILIKE '%cpc%' AND source = 'bing' AND cdate IS NOT NULL
+  WITH roas AS (
+    SELECT deal_id::text AS deal_id, cdate, (status = 'won') AS won
+      FROM public.roas_counted_deals WHERE cdate IS NOT NULL
+  ),
+  src AS (
+    SELECT 'Paid Ads'::text AS source, cdate, won FROM roas
     UNION ALL
     SELECT 'Organic', cdate, (deal_status = 'won')
       FROM public.ga4_ac_contact_source
@@ -48,10 +53,12 @@ const SRC_CTE = `
     SELECT 'Tailor', cdate, (status = 1)
       FROM public.ac_indirect_deals
       WHERE is_tailor = true AND cdate IS NOT NULL
+        AND deal_id::text NOT IN (SELECT deal_id FROM roas WHERE deal_id IS NOT NULL)
     UNION ALL
     SELECT 'Bureau', cdate, (status = 1)
       FROM public.ac_indirect_deals
       WHERE is_tailor = false AND cdate IS NOT NULL
+        AND deal_id::text NOT IN (SELECT deal_id FROM roas WHERE deal_id IS NOT NULL)
   )`;
 
 const BY_SOURCE_SQL = `${SRC_CTE}

@@ -1,0 +1,120 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-09
+Session: Fix clipped ⓘ info-tool tooltips on Marketing KPI/cards (marketing.html,
+spend_roi.html); add info-tool tooltips to nurture_events.html + monthly_log.html;
+codify the all-widgets ⓘ rule + overflow gotcha in DESIGN_GUIDE.md.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"fix tooltip display in marketing.html cards" (with line 202 "Sample" selected).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the tooltip mechanism. The §6 info tools render via `infoTip()`/`srcInfo()`
+in app.js → a `.src-tip` card that is `position:absolute`, escapes ABOVE the ⓘ icon
+(`bottom: calc(100% + 8px)`), `z-index:60`. In marketing.html two rules set
+`overflow: hidden` — `.grid .card` (line 34) and `.kpi` (line 76) — purely to give the
+3px gradient top accent bar (`::before`/`::after`) clean rounded corners. That
+`overflow:hidden` CLIPS the escaping tooltip.
+
+Fix (matching roi.html's documented approach): removed `overflow:hidden` from
+`.grid .card` and `.kpi`, and rounded each accent bar to the card radius
+(`border-radius: 16px 16px 0 0`) so it still sits flush in the rounded corners. Also
+added `.grid .card:hover, .grid .card:focus-within { z-index: 3 }` so a hovered card's
+tooltip paints above neighbours (the `.kpi` already had its own z-index lift). Confirmed
+via grep that no other `overflow:hidden` container remained. Frontend-only inline CSS, no
+app.js bump (helpers untouched) → needs a manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — compose a one-line git commit command.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked `git status` (nothing staged; the working tree already carried the larger
+uncommitted custom-date-range + info-tools work from prior sessions). Produced a single
+`git commit -am "feat(marketing): …custom date-range filter… and fix clipped infoTip
+tooltips on marketing cards and KPIs"` line.
+
+--------------------------------------------------------------------------------
+USER:
+"also fix tooltips in spend_roi cards"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Grepped spend_roi.html. Its local `.card` and the app.css base `.card` have NO
+overflow:hidden (so those don't clip), but the `.kpi` tiles (line 61) did. Applied the
+same fix to `.kpi`: dropped `overflow:hidden`, rounded `.kpi::after` to
+`border-radius: 16px 16px 0 0`. The `.kpi:hover/:focus-within { z-index: 2 }` lift was
+already present. Frontend-only → Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+"add tooltips in nurture_events. update design md cos all cards, graphs, tables should
+have tooltips" — and mid-turn: "also add tooltips in monthly_log".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read nurture_events.html, monthly_log.html, the app.js helpers (`infoTip`,
+`fillHeadInfo`, `srcInfo`), leads_bookings.html (reference pattern), and DESIGN_GUIDE §6.
+Confirmed both pages already load `app.js?v=14` (which contains infoTip/fillHeadInfo), so
+NO version bump was needed.
+
+nurture_events.html — added §6 ⓘ tools:
+- 4 KPI cards: added a `NE_INFO` array (one {desc, source} per card) and append
+  `infoTip(info.desc, info.source)` next to each card label in renderKpiRow (map now
+  takes (k, i)). Made `.ne-kpi .label` flex (align/gap), added `position:relative` +
+  `.ne-kpi:hover, .ne-kpi:focus-within { z-index: 2 }` so the tooltip paints above
+  neighbouring tiles.
+- Executive X table: added a `head-info` ⓘ span to the <h3> (desc + Google-Sheet source)
+  and REMOVED the duplicate "source: …" chart-cap caption — both the HTML default and the
+  JS line in renderEventsTable that re-set `eventsCap` (provenance now lives only in the ⓘ).
+- Added `fillHeadInfo()` at init.
+
+monthly_log.html — added §6 ⓘ tools to all three tables (Update status, October notes,
+Yearly summary): added a `head-info` ⓘ to each heading, removed the three provenance/
+definition `.chart-cap` captions (folded into the ⓘ), and added `fillHeadInfo()` at init.
+Left the per-row native-`title` `infoIcon` as-is — those sit inside an `overflow:auto`
+`.ml-table-wrap` where an infoTip hover card would be clipped/scrolled (now the sanctioned
+exception).
+
+DESIGN_GUIDE.md §6 — strengthened:
+- Scope line now says every card/table/chart on every tab must carry one WITH NO
+  EXCEPTIONS, lists nurture_events + monthly_log + roi + roas, and states pending/sample
+  widgets still get one.
+- Documented the scrolling-table exception (keep native `title` for a row-level ⓘ inside
+  an overflow:auto wrap; it does NOT count as the table's widget-level heading ⓘ).
+- Added a NEW "Gotcha (overflow:hidden)" paragraph capturing today's clip fix: the
+  `.src-tip` escapes above the tile, so an ancestor `overflow:hidden` clips it; drop it and
+  round the accent bar to the card radius instead (ref: marketing.html + spend_roi.html).
+
+Verified via grep that both pages have no dangling eventsCap reference and the head-info/
+fillHeadInfo wiring is consistent. Noted one judgment call to the user: kept nurture_events'
+KPI `sub` definition lines rather than stripping them (removing was beyond the ask and
+would leave tiles bare), offered to pull them into the ⓘ for strict §6 body-cleanliness if
+wanted. All frontend-only → Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — one-line commit command (again).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Produced: `git commit -am "feat(marketing): add info-tool tooltips to nurture_events and
+monthly_log cards and tables, fix overflow-clipped tooltips on marketing and spend_roi
+tiles, codify the all-widgets ⓘ rule plus overflow gotcha in DESIGN_GUIDE"`.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat and update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file; reviewed as_built.txt and CLAUDE.md for
+needed updates; verified .gitignore coverage. No git commands run (user commits/pushes
+themselves).
+
+================================================================================
+END OF EXPORT
+================================================================================

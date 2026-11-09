@@ -304,7 +304,7 @@
     /* ----- Yearly summary — LIVE (see measure_source) -----
        Keynote enquiries / Keynote bookings ← GET /api/marketing/overview
          (same source as marketing.html's "Keynote enquiries" / "Keynote bookings" cards:
-          deals created per FY across ads + indirect, deduped; bookings = won only).
+          deals/leads created per FY across paid + organic + indirect; bookings = won only).
        Marketing revenue / Marketing spend  ← GET /api/marketing/roi
          (same source as marketing.html's "Marketing revenue" / "Marketing spend" cards:
           row.marketingRevenue and row.totalSpend).
@@ -376,12 +376,12 @@
       rows.push(mkRow('Keynote enquiries', 'count',
         enqFy(2025), enqFy(2026), enqFy(2027),
         cySum(OVS.enqMon, 2025, 'total'), cySum(OVS.enqMon, 2026, 'total'),
-        'Deals created per period across two sources (ads = roas_counted_deals, indirect = ac_indirect_deals), deduped by deal. Same source as the Overview "Keynote enquiries" card. GET /api/marketing/overview.',
+        'Deals/leads created per period across three sources (paid = roas_counted_deals, organic = ga4 medium=organic, indirect = ac_indirect_deals excl. paid). Same source as the Overview "Keynote enquiries" card. GET /api/marketing/overview.',
         rEnq));
       rows.push(mkRow('Keynote bookings', 'count',
         bookFy(2025), bookFy(2026), bookFy(2027),
         cySum(OVS.bookMon, 2025, 'total'), cySum(OVS.bookMon, 2026, 'total'),
-        'WON deals created per period across the same two sources, deduped by deal. Same source as the Overview "Keynote bookings" card. GET /api/marketing/overview.',
+        'WON deals/leads created per period across the same three sources. Same source as the Overview "Keynote bookings" card. GET /api/marketing/overview.',
         rBook));
       rows.push(mkRow('Marketing revenue', 'currency',
         revFy(2025), revFy(2026), revFy(2027),

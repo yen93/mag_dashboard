@@ -124,7 +124,7 @@
       <!-- Enquiries by source (stacked bar, per month) -->
       <div class="card">
         <div class="card-head" style="display:block;margin-bottom:10px">
-          <h3>Enquiries by source <span class="head-info" data-info="Enquiries per month, stacked by lead source, for the selected financial year." data-src="GET /api/marketing/leads-by-source — ga4_ac_contact_source (Google/Bing cpc, Organic) + ac_indirect_deals (Tailor/Bureau); FY from the deal cdate."></span></h3>
+          <h3>Enquiries by source <span class="head-info" data-info="Enquiries per month, stacked by lead source, for the selected financial year." data-src="GET /api/marketing/leads-by-source — roas_counted_deals (Paid Ads) + ga4_ac_contact_source (Organic) + ac_indirect_deals (Tailor/Bureau, excl. paid); FY from the deal cdate."></span></h3>
         </div>
         <div class="chart-box"><canvas id="sourceCanvas"></canvas></div>
       </div>
@@ -133,7 +133,7 @@
       <div class="lb-lower">
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>By source <span class="head-info" data-info="Enquiries, bookings and booking rate per lead source for the selected FY, with a total row." data-src="GET /api/marketing/leads-by-source — ga4_ac_contact_source (Google/Bing cpc, Organic) + ac_indirect_deals (Tailor/Bureau); booking = won deal."></span></h3>
+            <h3>By source <span class="head-info" data-info="Enquiries, bookings and booking rate per lead source for the selected FY, with a total row." data-src="GET /api/marketing/leads-by-source — roas_counted_deals (Paid Ads) + ga4_ac_contact_source (Organic) + ac_indirect_deals (Tailor/Bureau, excl. paid); booking = won deal."></span></h3>
           </div>
           <div class="lb-table-wrap">
             <table class="lb-table">
@@ -172,14 +172,17 @@
   <script>
     /* Leads & Bookings — LIVE.
        • "Enquiries by source" chart + "By source" table  ← GET /api/marketing/leads-by-source
-         (five fixed sources: Google/Bing cpc, Organic, Tailor, Bureau; booking = won deal).
+         (four fixed sources: Paid Ads (roas_counted_deals), Organic, Tailor, Bureau,
+          Tailor/Bureau excl. paid deals; booking = won deal. Total == the Overview
+          "Keynote enquiries/bookings" cards).
        • "Events Booked" + "Enquiries" cards              ← GET /api/marketing/overview
          (the SAME figures as marketing.html's "Keynote bookings" / "Keynote enquiries").
        All FY-aware via the #fySeg toggle (AU FY, END-year). */
 
-    // Fixed source order + colours (stacked chart + table dots).
-    var SOURCES = ['Google', 'Bing', 'Organic', 'Tailor', 'Bureau'];
-    var SRC_COLOR = { Google: '#3b6ef0', Bing: '#14a0c4', Organic: '#17a673', Tailor: '#d9663a', Bureau: '#6a4bf5' };
+    // Fixed source order + colours (stacked chart + table dots). Overridden by
+    // the /leads-by-source payload's `sources`; keep the colour map in sync.
+    var SOURCES = ['Paid Ads', 'Organic', 'Tailor', 'Bureau'];
+    var SRC_COLOR = { 'Paid Ads': '#3b6ef0', Organic: '#17a673', Tailor: '#d9663a', Bureau: '#6a4bf5' };
 
     // ----- FY helpers (mirror marketing.html) -----
     function selFyKey() {
@@ -327,18 +330,20 @@
     function renderCards() {
       paintCard({
         state: BOOKINGS, valueEl: 'bookValue', deltaEl: 'bookDelta', labelEl: 'bookLabel', title: 'Events Booked',
-        source: 'GET /api/marketing/overview — roas_counted_deals + ac_indirect_deals, won deals, deduped by deal; FY from cdate.',
+        source: 'GET /api/marketing/overview — roas_counted_deals + ga4 organic + ac_indirect_deals, won deals; FY from cdate.',
         loadedInfo: function (fName, r) {
-          return 'Won deals created in ' + fName + ' across two sources — Ads ' + r.ads + ', Indirect ' + r.indirect +
-            ' (deduped by deal). Same figure as marketing.html "Keynote bookings".';
+          return 'Won deals/leads created in ' + fName + ' across three sources — Paid ' + r.ads +
+            ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect +
+            '. Same figure as marketing.html "Keynote bookings"; equals the by-source table total.';
         },
       });
       paintCard({
         state: ENQ, valueEl: 'enqValue', deltaEl: 'enqDelta', labelEl: 'enqLabel', title: 'Enquiries',
-        source: 'GET /api/marketing/overview — roas_counted_deals + ac_indirect_deals, all deals, deduped by deal; FY from cdate.',
+        source: 'GET /api/marketing/overview — roas_counted_deals + ga4 organic + ac_indirect_deals, all deals; FY from cdate.',
         loadedInfo: function (fName, r) {
-          return 'Deals created in ' + fName + ' across two sources — Ads ' + r.ads + ', Indirect ' + r.indirect +
-            ' (deduped by deal). Same figure as marketing.html "Keynote enquiries".';
+          return 'Deals/leads created in ' + fName + ' across three sources — Paid ' + r.ads +
+            ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect +
+            '. Same figure as marketing.html "Keynote enquiries"; equals the by-source table total.';
         },
       });
     }

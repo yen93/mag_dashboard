@@ -323,7 +323,7 @@
                   : (spend != null ? '<div class="sub">No clients won this FY</div>' : '')));
       // 5 — Cost per enquiry
       html += kpiCard('Cost per enquiry',
-        'Marketing spend ÷ enquiries (deals created this FY across the two deal sources, deduped — same count as the Overview).',
+        'Marketing spend ÷ enquiries (deals/leads created this FY across paid + organic + indirect — same count as the Overview).',
         'GET /api/marketing/roi (totalSpend) ÷ GET /api/marketing/overview (enquiries.total)',
         fmtCur(costPerEnq),
         deltaHtml(costPerEnq, pCostPerEnq, 'down-good', prevFyEnd));
