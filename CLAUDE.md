@@ -57,7 +57,10 @@ Cloud Run.
   before `#marketingNav`. **As of 2026-11-05 it takes a `live` arg:** the h1 + framing question ALWAYS
   render; the amber **"Sample data — layout only"** badge is emitted only when `live` is falsy (ternary).
   It is now called on **ALL** primary sub-tabs: the Overview + the still-sample sub-tabs
-  (`nurture_events.html`, `monthly_log.html`) call it with **no arg** (badge shows),
+  (`nurture_events.html`, `monthly_log.html`) call it with **no arg** (badge shows —
+  note `monthly_log.html` is now PARTIALLY LIVE as of 2026-11-09 (see its own paragraph below):
+  its Yearly summary table is live, but the badge stays because its Update-status + notes
+  sections are `pending`),
   and the **five LIVE pages** `leads_bookings.html` / `spend_roi.html` / `content_social.html` /
   **`email_partners.html` (now LIVE as of 2026-11-06, see its own paragraph below)** /
   **`website_search.html` (now PARTIALLY LIVE as of 2026-11-06, see its own paragraph below)** call it with
@@ -274,6 +277,23 @@ Cloud Run.
   older retained contacts** (card subs note "(current FY)") — the **TOTAL is accurate for every FY**. Validated
   per-FY (AC-matched): FY22 11 · FY23 8 · FY24 17 · FY25 33 · FY26 26 · FY27 **102** (organic 4 · cpc 6). Server +
   frontend + the route/module → needs a **Cloud Run redeploy**; **no new secrets** (server only SELECTs).
+  **Monthly Log page (`monthly_log.html` = Marketing sub-tab "Monthly Log", now PARTIALLY LIVE as of
+  2026-11-09):** FRONTEND-ONLY (no server/DB/route/migration/`app.js` change; stays **`app.js?v=10`**).
+  **The "Yearly summary" table is LIVE**, self-rendering from the SAME endpoints as the named Marketing cards
+  (per the owner's `measure_source`): **Keynote enquiries + Keynote bookings** ← `GET /api/marketing/overview`
+  (same as `marketing.html`; bookings = won only); **Marketing revenue + Marketing spend** ← `GET /api/marketing/roi`
+  (`row.marketingRevenue` / `row.totalSpend`, same as `marketing.html`); **Marketing ROI** =
+  `(marketingRevenue ÷ marketingSpend − 1) × 100` (**the same definition as `spend_roi.html`'s "Marketing ROI"
+  card**); **Cadence delivered** → red `pending` chip (no DB source). The table's **FY columns** (FY25/26/27) read
+  each source's per-FY totals; the **calendar-year columns** (CY2025/CY2026) sum each source's `byMonth` series by
+  calendar year (`cySum()`). Loaders `loadSummaryOverview()`/`loadSummaryRoi()` fetch at init; shows "Loading…"
+  until both resolve, degrades to "—" per-cell on error. The **FY26-vs-FY25** column = % change for counts/currency,
+  **points** change for ROI. The CSV "Download as Excel" button exports the LIVE rendered rows. **The "Update status"
+  table + "October notes" sections are NOT tracked live yet → both render a `pending` chip + "Not tracked yet"**
+  (the old `MOCK_BY_FY`/`selFyKey`/`currentData` mock machinery was removed). Because status/notes are still pending,
+  the page keeps `renderMarketingHead()` with **no `live` arg** (the "Sample data — layout only" badge still shows),
+  and the top `#fySeg` FY toggle is now **inert** (every section is either live or pending). Frontend-only → needs a
+  **Cloud Run redeploy**.
   **DESIGN GUIDE (as of 2026-11-05):** `DESIGN_GUIDE.md` (repo root) is the dev-facing styling
   standard for the whole dashboard — **`public/roas.html` is the reference**. It codifies the color
   tokens (+ page-local `--x-accent`/`--x-shadow` pattern), typography, the **horizontal segmented

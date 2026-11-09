@@ -1,0 +1,95 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-09
+Session: Wired the Monthly Log page's "Yearly summary" table live
+(public/monthly_log.html) — each measure now pulls from the same sources as the
+named Marketing cards (Overview + ROI + Spend & ROI), with FY and calendar-year
+columns; Cadence delivered tagged pending. Then turned the page's two remaining
+mock sections ("Update status" table and "October notes") into pending
+placeholders. Frontend-only; no DB, no git. Needs a manual Cloud Run redeploy.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret / token / connection string / credential
+was pasted into this chat. The CLAUDE.md shown in context names credential/env-var
+identifiers but contains no live values.
+
+--------------------------------------------------------------------------------
+USER:
+(pasted brief) measure_source: 1) "Keynote enquiries" — same source as the
+Keynote enquiries card in marketing.html; 2) "Keynote bookings" — same as
+marketing.html; 3) "Marketing revenue" — same as marketing.html; 4) "Marketing
+spend" — same as marketing.html; 5) "Marketing ROI" — same as spend_roi.html.
+Then: update the "Yearly summary" table in monthly_log.html — update each row per
+measure_source, and tag "Cadence delivered" as pending.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated the sources before editing. Read public/monthly_log.html (the Yearly
+summary table was hardcoded sample data in a YEARLY_SUMMARY_ROWS array; columns are
+Measure / FY25 / FY26 / FY27 (to Oct) / FY26 vs FY25 / CY2025 / CY2026 (to Oct)).
+Read server/metrics/marketing-overview.js (GET /api/marketing/overview returns
+enquiries + bookings, each with byFy [{fyEnd,fy,ads,indirect,total}] and byMonth
+[{month:'YYYY-MM',fyEnd,total}]; bookings = won only). Read
+server/metrics/marketing-roi.js (GET /api/marketing/roi returns rows[] per FY with
+marketingRevenue + totalSpend + hasSpend, and byMonth[] with revenue/spend/
+marketingRevenue). Read public/spend_roi.html to confirm the "Marketing ROI" card
+definition = net ROI % = round((marketingRevenue ÷ marketingSpend − 1) × 100). Read
+the matching cards in public/marketing.html to match each source exactly. Confirmed
+app.js helpers fmt()/fetchJSON()/esc() and the ".chip warn" pending-chip CSS.
+
+Implemented the live Yearly summary in monthly_log.html:
+  - Replaced YEARLY_SUMMARY_ROWS with live state (OVS for /overview, ROIS for /roi)
+    plus helpers: cySum() sums a per-month series over a calendar year; per-FY
+    accessors enqFy/bookFy/revFy/spendFy; roiFrom(rev,spend); diffFor() (percent
+    change for counts/currency, points change for ROI); buildSummaryRows();
+    dispVal()/dispDiff()/infoIcon() formatters.
+  - FY columns read each source's per-FY totals (FY25→2025, FY26→2026, FY27→2027);
+    CY columns sum each source's byMonth series by calendar year.
+  - Rows: Keynote enquiries + Keynote bookings ← /overview; Marketing revenue +
+    Marketing spend ← /roi; Marketing ROI = (marketingRevenue ÷ marketingSpend − 1)
+    × 100 (spend_roi.html definition); Cadence delivered → pending chip.
+  - Rewrote renderSummaryTable() to show "Loading…" until both endpoints resolve,
+    then render live rows (pending row = chip next to the measure + "—" cells).
+    Added loadSummaryOverview()/loadSummaryRoi() loaders, called at init.
+  - Updated the CSV "Download as Excel" handler to export the live rendered rows
+    (SUMMARY_RENDER) with plain-text csvVal()/csvDiff(); Cadence exports "pending".
+  - Updated the card caption to "Live — FY and calendar-year totals from the
+    Marketing Overview + ROI sources".
+No app.js change, so the page stays app.js?v=10. Noted the "Sample data — layout
+only" head badge still shows (renderMarketingHead() with no `true`) because the
+status + notes sections were still mock; flagged that dropping it would need the
+`live` arg + a ?v=11 bump. Reported it's frontend-only on existing live routes and
+needs a manual Cloud Run redeploy (Claude never deploys the dashboard).
+
+--------------------------------------------------------------------------------
+USER:
+"Update status" table and "October notes" to show pending.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed MOCK_BY_FY / selFyKey / currentData were used ONLY by renderStatusTable
+and renderNotes. Replaced the whole mock-data block + both render functions with
+pending placeholders:
+  - renderStatusTable() → one row: <span class="chip warn">pending</span> +
+    "Not tracked yet" (colspan 4).
+  - renderNotes() → a single .ml-note-item with the pending chip + "Not tracked
+    yet".
+  - Removed the now-unused MOCK_BY_FY object, selFyKey(), and currentData().
+Verified no dangling references remained. Noted the top FY toggle still calls
+renderAll() but is now inert (every section is either live — the Yearly summary —
+or pending), and offered to remove the controls bar if wanted. Reiterated it's
+frontend-only and needs a manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history; update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps: saved this transcript, reviewed as_built.txt and CLAUDE.md
+and updated the Monthly Log / monthly_log.html entries to reflect the now-live
+Yearly summary + pending status/notes, and confirmed .gitignore already covers all
+sensitive patterns. No git commands run — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -1,6 +1,21 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-06 (WEBSITE & SEARCH PAGE (public/website_search.html) WIRED PARTIALLY LIVE — ENQUIRIES
+Last updated: 2026-11-09 (MONTHLY LOG PAGE (public/monthly_log.html) — "YEARLY SUMMARY" TABLE WIRED LIVE; the two
+remaining mock sections turned into pending placeholders. Frontend-only (no DB/server/migration/app.js change).
+(1) Yearly summary table: replaced the hardcoded YEARLY_SUMMARY_ROWS sample array with LIVE data from the SAME
+sources as the named Marketing cards — Keynote enquiries + Keynote bookings ← GET /api/marketing/overview (same as
+marketing.html; bookings = won only); Marketing revenue + Marketing spend ← GET /api/marketing/roi (same as
+marketing.html; row.marketingRevenue / row.totalSpend); Marketing ROI = (marketingRevenue ÷ marketingSpend − 1)×100
+(same definition as the spend_roi.html "Marketing ROI" card); Cadence delivered → red "pending" chip (no DB source).
+FY columns (FY25/26/27) read each source's per-FY totals; calendar-year columns (CY2025/CY2026) sum each source's
+byMonth series by calendar year (cySum()). Loaders loadSummaryOverview()/loadSummaryRoi() fetch at init; the table
+shows "Loading…" until both resolve, degrades to "—" per-cell if a source errs. FY26-vs-FY25 column = % change for
+counts/currency, points change for ROI. CSV "Download as Excel" now exports the live rendered rows (plain-text
+csvVal/csvDiff; Cadence exports "pending"). (2) "Update status" table + "October notes" are NOT tracked live yet →
+both now render a "pending" chip + "Not tracked yet"; removed the now-unused MOCK_BY_FY / selFyKey / currentData
+mock machinery. Page stays app.js?v=10 (no app.js change); the "Sample data — layout only" head badge still shows
+(renderMarketingHead() with no `true`) and the top FY toggle is now inert (every section is live or pending). NEEDS
+a manual Cloud Run redeploy (frontend-only on existing live routes). Previously 2026-11-06 (WEBSITE & SEARCH PAGE (public/website_search.html) WIRED PARTIALLY LIVE — ENQUIRIES
 = LEADS WITH AN EXISTING SAVED ACTIVECAMPAIGN CONTACT. There is NO pageview/session data in Supabase, so true
 "sessions" are NOT available (they'd need a new GA4-sessions sync). Per the owner, an enquiry counts ONLY when
 it corresponds to a real saved AC contact: the source is public.ga4_ac_contact_source (GA4 & Ads leads matched

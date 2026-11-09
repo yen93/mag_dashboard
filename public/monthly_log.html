@@ -267,7 +267,7 @@
       <div class="card ml-card">
         <div class="card-head block-head">
           <h3 id="summaryHeading">Yearly summary</h3>
-          <div class="chart-cap">Same rows as the tracker's Yearly Summary tab</div>
+          <div class="chart-cap">Live — FY and calendar-year totals from the Marketing Overview + ROI sources</div>
         </div>
         <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="summaryHeading">
           <table class="ml-table" style="min-width:680px">
@@ -298,164 +298,160 @@
     /* Monthly Log — Frontend-only mock data view.
        Default active FY (FY27) renders the exact figures from the reference design. */
 
-    var YEARLY_SUMMARY_ROWS = [
-      { measure: 'Keynote enquiries', fy25: '137',      fy26: '165',      fy27: '56',       diff: '+20%',    cy25: '160',      cy26: '139' },
-      { measure: 'Keynote bookings',  fy25: '38',       fy26: '43',       fy27: '16',       diff: '+13%',    cy25: '42',       cy26: '37' },
-      { measure: 'Marketing revenue', fy25: '$312,000', fy26: '$374,500', fy27: '$137,500', diff: '+20%',    cy25: '$350,000', cy26: '$317,000' },
-      { measure: 'Marketing spend',   fy25: '$118,000', fy26: '$147,675', fy27: '$40,465',  diff: '+25%',    cy25: '$131,500', cy26: '$111,400' },
-      { measure: 'Marketing ROI',     fy25: '164%',     fy26: '154%',     fy27: '240%',     diff: '−10 pts', cy25: '166%',     cy26: '185%' },
-      { measure: 'Cadence delivered', fy25: '—',        fy26: '95%',      fy27: '96%',      diff: '—',       cy25: '—',        cy26: '95%' }
-    ];
+    /* ----- Yearly summary — LIVE (see measure_source) -----
+       Keynote enquiries / Keynote bookings ← GET /api/marketing/overview
+         (same source as marketing.html's "Keynote enquiries" / "Keynote bookings" cards:
+          deals created per FY across ads + indirect, deduped; bookings = won only).
+       Marketing revenue / Marketing spend  ← GET /api/marketing/roi
+         (same source as marketing.html's "Marketing revenue" / "Marketing spend" cards:
+          row.marketingRevenue and row.totalSpend).
+       Marketing ROI = (marketingRevenue ÷ marketingSpend − 1) × 100
+         (same definition as spend_roi.html's "Marketing ROI" card).
+       Cadence delivered → pending (no DB source).
+       The FY columns read each source's per-FY totals; the calendar-year (CY) columns
+       sum each source's per-MONTH series by calendar year. */
+    var OVS  = { enqFy: {}, bookFy: {}, enqMon: [], bookMon: [], loaded: false }; // /api/marketing/overview
+    var ROIS = { byFy: {}, byMon: [], loaded: false };                            // /api/marketing/roi
+    var SUMMARY_RENDER = [];   // the rows last rendered (for the CSV download)
 
-    var MOCK_BY_FY = {
-      fy27: {
-        notesTitle: 'October notes',
-        statusRows: [
-          { month: 'Jul 2026', due: '8 Aug 2026', updated: '6 Aug',  status: 'Done',        cls: 'done' },
-          { month: 'Aug 2026', due: '8 Sep 2026', updated: '8 Sep',  status: 'Done',        cls: 'done' },
-          { month: 'Sep 2026', due: '8 Oct 2026', updated: '10 Oct', status: 'Done late',   cls: 'late' },
-          { month: 'Oct 2026', due: '8 Nov 2026', updated: '—',      status: 'Not due yet', cls: 'pending' }
-        ],
-        notes: [
-          { title: 'What happened',                 body: 'Bureau send landed a booking; one reel slipped a week.' },
-          { title: 'Decisions made',                body: 'Hold LinkedIn spend one more month.' },
-          { title: "What we'll change next month", body: 'Test event-day content at the next keynote.' }
-        ]
-      },
-      fy26: {
-        notesTitle: 'June 2026 notes',
-        statusRows: [
-          { month: 'Mar 2026', due: '8 Apr 2026', updated: '6 Apr', status: 'Done',      cls: 'done' },
-          { month: 'Apr 2026', due: '8 May 2026', updated: '7 May', status: 'Done',      cls: 'done' },
-          { month: 'May 2026', due: '8 Jun 2026', updated: '9 Jun', status: 'Done late', cls: 'late' },
-          { month: 'Jun 2026', due: '8 Jul 2026', updated: '7 Jul', status: 'Done',      cls: 'done' }
-        ],
-        notes: [
-          { title: 'What happened',                 body: 'Executive X follow-ups converted two keynote bookings in June.' },
-          { title: 'Decisions made',                body: 'Lock FY27 social cadence at 22 slots per month.' },
-          { title: "What we'll change next month", body: 'Introduce 1st Tuesday bureau outreach tracking.' }
-        ]
-      },
-      fy25: {
-        notesTitle: 'June 2025 notes',
-        statusRows: [
-          { month: 'Mar 2025', due: '8 Apr 2025', updated: '7 Apr', status: 'Done',      cls: 'done' },
-          { month: 'Apr 2025', due: '8 May 2025', updated: '8 May', status: 'Done',      cls: 'done' },
-          { month: 'May 2025', due: '8 Jun 2025', updated: '6 Jun', status: 'Done',      cls: 'done' },
-          { month: 'Jun 2025', due: '8 Jul 2025', updated: '9 Jul', status: 'Done late', cls: 'late' }
-        ],
-        notes: [
-          { title: 'What happened',                 body: 'Strong EOFY search demand lifted June keynote enquiries.' },
-          { title: 'Decisions made',                body: 'Increase Google Ads exact-match budget for FY26.' },
-          { title: "What we'll change next month", body: 'Start tracking monthly social cadence compliance.' }
-        ]
-      },
-      fy24: {
-        notesTitle: 'June 2024 notes',
-        statusRows: [
-          { month: 'Mar 2024', due: '8 Apr 2024', updated: '5 Apr', status: 'Done', cls: 'done' },
-          { month: 'Apr 2024', due: '8 May 2024', updated: '7 May', status: 'Done', cls: 'done' },
-          { month: 'May 2024', due: '8 Jun 2024', updated: '8 Jun', status: 'Done', cls: 'done' },
-          { month: 'Jun 2024', due: '8 Jul 2024', updated: '8 Jul', status: 'Done', cls: 'done' }
-        ],
-        notes: [
-          { title: 'What happened',                 body: 'April Executive X dinner drove four qualified org enquiries.' },
-          { title: 'Decisions made',                body: 'Keep bi-annual Executive X dinner format for FY25.' },
-          { title: "What we'll change next month", body: 'Consolidate bureau contact list before Q1.' }
-        ]
-      },
-      fy23: {
-        notesTitle: 'June 2023 notes',
-        statusRows: [
-          { month: 'Mar 2023', due: '8 Apr 2023', updated: '7 Apr', status: 'Done',      cls: 'done' },
-          { month: 'Apr 2023', due: '8 May 2023', updated: '10 May', status: 'Done late', cls: 'late' },
-          { month: 'May 2023', due: '8 Jun 2023', updated: '7 Jun', status: 'Done',      cls: 'done' },
-          { month: 'Jun 2023', due: '8 Jul 2023', updated: '6 Jul', status: 'Done',      cls: 'done' }
-        ],
-        notes: [
-          { title: 'What happened',                 body: 'LinkedIn personal profile posts outperformed company page 4×.' },
-          { title: 'Decisions made',                body: 'Prioritise James personal LinkedIn cadence.' },
-          { title: "What we'll change next month", body: 'Tag all inbound web enquiries by source in ActiveCampaign.' }
-        ]
-      },
-      fy22: {
-        notesTitle: 'June 2022 notes',
-        statusRows: [
-          { month: 'Mar 2022', due: '8 Apr 2022', updated: '8 Apr', status: 'Done', cls: 'done' },
-          { month: 'Apr 2022', due: '8 May 2022', updated: '6 May', status: 'Done', cls: 'done' },
-          { month: 'May 2022', due: '8 Jun 2022', updated: '7 Jun', status: 'Done', cls: 'done' },
-          { month: 'Jun 2022', due: '8 Jul 2022', updated: '8 Jul', status: 'Done', cls: 'done' }
-        ],
-        notes: [
-          { title: 'What happened',                 body: 'Baseline year for paid search and speaker bureau tracking.' },
-          { title: 'Decisions made',                body: 'Standardise monthly reporting cut-off to the 8th.' },
-          { title: "What we'll change next month", body: 'Add Xero marketing account reconciliation.' }
-        ]
-      },
-      all: {
-        notesTitle: 'October notes',
-        statusRows: [
-          { month: 'Jul 2026', due: '8 Aug 2026', updated: '6 Aug',  status: 'Done',        cls: 'done' },
-          { month: 'Aug 2026', due: '8 Sep 2026', updated: '8 Sep',  status: 'Done',        cls: 'done' },
-          { month: 'Sep 2026', due: '8 Oct 2026', updated: '10 Oct', status: 'Done late',   cls: 'late' },
-          { month: 'Oct 2026', due: '8 Nov 2026', updated: '—',      status: 'Not due yet', cls: 'pending' }
-        ],
-        notes: [
-          { title: 'What happened',                 body: 'Bureau send landed a booking; one reel slipped a week.' },
-          { title: 'Decisions made',                body: 'Hold LinkedIn spend one more month.' },
-          { title: "What we'll change next month", body: 'Test event-day content at the next keynote.' }
-        ]
-      }
-    };
-
-    function selFyKey() {
-      var b = document.querySelector('#fySeg button.active');
-      return b ? b.getAttribute('data-fy') : 'fy27';
+    // Sum a per-month series ([{ month:'YYYY-MM', ... }]) over one calendar year.
+    function cySum(months, year, key) {
+      var yr = String(year), total = 0, any = false;
+      (months || []).forEach(function (m) {
+        if (String(m.month).slice(0, 4) === yr) { total += (m[key] || 0); any = true; }
+      });
+      return any ? total : null;
     }
 
-    function currentData() {
-      var key = selFyKey();
-      return MOCK_BY_FY[key] || MOCK_BY_FY.fy27;
+    // Per-FY accessors (fe = FY END year: FY25 → 2025, FY26 → 2026, FY27 → 2027).
+    function enqFy(fe)   { var r = OVS.enqFy[fe];  return r ? r.total : null; }
+    function bookFy(fe)  { var r = OVS.bookFy[fe]; return r ? r.total : null; }
+    function revFy(fe)   { var r = ROIS.byFy[fe];  return (r && r.marketingRevenue != null) ? r.marketingRevenue : null; }
+    function spendFy(fe) { var r = ROIS.byFy[fe];  return (r && r.hasSpend) ? r.totalSpend : null; }
+    function roiFrom(rev, spend) { return (rev != null && spend) ? (rev / spend - 1) * 100 : null; }
+
+    // FY26-vs-FY25 delta: % change for counts/currency, points change for ROI.
+    function diffFor(kind, a, b) {
+      if (a == null || b == null) return null;
+      if (kind === 'roi') return { type: 'pts', v: Math.round(b) - Math.round(a) };
+      if (!a) return null;   // avoid divide-by-zero
+      return { type: 'pct', v: (b - a) / Math.abs(a) * 100 };
+    }
+    function mkRow(measure, kind, fy25, fy26, fy27, cy25, cy26, info) {
+      return {
+        measure: measure, kind: kind, info: info,
+        fy25: fy25, fy26: fy26, fy27: fy27, cy25: cy25, cy26: cy26,
+        diff: diffFor(kind, fy25, fy26),
+      };
     }
 
+    function buildSummaryRows() {
+      var rows = [];
+      rows.push(mkRow('Keynote enquiries', 'count',
+        enqFy(2025), enqFy(2026), enqFy(2027),
+        cySum(OVS.enqMon, 2025, 'total'), cySum(OVS.enqMon, 2026, 'total'),
+        'Deals created per period across two sources (ads = roas_counted_deals, indirect = ac_indirect_deals), deduped by deal. Same source as the Overview "Keynote enquiries" card. GET /api/marketing/overview.'));
+      rows.push(mkRow('Keynote bookings', 'count',
+        bookFy(2025), bookFy(2026), bookFy(2027),
+        cySum(OVS.bookMon, 2025, 'total'), cySum(OVS.bookMon, 2026, 'total'),
+        'WON deals created per period across the same two sources, deduped by deal. Same source as the Overview "Keynote bookings" card. GET /api/marketing/overview.'));
+      rows.push(mkRow('Marketing revenue', 'currency',
+        revFy(2025), revFy(2026), revFy(2027),
+        cySum(ROIS.byMon, 2025, 'marketingRevenue'), cySum(ROIS.byMon, 2026, 'marketingRevenue'),
+        'Marketing-attributed won revenue (ROAS-paid + organic + bureau/tailor + Exec X, deduped). Same source as the Overview "Marketing revenue" card. GET /api/marketing/roi.'));
+      rows.push(mkRow('Marketing spend', 'currency',
+        spendFy(2025), spendFy(2026), spendFy(2027),
+        cySum(ROIS.byMon, 2025, 'spend'), cySum(ROIS.byMon, 2026, 'spend'),
+        'Xero marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST. Same source as the Overview "Marketing spend" card. GET /api/marketing/roi.'));
+      var roi25 = roiFrom(revFy(2025), spendFy(2025));
+      var roi26 = roiFrom(revFy(2026), spendFy(2026));
+      var roi27 = roiFrom(revFy(2027), spendFy(2027));
+      var roiCy25 = roiFrom(cySum(ROIS.byMon, 2025, 'marketingRevenue'), cySum(ROIS.byMon, 2025, 'spend'));
+      var roiCy26 = roiFrom(cySum(ROIS.byMon, 2026, 'marketingRevenue'), cySum(ROIS.byMon, 2026, 'spend'));
+      rows.push(mkRow('Marketing ROI', 'roi', roi25, roi26, roi27, roiCy25, roiCy26,
+        'Net return = (marketing revenue ÷ marketing spend − 1) × 100. Same definition as the Spend & ROI tab\'s "Marketing ROI" card.'));
+      rows.push({ measure: 'Cadence delivered', pending: true });
+      return rows;
+    }
+
+    // ----- Value / delta formatting -----
+    var _muted = '<span class="muted">—</span>';
+    function dispVal(kind, v) {
+      if (v == null) return _muted;
+      if (kind === 'currency') return esc(fmt(Math.round(v), 'currency'));
+      if (kind === 'roi') { var r = Math.round(v); return (r > 0 ? '+' : '') + r + '%'; }
+      return esc(fmt(Math.round(v)));
+    }
+    function dispDiff(diff) {
+      if (!diff) return _muted;
+      var cls = diff.v > 0 ? 'pos' : diff.v < 0 ? 'neg' : 'muted';
+      if (diff.type === 'pts') { var p = Math.round(diff.v); return (p > 0 ? '+' : '') + p + ' pts'; }
+      var pc = Math.round(diff.v); return (pc > 0 ? '+' : '') + pc + '%';
+    }
+    function infoIcon(text) {
+      if (!text) return '';
+      return ' <span tabindex="0" role="img" aria-label="' + esc(text) + '" title="' + esc(text) +
+        '" style="cursor:help;color:var(--text-muted);font-size:12px">ⓘ</span>';
+    }
+
+    // "Update status" and "October notes" are NOT tracked live yet — show a pending
+    // placeholder (red chip, same as Cadence delivered / the design-guide standard).
     function renderStatusTable() {
-      var d = currentData();
-      var html = d.statusRows.map(function (r) {
-        return '<tr>' +
-          '<td>' + esc(r.month) + '</td>' +
-          '<td>' + esc(r.due) + '</td>' +
-          '<td>' + esc(r.updated) + '</td>' +
-          '<td><span class="ml-badge ' + esc(r.cls) + '">' + esc(r.status) + '</span></td>' +
-        '</tr>';
-      }).join('');
-      document.getElementById('statusBody').innerHTML = html;
+      document.getElementById('statusBody').innerHTML =
+        '<tr><td colspan="4"><span class="chip warn">pending</span> ' +
+        '<span class="muted">Not tracked yet</span></td></tr>';
     }
 
     function renderNotes() {
-      var d = currentData();
-      document.getElementById('notesHeading').textContent = d.notesTitle;
-      var html = d.notes.map(function (n) {
-        return '<div class="ml-note-item">' +
-          '<div class="note-title">' + esc(n.title) + '</div>' +
-          '<div class="note-body">' + esc(n.body) + '</div>' +
-        '</div>';
-      }).join('');
-      document.getElementById('notesList').innerHTML = html;
+      document.getElementById('notesList').innerHTML =
+        '<div class="ml-note-item"><span class="chip warn">pending</span> ' +
+        '<span class="muted">Not tracked yet</span></div>';
     }
 
     function renderSummaryTable() {
-      var html = YEARLY_SUMMARY_ROWS.map(function (r) {
+      var body = document.getElementById('summaryBody');
+      if (!body) return;
+      if (!(OVS.loaded && ROIS.loaded)) {
+        body.innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>';
+        return;
+      }
+      var rows = buildSummaryRows();
+      SUMMARY_RENDER = rows;
+      var html = rows.map(function (r) {
+        if (r.pending) {
+          return '<tr><td>' + esc(r.measure) + ' <span class="chip warn">pending</span></td>' +
+            '<td>' + _muted + '</td><td>' + _muted + '</td><td>' + _muted + '</td>' +
+            '<td>' + _muted + '</td><td>' + _muted + '</td><td>' + _muted + '</td></tr>';
+        }
         return '<tr>' +
-          '<td>' + esc(r.measure) + '</td>' +
-          '<td>' + esc(r.fy25) + '</td>' +
-          '<td>' + esc(r.fy26) + '</td>' +
-          '<td>' + esc(r.fy27) + '</td>' +
-          '<td>' + esc(r.diff) + '</td>' +
-          '<td>' + esc(r.cy25) + '</td>' +
-          '<td>' + esc(r.cy26) + '</td>' +
+          '<td>' + esc(r.measure) + infoIcon(r.info) + '</td>' +
+          '<td>' + dispVal(r.kind, r.fy25) + '</td>' +
+          '<td>' + dispVal(r.kind, r.fy26) + '</td>' +
+          '<td>' + dispVal(r.kind, r.fy27) + '</td>' +
+          '<td>' + dispDiff(r.diff) + '</td>' +
+          '<td>' + dispVal(r.kind, r.cy25) + '</td>' +
+          '<td>' + dispVal(r.kind, r.cy26) + '</td>' +
         '</tr>';
       }).join('');
-      document.getElementById('summaryBody').innerHTML = html;
+      body.innerHTML = html;
+    }
+
+    function loadSummaryOverview() {
+      return fetchJSON('/api/marketing/overview').then(function (d) {
+        var e = d && d.enquiries, b = d && d.bookings;
+        if (e) { (e.byFy || []).forEach(function (r) { OVS.enqFy[r.fyEnd] = r; }); OVS.enqMon = e.byMonth || []; }
+        if (b) { (b.byFy || []).forEach(function (r) { OVS.bookFy[r.fyEnd] = r; }); OVS.bookMon = b.byMonth || []; }
+        OVS.loaded = true;
+        renderSummaryTable();
+      }).catch(function (err) { console.error('summary overview', err); OVS.loaded = true; renderSummaryTable(); });
+    }
+    function loadSummaryRoi() {
+      return fetchJSON('/api/marketing/roi').then(function (d) {
+        ((d && d.rows && d.rows.data) || []).forEach(function (r) { ROIS.byFy[r.fyEnd] = r; });
+        ROIS.byMon = (d && d.byMonth && d.byMonth.data) || [];
+        ROIS.loaded = true;
+        renderSummaryTable();
+      }).catch(function (err) { console.error('summary roi', err); ROIS.loaded = true; renderSummaryTable(); });
     }
 
     function renderAll() {
@@ -476,12 +472,28 @@
       });
     }
 
+    // Plain-text (no HTML) value/delta for the CSV export.
+    function csvVal(kind, v) {
+      if (v == null) return '';
+      if (kind === 'currency') return Math.round(v);
+      if (kind === 'roi') { var r = Math.round(v); return (r > 0 ? '+' : '') + r + '%'; }
+      return Math.round(v);
+    }
+    function csvDiff(diff) {
+      if (!diff) return '';
+      if (diff.type === 'pts') { var p = Math.round(diff.v); return (p > 0 ? '+' : '') + p + ' pts'; }
+      var pc = Math.round(diff.v); return (pc > 0 ? '+' : '') + pc + '%';
+    }
     document.getElementById('downloadExcelBtn').addEventListener('click', function () {
       var lines = [
         ['Measure', 'FY25', 'FY26', 'FY27 (to Oct)', 'FY26 vs FY25', 'CY2025', 'CY2026 (to Oct)'].join(',')
       ];
-      YEARLY_SUMMARY_ROWS.forEach(function (r) {
-        lines.push([r.measure, r.fy25, r.fy26, r.fy27, r.diff, r.cy25, r.cy26].map(function (cell) {
+      (SUMMARY_RENDER.length ? SUMMARY_RENDER : buildSummaryRows()).forEach(function (r) {
+        var cells = r.pending
+          ? [r.measure, 'pending', 'pending', 'pending', '', 'pending', 'pending']
+          : [r.measure, csvVal(r.kind, r.fy25), csvVal(r.kind, r.fy26), csvVal(r.kind, r.fy27),
+             csvDiff(r.diff), csvVal(r.kind, r.cy25), csvVal(r.kind, r.cy26)];
+        lines.push(cells.map(function (cell) {
           return '"' + String(cell).replace(/"/g, '""') + '"';
         }).join(','));
       });
@@ -499,7 +511,9 @@
     initPage('marketing');
     renderMarketingHead();
     renderMarketingSidebar('monthly-log');
-    renderAll();
+    renderAll();                 // status + notes (mock) + Yearly summary (Loading… until fetched)
+    loadSummaryOverview();       // live Keynote enquiries + bookings (same source as marketing.html)
+    loadSummaryRoi();            // live Marketing revenue + spend + ROI (same source as marketing.html / spend_roi.html)
     wireSeg('fySeg', renderAll);
   </script>
 </body>
