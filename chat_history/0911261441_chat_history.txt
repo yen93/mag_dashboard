@@ -1,0 +1,124 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-09
+Session: Month-axis chart labels across the Marketing sub-tabs changed to the
+"Revenue vs spend by month" span format ([Month] 1-[last day], e.g. "Jul 1-31"),
+then made RANGE-AWARE so a custom date range narrows the edge months to just the
+selected days (e.g. "Oct 1-9"). Two live month-bucketed charts affected:
+marketing.html "Enquiries vs bookings" and leads_bookings.html "Enquiries by
+source". Frontend-only; needs a manual Cloud Run redeploy.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. Credentials were not involved in this session.
+
+--------------------------------------------------------------------------------
+USER:
+(Pasted task.) tabs_list = marketing.html, leads_bookings.html, spend_roi.html,
+content_social.html, email_partners.html, website_search.html, nurture_events.html,
+monthly_log.html. Main task: (1) update all graphs with a monthly tagging in
+tabs_list and display them as [Month] 1-[last day of the month]; (2) use the
+"Revenue vs spend by month" graph in marketing.html as reference.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Studied the reference: public/marketing.html renderMonthChart() already labels its
+x-axis with a full calendar-month span via hoisted helpers MON_ABBR,
+monthSpanLabel(year,m1) -> "Mon 1-<lastDay>", and ymSpanLabel(ym) which splits a
+"YYYY-MM" string. Target format e.g. "Jul 1-31".
+
+Surveyed every chart in all eight tabs (grep for new Chart / labels: / monthLabel /
+canvas / lineChart) to find which have a MONTH x-axis:
+  - marketing.html: TWO charts. renderMonthChart() already uses ymSpanLabel (the
+    reference). renderEnqBookChart() ("Enquiries vs bookings") used
+    monthLabel(r.month) -> needed the span format (r.month = "YYYY-MM").
+  - leads_bookings.html: _srcChart ("Enquiries by source", stacked bar per month)
+    used monthLabel(m) (m = "YYYY-MM"); file had no span helper of its own.
+  - spend_roi.html: only chart is "Spend by type" (x = type names) -> skip.
+  - content_social.html: only LIVE chart is "Engagement by platform" (x = platform
+    names). The ['Jul','Aug',...] arrays in MOCK_BY_FY.chart are dead sample data
+    (per CLAUDE.md only kpis[].label is read) -> skip.
+  - website_search.html: traffic chart keyed by FY (r.fy) or AI-source name, not
+    months -> skip.
+  - email_partners / nurture_events / monthly_log: no Chart.js charts at all.
+Confirmed app.js monthLabel(ym) expects "YYYY-MM", so the input format matched.
+
+First edits (span format):
+  1. marketing.html renderEnqBookChart: monthLabel(r.month) -> ymSpanLabel(r.month).
+     ymSpanLabel/monthSpanLabel are hoisted function declarations, safe to call.
+  2. leads_bookings.html: added a self-contained helper block (var _SRC_MON_ABBR +
+     function ymSpanLabel) above renderSourceChart, then switched its labels from
+     monthLabel(m) -> ymSpanLabel(m).
+Verified both via grep; reported it's inline-only (no app.js?v= bump) and needs a
+manual Cloud Run redeploy. Noted spend_roi/website_search/content_social were left
+because none has a live monthly chart.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history; update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran dcp. Saved transcript 0911261432_chat_history.txt. Judged as_built.txt and
+CLAUDE.md unchanged (cosmetic label-only change, nothing documented became
+inaccurate); .gitignore already covered all sensitive patterns. No git run.
+
+--------------------------------------------------------------------------------
+USER:
+cm — compose a one-line Conventional Commits `git commit -m "..."` for the current
+changes.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected git status/diff (2 modified HTML files + the new chat-history file).
+Output a single-line command:
+  git commit -m "feat(marketing): label monthly charts as 'Mon 1-last' span in
+  Enquiries vs bookings and leads-by-source, matching the Revenue vs spend by month
+  reference"
+
+--------------------------------------------------------------------------------
+USER:
+If we use the custom date range filter, the dates in these graphs should also
+update accordingly. E.g. if selected is Oct 1-9 then the label for that month should
+be "Oct 1-9", not "Oct 1-30".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Checked app.js: getDateRange() returns {from,to} as "YYYY-MM-DD" (either may be
+empty); dateRangeActive() reports whether a range is set; both are globals. Checked
+each page's monthInRange()/currentSrcRows() — edge months are included as whole-month
+aggregates, so this is a LABEL-only change.
+
+Made the span helpers RANGE-AWARE in both files: for each month "YYYY-MM", default
+startDay=1, endDay=lastDay; if dateRangeActive(), and r.from is in that month set
+startDay=+r.from.slice(8,10); if r.to is in that month set endDay=+r.to.slice(8,10);
+label = MON_ABBR[m1-1] + ' ' + startDay + '-' + endDay.
+  - marketing.html: rewrote ymSpanLabel (used by BOTH renderMonthChart and
+    renderEnqBookChart) and removed the now-unused monthSpanLabel.
+  - leads_bookings.html: rewrote its local ymSpanLabel the same way.
+Verified both pages already re-render the affected charts on range change
+(marketing applyRange -> renderMonthChart/renderEnqBookChart; leads_bookings
+applyRange -> renderLB -> renderSourceChart), so labels update live. Printed both
+helpers via node to confirm syntax.
+
+Results: Oct 1-9 range -> "Oct 1-9"; Aug 15-Dec 9 -> "Aug 15-31","Sep 1-30",
+"Oct 1-31","Nov 1-30","Dec 1-9"; no range -> "Oct 1-31" unchanged. Still inline-only
+(no app.js?v= bump). Noted the bar/line VALUES stay month-level aggregates (edge
+month still totals the whole month); narrowing the edge values too would be a deeper
+server-side data-granularity change, offered if wanted. Needs a Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history; update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps again. Saved this transcript. Reviewed as_built.txt and
+CLAUDE.md: still a cosmetic x-axis label change (now range-aware) on two existing
+charts; it doesn't alter the built-state inventory, data pipeline, routes, env, or
+any documented convention, so neither file was edited. .gitignore already covers all
+sensitive patterns — left as is. No git commands run — user commits/pushes
+themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -309,13 +309,21 @@
     }
 
     // ----- Enquiries-by-source stacked chart (per month) -----
-    // X-axis label = full calendar-month span "Mon 1-<last day>" (e.g. Jul 1-31),
+    // X-axis label = calendar-month span "Mon 1-<last day>" (e.g. Jul 1-31),
     // matching marketing.html's "Revenue vs spend by month" reference chart.
+    // Range-aware: when a custom date range is active, the first/last month in the
+    // range show only the selected days (e.g. "Oct 1-9"), not the whole month span.
     var _SRC_MON_ABBR = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
     function ymSpanLabel(ym) {
       var p = String(ym).split('-'), year = +p[0], m1 = +p[1];
       var last = new Date(Date.UTC(year, m1, 0)).getUTCDate();
-      return _SRC_MON_ABBR[m1 - 1] + ' 1-' + last;
+      var startDay = 1, endDay = last;
+      if (dateRangeActive()) {
+        var r = getDateRange();
+        if (r.from && r.from.slice(0, 7) === ym) startDay = +r.from.slice(8, 10) || 1;
+        if (r.to && r.to.slice(0, 7) === ym) endDay = +r.to.slice(8, 10) || last;
+      }
+      return _SRC_MON_ABBR[m1 - 1] + ' ' + startDay + '-' + endDay;
     }
     var _srcChart = null;
     function renderSourceChart() {
