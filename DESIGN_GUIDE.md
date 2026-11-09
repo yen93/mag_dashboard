@@ -320,6 +320,17 @@ non-`overflow:hidden` `.kpi`/`.ne-kpi` tiles elsewhere).
 
 ## 7. Tables
 
+**⭐ MANDATORY — any row-level / detail table gets sorting + filters.** A table whose
+rows are individual records (one lead, deal, contact, invoice, campaign, event, …) —
+i.e. anything a user would want to scan, search, sort or narrow — **MUST** be built
+with the shared `renderSortableTable()` (tier B below), never hand-rolled markup. It
+gives sort, search and per-column Google-Sheets-style filters for free, and
+`ac_contact_sources.html` is the reference implementation. Do **not** ship a
+hand-built `<table>` of record rows without sort/filter. The **only** tables exempt
+are small, fixed **summary / aggregate** tables (a handful of total rows — e.g. a
+by-source totals table, a ROAS-by-FY table), which may use tier A. When in doubt
+(could the list grow, or would someone want to filter it?), use tier B.
+
 Two tiers:
 
 ### A. Static/presentation table — the `.roas-table` standard

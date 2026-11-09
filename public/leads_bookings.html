@@ -171,14 +171,7 @@
           <h3>All leads <span class="head-info" data-info="Every individual lead/deal behind the counts above — one row per deal, for the selected FY (or custom range). Columns: date, source, organisation, deal, status and value (AUD)." data-src="GET /api/marketing/leads-by-source — roas_counted_deals (Paid Ads) + ga4_ac_contact_source (Organic) + ac_indirect_deals (Tailor/Bureau, excl. paid); booking = won deal; FY from the deal cdate."></span></h3>
           <div class="muted" style="font-size:12px;margin-top:4px" id="leadsCount"></div>
         </div>
-        <div class="lb-table-wrap">
-          <table class="lb-table" id="leadsTable">
-            <thead>
-              <tr><th>Date</th><th>Source</th><th>Organisation</th><th>Deal</th><th>Status</th><th>Value</th></tr>
-            </thead>
-            <tbody id="leadsBody"></tbody>
-          </table>
-        </div>
+        <div id="leadsRows"></div>
       </div>
     </main>
   </div>
@@ -240,32 +233,42 @@
       var fyEnd = fyEndOf(key);
       return LEADS.rows.filter(function (r) { return r.fyEnd === fyEnd; });
     }
-    function money(v) {
-      v = Number(v) || 0;
-      return '$' + Math.round(v).toLocaleString();
-    }
+    // Shared sortable/searchable/filterable table (DESIGN_GUIDE §7 tier B — any
+    // row-level detail table uses renderSortableTable, same as ac_contact_sources).
+    // stateStore keeps sort/search/column-filters across FY-toggle re-renders.
+    var LEADS_TABLE_STATE = {};
     function renderLeadsTable() {
-      var body = document.getElementById('leadsBody');
+      var host = document.getElementById('leadsRows');
       var cnt = document.getElementById('leadsCount');
-      if (!body) return;
+      if (!host) return;
       var loadingNow = CUSTOM ? !LEADS.rangeRows : !BYSRC.loaded;
-      if (loadingNow) { body.innerHTML = '<tr><td colspan="6" class="muted">Loading…</td></tr>'; if (cnt) cnt.textContent = ''; return; }
+      if (loadingNow) { host.innerHTML = '<div class="muted" style="padding:10px 2px">Loading…</div>'; if (cnt) cnt.textContent = ''; return; }
       var rows = currentLeadRows();
-      if (!rows.length) { body.innerHTML = '<tr><td colspan="6" class="muted">No leads for this view.</td></tr>'; if (cnt) cnt.textContent = '0 leads'; return; }
-      body.innerHTML = rows.map(function (r) {
-        var dot = '<span class="src-dot" style="background:' + (SRC_COLOR[r.source] || '#9aa4b2') + '"></span>';
-        var st = r.won ? '<strong>' + esc(r.status || 'Won') + '</strong>' : esc(r.status || '—');
-        return '<tr>' +
-          '<td>' + esc(r.date || '') + '</td>' +
-          '<td>' + dot + esc(r.source) + '</td>' +
-          '<td>' + esc(r.org || '—') + '</td>' +
-          '<td>' + esc(r.title || '—') + '</td>' +
-          '<td>' + st + '</td>' +
-          '<td>' + money(r.value) + '</td>' +
-          '</tr>';
-      }).join('');
-      var won = rows.filter(function (r) { return r.won; }).length;
-      if (cnt) cnt.textContent = rows.length + ' lead' + (rows.length === 1 ? '' : 's') + ' · ' + won + ' booked';
+      function txt(v) { return v == null || v === '' ? '—' : esc(v); }
+      function srcCell(v) {
+        return '<span class="src-dot" style="background:' + (SRC_COLOR[v] || '#9aa4b2') + '"></span>' + esc(v);
+      }
+      function statusCell(v, row) { return row.won ? '<strong>' + esc(v || 'Won') + '</strong>' : esc(v || '—'); }
+      var cols = [
+        { key: 'date', label: 'Date', unit: 'date' },
+        { key: 'source', label: 'Source', render: srcCell, text: function (v) { return v; } },
+        { key: 'org', label: 'Organisation', render: txt },
+        { key: 'title', label: 'Deal', render: txt },
+        { key: 'status', label: 'Status', render: statusCell, text: function (v, row) { return row.won ? (v || 'Won') : (v || ''); } },
+        { key: 'value', label: 'Value', unit: 'currency' },
+      ];
+      renderSortableTable('leadsRows', rows, cols, {
+        stateStore: LEADS_TABLE_STATE,
+        searchPlaceholder: 'Search leads…',
+        sortKey: 'date', sortDir: 'desc',
+        emptyText: 'No leads for this view.',
+        pageSize: 50,
+        onCount: function (shown, total, list) {
+          var won = (list || []).filter(function (r) { return r.won; }).length;
+          if (cnt) cnt.textContent = (shown === total ? total : shown + ' of ' + total) +
+            ' lead' + (total === 1 ? '' : 's') + ' · ' + won + ' booked';
+        },
+      });
     }
 
     // Rows for the current view: the custom date range when active, else the selected FY.
