@@ -288,6 +288,16 @@ either arg may be empty). Use it for **every** widget:
 migrate those to `infoTip` so the hover card is consistent and legible. **Don't** leave a
 widget with no info tool, and **don't** duplicate the description as visible body text.
 
+**Scope:** this is NOT just for new pages — **every existing card, table and chart on every
+tab must carry one** (marketing / leads_bookings / spend_roi / content_social / email_partners /
+website_search and the rest). Auditing a page = one ⓘ per widget, provenance/description text
+pulled out of the body and into it.
+
+**Cache-bust gotcha:** `infoTip` / `fillHeadInfo` live in `app.js`. When a page **starts**
+using them, bump that page's `app.js?v=` query — otherwise a returning visitor can be served a
+**cached older `app.js` without `infoTip`** (→ `infoTip is not defined`). Bump to a version at or
+above the newest already in use.
+
 **Gotcha:** a hover-`transform` on a card/KPI creates a stacking context that can
 **clip** an escaping tooltip behind a sticky bar. If a tile with an info tooltip
 lifts on hover, add a matching `z-index` lift (`.kpi:hover, .kpi:focus-within

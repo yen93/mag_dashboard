@@ -218,16 +218,16 @@
       <!-- Partner outreach table card -->
       <div class="card ep-outreach-card">
         <div class="card-head block-head">
-          <h3 id="outreachHeading">Partner outreach<span class="head-info" data-info="Indirect (bureau / tailor) partner deals for the selected financial year — contacts, enquiries, bookings and won revenue, with the prior FY's revenue alongside for comparison." data-src="public.ac_indirect_deals (is_tailor split) via public.email_partner_metrics; partner contacts from the ActiveCampaign SPEAKERS BUREAUS list"></span></h3>
+          <h3 id="outreachHeading">Partner outreach<span class="head-info" data-info="Indirect (bureau / tailor) partner deals for the selected financial year — contacts, enquiries, bookings and won revenue, with the prior FY's revenue alongside. The &quot;Sent on time&quot; and &quot;Replies&quot; columns are pending: send cadence and replies aren't tracked in ActiveCampaign." data-src="GET /api/marketing/email-partners — public.ac_indirect_deals (is_tailor split) via public.email_partner_metrics; partner contacts from the ActiveCampaign SPEAKERS BUREAUS list"></span></h3>
         </div>
         <div class="ep-table-wrap" tabindex="0" role="region" aria-labelledby="outreachHeading">
           <table class="ep-table">
             <thead>
               <tr>
                 <th>Partner</th>
-                <th>Sent on time<span class="head-info" data-info="Whether the scheduled partner EDM went out on time — will track send cadence once a source exists." data-src="Pending — not tracked in ActiveCampaign"></span></th>
+                <th>Sent on time</th>
                 <th>Contacts</th>
-                <th>Replies<span class="head-info" data-info="Replies received from partners to outreach emails." data-src="Pending — not tracked in ActiveCampaign"></span></th>
+                <th>Replies</th>
                 <th>Enquiries</th>
                 <th>Bookings</th>
                 <th>Revenue (won)</th>
@@ -241,7 +241,7 @@
     </main>
   </div>
 
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=13"></script>
   <script>
     /* Email & Partners — LIVE.
        Email KPIs come from ActiveCampaign (run_campaign_performance_report), and
@@ -308,10 +308,14 @@
     function curRow()  { var k = selFyKey(); return k === 'all' ? EP.all : (EP.byFy[fyEndOf(k)] || null); }
     function prevRow() { var k = selFyKey(); return k === 'all' ? null  : (EP.byFy[fyEndOf(k) - 1] || null); }
 
-    function kpiCard(label, value, subHtml, subCls, hover) {
-      var titleAttr = hover ? ' title="' + esc(hover) + '"' : '';
-      return '<div class="ep-kpi"' + titleAttr + '>' +
-        '<div class="label">' + esc(label) + '</div>' +
+    // Shared provenance string for every email KPI (goes in the ⓘ only).
+    var EP_SRC = 'GET /api/marketing/email-partners — public.email_partner_metrics ' +
+      '(latest weekly snapshot per FY; email KPIs from ActiveCampaign ' +
+      'run_campaign_performance_report, filled by the email-partners-sync routine).';
+
+    function kpiCard(label, value, subHtml, subCls, info) {
+      return '<div class="ep-kpi">' +
+        '<div class="label">' + esc(label) + (info || '') + '</div>' +
         '<div class="value">' + value + '</div>' +
         '<div class="sub ' + (subCls || '') + '">' + subHtml + '</div>' +
       '</div>';
@@ -325,7 +329,6 @@
       if (!r) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">No snapshot for ' + esc(fyName(selFyKey())) + ' yet.</div>'; return; }
 
       var e = r.email, key = selFyKey(), prev = prevRow();
-      var openHover = 'Open rate ' + pct(e.openRate) + ' · click-to-open ' + pct(e.clickToOpenRate) + ' (Apple Mail inflates opens)';
       var priorTag = (key === 'all' || !prev) ? '' : (' vs FY' + String(fyEndOf(key) - 1).slice(-2));
 
       // Click-rate delta (percentage points) vs prior FY.
@@ -337,11 +340,16 @@
       }
 
       grid.innerHTML = [
-        kpiCard('Subscribed contacts', num(r.subscribers.activeContacts), 'Active in ActiveCampaign', ''),
-        kpiCard('EDM sends', num(e.campaignsSent), num(e.totalSends) + ' emails sent', 'pos', openHover),
-        kpiCard('Click rate', pct(e.clickRate), clkSub, clkCls, openHover),
-        kpiCard('Replies', '—', pendingChip + '<span>not in ActiveCampaign</span>', ''),
-        kpiCard('Unsubscribes', num(e.totalUnsubscribes), pct(e.unsubscribeRate) + ' of sends', 'warn')
+        kpiCard('Subscribed contacts', num(r.subscribers.activeContacts), '&nbsp;', '',
+          infoTip('Contacts currently subscribed / active in ActiveCampaign as of the latest snapshot for the selected FY.', EP_SRC)),
+        kpiCard('EDM sends', num(e.campaignsSent), num(e.totalSends) + ' emails sent', 'pos',
+          infoTip('Email campaigns sent this FY (headline) and total emails delivered (below). Open rate ' + pct(e.openRate) + ', click-to-open ' + pct(e.clickToOpenRate) + ' — opens are inflated by Apple Mail Privacy.', EP_SRC)),
+        kpiCard('Click rate', pct(e.clickRate), clkSub, clkCls,
+          infoTip('Unique click rate across campaigns this FY; the sub-line is the change vs the prior FY in percentage points.', EP_SRC)),
+        kpiCard('Replies', '—', pendingChip, '',
+          infoTip('Replies received to partner / campaign emails. Not tracked in ActiveCampaign, so this tile stays pending.', EP_SRC)),
+        kpiCard('Unsubscribes', num(e.totalUnsubscribes), pct(e.unsubscribeRate) + ' of sends', 'warn',
+          infoTip('Unsubscribes this FY (headline) and as a percentage of emails sent (below).', EP_SRC))
       ].join('');
     }
 
@@ -359,9 +367,7 @@
     }
 
     function renderOutreachTable() {
-      var cap = document.getElementById('outreachCap');
       var body = document.getElementById('outreachBody');
-      if (cap) cap.textContent = 'Indirect (bureau / tailor) CRM deals · ' + fyName(selFyKey());
       if (!body) return;
       if (!EP.loaded) { body.innerHTML = '<tr><td colspan="8" class="muted">Loading…</td></tr>'; return; }
       var r = curRow(), prev = prevRow();
@@ -382,8 +388,7 @@
       if (EP.capturedAt) {
         var dt = new Date(EP.capturedAt);
         el.textContent = 'Weekly snapshot · ' +
-          dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' }) +
-          ' · ActiveCampaign + CRM';
+          dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
       } else {
         el.textContent = '';
       }
@@ -434,6 +439,7 @@
     initPage('marketing');
     renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('email-partners');
+    fillHeadInfo();              // fill the static table-heading info tool(s)
     wireSeg('fySeg', renderAll);
     renderAll();                 // loading placeholders
     load();

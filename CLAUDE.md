@@ -331,6 +331,23 @@ Cloud Run.
   toggle as THE standard period/filter control** (the ROAS "by FY" pattern — no dropdowns / no
   `3M/6M/12M/YTD` for new work), KPI tiles, the 3 info-tool patterns, tables, chart conventions, etc.
   Read it before restyling or building a page.
+  **INFO TOOLS — now MANDATORY + rolled out across the Marketing data pages (as of 2026-11-09):**
+  `DESIGN_GUIDE.md` **§6** is the rule: **every card, table and chart carries EXACTLY ONE ⓘ** that, on
+  hover/focus, says **what the widget is + where its data comes from** — and that text lives **ONLY** in
+  the ⓘ, **never printed in the widget body** (no chart captions, no provenance strap-lines, no
+  definition sub-lines; **keep** data values, numeric deltas, `pending` chips, and §4 "as of …" notes).
+  The shared helpers are in **`app.js`**: **`infoTip(desc, source)`** (JS-built cards/charts — drop the
+  returned span next to the `.label`/heading) and **`fillHeadInfo(root?)`** which fills any
+  **`<span class="head-info" data-info="…" data-src="…">`** placeholder (static headings) — call it once
+  at init. `roas.html`/`roi.html` are the reference. §6 was extended 2026-11-09 with an explicit
+  all-pages SCOPE line + a **cache-bust gotcha** (a page that STARTS using info tools must bump its
+  `app.js?v=` or a returning visitor gets a cached older `app.js` lacking `infoTip` → `infoTip is not
+  defined`). **The six Marketing data pages — `marketing.html`, `leads_bookings.html`, `spend_roi.html`,
+  `content_social.html`, `email_partners.html`, `website_search.html` — were given full §6 coverage and
+  bumped to `app.js?v=13`** (website_search was v=12, the rest v=11). Along the way the old native-`title`
+  `.kpi-info`/`infoSpan` ⓘ on `marketing.html`/`leads_bookings.html` were migrated to `infoTip`, and two
+  dead-wiring bugs were fixed (`email_partners.html` had `head-info` spans but never called
+  `fillHeadInfo()`). Frontend-only → needs a **Cloud Run redeploy**.
   **Marketing OVERVIEW is now design-guide-styled + partly LIVE (as of 2026-11-05):** `marketing.html`
   follows `DESIGN_GUIDE.md` (page-local `--mkt-*` tokens, card/KPI hover polish, gradient-active
   `.segmented` toggles, `.kpi-info` ⓘ, `.mkt-take` callout). Its period filter is the **standard

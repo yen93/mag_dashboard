@@ -162,15 +162,17 @@
       <div class="grid">
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>Revenue vs spend by month</h3>
-            <div class="chart-cap">Selected FY · green bars = marketing spend, blue line = marketing revenue (shared axis); gray dashed = company revenue (right axis)</div>
+            <h3>Revenue vs spend by month <span class="head-info"
+              data-info="By month for the selected financial year: marketing spend (green bars) and marketing revenue (blue line) share the left axis; whole-business company revenue (gray dashed) sits on the right axis for context."
+              data-src="GET /api/marketing/roi (byMonth) — Xero P&L revenue + marketing_channel_monthly spend"></span></h3>
           </div>
           <div class="chart-box"><canvas id="spendRevCanvas"></canvas></div>
         </div>
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>Enquiries vs bookings</h3>
-            <div class="chart-cap">Keynote only · by month, selected FY</div>
+            <h3>Enquiries vs bookings <span class="head-info"
+              data-info="Keynote enquiries (all created deals) vs bookings (won deals) by month for the selected financial year, deduped by deal across the ads + indirect sources."
+              data-src="GET /api/marketing/overview (byMonth) — roas_counted_deals + ac_indirect_deals"></span></h3>
           </div>
           <div class="chart-box"><canvas id="enqBookCanvas"></canvas></div>
         </div>
@@ -178,17 +180,22 @@
 
       <div class="mkt-bottom">
         <div class="card">
-          <div class="label-sm">Cadence delivered</div>
+          <div class="label-sm">Cadence delivered <span class="head-info"
+            data-info="Planned marketing cadence / sends actually delivered in the period. Not tracked in any data source yet."
+            data-src="Not tracked yet — no database source"></span></div>
           <div class="big"><span class="chip warn">pending</span></div>
-          <div class="muted sm">No live data source yet</div>
         </div>
         <div class="card">
-          <div class="label-sm">Cost per enquiry</div>
+          <div class="label-sm">Cost per enquiry <span class="head-info"
+            data-info="Marketing spend ÷ keynote enquiries for the selected financial year. The line below, when shown, is the change vs the prior FY (lower is better)."
+            data-src="GET /api/marketing/roi (spend) ÷ GET /api/marketing/overview (enquiries)"></span></div>
           <div class="big" id="cpeValue">…</div>
           <div id="cpeSub"></div>
         </div>
         <div class="card" style="grid-column: span 2">
-          <div class="label-sm">Live AI Insight</div>
+          <div class="label-sm">Live AI Insight <span class="head-info"
+            data-info="A one- to two-sentence AI insight generated from the live Overview + ROI figures for the selected financial year."
+            data-src="GET /api/marketing/insight — OpenAI over the live Overview + ROI data"></span></div>
           <div class="notes" id="aiInsight">Generating insight…</div>
         </div>
       </div>
@@ -196,7 +203,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=13"></script>
   <script>
     /* Sample-data mockup — this Overview is "layout only" (see the head badge).
        The KPIs, charts and notes are illustrative placeholders, not live metrics. */
@@ -244,8 +251,11 @@
       return '<div class="delta ' + cls + '">' + arrow + ' ' + fmt(Math.abs(d), 'currency') +
         ' vs FY' + String(prevFyEnd).slice(-2) + '</div>';
     }
+    // ONE info tool per KPI card (DESIGN_GUIDE §6) — the styled infoTip hover card,
+    // not a native-title ⓘ. The passed text already states what the card is AND names
+    // its source (table/endpoint), so it goes in as the description.
     function infoSpan(text) {
-      return ' <span class="kpi-info" tabindex="0" role="img" aria-label="' + esc(text) + '" title="' + esc(text) + '">ⓘ</span>';
+      return infoTip(text, '');
     }
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
@@ -493,8 +503,7 @@
           html = costDelta(Math.round(cpe) - Math.round(pr.totalSpend / pe.total), fyEndOf(key) - 1);
         }
       }
-      if (sub) sub.innerHTML = html ||
-        '<span class="muted sm">' + (cpe == null ? 'Needs marketing spend + enquiries' : 'Marketing spend ÷ enquiries') + '</span>';
+      if (sub) sub.innerHTML = html || '';   // show only the numeric delta; the definition lives in the ⓘ
     }
 
     // ----- Live AI Insight -----
@@ -666,6 +675,7 @@
     initPage('marketing');               // wires top bar / theme (no data fetch)
     renderMarketingHead(true);
     renderMarketingSidebar('overview');
+    fillHeadInfo();                      // fill the static chart/bottom-card ⓘ placeholders once (§6)
     renderMktKpis();                     // initial paint (enquiries shows … until loaded)
     renderBottomCards();                 // initial paint (cost per enquiry shows … until loaded)
     loadEnquiries();                     // fetch live per-FY enquiry counts FIRST (independent of charts)

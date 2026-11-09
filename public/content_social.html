@@ -274,14 +274,14 @@
       <div class="cs-kpi-grid" id="csKpis"></div>
 
       <!-- Followers per platform (live, FY-aware) -->
-      <h3 class="cs-block-title" id="followersHeading">Followers by platform</h3>
+      <h3 class="cs-block-title" id="followersHeading">Followers by platform <span class="head-info" data-info="Current follower count per social platform, for the selected financial year (that FY's latest weekly snapshot)." data-src="GET /api/marketing/platforms — public.social_platform_stats, scraped weekly via Apify (public profile stats)."></span></h3>
       <div class="cs-kpi-grid" id="followerCards"></div>
 
       <!-- Platforms table -->
       <div class="card cs-platforms-card">
         <div class="card-head block-head">
-          <h3 id="platformsHeading">Platforms</h3>
-          <div class="chart-cap" id="platformsCap">October 2026 · Meta Business Suite and LinkedIn</div>
+          <h3 id="platformsHeading">Platforms <span class="head-info" data-info="Each platform's latest snapshot for the selected FY: posts published, average engagement per recent post, and engagement rate. Public stats only — impressions/reach are private analytics and are not scraped." data-src="GET /api/marketing/platforms — public.social_platform_stats, scraped weekly via Apify."></span></h3>
+          <div class="chart-cap" id="platformsCap"></div>
         </div>
         <div class="cs-table-wrap" tabindex="0" role="region" aria-labelledby="platformsHeading">
           <table class="cs-table">
@@ -302,8 +302,8 @@
       <div class="cs-lower">
         <div class="card cs-chart-card">
           <div class="card-head block-head">
-            <h3>Engagement by platform</h3>
-            <div class="chart-cap" id="impressionsCap">Recent-post engagement · live</div>
+            <h3>Engagement by platform <span class="head-info" data-info="Total engagement (likes + comments + shares) on each platform's recent posts, for the selected FY. social_platform_stats carries no impressions (private analytics), so engagement is the closest scrapable reach signal." data-src="GET /api/marketing/platforms — public.social_platform_stats, Apify weekly."></span></h3>
+            <div class="chart-cap" id="impressionsCap"></div>
           </div>
           <div class="cs-chart-box">
             <canvas id="impressionsCanvas"></canvas>
@@ -312,20 +312,20 @@
 
         <div class="cs-stack">
           <div class="card cs-side-card">
-            <div class="label-sm">Newsletter subscribers</div>
-            <div class="big" id="newsletterVal">2,480</div>
-            <div class="sub pos" id="newsletterSub">▲ 65 · Cas' Tips for High Performers</div>
+            <div class="label-sm">Newsletter subscribers <span class="head-info" data-info="Subscriber count of James's LinkedIn newsletter, 'Cas' Tips for High Performers'." data-src="GET /api/marketing/content-metrics — public.content_social_metrics (LinkedIn cookie sync or manual)."></span></div>
+            <div class="big" id="newsletterVal">…</div>
+            <div class="sub" id="newsletterSub"></div>
           </div>
 
           <div class="card cs-side-card">
-            <div class="label-sm">Article views</div>
-            <div class="big" id="articleVal">1,900</div>
-            <div class="sub pos" id="articleSub">2 articles this month</div>
+            <div class="label-sm">Article views <span class="head-info" data-info="Views of MAG articles (LinkedIn / blog) published in the period." data-src="Not tracked yet (pending) — needs an article-level log."></span></div>
+            <div class="big" id="articleVal"></div>
+            <div class="sub" id="articleSub"></div>
           </div>
 
           <div class="card cs-side-card">
-            <div class="label-sm">By format and pillar</div>
-            <div><span class="cs-phase-badge" id="formatBadge">Phase 2 — needs a post-level log</span></div>
+            <div class="label-sm">By format and pillar <span class="head-info" data-info="Breakdown of posts by content format and content pillar." data-src="Not tracked yet (pending) — needs a post-level log."></span></div>
+            <div><span class="cs-phase-badge" id="formatBadge">pending</span></div>
           </div>
         </div>
       </div>
@@ -333,7 +333,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=13"></script>
   <script>
     /* Content & Social — Frontend-only mock data view.
        Default active FY (FY27) renders the exact figures from the reference design. */
@@ -521,12 +521,19 @@
 
     // These KPI tiles have no live data source yet → show a red "pending" chip
     // (design-guide standard) instead of fabricated sample numbers. Labels stay so the
-    // reader knows what each tile will track.
+    // reader knows what each tile will track; each carries ONE ⓘ (what it will track + source).
+    var KPI_INFO = {
+      'Cadence slots delivered':       ['Planned content slots actually published vs the monthly cadence plan.', 'Not tracked yet (pending) — needs a post-level content log.'],
+      'Delivered on time':             ['Published content slots that went out on their scheduled date.', 'Not tracked yet (pending) — needs a post-level content log.'],
+      'Extra timely posts':            ['Timely posts published outside the planned cadence.', 'Not tracked yet (pending) — needs a post-level content log.'],
+      'Pillar mix · Offer & Booking':  ['Share of posts in the Offer & Booking content pillar (10% cap).', 'Not tracked yet (pending) — needs a post-level content log.']
+    };
     function renderKpiRow() {
       var d = currentData();
       var html = d.kpis.map(function (k) {
+        var info = KPI_INFO[k.label] || ['', ''];
         return '<div class="cs-kpi">' +
-          '<div class="label">' + esc(k.label) + '</div>' +
+          '<div class="label">' + esc(k.label) + ' ' + infoTip(info[0], info[1]) + '</div>' +
           '<div class="value"><span class="chip warn">pending</span></div>' +
         '</div>';
       }).join('');
@@ -587,7 +594,7 @@
         body.innerHTML = '<tr><td colspan="4" class="muted">No data for the selected financial year.</td></tr>';
         return;
       }
-      cap.textContent = 'Snapshot · ' + esc(rows[0].snapshotDate) + ' · live, updated weekly';
+      cap.textContent = 'As of ' + esc(rows[0].snapshotDate);
       cards.innerHTML = rows.map(function (p) {
         return '<div class="cs-kpi">' +
           '<div class="label">' + esc(p.platformName) + '</div>' +
@@ -627,15 +634,15 @@
     function applyLiveContentMetrics() {
       if (!CONTENT_METRICS) return;
       var m = CONTENT_METRICS['li_newsletter_subscribers_james'];
+      var sub = document.getElementById('newsletterSub');
+      sub.className = 'sub';
       if (m && m.value != null) {
+        // Value + as-of freshness only — what it is / where from live in the ⓘ.
         document.getElementById('newsletterVal').textContent = fmt(m.value, 'count');
-        document.getElementById('newsletterSub').textContent =
-          'LinkedIn newsletter · ' + (m.source === 'manual' ? 'manual' : 'auto') +
-          (m.asOf ? ' · as of ' + m.asOf : '');
+        sub.textContent = m.asOf ? ('As of ' + m.asOf) : '';
       } else {
-        // Live metric exists but no value set yet — be honest rather than show sample.
         document.getElementById('newsletterVal').textContent = '—';
-        document.getElementById('newsletterSub').textContent = 'LinkedIn newsletter · not set yet';
+        sub.textContent = 'Not set yet';
       }
     }
 
@@ -649,10 +656,11 @@
     function renderSideCards() {
       // Newsletter subscribers — LIVE (applyLiveContentMetrics overrides below).
       document.getElementById('newsletterVal').textContent = '…';
-      document.getElementById('newsletterSub').textContent = 'LinkedIn newsletter';
-      // Article views — no live source yet → red "pending" chip, no fabricated number.
+      document.getElementById('newsletterSub').textContent = '';
+      // Article views — no live source yet → red "pending" chip, no fabricated number
+      // (what it is / why pending lives in the card's ⓘ).
       document.getElementById('articleVal').innerHTML = '<span class="chip warn">pending</span>';
-      var as = document.getElementById('articleSub'); as.className = 'sub'; as.textContent = 'Not tracked yet';
+      var as = document.getElementById('articleSub'); as.className = 'sub'; as.textContent = '';
       // By format and pillar — no live source yet → pending.
       var fb = document.getElementById('formatBadge'); fb.className = 'chip warn'; fb.textContent = 'pending';
       applyLiveContentMetrics();   // live newsletter value wins, FY-toggle-safe
@@ -685,7 +693,7 @@
           : 'No snapshot for the selected financial year';
         return;
       }
-      cap.textContent = 'Recent-post engagement by platform · ' + esc(rows[0].snapshotDate) + ' · live';
+      cap.textContent = 'As of ' + esc(rows[0].snapshotDate);
 
       _impChart = new Chart(el.getContext('2d'), {
         type: 'bar',
@@ -745,6 +753,7 @@
     initPage('marketing');
     renderMarketingHead(true);        // live page (Platforms/followers/engagement/newsletter live; others show "pending") → no sample badge
     renderMarketingSidebar('content-social');
+    fillHeadInfo();                   // fill the static card/table/chart ⓘ info tools (DESIGN_GUIDE §6)
     renderAll();
     renderPlatforms();                // paint "Loading…" immediately
     loadPlatforms();                  // then fetch the live per-FY snapshots + re-render

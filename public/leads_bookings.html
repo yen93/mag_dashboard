@@ -69,8 +69,6 @@
     .delta { font-size: 12px; font-weight: 600; }
     .delta.pos { color: var(--pos); }
     .delta.neg { color: var(--neg); }
-    .kpi-info { cursor: help; color: var(--text-muted); font-size: 12px; margin-left: 2px; }
-    .kpi-info:hover, .kpi-info:focus { color: var(--mkt-accent); outline: none; }
 
     /* By-source table */
     .lb-table-wrap { overflow-x: auto; }
@@ -126,8 +124,7 @@
       <!-- Enquiries by source (stacked bar, per month) -->
       <div class="card">
         <div class="card-head" style="display:block;margin-bottom:10px">
-          <h3>Enquiries by source</h3>
-          <div class="chart-cap" id="chartCap">Enquiries per month, stacked</div>
+          <h3>Enquiries by source <span class="head-info" data-info="Enquiries per month, stacked by lead source, for the selected financial year." data-src="GET /api/marketing/leads-by-source — ga4_ac_contact_source (Google/Bing cpc, Organic) + ac_indirect_deals (Tailor/Bureau); FY from the deal cdate."></span></h3>
         </div>
         <div class="chart-box"><canvas id="sourceCanvas"></canvas></div>
       </div>
@@ -136,8 +133,7 @@
       <div class="lb-lower">
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>By source</h3>
-            <div class="chart-cap" id="tableCap">This period</div>
+            <h3>By source <span class="head-info" data-info="Enquiries, bookings and booking rate per lead source for the selected FY, with a total row." data-src="GET /api/marketing/leads-by-source — ga4_ac_contact_source (Google/Bing cpc, Organic) + ac_indirect_deals (Tailor/Bureau); booking = won deal."></span></h3>
           </div>
           <div class="lb-table-wrap">
             <table class="lb-table">
@@ -172,7 +168,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=11"></script>
+  <script src="app.js?v=13"></script>
   <script>
     /* Leads & Bookings — LIVE.
        • "Enquiries by source" chart + "By source" table  ← GET /api/marketing/leads-by-source
@@ -192,9 +188,6 @@
     }
     function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
     function fyName(key) { return key === 'all' ? 'All years' : key.toUpperCase(); }
-    function infoSpan(text) {
-      return ' <span class="kpi-info" tabindex="0" role="img" aria-label="' + esc(text) + '" title="' + esc(text) + '">ⓘ</span>';
-    }
 
     // =====================================================================
     //  By-source data (chart + table)
@@ -226,8 +219,6 @@
     function renderSourceTable() {
       var body = document.getElementById('sourceTableBody');
       var foot = document.getElementById('sourceTableFoot');
-      var cap = document.getElementById('tableCap');
-      if (cap) cap.textContent = 'This period · ' + fyName(selFyKey());
       if (!body) return;
       if (!BYSRC.loaded) { body.innerHTML = '<tr><td colspan="4" class="muted">Loading…</td></tr>'; foot.innerHTML = ''; return; }
 
@@ -257,8 +248,6 @@
     function renderSourceChart() {
       var el = document.getElementById('sourceCanvas');
       if (!el) return;
-      var cap = document.getElementById('chartCap');
-      if (cap) cap.textContent = 'Enquiries per month, stacked · ' + fyName(selFyKey());
       var rows = currentSrcRows();
       // Ordered unique month axis.
       var months = Array.from(new Set(rows.map(function (r) { return r.month; }))).sort();
@@ -316,8 +305,8 @@
       if (!cfg.state.loaded) { valEl.textContent = '…'; if (dEl) dEl.innerHTML = ''; return; }
       var r = rowFor(cfg.state, key);
       valEl.textContent = r ? String(r.total) : '—';
-      var info = r ? cfg.loadedInfo(fName, r) : cfg.title;
-      if (lEl) lEl.innerHTML = cfg.title + infoSpan(info);
+      var desc = r ? cfg.loadedInfo(fName, r) : cfg.title;
+      if (lEl) lEl.innerHTML = esc(cfg.title) + ' ' + infoTip(desc, cfg.source);
       var deltaHtml = '';
       if (r && key !== 'all') {
         var prev = cfg.state.byFy[fyEndOf(key) - 1];
@@ -334,6 +323,7 @@
     function renderCards() {
       paintCard({
         state: BOOKINGS, valueEl: 'bookValue', deltaEl: 'bookDelta', labelEl: 'bookLabel', title: 'Events Booked',
+        source: 'GET /api/marketing/overview — roas_counted_deals + ac_indirect_deals, won deals, deduped by deal; FY from cdate.',
         loadedInfo: function (fName, r) {
           return 'Won deals created in ' + fName + ' across two sources — Ads ' + r.ads + ', Indirect ' + r.indirect +
             ' (deduped by deal). Same figure as marketing.html "Keynote bookings".';
@@ -341,6 +331,7 @@
       });
       paintCard({
         state: ENQ, valueEl: 'enqValue', deltaEl: 'enqDelta', labelEl: 'enqLabel', title: 'Enquiries',
+        source: 'GET /api/marketing/overview — roas_counted_deals + ac_indirect_deals, all deals, deduped by deal; FY from cdate.',
         loadedInfo: function (fName, r) {
           return 'Deals created in ' + fName + ' across two sources — Ads ' + r.ads + ', Indirect ' + r.indirect +
             ' (deduped by deal). Same figure as marketing.html "Keynote enquiries".';
@@ -373,6 +364,7 @@
     initPage('marketing');
     renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('leads-bookings');
+    fillHeadInfo();        // fill the static card/chart/table ⓘ info tools
     renderSourceTable();   // initial (shows Loading…)
     renderCards();         // initial (shows …)
     loadBySource();

@@ -1,0 +1,125 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-09
+Session: Dashboard-wide INFO TOOLS rollout. Made the DESIGN_GUIDE §6 info-tool
+rule explicit (one ⓘ per card/table/chart; what-it-is + where-from live ONLY in
+the ⓘ, never in the widget body) and applied it across six Marketing data pages —
+marketing / leads_bookings / spend_roi / content_social / email_partners /
+website_search — via six parallel fork subagents, bumping them all to app.js?v=13.
+(Earlier in the same conversation, now also covered by the prior chat-history file:
+the Nurture & Events live cards + post_conference_deals cache, and the Executive X
+table rebuilt from the Executive X ROI Report Google Sheet.) Frontend/doc only;
+needs a manual Cloud Run redeploy.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret/credential/token/connection string was
+pasted into this chat. Only non-secret identifiers (Supabase project ref, a Google
+Sheet id) appeared, already recorded in CLAUDE.md.
+
+--------------------------------------------------------------------------------
+USER:
+(earlier tasks, already documented in 0911260949_chat_history.txt — summarized
+here for continuity) 1) Update nurture_events.html cards live from AC pipelines 3
+(keynotes) and 17 (post-conference), with a new post_conference_deals cache syncing
+daily. 2) Update the Executive X table from the Executive X ROI Report Google Sheet.
+Then ran /dcp and /cm.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+(summary) Built the four FY-aware Nurture & Events cards (GET /api/marketing/
+nurture-events + server/metrics/marketing-nurture-events.js), the upsert-only
+public.post_conference_deals cache (migrations 20261109170000/171000) and its daily
+pg_cron. Replaced the Executive X sample table with a hardcoded EXEC_X array of the 6
+real sessions from the ROI Report sheet (dropped the "Orgs that enquired" column),
+switched the page to renderMarketingHead(true) and app.js?v=11. Ran /dcp (wrote the
+first chat-history file, updated as_built.txt + CLAUDE.md) and produced a /cm commit
+line. (The user committed that work themselves — those files no longer show as
+modified.)
+
+--------------------------------------------------------------------------------
+USER:
+(main task of THIS segment) For tabs marketing.html, leads_bookings.html,
+spend_roi.html, content_social.html, email_partners.html, website_search.html:
+  1. Always add an info tool to each card, table, graph so we know where they are
+     from and what they are. Never display this kind of info in the widget itself —
+     put it in info tools only. See roas.html info tools as reference.
+  2. Add this info-tool rule to the design md.
+  3. Update the listed tabs and add/update info tools as needed.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated first. Read DESIGN_GUIDE.md and found §6 ("Info tools / tooltips ⭐
+(MANDATORY)") already codifies exactly this rule, and that app.js already has the
+shared helpers: infoTip(desc, source) (the styled ⓘ hover card), fillHeadInfo(root)
+(fills <span class="head-info" data-info data-src> placeholders), plus srcInfo /
+metaChips. So item 2 was essentially already satisfied; the real work was item 3.
+
+Surveyed the six tabs: all mostly MISSING info tools (marketing / leads_bookings /
+content_social had 0; spend_roi had 1 infoTip + 3 head-info; email_partners had 3
+head-info but NO fillHeadInfo call — a latent bug; website_search had 3 infoTip + 3
+head-info, on app.js?v=12; the rest on v=11).
+
+Strengthened DESIGN_GUIDE §6 with the two genuinely-missing pieces: an explicit
+all-pages SCOPE line (the rule applies to every existing tab, not just new pages),
+and a CACHE-BUST GOTCHA (a page that STARTS using info tools must bump its app.js?v=
+or a returning visitor gets a cached older app.js lacking infoTip → "infoTip is not
+defined").
+
+Dispatched SIX parallel fork subagents, one per file, each briefed to: give every
+card/table/chart exactly one ⓘ; write accurate what-it-is + where-from text from each
+widget's real endpoint/table (source hints supplied from CLAUDE.md); pull all
+provenance/description text OUT of widget bodies into the ⓘ (keeping data values,
+numeric deltas, pending chips, and §4 "as of…" notes); use head-info+fillHeadInfo for
+static headings and infoTip() for JS-built cards; fix the email_partners/website_search
+fillHeadInfo wiring; and bump each page to app.js?v=13. Each fork edited ONLY its file.
+
+Fork results:
+  - spend_roi.html: already fully §6-compliant; only the v=13 bump. (Kept two KPI
+    sub-lines that are data values, not provenance.)
+  - website_search.html: removed one body provenance subtitle (.ws-card-sub); its 3
+    head-info spans are filled directly via infoTip (no fillHeadInfo needed); v=13.
+    Noted more tiles there are actually live (sessions / AI visits / reviews) than the
+    brief assumed — only Phone enquiries is pending.
+  - leads_bookings.html: removed two .chart-cap captions; migrated the old native-title
+    infoSpan/.kpi-info ⓘ to infoTip; added fillHeadInfo(); v=13. (A commented-out "Phone
+    enquiries" pending card left commented.)
+  - email_partners.html: FIXED the dead wiring (fillHeadInfo was never called, so its
+    head-info spans rendered empty); consolidated the partner table from 3 ⓘ → 1;
+    removed KPI strap-lines; v=13.
+  - marketing.html: migrated its 6 KPI cards from native-title .kpi-info to infoTip;
+    added head-info to the 2 charts + 3 bottom cards; removed both chart captions;
+    fillHeadInfo() wired; v=13. (No tables on the page; .mkt-take callout left without a
+    ⓘ as it's an insight, not a data widget.)
+  - content_social.html: ⓘ on every KPI tile (new KPI_INFO map), the follower group, the
+    Platforms table, the Engagement chart and the newsletter/article/format cards;
+    captions reduced to "As of <date>" freshness notes; pending tiles keep their chips +
+    get a ⓘ; fillHeadInfo() wired; v=13.
+
+Verified across all six: each loads app.js?v=13; one ⓘ per widget; fillHeadInfo called
+where head-info spans rely on it (website_search fills manually, so correctly omitted);
+no leftover descriptive/provenance body captions (the two remaining content_social
+.chart-cap divs hold only "As of <date>"); the infoTip/infoSpan insertions are
+well-formed (marketing's infoSpan now delegates to infoTip; content_social uses a clean
+desc/source map). Documented the rollout + the cache-bust gotcha in CLAUDE.md's DESIGN
+GUIDE paragraph.
+
+FLAGGED to the user: public/ac_contact_sources.html shows as modified but it is NOT from
+this task (a date-range label rename — "Date range (created)"→"Custom Date Range",
+"All dates"→"Set Range" — on a different page; likely the user's own IDE edit). Left it
+untouched (not mine to commit or revert). Also flagged the two spend_roi data sub-lines
+as optional-to-strip, and that a few now-unused CSS rules (.kpi-info, .ws-card-sub,
+.chart-cap) were left in place as harmless. All changes frontend/doc only → needs a
+manual Cloud Run redeploy; verify in light + dark after deploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp documentation skill (no git): wrote this chat-history file, updated
+as_built.txt (info-tool rollout note) and confirmed CLAUDE.md + DESIGN_GUIDE already
+reflect the change, and checked .gitignore.
+
+================================================================================
+END OF EXPORT
+================================================================================

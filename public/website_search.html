@@ -476,7 +476,6 @@
               <button data-mode="sources">AI sources breakdown</button>
             </div>
           </div>
-          <div class="ws-card-sub" id="wsGraphSub"></div>
 
           <!-- Selected FY summary strip (updates dynamically with #fySeg) -->
           <div class="ws-fy-strip" id="wsFyStrip"></div>
@@ -528,7 +527,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=12"></script>
+  <script src="app.js?v=13"></script>
   <script>
     /* Website & Search — LIVE (except Phone enquiries, which is pending).
        LIVE from /api/marketing/website-search:
@@ -841,13 +840,6 @@
           'Weekly GA4 Data API snapshot of Website sessions and AI-tool referral visits per Australian financial year. Selecting a financial year spotlights that FY on the chart and updates the summary strip and AI tool sources breakdown.',
           'public.ga4_website_traffic_snapshots (GA4 property 363754280 · ga4-website-traffic-sync)'
         );
-      }
-
-      // Dynamic subtitle
-      var subEl = document.getElementById('wsGraphSub');
-      if (subEl) {
-        subEl.textContent = (activeKey === 'all' ? 'All financial years (FY22–FY27)' : (sel.fy + ' · ' + sel.period)) +
-          ' · Snapshot ' + sel.snapshotDate + ' · Weekly upsert-only sync';
       }
 
       // Selected FY summary strip
