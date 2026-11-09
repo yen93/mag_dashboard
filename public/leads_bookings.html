@@ -165,19 +165,18 @@
         </div>
       </div>
 
-      <!-- All rows returned by the /leads-by-source DB query (raw per-source × per-month grain) -->
+      <!-- All leads (one row per individual lead/deal from the four sources) -->
       <div class="card" style="margin-top:16px">
         <div class="card-head" style="display:block;margin-bottom:10px">
-          <h3>All query rows <span class="head-info" data-info="Every row returned by the leads-by-source DB query — one row per lead source per month, with its FY, enquiries and bookings (the raw grain the chart and By-source table aggregate). Not filtered by the FY toggle." data-src="GET /api/marketing/leads-by-source — roas_counted_deals (Paid Ads) + ga4_ac_contact_source (Organic) + ac_indirect_deals (Tailor/Bureau, excl. paid); one row per source × month, FY from the deal cdate."></span></h3>
-          <div class="muted" style="font-size:12px;margin-top:4px" id="allRowsCount"></div>
+          <h3>All leads <span class="head-info" data-info="Every individual lead/deal behind the counts above — one row per deal, for the selected FY (or custom range). Columns: date, source, organisation, deal, status and value (AUD)." data-src="GET /api/marketing/leads-by-source — roas_counted_deals (Paid Ads) + ga4_ac_contact_source (Organic) + ac_indirect_deals (Tailor/Bureau, excl. paid); booking = won deal; FY from the deal cdate."></span></h3>
+          <div class="muted" style="font-size:12px;margin-top:4px" id="leadsCount"></div>
         </div>
         <div class="lb-table-wrap">
-          <table class="lb-table">
+          <table class="lb-table" id="leadsTable">
             <thead>
-              <tr><th>Source</th><th>Month</th><th>FY</th><th>Enquiries</th><th>Bookings</th></tr>
+              <tr><th>Date</th><th>Source</th><th>Organisation</th><th>Deal</th><th>Status</th><th>Value</th></tr>
             </thead>
-            <tbody id="allRowsBody"></tbody>
-            <tfoot id="allRowsFoot"></tfoot>
+            <tbody id="leadsBody"></tbody>
           </table>
         </div>
       </div>
@@ -213,40 +212,60 @@
     //  By-source data (chart + table)
     // =====================================================================
     var BYSRC = { rows: [], loaded: false, rangeRows: null };   // rows: [{source, month, fyEnd, enquiries, bookings}]
+    var LEADS = { rows: [], rangeRows: null };                   // rows: [{source, date, month, fyEnd, org, title, status, won, value}]
     var CUSTOM = false;   // true while a custom date range is active (overrides the FY toggle)
 
     function loadBySource() {
       fetchJSON('/api/marketing/leads-by-source').then(function (d) {
         BYSRC.rows = (d && d.data) || [];
         if (d && d.sources && d.sources.length) SOURCES = d.sources;
+        BYSRC.rows = (d && d.data) || BYSRC.rows;
+        LEADS.rows = (d && d.leads) || [];
         BYSRC.loaded = true;
         renderSourceTable();
-        renderAllRowsTable();
+        renderLeadsTable();
         try { renderSourceChart(); } catch (e) { console.error('source chart', e); }
       }).catch(function (err) {
         console.error('leads-by-source', err);
-        BYSRC.loaded = true; renderSourceTable(); renderAllRowsTable();
+        BYSRC.loaded = true; renderSourceTable(); renderLeadsTable();
       });
     }
 
-    // ----- All query rows (raw per-source × per-month grain; NOT FY-filtered) -----
-    function renderAllRowsTable() {
-      var body = document.getElementById('allRowsBody');
-      var foot = document.getElementById('allRowsFoot');
-      var cnt = document.getElementById('allRowsCount');
+    // ----- All leads (individual deal rows) -----
+    // Rows for the current view: the custom date range when active, else the selected FY.
+    function currentLeadRows() {
+      if (CUSTOM) return LEADS.rangeRows || [];
+      var key = selFyKey();
+      if (key === 'all') return LEADS.rows;
+      var fyEnd = fyEndOf(key);
+      return LEADS.rows.filter(function (r) { return r.fyEnd === fyEnd; });
+    }
+    function money(v) {
+      v = Number(v) || 0;
+      return '$' + Math.round(v).toLocaleString();
+    }
+    function renderLeadsTable() {
+      var body = document.getElementById('leadsBody');
+      var cnt = document.getElementById('leadsCount');
       if (!body) return;
-      if (!BYSRC.loaded) { body.innerHTML = '<tr><td colspan="5" class="muted">Loading…</td></tr>'; foot.innerHTML = ''; if (cnt) cnt.textContent = ''; return; }
-      var rows = BYSRC.rows || [];
-      if (!rows.length) { body.innerHTML = '<tr><td colspan="5" class="muted">No rows.</td></tr>'; foot.innerHTML = ''; if (cnt) cnt.textContent = ''; return; }
+      var loadingNow = CUSTOM ? !LEADS.rangeRows : !BYSRC.loaded;
+      if (loadingNow) { body.innerHTML = '<tr><td colspan="6" class="muted">Loading…</td></tr>'; if (cnt) cnt.textContent = ''; return; }
+      var rows = currentLeadRows();
+      if (!rows.length) { body.innerHTML = '<tr><td colspan="6" class="muted">No leads for this view.</td></tr>'; if (cnt) cnt.textContent = '0 leads'; return; }
       body.innerHTML = rows.map(function (r) {
         var dot = '<span class="src-dot" style="background:' + (SRC_COLOR[r.source] || '#9aa4b2') + '"></span>';
-        return '<tr><td>' + dot + esc(r.source) + '</td><td>' + esc(monthLabel(r.month)) +
-          '</td><td>FY' + String(r.fyEnd).slice(-2) + '</td><td>' + r.enquiries + '</td><td>' + r.bookings + '</td></tr>';
+        var st = r.won ? '<strong>' + esc(r.status || 'Won') + '</strong>' : esc(r.status || '—');
+        return '<tr>' +
+          '<td>' + esc(r.date || '') + '</td>' +
+          '<td>' + dot + esc(r.source) + '</td>' +
+          '<td>' + esc(r.org || '—') + '</td>' +
+          '<td>' + esc(r.title || '—') + '</td>' +
+          '<td>' + st + '</td>' +
+          '<td>' + money(r.value) + '</td>' +
+          '</tr>';
       }).join('');
-      var gEnq = 0, gBook = 0;
-      rows.forEach(function (r) { gEnq += r.enquiries; gBook += r.bookings; });
-      foot.innerHTML = '<tr><td>Total</td><td></td><td></td><td>' + gEnq + '</td><td>' + gBook + '</td></tr>';
-      if (cnt) cnt.textContent = rows.length + ' row' + (rows.length === 1 ? '' : 's');
+      var won = rows.filter(function (r) { return r.won; }).length;
+      if (cnt) cnt.textContent = rows.length + ' lead' + (rows.length === 1 ? '' : 's') + ' · ' + won + ' booked';
     }
 
     // Rows for the current view: the custom date range when active, else the selected FY.
@@ -413,25 +432,27 @@
     // the range result; clearing the range restores FY mode.
     function renderLB() {
       renderSourceTable();
+      renderLeadsTable();
       renderCards();
       try { renderSourceChart(); } catch (e) { console.error('chart', e); }
     }
     function applyRange() {
       CUSTOM = dateRangeActive();
       if (!CUSTOM) { renderLB(); return; }
-      BYSRC.rangeRows = null; ENQ.range = BOOKINGS.range = null;   // loading
+      BYSRC.rangeRows = null; LEADS.rangeRows = null; ENQ.range = BOOKINGS.range = null;   // loading
       renderLB();
       Promise.all([
         fetchJSON('/api/marketing/leads-by-source' + dateRangeQS()),
         fetchJSON('/api/marketing/overview' + dateRangeQS()),
       ]).then(function (res) {
         BYSRC.rangeRows = (res[0] && res[0].range && res[0].range.data) || [];
+        LEADS.rangeRows = (res[0] && res[0].range && res[0].range.leads) || [];
         ENQ.range = (res[1] && res[1].enquiries && res[1].enquiries.range) || { ads: 0, indirect: 0, total: 0 };
         BOOKINGS.range = (res[1] && res[1].bookings && res[1].bookings.range) || { ads: 0, indirect: 0, total: 0 };
         renderLB();
       }).catch(function (err) {
         console.error('range', err);
-        BYSRC.rangeRows = []; ENQ.range = BOOKINGS.range = { ads: 0, indirect: 0, total: 0 };
+        BYSRC.rangeRows = []; LEADS.rangeRows = []; ENQ.range = BOOKINGS.range = { ads: 0, indirect: 0, total: 0 };
         renderLB();
       });
     }
@@ -442,7 +463,7 @@
     renderDateRange();
     fillHeadInfo();        // fill the static card/chart/table ⓘ info tools
     renderSourceTable();   // initial (shows Loading…)
-    renderAllRowsTable();  // initial (shows Loading…)
+    renderLeadsTable();    // initial (shows Loading…)
     renderCards();         // initial (shows …)
     loadBySource();
     loadOverview();

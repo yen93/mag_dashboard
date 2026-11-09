@@ -86,11 +86,63 @@ const RANGE_SQL = `${SRC_CTE}
   GROUP BY source, month, "fyEnd"
   ORDER BY month, source`;
 
+// ---------------------------------------------------------------------------
+// Per-lead detail — one row per individual deal/lead behind the counts above.
+// Same four disjoint sources + dedup as SRC_CTE, but carrying each deal's
+// date, org, title, status and value (AUD) for the "All leads" table.
+const LEADS_CTE = `
+  WITH roas AS (
+    SELECT deal_id::text AS deal_id, cdate, status, org, title, email,
+           coalesce(xero_engagement_fee, value) AS value
+      FROM public.roas_counted_deals WHERE cdate IS NOT NULL
+  ),
+  leads AS (
+    SELECT 'Paid Ads'::text AS source, cdate,
+           coalesce(nullif(org, ''), email) AS org, title,
+           initcap(status) AS status, (status = 'won') AS won, value
+      FROM roas
+    UNION ALL
+    SELECT 'Organic', cdate,
+           email AS org, deal_title AS title,
+           initcap(coalesce(deal_status, '')) AS status, (deal_status = 'won') AS won, deal_value AS value
+      FROM public.ga4_ac_contact_source
+      WHERE medium = 'organic' AND cdate IS NOT NULL
+    UNION ALL
+    SELECT CASE WHEN is_tailor THEN 'Tailor' ELSE 'Bureau' END, cdate,
+           coalesce(nullif(organization, ''), contact_name) AS org, title,
+           coalesce(status_label, '') AS status, (status = 1) AS won, value_aud AS value
+      FROM public.ac_indirect_deals
+      WHERE cdate IS NOT NULL
+        AND deal_id::text NOT IN (SELECT deal_id FROM roas WHERE deal_id IS NOT NULL)
+  )`;
+
+const LEADS_SELECT = `
+  SELECT source,
+    to_char(cdate, 'YYYY-MM-DD') AS date,
+    to_char(date_trunc('month', cdate), 'YYYY-MM') AS month,
+    ${FY('cdate')} AS "fyEnd",
+    org, title, status, won, coalesce(value, 0) AS value
+  FROM leads`;
+
+const LEADS_SQL = `${LEADS_CTE}${LEADS_SELECT} ORDER BY cdate DESC, source`;
+
+// Day-level custom-range variant. $1=from, $2=to ('YYYY-MM-DD' or null).
+const LEADS_RANGE_SQL = `${LEADS_CTE}${LEADS_SELECT}
+  WHERE ($1::date IS NULL OR cdate::date >= $1::date)
+    AND ($2::date IS NULL OR cdate::date <= $2::date)
+  ORDER BY cdate DESC, source`;
+
+const toLead = (r) => ({
+  source: r.source, date: r.date, month: r.month, fyEnd: Number(r.fyEnd) || 0,
+  org: r.org || '', title: r.title || '', status: r.status || '',
+  won: r.won === true, value: Number(r.value) || 0,
+});
+
 export async function getMarketingLeadsBySource(opts = {}) {
   const { from = null, to = null } = opts || {};
   if (!supabaseConfigured()) {
     return {
-      sources: LEAD_SOURCES, data: [],
+      sources: LEAD_SOURCES, data: [], leads: [],
       meta: { status: 'pending', source: SRC, note: 'Supabase not configured.' },
     };
   }
@@ -99,13 +151,15 @@ export async function getMarketingLeadsBySource(opts = {}) {
     source: r.source, month: r.month, fyEnd: n(r.fyEnd),
     enquiries: n(r.enquiries), bookings: n(r.bookings),
   });
-  const rows = await q(BY_SOURCE_SQL);
+  const [rows, leadRows] = await Promise.all([q(BY_SOURCE_SQL), q(LEADS_SQL)]);
   const data = rows.map(toRow);
+  const leads = leadRows.map(toLead);
 
   // Custom date-range rows (day-level), only when a range was requested.
   let range = null;
   if (from || to) {
-    range = { from, to, data: (await q(RANGE_SQL, [from, to])).map(toRow) };
+    const [rRows, rLeads] = await Promise.all([q(RANGE_SQL, [from, to]), q(LEADS_RANGE_SQL, [from, to])]);
+    range = { from, to, data: rRows.map(toRow), leads: rLeads.map(toLead) };
   }
-  return { sources: LEAD_SOURCES, data, range, meta: { status: 'live', source: SRC, note: null } };
+  return { sources: LEAD_SOURCES, data, leads, range, meta: { status: 'live', source: SRC, note: null } };
 }
