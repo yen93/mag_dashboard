@@ -229,19 +229,12 @@
     <nav class="subtabs" id="marketingNav"></nav>
 
     <main class="content">
-      <!-- Controls bar (same per-FY top toggle filter as marketing.html) -->
+      <!-- Controls bar. The custom date range stays here (it adds the "Selected range"
+           column to the Yearly summary). The per-FY toggle lives inside the
+           "Deals behind the summary" table below, since it only filters that table. -->
       <div class="card" style="margin-bottom:16px">
         <div class="mkt-controls">
-          <span class="ctl-label">Financial year</span>
-          <div class="segmented" id="fySeg">
-            <button data-fy="all">All years</button>
-            <button data-fy="fy22">FY22</button>
-            <button data-fy="fy23">FY23</button>
-            <button data-fy="fy24">FY24</button>
-            <button data-fy="fy25">FY25</button>
-            <button data-fy="fy26">FY26</button>
-            <button class="active" data-fy="fy27">FY27</button>
-          </div>
+          <span id="drAnchor" hidden></span>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
         </div>
@@ -287,6 +280,20 @@
             data-info="Every individual lead/deal behind the Yearly summary's Keynote enquiries and bookings — one row per deal across the four sources (Google/Bing/Paid Ads, Organic, Tailor, Bureau), with its FY, date, organisation, deal, status and value (AUD). Booking = won deal. Filtered to the selected FY (or custom date range); sort, search and filter per column."
             data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); FY from cdate."></span></h3>
           <div class="muted" style="font-size:12px;margin-top:4px" id="dealsCount"></div>
+        </div>
+        <!-- Financial-year filter — scoped to THIS table (the toggle doesn't affect the
+             Yearly summary / status / notes above). -->
+        <div class="mkt-controls" style="margin-bottom:14px">
+          <span class="ctl-label">Financial year</span>
+          <div class="segmented" id="fySeg">
+            <button data-fy="all">All years</button>
+            <button data-fy="fy22">FY22</button>
+            <button data-fy="fy23">FY23</button>
+            <button data-fy="fy24">FY24</button>
+            <button data-fy="fy25">FY25</button>
+            <button data-fy="fy26">FY26</button>
+            <button class="active" data-fy="fy27">FY27</button>
+          </div>
         </div>
         <div id="summaryDealsRows"></div>
       </div>
@@ -584,7 +591,8 @@
     });
 
     // Custom date range: adds a "Selected range" column to the Yearly summary (month-level,
-    // from the overview + ROI monthly series). The FY toggle is inert here either way.
+    // from the overview + ROI monthly series) and filters the deals table (day-level,
+    // overriding the FY toggle). The FY toggle itself only affects the deals table.
     function applyRange() { CUSTOM = dateRangeActive(); renderSummaryTable(); refreshDeals(); }
 
     // Re-render the deals table for the active FY / range — only once it has loaded.
@@ -699,12 +707,12 @@
     initPage('marketing');
     renderMarketingHead();
     renderMarketingSidebar('monthly-log');
-    renderDateRange();
+    renderDateRange({ after: 'drAnchor' });   // keep the date range in the top controls card
     fillHeadInfo();              // fill the table ⓘ info tools (§6)
     renderAll();                 // status + notes (mock) + Yearly summary (Loading… until fetched)
     loadSummaryOverview();       // live Keynote enquiries + bookings (same source as marketing.html)
     loadSummaryRoi();            // live Marketing revenue + spend + ROI (same source as marketing.html / spend_roi.html)
-    wireSeg('fySeg', function () { renderAll(); refreshDeals(); });
+    wireSeg('fySeg', refreshDeals);   // FY toggle only filters the deals table
     wireDateRange({ onChange: applyRange });
   </script>
 </body>
