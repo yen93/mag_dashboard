@@ -132,47 +132,7 @@
 
 &#x20;   "Xero Account": "WrkPod Staff",
 
-&#x20;   "Description": "Liv Badon"
-
-&#x20; },
-
-&#x20; {
-
-&#x20;   "Xero Account": "WrkPod Staff",
-
-&#x20;   "Description": "Sharmaine Cuevas"
-
-&#x20; },
-
-&#x20; {
-
-&#x20;   "Xero Account": "WrkPod Staff",
-
 &#x20;   "Description": "Nicki Ann N Venezuela"
-
-&#x20; },
-
-&#x20; {
-
-&#x20;   "Xero Account": "WrkPod Staff",
-
-&#x20;   "Description": "Liv Junne Badon"
-
-&#x20; },
-
-&#x20; {
-
-&#x20;   "Xero Account": "WrkPod Staff",
-
-&#x20;   "Description": "Jaycel Joy Java"
-
-&#x20; },
-
-&#x20; {
-
-&#x20;   "Xero Account": "WrkPod Staff",
-
-&#x20;   "Description": "KFM - virtual session"
 
 &#x20; }
 

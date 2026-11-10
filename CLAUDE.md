@@ -643,7 +643,12 @@ Cloud Run.
   (475/332/411/377, which also hold non-marketing spend — Netflix, non-marketing staff wages) are
   **dropped**. So to categorise/include a new vendor, **insert a row into
   `marketing_channel_vendor_map`** — no Xero re-pull (Type/Platform are joined at query time, not
-  stored). **The deployed defaults (`SINCE`/`OPEN_ACCOUNTS=302`/`SHARED_ACCOUNTS=475,332,411,377`) live
+  stored). **`include` is the exclusion switch:** set `include=false` on a vendor-map row to drop that
+  vendor (the sync keeps a mapped vendor only when `include=true`, on ANY account incl. 302). The read path
+  (`marketing-channel-summary.js`, `marketing-channel-items.js`, `marketing-roi.js`) does NOT check `include`
+  — it only sums what's stored — so after flipping `include` you must also delete that vendor's existing
+  `marketing_channel_monthly` rows (or wait for the next sync) for the change to show. Excluded vendors can
+  be given `type='Excluded'` as a marker. **The deployed defaults (`SINCE`/`OPEN_ACCOUNTS=302`/`SHARED_ACCOUNTS=475,332,411,377`) live
   in the edge fn's `index.ts`** (env secrets can override). Since the sync WIPES-then-reinserts the whole
   window, keep `SINCE` a stable FY22 floor (narrowing it deletes history). Refreshed **monthly** by cron
   `xero-channel-summary-sync-monthly` (`0 22 2 * *`). AP bills

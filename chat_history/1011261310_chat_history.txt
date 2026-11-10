@@ -1,0 +1,76 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-10
+Session: Marketing > Spend & ROI page (public/spend_roi.html) — "Spend by type" chart
+clean-up. Removed KFM, Liv Badon, Liv Junne Badon and Jaycel Joy Java from the Wages
+type; then removed all unmapped (Uncategorized, acct 302) vendors not in the
+"Marketing Expenses - Xero Account - Description.md" file. Data-only change in
+Supabase; no code edits or deploys. Ended with the /dcp documentation run.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Asked to update the "Spend by type" graph in spend_roi.html so items_list (KFM, Liv,
+Jaycel) is not included in Wages.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Traced the chart: spendByTypeForFy() in spend_roi.html sums the `type` series of
+GET /api/marketing/channel-summary (server/metrics/marketing-channel-summary.js),
+which groups marketing_channel_monthly by marketing_channel_vendor_map.type. Queried
+Supabase: KFM, Liv Badon, Liv Junne Badon and Jaycel Joy Java were all mapped to
+type "Wages" and all sat on shared account 377 (WrkPod Staff), about $29.7k total
+across FY24–FY27. Asked how to handle them; the user chose to drop them from
+marketing spend entirely. Confirmed in the Xero sync (supabase/functions/
+xero-channel-summary-sync/index.ts) that include=false on a shared account excludes a
+vendor. Set include=false on the four vendor_map rows and deleted their 40
+marketing_channel_monthly rows so the change applied immediately. Verified 0 leftover
+rows and 4 excluded map rows. Noted that roi.js sums marketing_channel_monthly with no
+vendor join, so the Marketing spend / ROI / CAC KPIs drop by the same amount. Flagged
+that KFM's spend is FY24–FY25 only, so earlier years are affected too.
+
+--------------------------------------------------------------------------------
+USER:
+Asked to include items in "Marketing Expenses - Xero Account - Description.md" that
+are not already included, and to remove all items under the Uncategorized type that
+are not in that file.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the file: 17 marketing vendors across Advertising and marketing ([ALL
+DESCRIPTIONS]), Website Expenses, Software subscriptions, Printing/stationery/postage,
+and WrkPod Staff. Queried the vendor map: every file vendor was already mapped, so
+the include step was a no-op (both Nicki Ann Venezuela spellings included). The
+Uncategorized bucket was 29 unmapped acct-302 vendors (~$57k, e.g. Belle Property,
+KYLE A RATHBONE, SPRINGWOOD PRINTING, aliexpress, Alibaba, DISNEY, Hoyts), none of them
+in the file. Because the file lists only "[ALL DESCRIPTIONS]" for 302, the file
+itself doesn't say which 302 vendors are marketing. Asked the user how wide to go; the
+user chose to remove all of them. Inserted an include=false exclusion row (type
+'Excluded') for each unmapped vendor into marketing_channel_vendor_map (contact_id is
+the PK) and deleted their marketing_channel_monthly rows. Verified: 0 unmapped rows
+remain, 33 vendors are now excluded, and no Uncategorized bucket remains. Remaining
+type buckets: Digital Ads, Agency, Wages, Tools, Software, Printed Collaterals.
+Offered to re-include any of the material vendors (e.g. Belle Property, KYLE A
+RATHBONE, SPRINGWOOD PRINTING) if wanted.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /dcp (document, no git): save this chat to chat_history/, update as_built.txt
+and CLAUDE.md if needed, update .gitignore if needed. No git commands.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Got the timestamp (1011261310) and matched the format of the most recent chat_history
+file. Security scan of the full conversation: no credentials, tokens or connection
+strings were pasted or printed. The Supabase project ref is already documented in
+CLAUDE.md, and the vendor data is business data, so no redactions were applied.
+Wrote this file. Judged as_built.txt unchanged: the work was data-only and the built
+state (scripts, integrations, stores, routines) didn't change. Edited CLAUDE.md's
+marketing_channel_vendor_map paragraph to record that include=false is the
+exclusion switch, that the Xero sync is what applies it, and that the read path
+doesn't check include. Checked .gitignore: it already covers the sensitive patterns,
+and no new sensitive files were introduced, so it was left alone. Did not run any git
+command, and did not commit or push.
+
+================================================================================
+END OF EXPORT
+================================================================================
