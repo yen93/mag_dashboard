@@ -1,0 +1,54 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-10
+Session: Conferences tab (public/sales.html) — add Deal title column, Custom Date Range, and CSV export of the current view; then /dcp documentation.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Pasted request, "update sales.html/Conferences Tab":
+1. Add an export button that exports only the data in the current view, based on the applied filters.
+2. Add a deal title column.
+3. Add a Custom Date Range just like the one in ac_contact_sources.html.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read public/sales.html, public/ac_contact_sources.html (the .acs-* date-range popover and Reset pattern), the renderSortableTable helper in public/app.js, the existing CSV-download pattern in public/monthly_log.html, server/metrics/liv-deals.js, and the sales-deals-sync edge function. Found that the sales_liv_deals cache does not store the deal title (the sync only derives the account name from it).
+
+Plan: join public.activecampaign_deals for the title on the server; copy the date-range popover and its CSS from ac_contact_sources.html, filtering on the deal's Created date; add an Export CSV button that captures the post-filter, post-search, post-column-filter, sorted list via renderSortableTable's onFilter callback and downloads it as a Blob CSV.
+
+Changes made:
+- server/metrics/liv-deals.js: LEFT JOIN public.activecampaign_deals ad ON ad.id::text = s.deal_id::text, returning "dealTitle". Aliased the sales_liv_deals columns with s.
+- public/sales.html: added the date-range toolbar (salesDateBtn / salesDatePopup / salesFrom / salesTo / salesQuick / salesReset) and the salesExportBtn button; a shared COLUMNS array drives both the table and the CSV; a Deal column was added as the 2nd column; state persists in TABLE_STATE so in-table search and filters survive date-range changes; Reset clears the range and the in-table filters. No app.js bump (stays ?v=9).
+- Syntax checks: the extracted inline script and server/metrics/liv-deals.js both pass node --check.
+
+Validation: the user asked for the join to be checked. A read-only Supabase query against project aivitcomiywiysrfwqxt (MAGTestProject) returned 340 in-scope deals, 340 matched, 340 with a non-null title. Sample titles follow the MAG "Account // Type // Dates" format.
+
+Noted that the change needs a manual Cloud Run redeploy and that I will not deploy it myself.
+
+--------------------------------------------------------------------------------
+USER:
+(Automated) The validation sub-agent finished. Result as above.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed the join is valid, stopped the fallback wakeup, and summarised the three changes and the redeploy requirement for the user.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save this chat to chat_history/, update as_built.txt, CLAUDE.md and .gitignore. Do not run any git commands.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Generated the timestamp (1011261335), ran the security scan over this session (no live secrets appeared in the transcript; only the Supabase project ref, which CLAUDE.md already records, so no redactions were needed), and wrote this file.
+
+as_built.txt: updated. Added a Conferences table toolbar entry in the Sales section, noted the title join in the sales_liv_deals data-store entry, and bumped the "Last updated" line to flag the redeploy requirement.
+
+CLAUDE.md: left alone. The change is a page-feature addition and does not change architecture, conventions, or gotchas.
+
+.gitignore: left alone. It already covers .env files, key and credential patterns, and service-account JSON; nothing new sensitive was introduced this session.
+
+Reminder: nothing was committed or pushed; the user handles git themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

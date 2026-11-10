@@ -244,7 +244,7 @@
       <div class="card ml-card">
         <div class="card-head block-head">
           <h3 id="summaryHeading">Yearly summary <span class="head-info"
-            data-info="FY and calendar-year totals for each marketing measure, with the FY26-vs-FY25 change. Per-measure definitions are on each row's ⓘ."
+            data-info="FY and calendar-year totals for each marketing measure. Per-measure definitions are on each row's ⓘ."
             data-src="GET /api/marketing/overview (Keynote enquiries / bookings) + GET /api/marketing/roi (Marketing revenue / spend / ROI); Cadence delivered pending."></span></h3>
         </div>
         <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="summaryHeading">
@@ -255,7 +255,6 @@
                 <th>FY25</th>
                 <th>FY26</th>
                 <th>FY27</th>
-                <th>FY26 vs FY25</th>
                 <th>CY2025</th>
                 <th>CY2026</th>
               </tr>
@@ -490,7 +489,7 @@
           rangeTh.remove();
         }
       }
-      var cols = CUSTOM ? 8 : 7;
+      var cols = CUSTOM ? 7 : 6;
       if (!(OVS.loaded && ROIS.loaded)) {
         body.innerHTML = '<tr><td colspan="' + cols + '" class="muted">Loading…</td></tr>';
         return;
@@ -502,14 +501,13 @@
         if (r.pending) {
           return '<tr><td>' + esc(r.measure) + ' <span class="chip warn">pending</span></td>' +
             '<td>' + _muted + '</td><td>' + _muted + '</td><td>' + _muted + '</td>' +
-            '<td>' + _muted + '</td><td>' + _muted + '</td><td>' + _muted + '</td>' + rangeCell + '</tr>';
+            '<td>' + _muted + '</td><td>' + _muted + '</td>' + rangeCell + '</tr>';
         }
         return '<tr>' +
           '<td>' + esc(r.measure) + infoIcon(r.info) + '</td>' +
           '<td>' + dispVal(r.kind, r.fy25) + '</td>' +
           '<td>' + dispVal(r.kind, r.fy26) + '</td>' +
           '<td>' + dispVal(r.kind, r.fy27) + '</td>' +
-          '<td>' + dispDiff(r.diff) + '</td>' +
           '<td>' + dispVal(r.kind, r.cy25) + '</td>' +
           '<td>' + dispVal(r.kind, r.cy26) + '</td>' +
           rangeCell +
@@ -568,13 +566,13 @@
     }
     document.getElementById('downloadExcelBtn').addEventListener('click', function () {
       var lines = [
-        ['Measure', 'FY25', 'FY26', 'FY27', 'FY26 vs FY25', 'CY2025', 'CY2026'].join(',')
+        ['Measure', 'FY25', 'FY26', 'FY27', 'CY2025', 'CY2026'].join(',')
       ];
       (SUMMARY_RENDER.length ? SUMMARY_RENDER : buildSummaryRows()).forEach(function (r) {
         var cells = r.pending
-          ? [r.measure, 'pending', 'pending', 'pending', '', 'pending', 'pending']
+          ? [r.measure, 'pending', 'pending', 'pending', 'pending', 'pending']
           : [r.measure, csvVal(r.kind, r.fy25), csvVal(r.kind, r.fy26), csvVal(r.kind, r.fy27),
-             csvDiff(r.diff), csvVal(r.kind, r.cy25), csvVal(r.kind, r.cy26)];
+             csvVal(r.kind, r.cy25), csvVal(r.kind, r.cy26)];
         lines.push(cells.map(function (cell) {
           return '"' + String(cell).replace(/"/g, '""') + '"';
         }).join(','));

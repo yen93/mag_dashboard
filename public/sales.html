@@ -11,6 +11,46 @@
        grows (it still scrolls horizontally on narrow screens). Matches the
        Buyer Sheet page. */
     .content { max-width: none; }
+
+    /* ---- Toolbar: custom date range + export (mirrors ac_contact_sources.html) ---- */
+    .acs-toolbar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+    .acs-field { display: flex; flex-direction: column; gap: 4px; }
+    .acs-field label, .acs-daterange > label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+    .acs-field input[type="date"] {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 10px; font: inherit;
+    }
+    .acs-quick { display: flex; gap: 6px; flex-wrap: wrap; }
+    .acs-quick button, .acs-reset {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 999px; padding: 6px 12px; font-size: 13px; font-weight: 600; cursor: pointer;
+    }
+    .acs-quick button.active, .acs-reset.active { background: var(--accent); color: #fff; border-color: transparent; }
+    .acs-spacer { flex: 1; }
+    .acs-daterange { position: relative; display: flex; flex-direction: column; gap: 4px; }
+    .acs-datebtn {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 10px; padding: 7px 12px; font: inherit; font-weight: 600; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    }
+    .acs-datebtn::after { content: '▾'; font-size: 11px; color: var(--text-muted); }
+    .acs-datebtn.active { border-color: var(--accent); color: var(--accent); }
+    .acs-popup {
+      position: absolute; top: calc(100% + 6px); left: 0; z-index: 50;
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: 0 10px 28px rgba(0,0,0,.28); padding: 14px; min-width: 240px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .acs-popup[hidden] { display: none; }
+    .acs-popup .acs-quick { margin-top: 2px; }
+    /* Export button — accent-filled so it reads as the primary toolbar action. */
+    .acs-export {
+      background: var(--accent); color: #fff; border: 1px solid transparent;
+      border-radius: 999px; padding: 7px 14px; font-size: 13px; font-weight: 700; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    }
+    .acs-export:hover { filter: brightness(1.05); }
+    .acs-export[disabled] { opacity: .5; cursor: default; }
   </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
@@ -41,6 +81,38 @@
           <div class="spacer"></div>
           <span class="muted" id="livCount" style="font-size:13px"></span>
         </div>
+
+        <!-- Toolbar: custom date range (filters on the deal's Created date) +
+             export of the current view. The From/To inputs + quick-range buttons
+             live inside a popover opened from the "Set Range" trigger. -->
+        <div class="acs-toolbar">
+          <div class="acs-daterange">
+            <label>Custom Date Range</label>
+            <button type="button" class="acs-datebtn" id="salesDateBtn"
+                    aria-haspopup="true" aria-expanded="false">Set Range</button>
+            <div class="acs-popup" id="salesDatePopup" hidden>
+              <div class="acs-field">
+                <label for="salesFrom">From (created)</label>
+                <input type="date" id="salesFrom" />
+              </div>
+              <div class="acs-field">
+                <label for="salesTo">To (created)</label>
+                <input type="date" id="salesTo" />
+              </div>
+              <div class="acs-quick" id="salesQuick">
+                <button type="button" data-days="7">7d</button>
+                <button type="button" data-days="30">30d</button>
+                <button type="button" data-days="60">60d</button>
+                <button type="button" data-days="0" class="active">All</button>
+              </div>
+              <button type="button" class="acs-reset" id="salesReset">Reset</button>
+            </div>
+          </div>
+          <div class="acs-spacer"></div>
+          <button type="button" class="acs-export" id="salesExportBtn"
+                  title="Download the deals currently shown (after the date range, search and column filters) as a CSV">⬇ Export CSV</button>
+        </div>
+
         <div id="livDeals"></div>
       </div>
     </div>
@@ -51,6 +123,15 @@
   <script src="app.js?v=9"></script>
   <script>
     function setChips(id, meta) { var el = document.getElementById(id); if (el) el.innerHTML = metaChips(meta); }
+
+    // All deals from the endpoint (the custom date range filters this set client-side).
+    var ALL_ROWS = [];
+    // Persistent table state so the in-table search / per-column filters / sort survive a
+    // date-range re-render (same pattern as the GA4 Leads page).
+    var TABLE_STATE = {};
+    // The deals currently shown (post date-range, post in-table search/column-filter, in the
+    // active sort order) — captured on every render so Export writes exactly the visible view.
+    var CURRENT_VIEW = [];
 
     // ---- LIV pipeline deals table (own endpoint) ----
     function livStatusPill(s) {
@@ -64,34 +145,171 @@
       return '<span title="' + esc(t) + '">' + esc(short) + '</span>';
     }
 
+    // Single source of truth for the columns — reused for the table render AND the CSV export.
+    var COLUMNS = [
+      { key: 'dateCreated', label: 'Created', unit: 'date' },
+      { key: 'dealTitle', label: 'Deal', render: livText },
+      { key: 'account', label: 'Account', render: livText },
+      { key: 'leadType', label: 'Lead type', render: livText },
+      { key: 'contact', label: 'Primary contact', render: livText },
+      { key: 'jobTitle', label: 'Job title', render: livText },
+      { key: 'lastNote', label: 'Last note', render: livNote },
+      { key: 'lastNoteDate', label: 'Note date', unit: 'date' },
+      { key: 'owner', label: 'Owner', render: livText },
+      { key: 'replied', label: 'Replied', render: livText },
+      { key: 'status', label: 'Status', render: livStatusPill },
+      { key: 'demoDate', label: 'Demo date', unit: 'date' },
+      { key: 'magalogSent', label: 'Magalog', render: livText },
+      { key: 'proposalSent', label: 'Proposal', render: livText },
+    ];
+
+    // ---- date-range filtering (on the deal's Created date) ----
+    function parseInput(id) { var el = document.getElementById(id); return el && el.value ? el.value : ''; }
+    function inRange(iso, from, to) {
+      if (!iso) return false;
+      var d = String(iso).slice(0, 10);
+      if (from && d < from) return false;
+      if (to && d > to) return false;
+      return true;
+    }
+    function filteredRows() {
+      var from = parseInput('salesFrom'), to = parseInput('salesTo');
+      if (!from && !to) return ALL_ROWS.slice();
+      return ALL_ROWS.filter(function (r) { return inRange(r.dateCreated, from, to); });
+    }
+
+    function renderDeals() {
+      renderSortableTable('livDeals', filteredRows(), COLUMNS, {
+        stateStore: TABLE_STATE,
+        searchPlaceholder: 'Search deals…',
+        sortKey: 'dateCreated', sortDir: 'desc',
+        emptyText: 'No deals match the current filters.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('livCount');
+          if (el) el.textContent = shown === total ? (total + ' deals') : (shown + ' of ' + total + ' deals');
+        },
+        // `list` is the post-search, post-column-filter, sorted view — exactly what Export writes.
+        onFilter: function (list) {
+          CURRENT_VIEW = list;
+          var btn = document.getElementById('salesExportBtn');
+          if (btn) btn.disabled = !list.length;
+        },
+      });
+    }
+
+    // ---- CSV export of the current view ----
+    function csvCell(row, col) {
+      var v = row[col.key];
+      if (v == null || v === '') return '';
+      if (col.unit === 'date') return String(v).slice(0, 10); // ISO yyyy-mm-dd (full note/status stay raw)
+      return String(v);
+    }
+    function exportCsv() {
+      var rows = CURRENT_VIEW || [];
+      var lines = [COLUMNS.map(function (c) { return c.label; }).join(',')];
+      rows.forEach(function (r) {
+        lines.push(COLUMNS.map(function (c) {
+          return '"' + csvCell(r, c).replace(/"/g, '""') + '"';
+        }).join(','));
+      });
+      var blob = new Blob([lines.join('\r\n')], { type: 'text/csv;charset=utf-8;' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = 'mag_conferences_deals_' + new Date().toISOString().slice(0, 10) + '.csv';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // ---- date-range popover wiring (mirrors ac_contact_sources.html) ----
+    function updateDateLabel() {
+      var btn = document.getElementById('salesDateBtn');
+      if (!btn) return;
+      var from = document.getElementById('salesFrom').value;
+      var to = document.getElementById('salesTo').value;
+      var quick = document.querySelector('#salesQuick button.active');
+      var days = quick ? quick.getAttribute('data-days') : null;
+      var label, active = true;
+      if (days && days !== '0') label = 'Last ' + quick.textContent;
+      else if (from && to) label = fmtDate(from) + ' – ' + fmtDate(to);
+      else if (from) label = 'From ' + fmtDate(from);
+      else if (to) label = 'Until ' + fmtDate(to);
+      else { label = 'Set Range'; active = false; }
+      btn.textContent = label;
+      btn.classList.toggle('active', active);
+    }
+    function clearQuickActive() {
+      document.querySelectorAll('#salesQuick button').forEach(function (x) { x.classList.remove('active'); });
+    }
+    function apply() { renderDeals(); updateDateLabel(); }
+    function setQuick(days) {
+      var from = document.getElementById('salesFrom'), to = document.getElementById('salesTo');
+      if (!days) { from.value = ''; to.value = ''; }
+      else {
+        var end = new Date();
+        var start = new Date(); start.setDate(start.getDate() - days);
+        to.value = end.toISOString().slice(0, 10);
+        from.value = start.toISOString().slice(0, 10);
+      }
+      apply();
+    }
+
+    function wireToolbar() {
+      var dateBtn = document.getElementById('salesDateBtn');
+      var datePopup = document.getElementById('salesDatePopup');
+      if (dateBtn && datePopup) {
+        dateBtn.addEventListener('click', function (e) {
+          e.stopPropagation();
+          var willOpen = datePopup.hidden;
+          datePopup.hidden = !willOpen;
+          dateBtn.setAttribute('aria-expanded', String(willOpen));
+        });
+        datePopup.addEventListener('click', function (e) { e.stopPropagation(); });
+        document.addEventListener('click', function (e) {
+          if (!datePopup.hidden && e.target !== dateBtn) {
+            datePopup.hidden = true;
+            dateBtn.setAttribute('aria-expanded', 'false');
+          }
+        });
+        document.addEventListener('keydown', function (e) {
+          if (e.key === 'Escape' && !datePopup.hidden) {
+            datePopup.hidden = true;
+            dateBtn.setAttribute('aria-expanded', 'false');
+          }
+        });
+      }
+      document.getElementById('salesFrom').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.getElementById('salesTo').addEventListener('change', function () { clearQuickActive(); apply(); });
+      document.querySelectorAll('#salesQuick button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          clearQuickActive();
+          b.classList.add('active');
+          setQuick(Number(b.getAttribute('data-days')));
+        });
+      });
+      // Reset clears the date range AND the in-table search + per-column value filters.
+      document.getElementById('salesReset').addEventListener('click', function () {
+        clearQuickActive();
+        document.querySelector('#salesQuick button[data-days="0"]').classList.add('active');
+        document.getElementById('salesFrom').value = '';
+        document.getElementById('salesTo').value = '';
+        TABLE_STATE.q = '';
+        TABLE_STATE.filters = {};
+        TABLE_STATE.page = 1;
+        apply();
+      });
+      document.getElementById('salesExportBtn').addEventListener('click', exportCsv);
+    }
+
     function loadLivDeals() {
       var host = document.getElementById('livDeals');
       host.innerHTML = '<div class="muted" style="padding:14px">Loading deals…</div>';
       fetchJSON('/api/sales/deals').then(function (data) {
         setChips('livChips', data.deals.meta);
-        renderSortableTable('livDeals', data.deals.data || [], [
-          { key: 'dateCreated', label: 'Created', unit: 'date' },
-          { key: 'account', label: 'Account', render: livText },
-          { key: 'leadType', label: 'Lead type', render: livText },
-          { key: 'contact', label: 'Primary contact', render: livText },
-          { key: 'jobTitle', label: 'Job title', render: livText },
-          { key: 'lastNote', label: 'Last note', render: livNote },
-          { key: 'lastNoteDate', label: 'Note date', unit: 'date' },
-          { key: 'owner', label: 'Owner', render: livText },
-          { key: 'replied', label: 'Replied', render: livText },
-          { key: 'status', label: 'Status', render: livStatusPill },
-          { key: 'demoDate', label: 'Demo date', unit: 'date' },
-          { key: 'magalogSent', label: 'Magalog', render: livText },
-          { key: 'proposalSent', label: 'Proposal', render: livText },
-        ], {
-          searchPlaceholder: 'Search deals…',
-          sortKey: 'dateCreated', sortDir: 'desc',
-          emptyText: 'No 2026 deals in this pipeline.',
-          onCount: function (shown, total) {
-            var el = document.getElementById('livCount');
-            if (el) el.textContent = shown === total ? (total + ' deals') : (shown + ' of ' + total + ' deals');
-          },
-        });
+        ALL_ROWS = data.deals.data || [];
+        apply();
       }).catch(function (err) {
         console.error(err);
         host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load deals</strong><span>' + esc(err.message) + '</span></div>';
@@ -100,7 +318,7 @@
 
     initPage('sales'); // login / top-bar / theme only — this page renders its own table
     renderSalesSidebar('conferences');
-    if (currentUser()) loadLivDeals();
+    if (currentUser()) { wireToolbar(); loadLivDeals(); }
   </script>
 </body>
 </html>

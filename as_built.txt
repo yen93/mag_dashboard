@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-10 (MONTHLY LOG: "Deals behind the summary" table + FY toggle/date range moved into it — frontend-only, needs redeploy. AI-SOURCE LIST: new public.ai_source_patterns table + ai-source-patterns-sync monthly edge fn (curated + OpenAI discovery, append-only) — WRITTEN, NOT YET APPLIED/DEPLOYED; ga4-website-traffic-sync rewired to read it with regex fallback — NOT YET DEPLOYED. SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
+Last updated: 2026-11-10 (CONFERENCES PAGE (public/sales.html) + server/metrics/liv-deals.js: NEW Deal column (live join to activecampaign_deals.title by deal id, 340/340 match), NEW Custom Date Range popover (Created date, mirrors ac_contact_sources.html) and NEW "Export CSV" of the current filtered/sorted view — server + frontend, NEEDS a manual Cloud Run redeploy. MONTHLY LOG: "Deals behind the summary" table + FY toggle/date range moved into it — frontend-only, needs redeploy. AI-SOURCE LIST: new public.ai_source_patterns table + ai-source-patterns-sync monthly edge fn (curated + OpenAI discovery, append-only) — WRITTEN, NOT YET APPLIED/DEPLOYED; ga4-website-traffic-sync rewired to read it with regex fallback — NOT YET DEPLOYED. SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
 = row.marketingRevenue from /api/marketing/roi, FY-aware with vs-prior-FY delta) — 6 KPI cards now. (2) Channel results
 table: the Executive X row carries a small muted note "Updated at the close of each season." (3) NEW click-to-drill-down on
 the "Spend by type" bars: clicking a type opens a modal listing the distinct VENDOR names under that type (names only, no $),
@@ -580,6 +580,13 @@ SCRIPTS / APP CODE
     ("Operations"). "Home" is the first tab, active only on home.html. This
     <nav class="tabbar"> block is still hand-duplicated in ALL 15 pages (the 14
     originals + home.html) — edit them all to change it.
+  - CONFERENCES TABLE TOOLBAR (2026-11-10): sales.html's LIV deals table now has a
+    Custom Date Range popover (From/To on the deal's Created date + 7d/30d/60d/All +
+    Reset; markup/CSS mirror ac_contact_sources.html, ids prefixed "sales*"/"acs-*"
+    classes), a "Deal" column (2nd, the AC deal title), and an "Export CSV" button that
+    downloads the CURRENT view (post date-range, in-table search, column filters, sort).
+    Client-only export via Blob; no new endpoint. Route /api/sales/deals is unchanged in
+    path; liv-deals.js now LEFT JOINs public.activecampaign_deals for `dealTitle`.
   - SALES LEFT SIDEBAR (new 2026-10-22, 3rd pass): Conferences (sales.html —
     legacy filename; the LIV deals table; <title> still "Conferences") is no longer
     a top tab — it moved UNDER Sales, reached via a left sidebar
@@ -924,7 +931,8 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
 - Most metrics are read live from MAG's existing AC-mirror / leads / reviews
   tables. In addition, several dashboard-owned cache tables are filled on a
   schedule and only SELECTed at request time:
-  - public.sales_liv_deals — LIV pipeline deal rows (Conferences page).
+  - public.sales_liv_deals — LIV pipeline deal rows (Conferences page). The deal title
+    is NOT stored here; liv-deals.js joins public.activecampaign_deals (title) by deal id.
   - public.mag_buyer_sheet — Buyer Analysis rows (one per WON deal). As of
     2026-10-13 also carries engagement_fee numeric, amount_total numeric, and
     invoice_json text (migration 20261013010000). These come from

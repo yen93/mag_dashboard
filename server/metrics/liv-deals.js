@@ -18,29 +18,35 @@ import { section } from '../lib/metric.js';
 const SRC = 'Supabase + ActiveCampaign (Supabase cache)';
 const MAX_ATTEMPTS = 2; // matches the edge function's MAX_ENRICH_ATTEMPTS
 
+// The deal TITLE isn't stored on the cache (the sync only derives `account`
+// from it), so pull it live from the daily AC deal mirror by deal id — same
+// pattern the GA4 Leads page uses for its Deal column. LEFT JOIN so a missing
+// mirror row just blanks the title rather than dropping the deal.
 const SELECT = `
   SELECT
-    deal_id        AS "id",
-    date_created   AS "dateCreated",
-    account        AS "account",
-    account_id     AS "accountId",
-    lead_type      AS "leadType",
-    contact        AS "contact",
-    contact_id     AS "contactId",
-    job_title      AS "jobTitle",
-    last_note      AS "lastNote",
-    last_note_date AS "lastNoteDate",
-    owner          AS "owner",
-    replied        AS "replied",
-    status         AS "status",
-    demo_date      AS "demoDate",
-    proposal_sent  AS "proposalSent",
-    magalog_sent   AS "magalogSent",
-    enriched_at    AS "enrichedAt",
-    enrichment_attempts AS "enrichmentAttempts"
-  FROM public.sales_liv_deals
-  WHERE in_scope = true
-  ORDER BY date_created DESC`;
+    s.deal_id        AS "id",
+    s.date_created   AS "dateCreated",
+    ad.title         AS "dealTitle",
+    s.account        AS "account",
+    s.account_id     AS "accountId",
+    s.lead_type      AS "leadType",
+    s.contact        AS "contact",
+    s.contact_id     AS "contactId",
+    s.job_title      AS "jobTitle",
+    s.last_note      AS "lastNote",
+    s.last_note_date AS "lastNoteDate",
+    s.owner          AS "owner",
+    s.replied        AS "replied",
+    s.status         AS "status",
+    s.demo_date      AS "demoDate",
+    s.proposal_sent  AS "proposalSent",
+    s.magalog_sent   AS "magalogSent",
+    s.enriched_at    AS "enrichedAt",
+    s.enrichment_attempts AS "enrichmentAttempts"
+  FROM public.sales_liv_deals s
+  LEFT JOIN public.activecampaign_deals ad ON ad.id::text = s.deal_id::text
+  WHERE s.in_scope = true
+  ORDER BY s.date_created DESC`;
 
 export async function getLivDeals() {
   if (!supabaseConfigured()) {
