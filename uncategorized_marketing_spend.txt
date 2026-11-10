@@ -1,0 +1,65 @@
+UNCATEGORIZED — Marketing Spend-by-type (spend_roi.html / roi.html Channel Summary)
+Generated: 2026-11-10
+Source: public.marketing_channel_monthly LEFT JOIN public.marketing_channel_vendor_map
+        (live Xero bank txns, via /api/marketing/channel-summary)
+
+WHAT "UNCATEGORIZED" MEANS
+--------------------------
+Any marketing-spend line whose Xero vendor is NOT mapped in
+marketing_channel_vendor_map. In the BY_TYPE query the bucket is
+coalesce(m.type, 'Uncategorized'). Because the kept-rows rule only retains
+unmapped vendors on the OPEN account 302 (Advertising), every Uncategorized
+item is a 302 vendor that has not been assigned a type/platform yet.
+
+All items below are on account 302. Amounts are ex-GST. ~$42.7k all-time (FY22-FY27).
+
+ITEMS (by spend, desc)
+----------------------
+Vendor                    Spend     When
+Belle Property            $10,814   Oct 2024
+KYLE A RATHBONE           $6,400    FY22
+FABRICATED.COM.AU         $3,715    Mar 2023
+Google store              $3,425    Apr-May 2023
+SPRINGWOOD PRINTING CO    $3,102    FY22
+Clea Sherman              $2,850    FY22
+Media Management          $2,800    Dec 2025-Feb 2026
+Tatu                      $1,818    Jun 2023
+aliexpress                $1,396    FY24
+Alibaba                   $1,086    Nov 2023
+Media Mgt                 $1,000    Sep 2023
+Joyce photography         $750      Mar 2022
+Global Data SCAM          $616      Apr 2022
+Fast printing             $580      Dec 2021
+Clea Writing              $545      Nov 2022
+Australia Printred        $391      Sep 2021
+Stickaroo                 $295      Nov 2023
+Marielle Buscato          $273      Aug-Sep 2022
+Mylk made                 $168      Oct 2021
+Snapfish                  $130      Dec 2024
+OKGA                      $118      Sep 2025
+DISNEY                    $109      Apr 2022
+MFSR                      $105      Mar 2025
+Envato                    $48       Sep 2023
+Hoyt                      $45       Oct 2024
+Hoyts                     $33       Oct 2024
+Crinkle paper             $29       Oct 2021
+Gumrd                     $22       Sep 2023
+GOOGLE*TV                 $6        Jun 2025
+
+NOTES
+-----
+- The spend-by-type chart is FY-aware: on any FY toggle you only see the subset
+  whose month falls in that FY (e.g. FY27 -> just Media Management $2,800;
+  Belle Property $10,814 is an FY25 item).
+- Several look like non-marketing / miscoded charges that landed on 302 — e.g.
+  DISNEY, Hoyt(s), aliexpress, Alibaba, Google store, GOOGLE*TV, and literally
+  "Global Data SCAM". Since 302 is the open account, these are swept in as
+  Uncategorized rather than dropped.
+- Some are duplicate spellings of the same vendor (Media Management / Media Mgt;
+  Hoyt / Hoyts; Clea Sherman / Clea Writing).
+
+TO RECLASSIFY
+-------------
+Add a row to marketing_channel_vendor_map for that contact_id with the correct
+type (and include=false to exclude a non-marketing charge like Disney/Hoyts).
+It is joined at query time, so no Xero re-pull is needed.

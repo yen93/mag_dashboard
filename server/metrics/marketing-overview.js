@@ -1,16 +1,20 @@
 // Marketing Overview — live KPI(s) for the Marketing Overview page.
 //
 // Two FY-aware headlines, both counting over THREE disjoint lead sources (the
-// same population the Leads & Bookings "By source" table sums, so the two pages
-// reconcile exactly):
-//   • paid (ads) → paid-search-counted deals, public.roas_counted_deals (the same
-//                  canonical view the ROAS tab counts). FY from the deal cdate.
+// SAME population the Leads & Bookings "By source" table sums, so the two pages
+// reconcile EXACTLY — including the FY-split paid source below):
+//   • paid (ads) → EARLIER FYs: public.roas_counted_deals (the canonical view the
+//                  ROAS tab counts). FY27 ONWARDS: ga4_ac_contact_source cpc
+//                  Google/Bing rows (collapsed to one 'ads' bucket), excl. rows on
+//                  non-keynote funnel pages / free-gift opt-ins — the same basis as
+//                  the Leads & Bookings Google Ads + Bing Ads buckets. FY from cdate.
 //   • organic    → organic-search leads, public.ga4_ac_contact_source
-//                  WHERE medium='organic'. FY from the contact cdate.
+//                  WHERE medium='organic' (FY27+ also drops the excluded pages /
+//                  free-gift opt-ins). FY from the contact cdate.
 //   • indirect   → indirect / bureau deals, public.ac_indirect_deals (every AC
 //                  deal whose "Deal Source?" = Indirect, 2021→present), EXCLUDING
-//                  any deal already counted as paid (precedence paid > indirect,
-//                  mirroring the ROI tab's marketing-revenue dedup). FY from cdate.
+//                  any deal already counted as paid in roas (precedence paid >
+//                  indirect, mirroring the ROI tab's marketing-revenue dedup). FY from cdate.
 //
 // The three buckets are disjoint (organic never overlaps paid/indirect by deal;
 // indirect excludes paid deal_ids), so the total is a plain sum — no cross-source
@@ -27,34 +31,55 @@
 // retention window, so earlier FYs carry no organic rows (expected).
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
+// Shared FY27+ ga4 sourcing fragments — the SAME definitions the Leads & Bookings
+// metric uses, imported so the Overview "Keynote enquiries/bookings" headline stays
+// byte-for-byte reconciled with the by-source table (same paid/organic population).
+import { PAID_SPLIT_FY, GA_PLATFORM, GA_IS_CPC, GA_ROW_OK } from './marketing-leads-by-source.js';
 
 const SRC_ENQ =
   'Live (Supabase): count of deals/leads created per FY across three sources — ' +
-  'paid (roas_counted_deals) + organic (ga4_ac_contact_source, medium=organic) + ' +
-  'indirect/bureau (ac_indirect_deals, excl. paid deals).';
+  'paid (roas_counted_deals before FY27, ga4_ac_contact_source cpc rows FY27+) + ' +
+  'organic (ga4_ac_contact_source, medium=organic) + indirect/bureau (ac_indirect_deals, ' +
+  'excl. paid deals). FY27+ ga4 rows on non-keynote funnel pages / free-gift opt-ins excluded.';
 const SRC_BOOK =
   'Live (Supabase): count of WON deals/leads created per FY across three sources — ' +
-  'paid (roas_counted_deals, status=won) + organic (ga4_ac_contact_source organic, ' +
-  'deal_status=won) + indirect/bureau (ac_indirect_deals status=Won, excl. paid deals).';
+  'paid (roas_counted_deals before FY27, ga4_ac_contact_source cpc FY27+; status/deal_status=won) + ' +
+  'organic (ga4_ac_contact_source organic, deal_status=won) + indirect/bureau (ac_indirect_deals ' +
+  'status=Won, excl. paid deals). FY27+ ga4 rows on non-keynote pages / free-gift opt-ins excluded.';
 
 // AU financial-year END year from a date column: calendar year + 1 if month >= July.
 const FY = (col) =>
   `extract(year FROM ${col})::int + CASE WHEN extract(month FROM ${col}) >= 7 THEN 1 ELSE 0 END`;
 
-// Shared three-bucket CTE. `roas` is the paid set (also used to exclude paid
-// deal_ids from indirect); the three buckets are disjoint so counts just sum.
+// Shared three-bucket CTE. `roas` is the paid set for earlier FYs AND the exclusion
+// list for indirect; the three buckets are disjoint so counts just sum.
+//
+// PAID + ORGANIC split by FY (identical to marketing-leads-by-source.js, so the
+// Overview headline and the by-source table reconcile EXACTLY):
+//   • paid, < FY27  → roas_counted_deals (one combined ads bucket).
+//   • paid, FY27+   → ga4_ac_contact_source cpc Google/Bing rows (collapsed back to
+//                     one 'ads' bucket here), excl. non-keynote pages / free-gift opt-ins.
+//   • organic       → ga4_ac_contact_source medium='organic' (FY27+ also GA_ROW_OK).
 const BUCKETS_CTE = `
   WITH roas AS (
     SELECT deal_id::text AS deal_id, cdate, (status = 'won') AS won
     FROM public.roas_counted_deals WHERE cdate IS NOT NULL
   ),
   paid AS (
-    SELECT 'ads'::text AS grp, cdate, won FROM roas
+    SELECT 'ads'::text AS grp, cdate, won
+      FROM roas WHERE (${FY('cdate')}) < ${PAID_SPLIT_FY}
+    UNION ALL
+    SELECT 'ads'::text, cdate, (deal_status = 'won')
+      FROM public.ga4_ac_contact_source
+      WHERE cdate IS NOT NULL
+        AND (${FY('cdate')}) >= ${PAID_SPLIT_FY}
+        AND ${GA_IS_CPC} AND (${GA_PLATFORM}) IS NOT NULL AND ${GA_ROW_OK}
   ),
   organic AS (
     SELECT 'organic'::text AS grp, cdate, (deal_status = 'won') AS won
     FROM public.ga4_ac_contact_source
     WHERE medium = 'organic' AND cdate IS NOT NULL
+      AND ( (${FY('cdate')}) < ${PAID_SPLIT_FY} OR ${GA_ROW_OK} )
   ),
   indirect AS (
     SELECT 'indirect'::text AS grp, cdate, (status = 1) AS won

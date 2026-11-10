@@ -124,7 +124,7 @@
       <!-- Enquiries by source (stacked bar, per month) -->
       <div class="card">
         <div class="card-head" style="display:block;margin-bottom:10px">
-          <h3>Enquiries by source <span class="head-info" data-info="Enquiries per month, stacked by lead source, for the selected financial year." data-src="GET /api/marketing/leads-by-source — roas_counted_deals (Paid Ads) + ga4_ac_contact_source (Organic) + ac_indirect_deals (Tailor/Bureau, excl. paid); FY from the deal cdate."></span></h3>
+          <h3>Enquiries by source <span class="head-info" data-info="Enquiries per month, stacked by lead source, for the selected financial year. FY27 onwards paid is split into Google Ads / Bing Ads and sourced (with Organic) from the GA4 & Ads Leads tracker, excluding non-keynote funnel pages; earlier years show one Paid Ads bucket from the ROAS view." data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); FY from cdate."></span></h3>
         </div>
         <div class="chart-box"><canvas id="sourceCanvas"></canvas></div>
       </div>
@@ -133,7 +133,7 @@
       <div class="lb-lower">
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>By source <span class="head-info" data-info="Enquiries, bookings and booking rate per lead source for the selected FY, with a total row." data-src="GET /api/marketing/leads-by-source — roas_counted_deals (Paid Ads) + ga4_ac_contact_source (Organic) + ac_indirect_deals (Tailor/Bureau, excl. paid); booking = won deal."></span></h3>
+            <h3>By source <span class="head-info" data-info="Enquiries, bookings and booking rate per lead source for the selected FY, with a total row. FY27 onwards paid is split into Google Ads / Bing Ads and sourced (with Organic) from the GA4 & Ads Leads tracker, excluding non-keynote funnel pages; earlier years show one Paid Ads bucket from the ROAS view. Total reconciles with the Overview 'Keynote enquiries/bookings' cards." data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); booking = won deal."></span></h3>
           </div>
           <div class="lb-table-wrap">
             <table class="lb-table">
@@ -168,7 +168,7 @@
       <!-- All leads (one row per individual lead/deal from the four sources) -->
       <div class="card" style="margin-top:16px">
         <div class="card-head" style="display:block;margin-bottom:10px">
-          <h3>All leads <span class="head-info" data-info="Every individual lead/deal behind the counts above — one row per deal, for the selected FY (or custom range). Columns: date, source, organisation, deal, status and value (AUD)." data-src="GET /api/marketing/leads-by-source — roas_counted_deals (Paid Ads) + ga4_ac_contact_source (Organic) + ac_indirect_deals (Tailor/Bureau, excl. paid); booking = won deal; FY from the deal cdate."></span></h3>
+          <h3>All leads <span class="head-info" data-info="Every individual lead/deal behind the counts above — one row per deal, for the selected FY (or custom range). Columns: date, source, organisation, deal, status and value (AUD). FY27 onwards paid leads show as Google Ads / Bing Ads (from the GA4 & Ads Leads tracker, excl. non-keynote funnel pages); earlier years as Paid Ads from the ROAS view." data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); booking = won deal; FY from cdate."></span></h3>
           <div class="muted" style="font-size:12px;margin-top:4px" id="leadsCount"></div>
         </div>
         <div id="leadsRows"></div>
@@ -181,17 +181,33 @@
   <script>
     /* Leads & Bookings — LIVE.
        • "Enquiries by source" chart + "By source" table  ← GET /api/marketing/leads-by-source
-         (four fixed sources: Paid Ads (roas_counted_deals), Organic, Tailor, Bureau,
-          Tailor/Bureau excl. paid deals; booking = won deal. Total == the Overview
-          "Keynote enquiries/bookings" cards).
+         (paid = roas_counted_deals before FY27 (one "Paid Ads" row); FY27 onwards the paid
+          bucket + Organic come from ga4_ac_contact_source (cpc rows split Google Ads / Bing
+          Ads, plus medium=organic), EXCLUDING non-keynote funnel pages + free-gift opt-ins. Tailor,
+          Bureau from ac_indirect_deals (excl. paid deals); booking = won deal.
+          Total == the Overview "Keynote enquiries/bookings" cards — marketing-overview.js now
+          applies the SAME FY27 ga4 sourcing + exclusions, so both pages reconcile).
        • "Events Booked" + "Enquiries" cards              ← GET /api/marketing/overview
          (the SAME figures as marketing.html's "Keynote bookings" / "Keynote enquiries").
        All FY-aware via the #fySeg toggle (AU FY, END-year). */
 
-    // Fixed source order + colours (stacked chart + table dots). Overridden by
-    // the /leads-by-source payload's `sources`; keep the colour map in sync.
-    var SOURCES = ['Paid Ads', 'Organic', 'Tailor', 'Bureau'];
-    var SRC_COLOR = { 'Paid Ads': '#3b6ef0', Organic: '#17a673', Tailor: '#d9663a', Bureau: '#6a4bf5' };
+    // Master source order + colours (stacked chart + table dots). FY27 onwards the
+    // paid bucket is split into "Google Ads" / "Bing Ads" (via ga4_ac_contact_source);
+    // earlier FYs keep the single "Paid Ads". Each view only shows the sources that
+    // actually have rows — see visibleSources() — so the FY toggle picks the right set.
+    var SRC_ORDER = ['Google Ads', 'Bing Ads', 'Paid Ads', 'Organic', 'Tailor', 'Bureau'];
+    var SRC_COLOR = {
+      'Google Ads': '#3b6ef0', 'Bing Ads': '#12a5b8', 'Paid Ads': '#4a6fa5',
+      Organic: '#17a673', Tailor: '#d9663a', Bureau: '#6a4bf5',
+    };
+    // Sources present in the given rows, in master order (any unknown appended last).
+    function visibleSources(rows) {
+      var present = {};
+      (rows || []).forEach(function (r) { present[r.source] = true; });
+      var out = SRC_ORDER.filter(function (s) { return present[s]; });
+      Object.keys(present).forEach(function (s) { if (out.indexOf(s) < 0) out.push(s); });
+      return out;
+    }
 
     // ----- FY helpers (mirror marketing.html) -----
     function selFyKey() {
@@ -211,8 +227,6 @@
     function loadBySource() {
       fetchJSON('/api/marketing/leads-by-source').then(function (d) {
         BYSRC.rows = (d && d.data) || [];
-        if (d && d.sources && d.sources.length) SOURCES = d.sources;
-        BYSRC.rows = (d && d.data) || BYSRC.rows;
         LEADS.rows = (d && d.leads) || [];
         BYSRC.loaded = true;
         renderSourceTable();
@@ -288,8 +302,9 @@
       if (CUSTOM ? !BYSRC.rangeRows : !BYSRC.loaded) { body.innerHTML = '<tr><td colspan="4" class="muted">Loading…</td></tr>'; foot.innerHTML = ''; return; }
 
       var rows = currentSrcRows();
+      var srcs = visibleSources(rows);
       var totals = {};
-      SOURCES.forEach(function (s) { totals[s] = { enq: 0, book: 0 }; });
+      srcs.forEach(function (s) { totals[s] = { enq: 0, book: 0 }; });
       rows.forEach(function (r) {
         if (!totals[r.source]) totals[r.source] = { enq: 0, book: 0 };
         totals[r.source].enq += r.enquiries; totals[r.source].book += r.bookings;
@@ -298,13 +313,13 @@
         if (!enq) return '—';
         return Math.round(book / enq * 100) + '%';
       }
-      body.innerHTML = SOURCES.map(function (s) {
+      body.innerHTML = srcs.map(function (s) {
         var t = totals[s] || { enq: 0, book: 0 };
         var dot = '<span class="src-dot" style="background:' + (SRC_COLOR[s] || '#9aa4b2') + '"></span>';
         return '<tr><td>' + dot + esc(s) + '</td><td>' + t.enq + '</td><td>' + t.book + '</td><td>' + rateCell(t.enq, t.book) + '</td></tr>';
       }).join('');
       var gEnq = 0, gBook = 0;
-      SOURCES.forEach(function (s) { gEnq += totals[s].enq; gBook += totals[s].book; });
+      srcs.forEach(function (s) { gEnq += totals[s].enq; gBook += totals[s].book; });
       foot.innerHTML = '<tr><td>Total</td><td>' + gEnq + '</td><td>' + gBook + '</td><td>' + rateCell(gEnq, gBook) + '</td></tr>';
     }
 
@@ -338,7 +353,7 @@
         (lookup[r.source] = lookup[r.source] || {})[r.month] = (lookup[r.source][r.month] || 0) + r.enquiries;
       });
       var tc = themeColors();
-      var datasets = SOURCES.map(function (s) {
+      var datasets = visibleSources(rows).map(function (s) {
         return {
           label: s,
           data: months.map(function (m) { return (lookup[s] && lookup[s][m]) || 0; }),

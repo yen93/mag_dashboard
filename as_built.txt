@@ -1,6 +1,52 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-09 (MARKETING ENQUIRY DEFINITION UNIFIED so marketing.html "Keynote enquiries/bookings"
+Last updated: 2026-11-10 (SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
+= row.marketingRevenue from /api/marketing/roi, FY-aware with vs-prior-FY delta) — 6 KPI cards now. (2) Channel results
+table: the Executive X row carries a small muted note "Updated at the close of each season." (3) NEW click-to-drill-down on
+the "Spend by type" bars: clicking a type opens a modal listing the distinct VENDOR names under that type (names only, no $),
+filtered to the selected FY / custom range / all years exactly like the bar. NEW route GET /api/marketing/channel-items
+(server/index.js, requireAuth, 10-min cache) → NEW server/metrics/marketing-channel-items.js (getMarketingChannelItems;
+same LEFT JOIN + coalesce(type,'Uncategorized') bucketing as marketing-channel-summary.js BY_TYPE; SELECTs only
+marketing_channel_monthly × marketing_channel_vendor_map; no migration/secret). Frontend-only + 1 new route/module → needs a
+manual Cloud Run redeploy. Also a standalone reference file uncategorized_marketing_spend.txt sits in the project root
+(snapshot of the unmapped "Uncategorized" vendors, 2026-11-10). Previously 2026-11-09 (MARKETING OVERVIEW enquiries/bookings UNIFIED with the new Leads & Bookings FY27 basis
+so marketing.html's "Keynote enquiries/bookings" cards + leads_bookings.html's summary cards + the by-source
+table ALL show the same count again. server/metrics/marketing-leads-by-source.js now EXPORTS PAID_SPLIT_FY /
+GA_PLATFORM / GA_IS_CPC / GA_ROW_OK; server/metrics/marketing-overview.js IMPORTS them and rewrote its
+BUCKETS_CTE paid+organic branches to the identical FY-split (paid <FY27 = roas_counted_deals; paid FY27+ = ga4
+cpc Google/Bing collapsed to one 'ads' bucket; organic FY27+ also GA_ROW_OK). Overview FY27 is now 41 enq / 8
+booked (was 44/9); FY26/earlier UNCHANGED. Knock-on: monthly_log.html + spend_roi.html (which read
+/api/marketing/overview) now show the FY27 41 figure too — no code change, they just follow. Reverted the
+"differs from Overview" notes added earlier today on leads_bookings.html (cards/table ⓘ + header comment) back
+to "reconciles"; updated marketing.html's 2 card tooltips + the enquiries-vs-bookings chart data-src + a code
+comment to describe the FY27 ga4 paid basis. Frontend + 2 server modules → needs a manual Cloud Run redeploy.
+Previously 2026-11-09: LEADS & BOOKINGS FY27+ PAID + ORGANIC now sourced from public.ga4_ac_contact_source
+(the GA4 & Ads Leads tracker), NOT roas_counted_deals — so the by-source table reconciles with that page
+(and now, per above, the Overview too). EARLIER FYs UNTOUCHED (paid still roas_counted_deals, one "Paid Ads" row).
+server/metrics/marketing-leads-by-source.js — PAID_SPLIT_FY=2027 + shared SQL fragments GA_PLATFORM (Bing Ads
+/ Google Ads from lower(coalesce(channel,source)): channel e.g. "bing / cpc" holds the real platform even when
+source is "(calendly)"), GA_IS_CPC (…LIKE '%cpc%'), and GA_LINK_OK (conversion_link NOT IN EXCLUDED_LINKS).
+FY27+ ga4 rows are dropped from Google/Bing/Organic when NOT a keynote enquiry: GA_LINK_OK (conversion_link NOT
+IN EXCLUDED_LINKS = the 7 non-keynote funnel pages /careers-seasonal/, /executive-x/, /careersph-based/,
+/free-gift-opt-in/, /leader-x-payment-gateway/, /execx/, /executive-x-payment-gateway/) AND GA_ACTION_OK
+(conversion_action <> 'free_gifts_opt_ins' — same rule ac-contact-sources.js uses; catches the
+/free-gift-delivery-page/ opt-in variant NOT in the link list, e.g. low.victor@gmail.com); combined as GA_ROW_OK.
+Both the counts SRC_CTE and per-lead LEADS_CTE now: paid <FY27 from roas (fy_end<2027), paid FY27+ from ga4 cpc
+rows split Google/Bing, Organic from ga4 medium=organic (FY27+ also GA_ROW_OK), Tailor/Bureau from
+ac_indirect_deals (excl. roas deal_ids). The old same-day PLAT_CTE/PAID_SOURCE (which LABELLED roas rows
+Google/Bing + defaulted no-ga4 deals to Google, Bing=2) was REMOVED.
+Validated FY27 post-exclusion: Google Ads 2/1 · Bing Ads 3/1 · Organic 1/0 · Tailor 11/1 · Bureau 24/5 =
+41 enq / 8 booked. At this step this NO LONGER equalled the Overview cards (then 44/9) — Clover paid deals with
+no ga4 row (won "Tilray", open "Lutheran") drop; ga4 raw cpc leads with no deal are added — but the Overview was
+UNIFIED to the same basis in the step above, so both are 41/8 now. Frontend
+public/leads_bookings.html — SRC_ORDER + visibleSources(rows) (shows only sources present in the view);
+SRC_COLOR has Google Ads/Bing Ads/Paid Ads; 3 ⓘ notes + the 2 summary-card ⓘ (which now note they read the
+Overview/roas basis and differ from the table for FY27) + header comment updated. The "Events Booked"/
+"Enquiries" cards STILL read /api/marketing/overview (roas) — intentionally unchanged. NO app.js change (no ?v=
+bump), NO DB migration, NO new secrets (producer only SELECTs) → needs a manual Cloud Run redeploy.
+Previously 2026-11-09: LEADS & BOOKINGS "Paid Ads" split Google/Bing by LABELLING roas rows (superseded same
+day by the ga4-sourced approach above). Previously 2026-11-09: MARKETING ENQUIRY
+DEFINITION UNIFIED so marketing.html "Keynote enquiries/bookings"
 and leads_bookings.html "By source" reconcile EXACTLY. Both now count ONE disjoint 3-bucket population:
 Paid Ads = public.roas_counted_deals (all rows; booking=status='won') + Organic = public.ga4_ac_contact_source
 medium='organic' (booking=deal_status='won') + Indirect = public.ac_indirect_deals (booking=status=1),

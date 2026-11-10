@@ -87,19 +87,43 @@ Cloud Run.
   sources:** (1) a full-width **"Enquiries by source"** Chart.js **stacked bar** chart + a **"By source"**
   table (Source / Enquiries / Bookings / Rate + Total row) — both from **`GET /api/marketing/leads-by-source`**
   → **`server/metrics/marketing-leads-by-source.js`** (`getMarketingLeadsBySource`, requireAuth, cached
-  10 min). **As of 2026-11-09 this is ONE union query over FOUR FIXED sources** (the SAME disjoint
-  population the Overview "Keynote enquiries/bookings" cards count, so the two pages reconcile EXACTLY),
-  returning per-source-per-month `{ source, month, fyEnd, enquiries, bookings }`: **Paid Ads** =
-  `public.roas_counted_deals` (ALL rows — the canonical ROAS-counted view; booking = `status='won'`; it
-  carries NO Google/Bing platform split — its `source` col is the attribution method clover/ga4cpc/niki —
-  so paid is ONE row, **not** split into Google/Bing); **Organic** = `ga4_ac_contact_source` `medium='organic'`
-  (booking = `deal_status='won'`); **Tailor** = `ac_indirect_deals` `is_tailor=true`; **Bureau** =
-  `ac_indirect_deals` `is_tailor=false`. **Tailor/Bureau EXCLUDE any `deal_id` already counted as Paid Ads**
-  (precedence paid > indirect, mirroring `roi.js`'s marketing-revenue dedup), so the four buckets are
-  disjoint and the total is a plain sum (= the Overview card totals). Month + AU FY (END-year) from `cdate`.
-  Exports `LEAD_SOURCES=['Paid Ads','Organic','Tailor','Bureau']` — the chart + table show **ONLY** these
-  four; the client filters the rows to the selected FY. (This **REPLACED** the earlier FIVE-source design —
-  Google/Bing from `ga4_ac_contact_source` cpc rows — which did NOT reconcile with the Overview card.)
+  10 min). **This is ONE union query whose PAID + ORGANIC sourcing deliberately SPLITS by FY** (returning
+  per-source-per-month `{ source, month, fyEnd, enquiries, bookings }`):
+  **EARLIER FYs (< FY27) — UNCHANGED, from the ROAS view:** **Paid Ads** = `public.roas_counted_deals`
+  (rows with `fy_end<2027`; booking = `status='won'`) — one combined Google+Bing row.
+  **FY27 ONWARDS — paid + organic come STRAIGHT FROM `ga4_ac_contact_source`** (so the page reconciles with the
+  **GA4 & Ads Leads tracker**, **NOT** the Overview card), **EXCLUDING** rows that aren't keynote enquiries —
+  either `conversion_link` is a non-keynote funnel page (`EXCLUDED_LINKS` = `/careers-seasonal/`, `/executive-x/`,
+  `/careersph-based/`, `/free-gift-opt-in/`, `/leader-x-payment-gateway/`, `/execx/`,
+  `/executive-x-payment-gateway/`) **OR** `conversion_action='free_gifts_opt_ins'` (`GA_ACTION_OK` — the SAME
+  rule `ac-contact-sources.js` uses; catches the `/free-gift-delivery-page/` variant NOT in `EXCLUDED_LINKS`,
+  e.g. `low.victor@gmail.com`): **Google Ads**
+  / **Bing Ads** = the **cpc** ga4 rows (`GA_IS_CPC`: `lower(coalesce(channel,source)) LIKE '%cpc%'`) whose
+  platform (`GA_PLATFORM`: read from **`channel`** e.g. `"bing / cpc"`, which holds the real platform even when
+  `source` is `"(calendly)"`; fallback `source`) is bing/google; booking = `deal_status='won'`.
+  **Organic** = `ga4_ac_contact_source` `medium='organic'` (ALL FYs; FY27+ ALSO drops the excluded pages +
+  free-gift opt-ins, earlier FYs untouched). **Tailor** = `ac_indirect_deals` `is_tailor=true`; **Bureau** =
+  `is_tailor=false`; both EXCLUDE any `deal_id` already in the ROAS view (precedence paid > indirect). The shared
+  SQL fragments `GA_PLATFORM` / `GA_IS_CPC` / `GA_LINK_OK` / `GA_ACTION_OK` / `GA_ROW_OK` (+ `EXCLUDED_LINKS`/
+  `EXCL_LINKS_SQL`) and `PAID_SPLIT_FY=2027` drive BOTH the counts `SRC_CTE` and the per-lead `LEADS_CTE` — and
+  **`PAID_SPLIT_FY` / `GA_PLATFORM` / `GA_IS_CPC` / `GA_ROW_OK` are EXPORTED and RE-IMPORTED by
+  `marketing-overview.js`** (see below) so the Overview headline uses the identical FY27 population.
+  **KEY CONSEQUENCE — FY27's membership CHANGED from the old roas-only basis** (Clover-audited paid deals with
+  **no ga4 row drop out** — e.g. the FY27 won keynote "Tilray" + open "Lutheran" — and ga4 **raw cpc leads with
+  no deal are added in**), but because `marketing-overview.js` was switched to the SAME basis, **the Overview
+  "Keynote enquiries/bookings" cards STILL reconcile EXACTLY** with this by-source total. Validated FY27
+  (post-exclusion): **Google Ads 2/1 · Bing Ads 3/1 · Organic 1/0 · Tailor 11/1 · Bureau 24/5 = 41 enq / 8
+  booked** (Overview FY27 = 41/8 too; was 44/9 under the old roas basis). (Build history 2026-11-09: v1 LABELLED
+  roas paid rows Google/Bing via a `plat` CTE, defaulted no-ga4 deals to Google (Bing=2, reconciled w/ Overview);
+  v2 switched FY27 paid to ga4-sourced + the conversion_link list (Bing=3, 43 enq) — the owner wanted the GA4-page
+  basis; v3 added the `free_gifts_opt_ins` conversion_action exclusion (drops low.victor etc., 41 enq); v4 then
+  propagated the v2+v3 FY27 logic INTO `marketing-overview.js` so the Overview cards match again.) Month + AU FY
+  (END-year) from `cdate`. Exports
+  `LEAD_SOURCES=['Google Ads','Bing Ads','Paid Ads','Organic','Tailor','Bureau']` (master order); the client's
+  `visibleSources(rows)` shows **only the sources actually present in the selected FY** (FY27 → Google Ads/Bing
+  Ads/Organic/Tailor/Bureau; earlier FYs → Paid Ads/…; "All years" → both). **The page's "Events Booked" /
+  "Enquiries" summary cards read `/api/marketing/overview`, which now uses the SAME FY27 basis, so they again
+  equal the by-source table total (and marketing.html's Keynote cards).**
   **NB** the organic rows are sparse for older FYs (GA4 ~60-day retention), so earlier FYs read mostly
   Bureau/Tailor/Paid — expected, it's the exact queries. (2) Two summary cards —
   **"Events Booked"** (was "Demos booked (Calendly)") + **"Enquiries"** (was "Form enquiries") — are
@@ -110,6 +134,11 @@ Cloud Run.
   (`.lb-table-wrap`), the segmented toggle wraps, charts flex. (**app.js bumped to `?v=11` 2026-11-05**
   when `renderMarketingHead(true)` was added — see the sub-tab-bar paragraph above.)
   Server + frontend change → needs a **Cloud Run redeploy**.
+  **Spend & ROI drill-down (2026-11-10):** clicking a bar in "Spend by type" opens a modal listing the
+  distinct vendor names under that type (names only, no $), via NEW `GET /api/marketing/channel-items` →
+  `server/metrics/marketing-channel-items.js` (same `coalesce(type,'Uncategorized')` bucketing as
+  `marketing-channel-summary.js` BY_TYPE, so the list matches the bar). The page also has a 6th KPI card
+  "Marketing revenue" (first, highlighted) and an Executive X-only "Updated at the close of each season." note.
   **Spend & ROI page (`spend_roi.html` = Marketing sub-tab "Spend & ROI", now LIVE as of 2026-11-05):**
   a self-rendering page (`initPage('marketing')` with no renderFn + `renderMarketingSidebar('spend-roi')` +
   its own `fetchJSON`). **As of 2026-11-05 it calls `renderMarketingHead(true)`** (right after `initPage`,
@@ -408,9 +437,13 @@ Cloud Run.
   "Keynote enquiries" and "Keynote bookings", are LIVE + FY-aware** — the count of deals/leads
   **created** in the selected FY, FY by the deal's `cdate` (AU END-year). **As of 2026-11-09 these count
   THREE disjoint sources** (so they reconcile EXACTLY with `leads_bookings.html`'s "By source" total —
-  the two pages share this definition): **ads/paid** (`public.roas_counted_deals`, ALL rows) +
-  **organic** (`public.ga4_ac_contact_source` `medium='organic'`) + **indirect/bureau**
-  (`public.ac_indirect_deals`, EXCLUDING any `deal_id` already counted as paid — precedence paid >
+  the two pages share this definition): **ads/paid** (**earlier FYs** = `public.roas_counted_deals` ALL
+  rows; **FY27 ONWARDS** = `public.ga4_ac_contact_source` cpc Google/Bing rows, excl. non-keynote funnel
+  pages + `free_gifts_opt_ins` — collapsed to one `ads` bucket; `marketing-overview.js` IMPORTS
+  `PAID_SPLIT_FY`/`GA_PLATFORM`/`GA_IS_CPC`/`GA_ROW_OK` from `marketing-leads-by-source.js` so the two
+  stay byte-for-byte identical) + **organic** (`public.ga4_ac_contact_source` `medium='organic'`; FY27+
+  also drops the excluded pages/opt-ins) + **indirect/bureau**
+  (`public.ac_indirect_deals`, EXCLUDING any `deal_id` already in the ROAS view — precedence paid >
   indirect, matching `roi.js`'s marketing-revenue dedup). The buckets are disjoint (organic 0 overlap),
   so the total is a plain sum. **Enquiries = ALL deals/leads** (status-agnostic); **Bookings = WON only**
   (`roas_counted_deals.status='won'` / ga4 `deal_status='won'` / `ac_indirect_deals.status=1`).
@@ -427,9 +460,11 @@ Cloud Run.
   each with an ⓘ tooltip (per-source breakdown) + a vs-prior-FY delta. **GOTCHA:** the chart sample array
   that used to be `var ENQ` collided (hoisting) with the `ENQ` state object — renamed to `ENQ_SERIES`;
   the bookings state is `BOOKINGS` (distinct from the chart's `BOOK` array), keep them distinct. **Cards
-  3–6 ARE NOW ALL LIVE too (as of 2026-11-05)** — the `KPIS[]` sample array is EMPTY. Card 3 **Enquiry → booking rate** (`rateCard()` = bookings ÷ enquiries, pts delta). Cards 4–6 come from a new **`MROI` state** fetched from **`GET /api/marketing/roi`** (`loadRoiCards()` indexes `rows.data` by `fyEnd` + the `total` row; the SAME source as the ROI tab): **Marketing revenue** = `row.marketingRevenue` (`revenueCard`), **Marketing spend** = `row.totalSpend` where `hasSpend` (`spendCard`), **Marketing ROI** = net return `(rev÷spend−1)×100` (`roiCard`, mirrors the ROI tab's Net ROI); helpers `mroiRow`/`currencyDelta`/`costDelta`/`kpiHtml`. **CHARTS now LIVE:** the old sample "Spend vs marketing revenue" chart was REPLACED by a COPY of `roi.html`'s "Revenue vs spend by month" combo chart (green spend bars + blue marketing-revenue line on a shared `niceCeil` LEFT $ axis + gray dashed company-revenue line on the RIGHT axis), fed by `MROI.byMonth` (= `/api/marketing/roi` `byMonth.data`) and filtered by `currentMroiMonths()` — `roi.html` was NOT modified (copy, not move); and "Enquiries vs bookings" is LIVE monthly from new **`ENQ.byMonth`/`BOOKINGS.byMonth`** (`renderEnqBookChart`), backed by **`OVERVIEW_MONTH_SQL`** in `marketing-overview.js` → `enquiries.byMonth`/`bookings.byMonth` (`[{month,fyEnd,total}]`, the SAME three-bucket disjoint set as of 2026-11-09, one row per deal/lead by creation month). The sample chart arrays (`MONTHS`/`ENQ_SERIES`/`BOOK`/`SPEND`/`REVENUE`/`_c1`) are GONE, so the ENQ/ENQ_SERIES hoisting-gotcha noted above no longer applies; `drawCharts()` just calls `renderMonthChart()`+`renderEnqBookChart()`. **BOTTOM CARDS:** **Cost per enquiry** LIVE (`renderBottomCards()` = marketing spend ÷ enquiries, `costDelta` lower=green); **Cadence delivered** KEPT but shows a `pending` chip (no DB source for cadence — owner's decision); **Past-client Offsites booked** REMOVED; **"Latest notes · October" RENAMED "Live AI Insight"** → `#aiInsight` auto-loads a 1–2 sentence OpenAI insight from **`GET /api/marketing/insight?fy=fy27`** → **`server/marketingInsight.js`** (`getMarketingInsight(fy)`, on the `marketing` router, `fy` validated `/^fy\d{2}$/|all`, cached per-FY 10 min; read-only context-stuff of the live Overview+ROI figures for the FY + prior FY, ONE Chat Completions call; returns `{insight}` or `{insight:null,note}` when the key is unset; `loadInsight`/`scheduleInsight` 400ms debounce on FY change; REUSES the existing `OPENAI_API_KEY` — no new secret). (The amber `.mkt-take` takeaway sentence is still sample prose.) **Validated enquiries per FY (3-bucket,
-  as of 2026-11-09): FY22 66 · FY23 142 · FY24 151 · FY25 180 · FY26 136 · FY27 44.** Validated
-  bookings/won per FY: FY22 34 · FY23 44 · FY24 44 · FY25 40 · FY26 21 · FY27 9. (Both pages reconcile to
+  3–6 ARE NOW ALL LIVE too (as of 2026-11-05)** — the `KPIS[]` sample array is EMPTY. Card 3 **Enquiry → booking rate** (`rateCard()` = bookings ÷ enquiries, pts delta). Cards 4–6 come from a new **`MROI` state** fetched from **`GET /api/marketing/roi`** (`loadRoiCards()` indexes `rows.data` by `fyEnd` + the `total` row; the SAME source as the ROI tab): **Marketing revenue** = `row.marketingRevenue` (`revenueCard`), **Marketing spend** = `row.totalSpend` where `hasSpend` (`spendCard`), **Marketing ROI** = net return `(rev÷spend−1)×100` (`roiCard`, mirrors the ROI tab's Net ROI); helpers `mroiRow`/`currencyDelta`/`costDelta`/`kpiHtml`. **CHARTS now LIVE:** the old sample "Spend vs marketing revenue" chart was REPLACED by a COPY of `roi.html`'s "Revenue vs spend by month" combo chart (green spend bars + blue marketing-revenue line on a shared `niceCeil` LEFT $ axis + gray dashed company-revenue line on the RIGHT axis), fed by `MROI.byMonth` (= `/api/marketing/roi` `byMonth.data`) and filtered by `currentMroiMonths()` — `roi.html` was NOT modified (copy, not move); and "Enquiries vs bookings" is LIVE monthly from new **`ENQ.byMonth`/`BOOKINGS.byMonth`** (`renderEnqBookChart`), backed by **`OVERVIEW_MONTH_SQL`** in `marketing-overview.js` → `enquiries.byMonth`/`bookings.byMonth` (`[{month,fyEnd,total}]`, the SAME three-bucket disjoint set — incl. the FY27+ ga4-sourced paid basis — as of 2026-11-09, one row per deal/lead by creation month). The sample chart arrays (`MONTHS`/`ENQ_SERIES`/`BOOK`/`SPEND`/`REVENUE`/`_c1`) are GONE, so the ENQ/ENQ_SERIES hoisting-gotcha noted above no longer applies; `drawCharts()` just calls `renderMonthChart()`+`renderEnqBookChart()`. **BOTTOM CARDS:** **Cost per enquiry** LIVE (`renderBottomCards()` = marketing spend ÷ enquiries, `costDelta` lower=green); **Cadence delivered** KEPT but shows a `pending` chip (no DB source for cadence — owner's decision); **Past-client Offsites booked** REMOVED; **"Latest notes · October" RENAMED "Live AI Insight"** → `#aiInsight` auto-loads a 1–2 sentence OpenAI insight from **`GET /api/marketing/insight?fy=fy27`** → **`server/marketingInsight.js`** (`getMarketingInsight(fy)`, on the `marketing` router, `fy` validated `/^fy\d{2}$/|all`, cached per-FY 10 min; read-only context-stuff of the live Overview+ROI figures for the FY + prior FY, ONE Chat Completions call; returns `{insight}` or `{insight:null,note}` when the key is unset; `loadInsight`/`scheduleInsight` 400ms debounce on FY change; REUSES the existing `OPENAI_API_KEY` — no new secret). (The amber `.mkt-take` takeaway sentence is still sample prose.) **Validated enquiries per FY (3-bucket,
+  as of 2026-11-09): FY22 66 · FY23 142 · FY24 151 · FY25 180 · FY26 136 · FY27 41.** Validated
+  bookings/won per FY: FY22 34 · FY23 44 · FY24 44 · FY25 40 · FY26 21 · FY27 8. (**FY27 was 44/9 under the
+  pre-2026-11-09 roas-only paid basis; it is 41/8 now that FY27 paid+organic are ga4-sourced + the
+  non-keynote/free-gift exclusions apply — see the leads-by-source paragraph.** Both pages reconcile to
   these; organic has rows only in FY27 — GA4 ~60-day retention. These replaced the 2026-11-05 two-source
   figures — enquiries FY22 65·FY23 128·FY24 147·FY25 178·FY26 137·FY27 40 — which lacked organic and
   excluded Niki no-`deal_id` rows from the paid side.) Server + frontend change (no `app.js` bump) →

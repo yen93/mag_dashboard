@@ -101,6 +101,24 @@
     table.sr-table tbody tr:last-child td { border-bottom: none; }
     table.sr-table tbody td:first-child { font-weight: 600; }
     table.sr-table .ch-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 8px; vertical-align: baseline; }
+
+    /* Spend-by-type drill-down modal */
+    .items-backdrop { display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(10, 14, 22, .55); align-items: center; justify-content: center; padding: 20px; }
+    .items-modal { width: 100%; max-width: 440px; max-height: 80vh; display: flex; flex-direction: column;
+      background: var(--surface, #fff); color: var(--text, #111); border: 1px solid var(--border);
+      border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.35); overflow: hidden; }
+    .items-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      padding: 16px 18px 12px; border-bottom: 1px solid var(--border); }
+    .items-modal-head h3 { margin: 0; font-size: 16px; }
+    .items-close { background: none; border: none; font-size: 24px; line-height: 1; cursor: pointer;
+      color: var(--text-muted); padding: 0 2px; }
+    .items-close:hover { color: var(--text); }
+    .items-modal-body { padding: 12px 18px 18px; overflow-y: auto; }
+    .items-count { font-size: 12px; margin-bottom: 8px; }
+    ol.items-list { margin: 0; padding-left: 22px; }
+    ol.items-list li { padding: 4px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
+    ol.items-list li:last-child { border-bottom: none; }
   </style>
 </head>
 <body>
@@ -177,6 +195,20 @@
     </main>
   </div>
 
+  <!-- Spend-by-type drill-down modal: items under a clicked type (names only) -->
+  <div id="itemsBackdrop" class="items-backdrop" onclick="if(event.target===this)closeTypeItems()">
+    <div class="items-modal" role="dialog" aria-modal="true" aria-labelledby="itemsTitle">
+      <div class="items-modal-head">
+        <div>
+          <h3 id="itemsTitle">Type</h3>
+          <div id="itemsSub" class="muted" style="font-size:12px;margin-top:2px"></div>
+        </div>
+        <button type="button" class="items-close" aria-label="Close" onclick="closeTypeItems()">&times;</button>
+      </div>
+      <div id="itemsBody" class="items-modal-body"></div>
+    </div>
+  </div>
+
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=14"></script>
   <script>
@@ -206,6 +238,7 @@
     var OV  = { byFy: {}, total: null, loaded: false, range: null };  // /api/marketing/overview (enquiries)
     var CH  = { months: [], type: [], loaded: false };           // /api/marketing/channel-summary
     var CR  = { rows: [], total: null, loaded: false };          // /api/marketing/channel-results
+    var CI  = { items: [], loaded: false };                      // /api/marketing/channel-items (bar drill-down)
 
     // Custom date range (beside the FY toggle). When active it overrides the FY toggle:
     // the KPI cards + Spend-by-type aggregate the already-loaded MONTHLY series within the
@@ -266,9 +299,9 @@
       var box = document.getElementById('kpis');
       if (!box) return;
       if (!ROI.loaded) {
-        box.innerHTML = kpiCard('Marketing spend', '', '', '…') + kpiCard('Net return', '', '', '…') +
-          kpiCard('Marketing ROI', '', '', '…') + kpiCard('Marketing CAC', '', '', '…') +
-          kpiCard('Cost per enquiry', '', '', '…');
+        box.innerHTML = kpiCard('Marketing revenue', '', '', '…') + kpiCard('Marketing spend', '', '', '…') +
+          kpiCard('Net return', '', '', '…') + kpiCard('Marketing ROI', '', '', '…') +
+          kpiCard('Marketing CAC', '', '', '…') + kpiCard('Cost per enquiry', '', '', '…');
         return;
       }
       var key = selFyKey();
@@ -296,32 +329,38 @@
       var pCostPerEnq = (pSpend != null && pEnq) ? pSpend / pEnq : null;
 
       var html = '';
-      // 1 — Marketing spend
+      // 1 — Marketing revenue (highlighted first card)
+      html += kpiCard('Marketing revenue',
+        'Marketing-attributed won revenue for the selected FY — ROAS-paid + organic + bureau/tailor + Exec X (deduped). Same figure as the ROI tab’s "Marketing revenue".',
+        'GET /api/marketing/roi (row.marketingRevenue)',
+        fmtCur(mRev),
+        deltaHtml(mRev, pMRev, 'up-good', prevFyEnd));
+      // 2 — Marketing spend
       html += kpiCard('Marketing spend',
         'Total marketing spend for the selected FY — Xero marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST. Same figure as the ROI tab.',
         'GET /api/marketing/roi (row.totalSpend) ← public.marketing_channel_monthly, live from Xero',
         fmtCur(spend),
         deltaHtml(spend, pSpend, 'neutral', prevFyEnd));
-      // 2 — Net return (marketing revenue − marketing spend)
+      // 3 — Net return (marketing revenue − marketing spend)
       html += kpiCard('Net return',
         'Marketing-attributed won revenue minus marketing spend. Revenue = ROAS-paid + organic + bureau/tailor + Exec X (deduped), same as the ROI tab.',
         'GET /api/marketing/roi (marketingRevenue − totalSpend)',
         fmtCur(netReturn),
         deltaHtml(netReturn, pNetReturn, 'up-good', prevFyEnd));
-      // 3 — Marketing ROI (net ROI %)
+      // 4 — Marketing ROI (net ROI %)
       html += kpiCard('Marketing ROI',
         'Net return on marketing spend = (marketing revenue ÷ marketing spend − 1). Same definition as the ROI tab’s "Net ROI".',
         'GET /api/marketing/roi (marketingRevenue ÷ totalSpend − 1)',
         (marketingRoi != null ? (marketingRoi > 0 ? '+' : '') + marketingRoi + '%' : '<span class="muted">—</span>'),
         ros != null ? '<div class="sub">Return on spend ' + ros.toFixed(2) + '×</div>' : '');
-      // 4 — Marketing CAC
+      // 5 — Marketing CAC
       html += kpiCard('Marketing CAC',
         'Cost to acquire a client = marketing spend ÷ clients won (all AC deals won this FY). Same as the ROI tab’s "Cost per client".',
         'GET /api/marketing/roi (totalSpend ÷ dealsWon)',
         fmtCur(cac),
         (dealsWon ? '<div class="sub">Marketing spend ÷ ' + dealsWon + ' clients won</div>'
                   : (spend != null ? '<div class="sub">No clients won this FY</div>' : '')));
-      // 5 — Cost per enquiry
+      // 6 — Cost per enquiry
       html += kpiCard('Cost per enquiry',
         'Marketing spend ÷ enquiries (deals/leads created this FY across paid + organic + indirect — same count as the Overview).',
         'GET /api/marketing/roi (totalSpend) ÷ GET /api/marketing/overview (enquiries.total)',
@@ -370,10 +409,12 @@
     }
 
     var _spendChart = null;
+    var _spendRows = [];   // current bars (type name → index), for the click drill-down
     function renderSpendByType() {
       var el = document.getElementById('spendCanvas');
       if (!el) return;
       var rows = CH.loaded ? spendByTypeForFy(selFyKey()) : [];
+      _spendRows = rows;
       var tc = themeColors();
       // Size the box to the number of bars so they stay readable.
       var box = document.getElementById('spendBox');
@@ -392,9 +433,20 @@
         },
         options: {
           indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          onClick: function (evt, els) {
+            if (!els || !els.length) return;
+            var r = _spendRows[els[0].index];
+            if (r) showTypeItems(r.name);
+          },
+          onHover: function (evt, els) {
+            if (evt && evt.native && evt.native.target) evt.native.target.style.cursor = els.length ? 'pointer' : 'default';
+          },
           plugins: {
             legend: { display: false },
-            tooltip: { callbacks: { label: function (ctx) { return fmt(ctx.parsed.x, 'currency'); } } },
+            tooltip: { callbacks: {
+              label: function (ctx) { return fmt(ctx.parsed.x, 'currency'); },
+              afterLabel: function () { return 'Click to see items'; },
+            } },
           },
           scales: {
             x: { beginAtZero: true, ticks: { color: tc.muted, callback: compactAud }, grid: { color: tc.grid } },
@@ -402,6 +454,57 @@
           },
         },
       });
+    }
+
+    // ===================================================================
+    //  Spend-by-type drill-down — click a bar → list the vendors (items)
+    //  under that type for the current FY/range. Names only, no $ values.
+    // ===================================================================
+    // Distinct vendors under `typeName`, filtered the SAME way the bar was
+    // (selected FY, custom range, or all years) so the list matches the bar.
+    function itemsForType(typeName) {
+      var key = selFyKey();
+      var rows = (CI.items || []).filter(function (it) { return it.type === typeName; });
+      if (CUSTOM) {
+        rows = rows.filter(function (it) { return monthInRange(channelMonthYM(it.month)); });
+      } else if (key !== 'all') {
+        var fe = fyEndOf(key);
+        rows = rows.filter(function (it) { return channelMonthFyEnd(it.month) === fe; });
+      }
+      var seen = {}, out = [];
+      rows.forEach(function (it) {
+        var v = (it.vendor || '').trim();
+        if (v && !seen[v.toLowerCase()]) { seen[v.toLowerCase()] = 1; out.push(v); }
+      });
+      return out.sort(function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
+    }
+    function showTypeItems(typeName) {
+      var scope = CUSTOM ? 'selected range' : (selFyKey() === 'all' ? 'all years' : fyName(selFyKey()));
+      var titleEl = document.getElementById('itemsTitle');
+      var subEl = document.getElementById('itemsSub');
+      var bodyEl = document.getElementById('itemsBody');
+      if (titleEl) titleEl.textContent = typeName;
+      if (subEl) subEl.textContent = 'Items under this type · ' + scope;
+      if (!CI.loaded) {
+        bodyEl.innerHTML = '<div class="muted" style="padding:8px 0">Loading…</div>';
+      } else {
+        var items = itemsForType(typeName);
+        if (!items.length) {
+          bodyEl.innerHTML = '<div class="muted" style="padding:8px 0">No items for this type in the ' + esc(scope) + '.</div>';
+        } else {
+          bodyEl.innerHTML =
+            '<div class="items-count muted">' + items.length + ' item' + (items.length === 1 ? '' : 's') + '</div>' +
+            '<ol class="items-list">' +
+            items.map(function (v) { return '<li>' + esc(v) + '</li>'; }).join('') +
+            '</ol>';
+        }
+      }
+      var bd = document.getElementById('itemsBackdrop');
+      if (bd) bd.style.display = 'flex';
+    }
+    function closeTypeItems() {
+      var bd = document.getElementById('itemsBackdrop');
+      if (bd) bd.style.display = 'none';
     }
 
     // ===================================================================
@@ -416,11 +519,12 @@
     }
     function intCell(v) { return (v == null) ? '<span class="muted">—</span>' : String(v); }
     function roasCell(v) { return (v == null) ? '<span class="muted">—</span>' : v.toFixed(1) + '×'; }
-    function channelRowHtml(name, c) {
+    function channelRowHtml(name, c, note) {
       var costPerEnq = (c.spend != null && c.enquiries) ? c.spend / c.enquiries : null;
       var dot = '<span class="ch-dot" style="background:' + (CH_COLOR[name] || '#9aa4b2') + '"></span>';
+      var noteHtml = note ? '<div class="muted" style="font-size:11px;font-weight:400;margin-top:2px">' + esc(note) + '</div>' : '';
       return '<tr>' +
-        '<td>' + dot + esc(name) + '</td>' +
+        '<td>' + dot + esc(name) + noteHtml + '</td>' +
         '<td>' + fmtCur(c.spend) + '</td>' +
         '<td>' + intCell(c.enquiries) + '</td>' +
         '<td>' + fmtCur(costPerEnq) + '</td>' +
@@ -445,7 +549,7 @@
       }
       body.innerHTML =
         channelRowHtml('Paid (Google, Bing, Agency)', row.paid) +
-        channelRowHtml('Executive X', row.execX);
+        channelRowHtml('Executive X', row.execX, 'Updated at the close of each season.');
     }
 
     // ===================================================================
@@ -493,6 +597,12 @@
         renderChannelResults();
       }).catch(function (err) { console.error('channel-results', err); CR.loaded = true; renderChannelResults(); });
     }
+    function loadChannelItems() {
+      return fetchJSON('/api/marketing/channel-items').then(function (d) {
+        CI.items = (d && d.items) || [];
+        CI.loaded = true;
+      }).catch(function (err) { console.error('channel-items', err); CI.loaded = true; });
+    }
 
     // ----- Segmented toggle -----
     function wireSeg(id, onChange) {
@@ -533,9 +643,11 @@
     loadOverview();
     loadChannelSummary();
     loadChannelResults();
+    loadChannelItems();
     wireSeg('fySeg', renderSR);
     wireDateRange({ onChange: applyRange });
     window.onThemeChange = function () { try { renderSpendByType(); } catch (e) {} };
+    document.addEventListener('keydown', function (e) { if (e.key === 'Escape') closeTypeItems(); });
   </script>
 </body>
 </html>

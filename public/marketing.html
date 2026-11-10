@@ -179,7 +179,7 @@
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Enquiries vs bookings <span class="head-info"
               data-info="Keynote enquiries (all created deals) vs bookings (won deals) by month for the selected financial year, across the paid + organic + indirect sources."
-              data-src="GET /api/marketing/overview (byMonth) — roas_counted_deals + ga4 organic + ac_indirect_deals (excl. paid)"></span></h3>
+              data-src="GET /api/marketing/overview (byMonth) — paid: roas_counted_deals before FY27, ga4 cpc rows FY27+ (excl. non-keynote pages / free-gift opt-ins); + ga4 organic + ac_indirect_deals (excl. paid)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="enqBookCanvas"></canvas></div>
         </div>
@@ -217,7 +217,8 @@
 
     // ----- KPI cards -----
     // Cards 1–2 ("Keynote enquiries" and "Keynote bookings") are LIVE + FY-aware:
-    // per-FY counts across three sources (ads = roas_counted_deals, organic =
+    // per-FY counts across three sources (ads = roas_counted_deals before FY27 /
+    // ga4 cpc rows FY27+ excl. non-keynote pages & free-gift opt-ins, organic =
     // ga4 medium=organic, indirect = ac_indirect_deals excl. paid) — from
     // GET /api/marketing/overview. Total == Leads & Bookings by-source total.
     //   • Enquiries = ALL deals created in the FY.
@@ -331,8 +332,10 @@
         loadedInfo: function (fyName, r) {
           return 'Deals/leads created in ' + fyName + ' across three sources — Paid ' + r.ads +
             ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect + '. ' +
-            'Paid = roas_counted_deals · Organic = ga4_ac_contact_source (medium=organic) · ' +
+            'Paid = roas_counted_deals before FY27, ga4_ac_contact_source cpc rows FY27+ · ' +
+            'Organic = ga4_ac_contact_source (medium=organic) · ' +
             'Indirect = ac_indirect_deals (Deal Source? = Indirect, excl. paid). ' +
+            'FY27+ drops ga4 rows on non-keynote pages / free-gift opt-ins. ' +
             'Equals the Leads & Bookings by-source total. Created = deal date, AU FY.';
         },
       });
@@ -345,7 +348,8 @@
         loadedInfo: function (fyName, r) {
           return 'Won deals/leads created in ' + fyName + ' across three sources — Paid ' + r.ads +
             ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect + '. ' +
-            'Paid = roas_counted_deals (won) · Organic = ga4 organic (deal_status=won) · ' +
+            'Paid = roas_counted_deals before FY27 (won), ga4 cpc rows FY27+ (deal_status=won) · ' +
+            'Organic = ga4 organic (deal_status=won) · ' +
             'Indirect = ac_indirect_deals (status Won, excl. paid). Created = deal date, AU FY.';
         },
       });

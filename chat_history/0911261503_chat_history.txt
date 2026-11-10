@@ -1,0 +1,86 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-09
+Session: Split the Leads & Bookings "Paid Ads" bucket into Google Ads / Bing Ads
+         for FY27 onwards (chart + tables), leaving earlier FYs untouched
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+On the Leads & Bookings page, update the graphs: "Paid Ads" should be broken down
+into two — Google or Bing. Use ga4_ac_contact_source to determine which ones are
+Google vs Bing. Also include organic in this table. This is for FY27 onwards; for
+previous years, don't touch them — keep their frontend and backend the same.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated before editing. Read server/metrics/marketing-leads-by-source.js and
+public/leads_bookings.html. The endpoint /api/marketing/leads-by-source feeds the
+"Enquiries by source" stacked chart, the "By source" table and the "All leads"
+table; its paid bucket = public.roas_counted_deals (ALL rows), with no built-in
+Google/Bing split. Organic/Tailor/Bureau were already present.
+
+Queried MAGTestProject (Supabase ref aivitcomiywiysrfwqxt) to find the platform
+signal:
+- ga4_ac_contact_source has source/medium/channel. Paid rows carry source=google/
+  bing + medium=cpc, but for Calendly bookings source reads "(calendly)" while the
+  `channel` column still holds the true platform (e.g. "bing / cpc"). So `channel`
+  (fallback `source`) is the authoritative platform signal.
+- roas_counted_deals for FY27 (by cdate-derived FY) = 5 paid deals (4 clover + 1
+  ga4cpc). Joining each deal_id to ga4_ac_contact_source: 3 resolve to Google, 2 to
+  Bing (via channel "bing / cpc"); 2 clover deals had no ga4 match.
+- Decided: FY27+ paid deal → Bing when channel/source contains "bing", Google when
+  it contains "google", and default to Google when there's no ga4 match (Clover/Niki
+  paid attribution is Google-Ads-oriented). Verified the split sums back to the old
+  paid total and still reconciles with the Overview card (FY27 total 44).
+
+Backend edits (server/metrics/marketing-leads-by-source.js):
+- Added PAID_SPLIT_FY=2027, a shared PLAT_CTE (per-deal_id platform from
+  ga4_ac_contact_source via bool_or on lower(coalesce(channel, source)) LIKE
+  '%bing%'/'%google%'), and a PAID_SOURCE CASE expression
+  (fy_end>=2027 → coalesce(platform,'Google Ads'); else 'Paid Ads').
+- Wired PLAT_CTE + PAID_SOURCE into BOTH the counts query (SRC_CTE) and the
+  per-lead query (LEADS_CTE); added fy_end to each roas CTE and LEFT JOIN plat.
+- LEAD_SOURCES export → ['Google Ads','Bing Ads','Paid Ads','Organic','Tailor',
+  'Bureau'] (master order). Updated the source/provenance strings + header comment.
+
+Ran the exact production counts query against the live DB: executes cleanly and
+FY27 = Google Ads 3 (2 booked) / Bing Ads 2 (1 booked) / Organic 4 / Tailor 11 /
+Bureau 24 = 44 total (matches Overview); FY26 keeps one Paid Ads row (23), total
+136 (matches Overview). node --check + ESM import of the module both pass.
+
+Frontend edits (public/leads_bookings.html):
+- Replaced the fixed `SOURCES` array with a master `SRC_ORDER` +
+  `visibleSources(rows)` helper that returns only the sources actually present in
+  the selected view (so FY27 shows Google Ads/Bing Ads/Organic/Tailor/Bureau,
+  earlier FYs show Paid Ads/…, "All years" shows both). Added Google Ads (#3b6ef0),
+  Bing Ads (#12a5b8) and a distinct Paid Ads (#4a6fa5) to SRC_COLOR.
+- Updated renderSourceTable and renderSourceChart to iterate visibleSources(rows);
+  removed the old `SOURCES = d.sources` override in loadBySource. Grep confirmed no
+  stale `SOURCES` references remain.
+- Updated the three ⓘ info-tool data-info/data-src notes (chart, By source, All
+  leads) and the script header comment to document the FY27 split.
+- No app.js change, so no ?v= bump needed.
+
+Documentation:
+- Updated the now-contradictory leads-by-source paragraph in CLAUDE.md (it had
+  said paid is "ONE row, not split into Google/Bing") to describe the FY27+
+  Google/Bing split, PLAT_CTE/PAID_SOURCE/PAID_SPLIT_FY, visibleSources, and the
+  new LEAD_SOURCES master order.
+
+Told the user the change needs a manual Cloud Run redeploy (server + frontend) to
+go live; I do not deploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save the chat, update as_built.txt / CLAUDE.md / .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps: wrote this chat-history file; reviewed as_built.txt and CLAUDE.md
+for needed updates (CLAUDE.md already updated in-session; as_built touched where it
+described the leads-by-source sources); confirmed .gitignore already covers secrets.
+No git commands run — the user commits/pushes themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

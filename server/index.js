@@ -28,6 +28,7 @@ import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
 import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
 import { getMarketingChannelResults } from './metrics/marketing-channel-results.js';
+import { getMarketingChannelItems } from './metrics/marketing-channel-items.js';
 import { getAdPlatforms } from './metrics/ad-platforms.js';
 import { getWebsiteSearch } from './metrics/marketing-website-search.js';
 import { ga4AgentRouter } from './ga4Agent.js';
@@ -352,6 +353,17 @@ marketing.get('/channel-results', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:channel-results]', err);
     res.status(502).json({ error: 'Failed to load channel results from data source.', detail: err.message });
+  }
+});
+// Channel items — the distinct vendors (line items) behind each "Spend by type" bucket,
+// for the spend_roi.html drill-down modal. See server/metrics/marketing-channel-items.js.
+marketing.get('/channel-items', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:channel-items', getMarketingChannelItems, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:channel-items]', err);
+    res.status(502).json({ error: 'Failed to load channel items from data source.', detail: err.message });
   }
 });
 // Ad Platforms — raw per-platform performance (GA4 website events, Google Ads campaign
