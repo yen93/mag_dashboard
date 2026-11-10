@@ -192,6 +192,21 @@
       transform: translateY(-1px);
       box-shadow: var(--mkt-shadow);
     }
+
+    /* "See deals" toggle button — same pill style as sales_overview's
+       "See ACS Deals Table" toggle (.acs-reset). */
+    .acs-reset {
+      background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 999px; padding: 8px 16px; font-size: 13px; font-weight: 600;
+      font-family: inherit; cursor: pointer;
+      transition: background .16s ease, border-color .16s ease;
+    }
+    .acs-reset:hover { background: var(--surface-2); border-color: var(--mkt-accent); }
+    /* Source dot in the deals table (same as leads_bookings). */
+    .src-dot {
+      display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+      margin-right: 7px; vertical-align: middle;
+    }
   </style>
 </head>
 <body>
@@ -232,8 +247,52 @@
         </div>
       </div>
 
-      <!-- Top 2-column row: Update status (left) + Notes (right) -->
-      <div class="ml-top">
+      <!-- Yearly summary table card -->
+      <div class="card ml-card">
+        <div class="card-head block-head">
+          <h3 id="summaryHeading">Yearly summary <span class="head-info"
+            data-info="FY and calendar-year totals for each marketing measure, with the FY26-vs-FY25 change. Per-measure definitions are on each row's ⓘ."
+            data-src="GET /api/marketing/overview (Keynote enquiries / bookings) + GET /api/marketing/roi (Marketing revenue / spend / ROI); Cadence delivered pending."></span></h3>
+        </div>
+        <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="summaryHeading">
+          <table class="ml-table" style="min-width:680px">
+            <thead>
+              <tr id="summaryHead">
+                <th>Measure</th>
+                <th>FY25</th>
+                <th>FY26</th>
+                <th>FY27</th>
+                <th>FY26 vs FY25</th>
+                <th>CY2025</th>
+                <th>CY2026</th>
+              </tr>
+            </thead>
+            <tbody id="summaryBody"></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="ml-actions" style="justify-content:space-between">
+        <button type="button" class="acs-reset" id="summaryDealsToggle" aria-expanded="false">See deals behind the summary</button>
+        <button type="button" class="ml-download-btn" id="downloadExcelBtn">Download as Excel (tracker layout)</button>
+      </div>
+
+      <!-- ============ DEALS BEHIND THE SUMMARY (hidden by default; toggled above) ============
+           The individual deals/leads that make up the Yearly summary's Keynote enquiries /
+           bookings rows — one row per deal across the four lead sources. Same source + columns
+           as the Leads & Bookings "All leads" table, reconciling with the summary counts. -->
+      <div class="card ml-card" id="summaryDealsSection" style="display:none;margin-top:16px">
+        <div class="card-head block-head">
+          <h3 id="dealsHeading">Deals behind the summary <span class="head-info"
+            data-info="Every individual lead/deal behind the Yearly summary's Keynote enquiries and bookings — one row per deal across the four sources (Google/Bing/Paid Ads, Organic, Tailor, Bureau), with its FY, date, organisation, deal, status and value (AUD). Booking = won deal. Filtered to the selected FY (or custom date range); sort, search and filter per column."
+            data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); FY from cdate."></span></h3>
+          <div class="muted" style="font-size:12px;margin-top:4px" id="dealsCount"></div>
+        </div>
+        <div id="summaryDealsRows"></div>
+      </div>
+
+      <!-- Pending cards, below the Yearly summary: Update status (left) + Notes (right) -->
+      <div class="ml-top" style="margin-top:16px;margin-bottom:0">
         <div class="card ml-card">
           <div class="card-head block-head">
             <h3 id="statusHeading">Update status <span class="head-info"
@@ -263,35 +322,6 @@
           </div>
           <div class="ml-notes-list" id="notesList"></div>
         </div>
-      </div>
-
-      <!-- Yearly summary table card -->
-      <div class="card ml-card">
-        <div class="card-head block-head">
-          <h3 id="summaryHeading">Yearly summary <span class="head-info"
-            data-info="FY and calendar-year totals for each marketing measure, with the FY26-vs-FY25 change. Per-measure definitions are on each row's ⓘ."
-            data-src="GET /api/marketing/overview (Keynote enquiries / bookings) + GET /api/marketing/roi (Marketing revenue / spend / ROI); Cadence delivered pending."></span></h3>
-        </div>
-        <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="summaryHeading">
-          <table class="ml-table" style="min-width:680px">
-            <thead>
-              <tr id="summaryHead">
-                <th>Measure</th>
-                <th>FY25</th>
-                <th>FY26</th>
-                <th>FY27 (to Oct)</th>
-                <th>FY26 vs FY25</th>
-                <th>CY2025</th>
-                <th>CY2026 (to Oct)</th>
-              </tr>
-            </thead>
-            <tbody id="summaryBody"></tbody>
-          </table>
-        </div>
-      </div>
-
-      <div class="ml-actions">
-        <button type="button" class="ml-download-btn" id="downloadExcelBtn">Download as Excel (tracker layout)</button>
       </div>
     </main>
   </div>
@@ -531,7 +561,7 @@
     }
     document.getElementById('downloadExcelBtn').addEventListener('click', function () {
       var lines = [
-        ['Measure', 'FY25', 'FY26', 'FY27 (to Oct)', 'FY26 vs FY25', 'CY2025', 'CY2026 (to Oct)'].join(',')
+        ['Measure', 'FY25', 'FY26', 'FY27', 'FY26 vs FY25', 'CY2025', 'CY2026'].join(',')
       ];
       (SUMMARY_RENDER.length ? SUMMARY_RENDER : buildSummaryRows()).forEach(function (r) {
         var cells = r.pending
@@ -555,17 +585,126 @@
 
     // Custom date range: adds a "Selected range" column to the Yearly summary (month-level,
     // from the overview + ROI monthly series). The FY toggle is inert here either way.
-    function applyRange() { CUSTOM = dateRangeActive(); renderSummaryTable(); }
+    function applyRange() { CUSTOM = dateRangeActive(); renderSummaryTable(); refreshDeals(); }
+
+    // Re-render the deals table for the active FY / range — only once it has loaded.
+    function refreshDeals() { if (SUMMARY_DEALS.rows != null) renderSummaryDeals(); }
+
+    // =====================================================================
+    //  Deals behind the summary — the individual leads/deals that make up the
+    //  Yearly summary's Keynote enquiries / bookings (same source + columns as
+    //  the Leads & Bookings "All leads" table). Toggled open from the button
+    //  below the Yearly summary, lazy-loaded on first open.
+    // =====================================================================
+    var SUMMARY_DEALS = { rows: null, loading: false };   // null = not yet loaded
+    var DEALS_TABLE_STATE = {};
+    var DEAL_SRC_COLOR = {
+      'Google Ads': '#3b6ef0', 'Bing Ads': '#12a5b8', 'Paid Ads': '#4a6fa5',
+      Organic: '#17a673', Tailor: '#d9663a', Bureau: '#6a4bf5',
+    };
+
+    // FY toggle helpers (the toggle is inert for the rest of the page, but the
+    // deals table honours it). fe = FY END year: fy27 → 2027.
+    function dealFyKey() {
+      var b = document.querySelector('#fySeg button.active');
+      return b ? b.getAttribute('data-fy') : 'fy27';
+    }
+    function dealFyEnd(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
+
+    // Rows for the current view: the custom date range when active (day-level,
+    // which overrides the FY toggle), else the selected FY.
+    function currentDealRows() {
+      var all = SUMMARY_DEALS.rows || [];
+      if (CUSTOM) {
+        var r = getDateRange(), f = r.from || '', t = r.to || '';
+        return all.filter(function (d) {
+          return (!f || d.date >= f) && (!t || d.date <= t);
+        });
+      }
+      var key = dealFyKey();
+      if (key === 'all') return all;
+      var fe = dealFyEnd(key);
+      return all.filter(function (d) { return d.fyEnd === fe; });
+    }
+
+    function renderSummaryDeals() {
+      var host = document.getElementById('summaryDealsRows');
+      var cnt = document.getElementById('dealsCount');
+      if (!host) return;
+      if (SUMMARY_DEALS.rows == null) {
+        host.innerHTML = '<div class="muted" style="padding:10px 2px">Loading…</div>';
+        if (cnt) cnt.textContent = '';
+        return;
+      }
+      function txt(v) { return v == null || v === '' ? '—' : esc(v); }
+      function fyCell(v) { return v ? 'FY' + String(v).slice(-2) : '—'; }
+      function srcCell(v) {
+        return '<span class="src-dot" style="background:' + (DEAL_SRC_COLOR[v] || '#9aa4b2') + '"></span>' + esc(v || '—');
+      }
+      function statusCell(v, row) { return row.won ? '<strong>' + esc(v || 'Won') + '</strong>' : esc(v || '—'); }
+      var cols = [
+        { key: 'fyEnd', label: 'FY', render: fyCell, text: function (v) { return v ? 'FY' + String(v).slice(-2) : ''; } },
+        { key: 'date', label: 'Date', unit: 'date' },
+        { key: 'source', label: 'Source', render: srcCell, text: function (v) { return v; } },
+        { key: 'org', label: 'Organisation', render: txt },
+        { key: 'title', label: 'Deal', render: txt },
+        { key: 'status', label: 'Status', render: statusCell, text: function (v, row) { return row.won ? (v || 'Won') : (v || ''); } },
+        { key: 'value', label: 'Value', unit: 'currency' },
+      ];
+      renderSortableTable('summaryDealsRows', currentDealRows(), cols, {
+        stateStore: DEALS_TABLE_STATE,
+        searchPlaceholder: 'Search deals…',
+        sortKey: 'date', sortDir: 'desc',
+        emptyText: 'No deals found.',
+        pageSize: 50,
+        onCount: function (shown, total, list) {
+          var won = (list || []).filter(function (r) { return r.won; }).length;
+          if (cnt) cnt.textContent = (shown === total ? total : shown + ' of ' + total) +
+            ' deal' + (total === 1 ? '' : 's') + ' · ' + won + ' booked';
+        },
+      });
+    }
+
+    function loadSummaryDeals() {
+      if (SUMMARY_DEALS.rows != null || SUMMARY_DEALS.loading) return;   // load once
+      SUMMARY_DEALS.loading = true;
+      renderSummaryDeals();   // show "Loading…"
+      fetchJSON('/api/marketing/leads-by-source').then(function (d) {
+        SUMMARY_DEALS.rows = (d && d.leads) || [];
+        SUMMARY_DEALS.loading = false;
+        renderSummaryDeals();
+      }).catch(function (err) {
+        console.error('summary deals', err);
+        SUMMARY_DEALS.rows = [];
+        SUMMARY_DEALS.loading = false;
+        var host = document.getElementById('summaryDealsRows');
+        if (host) host.innerHTML = '<div class="needs-setup"><strong>Couldn’t load deals</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
+    (function wireSummaryDealsToggle() {
+      var btn = document.getElementById('summaryDealsToggle');
+      if (!btn) return;
+      btn.addEventListener('click', function () {
+        var section = document.getElementById('summaryDealsSection');
+        if (!section) return;
+        var show = section.style.display === 'none';
+        section.style.display = show ? '' : 'none';
+        btn.setAttribute('aria-expanded', show ? 'true' : 'false');
+        btn.textContent = show ? 'Hide deals behind the summary' : 'See deals behind the summary';
+        if (show) loadSummaryDeals();
+      });
+    })();
 
     initPage('marketing');
     renderMarketingHead();
     renderMarketingSidebar('monthly-log');
     renderDateRange();
-    fillHeadInfo();              // fill the three table ⓘ info tools (§6)
+    fillHeadInfo();              // fill the table ⓘ info tools (§6)
     renderAll();                 // status + notes (mock) + Yearly summary (Loading… until fetched)
     loadSummaryOverview();       // live Keynote enquiries + bookings (same source as marketing.html)
     loadSummaryRoi();            // live Marketing revenue + spend + ROI (same source as marketing.html / spend_roi.html)
-    wireSeg('fySeg', renderAll);
+    wireSeg('fySeg', function () { renderAll(); refreshDeals(); });
     wireDateRange({ onChange: applyRange });
   </script>
 </body>

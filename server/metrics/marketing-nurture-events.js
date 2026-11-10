@@ -51,6 +51,41 @@ const CARDS_SQL = `
   FROM keynote FULL OUTER JOIN offsite ON keynote.fy_end = offsite.fy_end
   ORDER BY 1`;
 
+// Per-deal lists behind the three count cards — powers the click-through modal on
+// nurture_events.html (click card 1/2/3 → see the deals counted). The client
+// FY/range-filters these the same way the cards are filtered:
+//   • card 1 "keynote clients"   → the `keynote` rows
+//   • card 2 "offsite enquiries" → the `offsite` rows (all)
+//   • card 3 "offsites booked"   → the `offsite` rows where won
+// So the won offsite deals are NOT returned twice — the client derives card 3 from
+// the offsite rows' `won` flag. Columns mirror the counts' tables exactly.
+const DEALS_SQL = `
+  SELECT 'keynote' AS card,
+         d.id AS deal_id,
+         coalesce(nullif(a.name, ''), nullif(d.organization, ''), split_part(d.title, ' // ', 1)) AS org,
+         d.title AS title,
+         ${FY('d.cdate')} AS fy_end,
+         to_char(d.cdate, 'YYYY-MM-DD') AS date,
+         public.ac_value_aud(d.value, d.currency) AS value,
+         true AS won,
+         'Won' AS status
+  FROM public.activecampaign_deals d
+  LEFT JOIN public.activecampaign_accounts a ON a.id = d.organization
+  WHERE d."group" = '3' AND d.status = 1 AND d.cdate IS NOT NULL
+  UNION ALL
+  SELECT 'offsite' AS card,
+         p.deal_id AS deal_id,
+         coalesce(nullif(p.organization, ''), nullif(p.contact_name, ''), split_part(p.title, ' // ', 1)) AS org,
+         p.title AS title,
+         ${FY('p.cdate')} AS fy_end,
+         to_char(p.cdate, 'YYYY-MM-DD') AS date,
+         p.value_aud AS value,
+         (p.status = 1) AS won,
+         coalesce(p.status_label, '') AS status
+  FROM public.post_conference_deals p
+  WHERE p.cdate IS NOT NULL
+  ORDER BY date DESC`;
+
 // Custom date-range variant — same counts, but filtered to an arbitrary [from,to]
 // (inclusive) on the deal cdate instead of grouped by FY. Day-level: both deal
 // tables are row-per-deal with a real cdate. $1=from, $2=to ('YYYY-MM-DD' or null).
@@ -79,11 +114,29 @@ export async function getMarketingNurtureEvents(opts = {}) {
   if (!supabaseConfigured()) {
     return {
       byFy: [], total: { keynoteClients: 0, offsiteEnquiries: 0, offsiteBooked: 0 },
+      deals: { keynote: [], offsite: [] },
       meta: { status: 'pending', source: SRC, note: 'Supabase not configured.' },
     };
   }
   const n = (v) => Number(v) || 0;
   const rows = await q(CARDS_SQL);
+
+  // Per-deal lists for the card drill-down modal (one query, both cards).
+  const dealRows = await q(DEALS_SQL);
+  const toDeal = (r) => ({
+    dealId: r.deal_id,
+    org: r.org || '',
+    title: r.title || '',
+    fyEnd: n(r.fy_end),
+    date: r.date,
+    value: n(r.value),
+    won: r.won === true,
+    status: r.status || '',
+  });
+  const deals = {
+    keynote: dealRows.filter((r) => r.card === 'keynote').map(toDeal),
+    offsite: dealRows.filter((r) => r.card === 'offsite').map(toDeal),
+  };
 
   // Custom date-range roll-up (day-level), only when a range was requested.
   let range = null;
@@ -116,5 +169,5 @@ export async function getMarketingNurtureEvents(opts = {}) {
     { keynoteClients: 0, offsiteEnquiries: 0, offsiteBooked: 0 },
   );
 
-  return { byFy, total, range, meta: { status: 'live', source: SRC, note: null } };
+  return { byFy, total, range, deals, meta: { status: 'live', source: SRC, note: null } };
 }

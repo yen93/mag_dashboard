@@ -1,7 +1,9 @@
 // Marketing — Channel results (the "Spend & ROI" tab's bottom-right table).
 //
-// Exactly the two channels in the brief's channel_list, per Australian FY (END-year,
-// Jul–Jun). LIVE, computed at request time from Supabase:
+// The channels in the brief's channel_list, per Australian FY (END-year, Jul–Jun).
+// LIVE, computed at request time from Supabase. Where a channel has no known source
+// for a column, that column is returned as the sentinel 'pending' (the page renders it
+// as a red `pending` chip, DESIGN_GUIDE §8) — never a fabricated number.
 //
 //   • "Paid (Google, Bing, Agency)"  → the canonical ROAS metric (server/metrics/roas.js).
 //       Spend     = All-in ad cost (Google Ads + Bing + Simple Digital/agency, ex-GST, Xero)
@@ -12,19 +14,36 @@
 //
 //   • "Executive X"  → public.exec_x_revenue (static load of the Executive X ROI sheet).
 //       Bookings  = count of Exec X engagements (one row per client), Revenue = sum(revenue).
-//       Spend / Enquiries / ROAS are not tracked for Exec X → null (shown as "—").
+//       Spend / Enquiries / Cost-per-enquiry / ROAS are not tracked for Exec X → 'pending'.
 //
-// Both channels are returned per FY plus an "all years" total, so the page's FY toggle can
-// filter client-side. Cost-per-enquiry is derived on the client (spend ÷ enquiries).
+//   • "Bureau" / "Tailor"  → the leads-by-source metric (marketing-leads-by-source.js —
+//       ac_indirect_deals, split by is_tailor), so these rows reconcile EXACTLY with the
+//       Leads & Bookings "By source" table.
+//       Enquiries = leads for that source, Bookings = won, Revenue = won revenue (AUD).
+//       Spend / Cost-per-enquiry / ROAS are not tracked for these channels → 'pending'.
+//
+//   • "Marketing EDM"  → not yet attributed to deals/revenue → every column 'pending'.
+//
+// All channels are returned per FY plus an "all years" total, so the page's FY toggle can
+// filter client-side. Cost-per-enquiry is derived on the client (spend ÷ enquiries; 'pending'
+// whenever spend or enquiries is 'pending').
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { getRoas } from './roas.js';
+import { getMarketingLeadsBySource } from './marketing-leads-by-source.js';
 
-export const CHANNELS = ['Paid (Google, Bing, Agency)', 'Executive X'];
+export const CHANNELS = [
+  'Paid (Google, Bing, Agency)', 'Executive X', 'Bureau', 'Tailor', 'Marketing EDM',
+];
+
+// Sentinel for a column with no known data source for a given channel.
+const PENDING = 'pending';
 
 const SRC =
   'Live (Supabase): Paid row from the ROAS metric (roas_counted_deals + Xero ad spend — ' +
-  'Google/Bing/Simple Digital); Executive X from exec_x_revenue (Exec X ROI sheet).';
+  'Google/Bing/Simple Digital); Executive X from exec_x_revenue (Exec X ROI sheet); ' +
+  'Bureau/Tailor from the leads-by-source metric (ac_indirect_deals); ' +
+  'Marketing EDM not yet tracked. Untracked columns return "pending".';
 
 const EXEC_X_SQL = `
   SELECT fy_end AS "fyEnd",
@@ -50,14 +69,40 @@ function paidFrom(r) {
 }
 
 // Executive X has no spend / enquiry funnel / ROAS — only bookings + revenue.
+// The untracked columns are 'pending' (not "—"): they have no source, not a zero value.
 function execXFrom(e) {
   return {
-    spend: null,
-    enquiries: null,
+    spend: PENDING,
+    enquiries: PENDING,
     bookings: e ? num(e.bookings) || 0 : 0,
     revenue: e ? num(e.revenue) || 0 : 0,
-    roasTotal: null,
-    roasAds: null,
+    roasTotal: PENDING,
+    roasAds: PENDING,
+  };
+}
+
+// Bureau / Tailor — enquiries, bookings and won revenue per FY from the leads-by-source
+// metric (so they reconcile with the Leads & Bookings "By source" table). Spend /
+// cost-per-enquiry / ROAS are not tracked for these channels → 'pending'.
+// `fyEnd` null → aggregate across all years.
+function indirectFrom(leads, source, fyEnd) {
+  const rows = leads.filter((l) => l.source === source && (fyEnd == null || l.fyEnd === fyEnd));
+  const won = rows.filter((l) => l.won);
+  return {
+    spend: PENDING,
+    enquiries: rows.length,
+    bookings: won.length,
+    revenue: Math.round(won.reduce((a, l) => a + (num(l.value) || 0), 0)),
+    roasTotal: PENDING,
+    roasAds: PENDING,
+  };
+}
+
+// Marketing EDM — no deal/revenue attribution source yet → every column 'pending'.
+function edmChannel() {
+  return {
+    spend: PENDING, enquiries: PENDING, bookings: PENDING,
+    revenue: PENDING, roasTotal: PENDING, roasAds: PENDING,
   };
 }
 
@@ -73,15 +118,24 @@ export async function getMarketingChannelResults() {
     };
   }
 
-  const [roas, execRows] = await Promise.all([getRoas(), q(EXEC_X_SQL)]);
+  const [roas, execRows, lbs] = await Promise.all([getRoas(), q(EXEC_X_SQL), getMarketingLeadsBySource()]);
   const paidRows = (roas.rows && roas.rows.data) || [];
   const paidByFy = {};
   paidRows.forEach((r) => { paidByFy[r.fyEnd] = r; });
   const execByFy = {};
   execRows.forEach((e) => { execByFy[num(e.fyEnd)] = e; });
 
-  // FY axis = FYs that appear in either channel.
-  const fyEnds = [...new Set([...paidRows.map((r) => r.fyEnd), ...execRows.map((e) => num(e.fyEnd))])]
+  // Bureau / Tailor come from the per-lead rows of the leads-by-source metric.
+  const INDIRECT = ['Bureau', 'Tailor'];
+  const leads = ((lbs && lbs.leads) || []).filter((l) => INDIRECT.includes(l.source));
+  const leadFyEnds = leads.map((l) => l.fyEnd);
+
+  // FY axis = FYs that appear in any channel.
+  const fyEnds = [...new Set([
+    ...paidRows.map((r) => r.fyEnd),
+    ...execRows.map((e) => num(e.fyEnd)),
+    ...leadFyEnds,
+  ])]
     .filter((v) => v != null)
     .sort((a, b) => a - b);
 
@@ -90,9 +144,13 @@ export async function getMarketingChannelResults() {
     fy: 'FY' + String(fyEnd).slice(-2),
     paid: paidFrom(paidByFy[fyEnd]),
     execX: execXFrom(execByFy[fyEnd]),
+    bureau: indirectFrom(leads, 'Bureau', fyEnd),
+    tailor: indirectFrom(leads, 'Tailor', fyEnd),
+    edm: edmChannel(),
   }));
 
-  // All-years total — paid from the ROAS total row (ratios recomputed there); Exec X summed.
+  // All-years total — paid from the ROAS total row (ratios recomputed there); Exec X summed;
+  // Bureau/Tailor/Organic aggregated across all FYs.
   const execTotal = {
     bookings: execRows.reduce((a, e) => a + (num(e.bookings) || 0), 0),
     revenue: execRows.reduce((a, e) => a + (num(e.revenue) || 0), 0),
@@ -102,6 +160,9 @@ export async function getMarketingChannelResults() {
     fy: 'All',
     paid: paidFrom(roas.total),
     execX: execXFrom(execTotal),
+    bureau: indirectFrom(leads, 'Bureau', null),
+    tailor: indirectFrom(leads, 'Tailor', null),
+    edm: edmChannel(),
   };
 
   // Default to the current AU FY if present, else the latest.
@@ -110,9 +171,10 @@ export async function getMarketingChannelResults() {
   const defaultFy = fyEnds.includes(curFy) ? curFy : (fyEnds[fyEnds.length - 1] ?? null);
 
   const note = rows.length
-    ? `Two channels per FY (${rows[0].fy}–${rows[rows.length - 1].fy}). Paid = ROAS metric ` +
-      `(All-in Google+Bing+agency cost vs won paid revenue); Executive X = exec_x_revenue ` +
-      `(bookings + revenue only; no spend/ROAS tracked).`
+    ? `${CHANNELS.length} channels per FY (${rows[0].fy}–${rows[rows.length - 1].fy}). ` +
+      `Paid = ROAS metric (All-in Google+Bing+agency cost vs won paid revenue); ` +
+      `Executive X = exec_x_revenue; Bureau/Tailor = leads-by-source (enquiries, ` +
+      `bookings, won revenue); Marketing EDM not yet tracked. Untracked columns = "pending".`
     : 'No channel results yet.';
 
   return {

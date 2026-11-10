@@ -157,16 +157,32 @@ Cloud Run.
   bar — the **`type` series of `GET /api/marketing/channel-summary`** (the **SAME buckets + DB source** as
   roi.html's Channel Summary "By type" — Wages/Digital Ads/Agency/Software/Tools/Printed Collaterals; brief
   item #5), **summed over the selected FY's calendar months** via a page-local `channelMonthFyEnd()`
-  (`'Mon-YYYY'` → AU FY-end). (3) **"Channel results"** table — **ONLY the two `channel_list` channels**
-  (brief item #6), full design columns (Channel / Spend / Enquiries / Cost-per-enquiry / Bookings / Revenue /
-  ROAS total / ROAS ads), from a **NEW endpoint `GET /api/marketing/channel-results`** →
+  (`'Mon-YYYY'` → AU FY-end). (3) **"Channel results"** table — **5 channels (as of 2026-11-10; was the two
+  `channel_list` channels only — Paid, Executive X, Bureau, Tailor, Marketing EDM)**, full design columns
+  (Channel / Spend / Enquiries / Cost-per-enquiry / Bookings / Revenue / ROAS total / ROAS ads), from a
+  **NEW endpoint `GET /api/marketing/channel-results`** →
   **`server/metrics/marketing-channel-results.js`** (`getMarketingChannelResults`, requireAuth, cached 10 min):
-  returns the two channels **per FY** (+ an all-years `total` + `defaultFy`). **Paid (Google, Bing, Agency)**
+  returns each channel **per FY** (+ an all-years `total` + `defaultFy`), as a row object
+  `{fyEnd,fy,paid,execX,bureau,tailor,edm}`. **Paid (Google, Bing, Agency)**
   reuses the canonical **ROAS metric `getRoas()`** (`server/metrics/roas.js`) — Spend = **All-in cost**
   (Google Xero + Bing + Simple Digital/agency), Enquiries = `leads` (won+lost+open), Bookings = `won`,
   Revenue = `wonRevenue`, ROAS total/ads = `roasAllin`/`roasGoogle`. **Executive X** = `public.exec_x_revenue`
-  — Bookings = count of engagements (one row/client), Revenue = `sum(revenue)`; **spend/enquiries/ROAS are not
-  tracked → `null`, shown "—"**. Cost-per-enquiry is derived client-side (`spend ÷ enquiries`). **Responsive**
+  — Bookings = count of engagements (one row/client), Revenue = `sum(revenue)`. **Bureau / Tailor
+  (added 2026-11-10)** = enquiries, bookings + won revenue from the **leads-by-source metric**
+  (`getMarketingLeadsBySource().leads`, imported into `marketing-channel-results.js` — `ac_indirect_deals`
+  split by `is_tailor`), so **these rows reconcile EXACTLY with the Leads & Bookings "By source" table**; the
+  FY axis now unions these lead FYs too. (An **Organic** row was added then **REMOVED same day 2026-11-10**
+  per the owner — it's no longer in the table or the row object.)
+  **Marketing EDM (added 2026-11-10)** = not yet attributed to deals → every column pending.
+  **PENDING SENTINEL (as of 2026-11-10):** a column with **no known source** for a channel comes back as the
+  string **`'pending'`** (NOT `null`) and the page renders it as the DESIGN_GUIDE §8 red **`pending` chip**;
+  `null` stays "—" (a genuine missing value). **Executive X's untracked columns (spend/enquiries/ROAS) were
+  switched `null`→`'pending'`** (so they now show the chip, not "—"); Bureau/Tailor/Organic's
+  spend/cost-per-enquiry/ROAS are `'pending'`; Marketing EDM is `'pending'` across the board. Cost-per-enquiry
+  is derived client-side (`spend ÷ enquiries`; `'pending'` whenever spend or enquiries is `'pending'`). The
+  page's cell helpers (`fmtCur`/`intCell`/`roasCell` + a local `pendChip()`/`PENDING`) render the sentinel.
+  **No `app.js` bump** (uses existing globals + the `.chip.warn` class already in `app.css`); no DB/migration/
+  secret change. **Responsive**
   (brief item #3): `.kpi-grid` auto-fits/wraps, `.sr-lower` grid collapses to one column < 900px, the table
   scrolls (`.sr-table-wrap`, `min-width:620px`), the segmented toggle wraps. (**app.js bumped to `?v=11`
   2026-11-05** when `renderMarketingHead(true)` was added — see the sub-tab-bar paragraph above.)
@@ -1275,6 +1291,15 @@ Cloud Run.
 - `leads.is_referred` is only an approximate direct/indirect proxy; "bureau"
   isn't explicitly tagged anywhere in Supabase yet.
 - Ignore `ac_deals_160726` / `ac_contacts_170726` — empty one-off backups.
+
+- **"Visits from AI tools" is a classification, not a GA4 feature.** GA4 is stock; the
+  AI label is applied in `ga4-website-traffic-sync`, which matches GA4's standard
+  `sessionSource` against the active rows of `public.ai_source_patterns` (lowercase
+  substring match, NOT regex). That table is append-only (never DELETE; soft-disable with
+  `active=false`), filled monthly by `ai-source-patterns-sync` (curated baseline + OpenAI
+  discovery, sanitized). The hardcoded `AI_SOURCE_RE` in the sync function is a fallback
+  only. It is a referrer-attributable floor, not total AEO influence. Patterns are added
+  as new hostname fragments and never as bare words such as `google`, `bing`, or `chat`.
 
 ## Build / run
 - Local: `npm install` then `npm run dev` (nodemon on :8080) or `npm start`.

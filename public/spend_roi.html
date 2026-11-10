@@ -176,8 +176,8 @@
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Channel results <span class="head-info"
-              data-info="Per-channel spend, enquiries, bookings, revenue and ROAS (on total cost and on ad spend alone) for the two tracked channels: Paid (Google/Bing/Agency) and Executive X."
-              data-src="GET /api/marketing/channel-results — Paid via the ROAS metric; Executive X via public.exec_x_revenue"></span></h3>
+              data-info="Per-channel spend, enquiries, bookings, revenue and ROAS by financial year. Paid (Google/Bing/Agency) is fully tracked; Executive X shows bookings + revenue; Bureau and Tailor show enquiries, bookings and won revenue (spend/ROAS not tracked); Marketing EDM is not yet attributed. Columns with no source show a 'pending' chip."
+              data-src="GET /api/marketing/channel-results — Paid via the ROAS metric; Executive X via public.exec_x_revenue; Bureau/Tailor via the leads-by-source metric (ac_indirect_deals)"></span></h3>
           </div>
           <div class="sr-table-wrap">
             <table class="sr-table">
@@ -229,7 +229,14 @@
     }
     function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
     function fyName(key) { return key === 'all' ? 'All years' : key.toUpperCase(); }
-    function fmtCur(v) { return (v == null) ? '<span class="muted">—</span>' : fmt(v, 'currency'); }
+    // A column with no known data source for a channel comes back as the string 'pending'
+    // and renders as the DESIGN_GUIDE §8 chip; null is a genuine missing value → "—".
+    var PENDING = 'pending';
+    function pendChip() { return '<span class="chip warn">pending</span>'; }
+    function fmtCur(v) {
+      if (v === PENDING) return pendChip();
+      return (v == null) ? '<span class="muted">—</span>' : fmt(v, 'currency');
+    }
 
     // ===================================================================
     //  State
@@ -510,17 +517,32 @@
     // ===================================================================
     //  Channel results table — the two channel_list channels for the FY.
     // ===================================================================
-    var CH_COLOR = { 'Paid (Google, Bing, Agency)': '#3b6ef0', 'Executive X': '#7c5cff' };
+    var CH_COLOR = {
+      'Paid (Google, Bing, Agency)': '#3b6ef0',
+      'Executive X': '#7c5cff',
+      'Bureau': '#e8833a',
+      'Tailor': '#e15b97',
+      'Marketing EDM': '#9aa4b2',
+    };
     function crRowFor(key) {
       if (!CR.loaded) return null;
       if (key === 'all') return CR.total;
       var fe = fyEndOf(key);
       return (CR.rows || []).find(function (r) { return r.fyEnd === fe; }) || null;
     }
-    function intCell(v) { return (v == null) ? '<span class="muted">—</span>' : String(v); }
-    function roasCell(v) { return (v == null) ? '<span class="muted">—</span>' : v.toFixed(1) + '×'; }
+    function intCell(v) {
+      if (v === PENDING) return pendChip();
+      return (v == null) ? '<span class="muted">—</span>' : String(v);
+    }
+    function roasCell(v) {
+      if (v === PENDING) return pendChip();
+      return (v == null) ? '<span class="muted">—</span>' : v.toFixed(1) + '×';
+    }
     function channelRowHtml(name, c, note) {
-      var costPerEnq = (c.spend != null && c.enquiries) ? c.spend / c.enquiries : null;
+      // Cost / enquiry is derived (spend ÷ enquiries); 'pending' if either input is 'pending'.
+      var costPerEnq;
+      if (c.spend === PENDING || c.enquiries === PENDING) costPerEnq = PENDING;
+      else costPerEnq = (c.spend != null && c.enquiries) ? c.spend / c.enquiries : null;
       var dot = '<span class="ch-dot" style="background:' + (CH_COLOR[name] || '#9aa4b2') + '"></span>';
       var noteHtml = note ? '<div class="muted" style="font-size:11px;font-weight:400;margin-top:2px">' + esc(note) + '</div>' : '';
       return '<tr>' +
@@ -549,7 +571,10 @@
       }
       body.innerHTML =
         channelRowHtml('Paid (Google, Bing, Agency)', row.paid) +
-        channelRowHtml('Executive X', row.execX, 'Updated at the close of each season.');
+        channelRowHtml('Executive X', row.execX, 'Updated at the close of each season.') +
+        channelRowHtml('Bureau', row.bureau) +
+        channelRowHtml('Tailor', row.tailor) +
+        channelRowHtml('Marketing EDM', row.edm, 'Not yet attributed to deals.');
     }
 
     // ===================================================================

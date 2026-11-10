@@ -35,8 +35,29 @@ const START_DATE = "2021-07-01";
 const MIN_FY_END = 2022;
 
 // Matches AI assistant referral/traffic sources in GA4 `sessionSource`.
+// FALLBACK ONLY: the live, maintained list lives in public.ai_source_patterns
+// (appended monthly by ai-source-patterns-sync). This regex is used only if that
+// table is empty or unreachable, so the classification never silently breaks.
 const AI_SOURCE_RE =
   /(chatgpt|openai|perplexity|claude\.ai|anthropic|gemini\.google|bard\.google|copilot|edgeservices|poe\.com|you\.com|phind|mistral|deepseek|meta\.ai|grok)/i;
+
+// Load the maintained AI-source substrings from public.ai_source_patterns (active only).
+// Returns [] on any failure, which makes callers fall back to AI_SOURCE_RE.
+async function loadAiPatterns(db: any): Promise<string[]> {
+  try {
+    const { data, error } = await db.from("ai_source_patterns").select("pattern").eq("active", true);
+    if (error) throw error;
+    return (data ?? [])
+      .map((r: any) => String(r.pattern ?? "").trim().toLowerCase())
+      .filter((p: string) => p.length > 0);
+  } catch (e) {
+    console.error(
+      "[ga4-website-traffic-sync] ai_source_patterns load failed; using fallback AI_SOURCE_RE:",
+      e instanceof Error ? e.message : String(e),
+    );
+    return [];
+  }
+}
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body, null, 2), {
@@ -146,6 +167,7 @@ type Summary = {
   fn: string;
   snapshot_date: string;
   property_id: string;
+  ai_matcher: string;
   rows_built: number;
   upserted_rows: number;
   per_fy: Record<string, { website_sessions: number; ai_tool_visits: number; ai_sources: Record<string, number> }>;
@@ -193,6 +215,7 @@ async function run(dry: boolean): Promise<Summary> {
     fn: "ga4-website-traffic-sync",
     snapshot_date: snapshot,
     property_id: GA4_PROPERTY_ID,
+    ai_matcher: "",
     rows_built: 0,
     upserted_rows: 0,
     per_fy: {},
@@ -212,6 +235,17 @@ async function run(dry: boolean): Promise<Summary> {
 
     const sa = JSON.parse(atob(GA4_SA_JSON_B64));
     const token = await ga4AccessToken(sa);
+
+    // One Supabase client for both reading the AI-source list and the later upsert.
+    const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
+
+    // Maintained AI-source substrings (public.ai_source_patterns); empty => fallback regex.
+    const aiPatterns = await loadAiPatterns(db);
+    summary.ai_matcher = aiPatterns.length
+      ? `ai_source_patterns (${aiPatterns.length} active)`
+      : "fallback AI_SOURCE_RE";
+    const isAiSource = (src: string): boolean =>
+      aiPatterns.length > 0 ? aiPatterns.some((p) => src.includes(p)) : AI_SOURCE_RE.test(src);
 
     // Run both reports in parallel:
     // 1. Total website sessions by yearMonth (no source dimension, avoiding any cardinality thresholding)
@@ -268,7 +302,7 @@ async function run(dry: boolean): Promise<Summary> {
       const src = (r.dimensionValues?.[1]?.value ?? "").trim().toLowerCase();
       const fyEnd = fyEndFromYearMonth(ym);
       if (!fyEnd || fyEnd < MIN_FY_END || !src) continue;
-      if (!AI_SOURCE_RE.test(src)) continue;
+      if (!isAiSource(src)) continue;
       const s = parseInt(r.metricValues?.[0]?.value ?? "0", 10) || 0;
       if (s <= 0) continue;
       const rec = ensureFy(fyEnd);
@@ -298,7 +332,6 @@ async function run(dry: boolean): Promise<Summary> {
       return summary;
     }
 
-    const db = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, { auth: { persistSession: false } });
     const { data, error } = await db.rpc("reload_ga4_website_traffic_snapshots", { _rows: rows });
     if (error) throw new Error(`reload_ga4_website_traffic_snapshots failed: ${error.message}`);
     summary.upserted_rows = typeof data === "number" ? data : rows.length;

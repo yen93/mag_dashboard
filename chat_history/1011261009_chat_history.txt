@@ -1,0 +1,171 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-10
+Session: Explained where the AI-tool traffic numbers on public/website_search.html
+come from (GA4 standard sessionSource + a hand-maintained AI regex in the edge
+function), pulled sample rows from the snapshot table, then built a monthly
+self-maintaining AI-source list (new table + RPC + cron + edge function) and
+rewired ga4-website-traffic-sync to read from it. Migrations and functions were
+written but NOT applied or deployed.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret, token or connection string was pasted
+into this chat. Read-only SELECTs were run against Supabase project
+aivitcomiywiysrfwqxt; no credentials were printed.
+
+--------------------------------------------------------------------------------
+USER:
+Asked whether the "AI Tools" data on website_search.html was a default GA4
+configuration or set up manually to track AEO performance.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Grepped website_search.html and found the "Visits from AI tools" card and AI
+sources panel are live from the ga4_website_traffic_snapshots cache. Read
+supabase/functions/ga4-website-traffic-sync/index.ts. Answer: nothing AI-related
+is configured in GA4. The function pulls two standard runReport calls (yearMonth ->
+sessions; yearMonth x sessionSource -> sessions) and keeps rows whose sessionSource
+matches a hardcoded regex AI_SOURCE_RE (index.ts:38-39). Caveats noted: it only
+captures referrer-attributable AI clicks (a floor, not true AEO influence), and it
+only counts new tools once someone edits the regex and redeploys.
+
+--------------------------------------------------------------------------------
+USER:
+"i used the ga4 api to get this data".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Acknowledged that this matches the finding: the data came from the GA4 Data API
+via the custom sync, and the AI classification is a post-processing filter in the
+pipeline, not a GA4 feature.
+
+--------------------------------------------------------------------------------
+USER:
+So AI_SOURCE_RE was manually configured?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Yes. It is a literal regex typed into the edge function source. It is not
+generated and not configured in GA4. Detection is substring/regex matching of
+GA4's standard sessionSource against that list at sync time, so any new AI tool
+is silently excluded until someone edits the line and redeploys.
+
+--------------------------------------------------------------------------------
+USER:
+Nothing AI-related was set up in GA4? The config is on the DB side. What kind of
+data was fetched from GA4 then?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Confirmed. GA4 is stock. Two plain reports were fetched: (1) yearMonth -> sessions
+for total website sessions, and (2) yearMonth + sessionSource -> sessions as the
+raw input for the AI filter. Clarified that the AI logic lives in the sync code,
+not in the database itself.
+
+--------------------------------------------------------------------------------
+USER:
+Are these two plain-vanilla reports saved in the DB? Wants to see a sample row.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+No. The raw reports are not stored; only the per-FY aggregate is persisted to
+public.ga4_website_traffic_snapshots (one row per fy_end + snapshot_date). Ran a
+read-only SELECT (ordered by snapshot_date desc, fy_end desc, limit 8) and showed
+the latest rows. Sample: FY27 2026-11-08 = 19,709 sessions / 15 AI visits
+({claude.ai:3, chatgpt.com:12}); FY26 = 56,742 / 161 with 8 sources including
+copilot variants and perplexity + perplexity.ai as separate keys. Flagged that the
+regex fragments one tool across multiple breakdown keys (copilot.com,
+copilot.microsoft.com, copilot.cloud.microsoft; perplexity vs perplexity.ai) while
+the total stays correct. AI traffic is essentially zero before FY25.
+
+--------------------------------------------------------------------------------
+USER:
+Show the full sessionSource list, including missing AI tools.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explained that the full sessionSource list exists only live in the GA4 property,
+and fetching it needs a GA4 runReport call, which /q mode does not allow. Checked
+the one GA4 dataset in Supabase, ga4_events_staging (conversion events only,
+~60-day window, 18 distinct sources, no AI referrers), and found it cannot show
+the gap. Listed likely-missing AI sources by reasoning from the regex: duck.ai,
+x.com (Grok), brave Leo, kagi, character.ai, huggingface.co, qwen/tongyi. Noted
+bing was deliberately excluded because matching it would over-count ordinary
+search. Offered to write a throwaway GA4 dump script if the user confirms.
+
+--------------------------------------------------------------------------------
+USER:
+Create a new edge function that checks whether AI_SOURCE_RE is still up to date
+and adds new AI sites that aren't already there. Noted there are no Chinese AIs
+listed "like deepseek" (correction: deepseek IS in the regex; Chinese coverage is
+otherwise thin). Should run once a month. Only add, never remove.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Pointed out a design constraint: an edge function cannot edit another function's
+source regex at runtime, so the source of truth has to move to a database table
+read by both functions. Asked two questions. User chose: (a) HYBRID discovery,
+i.e. a curated seed plus monthly OpenAI discovery of new AI referral domains, and
+(b) YES, rewire ga4-website-traffic-sync to read from the table, keeping the
+regex as a fallback.
+
+Built, following the existing ga4_website_traffic_snapshots conventions:
+  1. supabase/migrations/20261110120000_create_ai_source_patterns.sql — new table
+     public.ai_source_patterns (pattern PK, label, vendor, region, source, active,
+     added_at, notes), RLS on, BEFORE DELETE trigger blocks deletes, RPC
+     reload_ai_source_patterns(_rows jsonb) with on conflict do nothing (insert-only,
+     returns count), and a curated seed of ~31 patterns: every former regex entry
+     plus claude.com, aistudio.google, duck.ai, character.ai, huggingface.co and
+     Chinese AIs qwen, tongyi, kimi, doubao, yiyan.baidu, chatglm, zhipu, xinghuo.
+  2. supabase/migrations/20261110120100_schedule_ai_source_patterns_sync.sql —
+     pg_cron job ai-source-patterns-sync-monthly, '0 22 1 * *' (06:00 PH on the 2nd),
+     calling the edge function with ?sync=1 via pg_net.
+  3. supabase/functions/ai-source-patterns-sync/index.ts (new) — reads existing
+     patterns, re-asserts the curated CANONICAL baseline, then asks OpenAI
+     (OPENAI_API_KEY, optional OPENAI_MODEL default gpt-4o-mini, temperature 0, JSON
+     mode) for new AI referral hostnames. LLM output is sanitized: scheme and path
+     stripped, hostname characters only, length 4-60, must contain a letter, and a
+     DENY set rejects general search/social tokens (google, bing, baidu, facebook,
+     x.com, bare ai/chat/gpt, etc.). Capped at 30 additions. LLM failure is
+     non-fatal. Insert-only. Modes ?dry=1 / ?sync=1 / background. Failure email via
+     Gmail, same as the function family.
+  4. supabase/functions/ga4-website-traffic-sync/index.ts (edited) — added
+     loadAiPatterns(db) which reads active rows from ai_source_patterns; the matcher
+     is substring containment against those rows, falling back to the original
+     AI_SOURCE_RE when the table is empty or unreachable. Added an ai_matcher field to
+     the summary. Reused one Supabase client for the read and the later upsert.
+     The regex is kept, commented as fallback only.
+
+Verified there is no second AI-classification consumer: server/metrics/
+marketing-website-search.js only SELECTs the pre-computed snapshot table, so no
+Cloud Run redeploy is required.
+
+Noted that the GA4 sync recomputes all FYs from Jul 2021 on every run, so after
+the rewire the next weekly run will reclassify full history with the fuller list.
+Prior snapshot_dates stay as append-only history.
+
+Did NOT apply the migrations and did NOT deploy the functions. Listed the
+deploy checklist for the user: apply the 2 migrations; deploy both functions with
+--no-verify-jwt (MCP deploy defaults to verify_jwt=true, which causes 401); then
+dry-run and sync the new function. Offered to apply the migrations via the
+Supabase MCP, which is additive, and left the function deploys to the user because
+they need the CLI flag.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history, update as_built.txt / CLAUDE.md / .gitignore; no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the four dcp steps. Saved this transcript to chat_history/. Security scan
+found no secrets to redact. Updated as_built.txt to add the ai_source_patterns and
+ga4_website_traffic_snapshots data stores and the two monthly/weekly automations,
+marking the new items as written but not yet applied or deployed. Updated
+CLAUDE.md with a data-caveat bullet on AI-source classification. Reviewed
+.gitignore: .env, *.env, *cookie*, *_token, *-token.* and similar patterns already
+cover the working-tree sensitive files (including supabase-access-token.txt), so no
+change was needed. No git commands were run; the user commits and pushes
+themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

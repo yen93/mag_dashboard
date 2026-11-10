@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-10 (SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
+Last updated: 2026-11-10 (AI-SOURCE LIST: new public.ai_source_patterns table + ai-source-patterns-sync monthly edge fn (curated + OpenAI discovery, append-only) — WRITTEN, NOT YET APPLIED/DEPLOYED; ga4-website-traffic-sync rewired to read it with regex fallback — NOT YET DEPLOYED. SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
 = row.marketingRevenue from /api/marketing/roi, FY-aware with vs-prior-FY delta) — 6 KPI cards now. (2) Channel results
 table: the Executive X row carries a small muted note "Updated at the close of each season." (3) NEW click-to-drill-down on
 the "Spend by type" bars: clicking a type opens a modal listing the distinct VENDOR names under that type (names only, no $),
@@ -982,6 +982,19 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
     server/metrics/marketing-nurture-events.js (offsite enquiries = all rows, bookings =
     status=1, per FY). Filled by the pg_cron job post-conference-deals-sync-daily (see
     AUTOMATIONS). Schedule migration 20261109171000.
+  - public.ga4_website_traffic_snapshots (NEW 2026-11-06; migration 20261106170000) — upsert-only
+    weekly snapshot per AU FY of GA4 website sessions + AI-tool visits (+ ai_sources_breakdown
+    jsonb). Filled by ga4-website-traffic-sync (see AUTOMATIONS). Backs the "Website sessions" /
+    "Visits from AI tools" cards and AI sources panel on website_search.html via
+    server/metrics/marketing-website-search.js (SELECT only). Blocks DELETE via trigger.
+  - public.ai_source_patterns (NEW 2026-11-10; migration 20261110120000; WRITTEN, NOT YET APPLIED) —
+    append-only list of AI-assistant referral sources (lowercase substrings matched against GA4
+    sessionSource, case-insensitive containment). Columns: pattern (PK), label, vendor, region,
+    source ('seed'|'llm'|'manual'), active (soft-disable; reader filters active=true), added_at,
+    notes. Seeded with ~31 curated patterns incl. Chinese AIs (deepseek, qwen, tongyi, kimi, doubao,
+    yiyan.baidu, chatglm, zhipu, xinghuo). Written by RPC reload_ai_source_patterns(_rows jsonb)
+    (insert-only, on conflict do nothing). BEFORE DELETE trigger blocks deletes. Read by
+    ga4-website-traffic-sync (falls back to hardcoded AI_SOURCE_RE if empty/unreachable).
   - public.social_platform_stats (NEW 2026-11-06; migration 20261106120000) — weekly
     snapshots of each social platform's PUBLIC stats for the Content & Social "Platforms"
     table. PK (platform_key, snapshot_date); cols platform_name, network, profile_url,
@@ -1643,6 +1656,25 @@ AUTOMATIONS / ROUTINES
   deliberately left unchanged so this cron owns channel correctness. Only covers bookings whose
   contact is in ac_new_leads (post-5-Oct-2026). See also the memory note
   calendly-booking-channel-reconcile.md.
+- ga4-website-traffic-sync (Supabase EDGE FUNCTION, deploy --no-verify-jwt; pg_cron
+  `ga4-website-traffic-sync-weekly` '15 20 * * 0' = Mon 04:15 PH, migration 20261106171000) —
+  runReport on GA4 property 363754280 (yearMonth->sessions; yearMonth x sessionSource->sessions),
+  aggregates per AU FY, UPSERTs public.ga4_website_traffic_snapshots via
+  reload_ga4_website_traffic_snapshots. AI classification: reads active patterns from
+  public.ai_source_patterns (substring match); falls back to the hardcoded AI_SOURCE_RE
+  (index.ts) if the table is empty/unreachable. Modes ?dry=1 / ?sync=1 / background. Refuses an
+  all-zero snapshot. Secrets GA4_PROPERTY_ID, GA4_SA_JSON_B64, optional GMAIL_*/ALERT_EMAIL.
+  REWIRED 2026-11-10 to read ai_source_patterns — the rewired version is WRITTEN, NOT YET
+  DEPLOYED. The AI-visit numbers do not change until it is deployed and the next run has happened.
+- ai-source-patterns-sync (Supabase EDGE FUNCTION, deploy --no-verify-jwt; pg_cron
+  `ai-source-patterns-sync-monthly` '0 22 1 * *' = 1st of month 06:00 PH on the 2nd, migration
+  20261110120100) — WRITTEN 2026-11-10, NOT YET DEPLOYED OR SCHEDULED-LIVE. Re-asserts the curated
+  CANONICAL baseline into public.ai_source_patterns, then asks OpenAI (OPENAI_API_KEY, optional
+  OPENAI_MODEL default gpt-4o-mini; skipped if unset) for new AI-assistant referral hostnames not
+  already present. LLM output is sanitized (scheme/path stripped, hostname chars only, length 4-60,
+  DENY set blocks general search/social tokens, max 30 per run). Insert-only via
+  reload_ai_source_patterns. LLM failure is non-fatal. Modes ?dry=1 / ?sync=1 / background. Failure
+  email via Gmail (GMAIL_*/ALERT_EMAIL, same as the family).
 - MAG's own lead-gen/outreach automations (LinkedIn scraping, cold-lead
   sequencing, proposal routing) write into the Supabase tables this dashboard
   reads; they are external to this repo.

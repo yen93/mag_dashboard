@@ -162,6 +162,42 @@
       font-variant-numeric: tabular-nums;
       color: var(--text);
     }
+
+    /* Clickable KPI cards (first 3) → deal drill-down */
+    .ne-kpi.clickable { cursor: pointer; }
+    .ne-kpi.clickable:hover {
+      border-color: color-mix(in srgb, var(--mkt-accent) 45%, var(--border));
+    }
+    .ne-kpi .drill-hint {
+      font-size: 11px; font-weight: 600; color: var(--mkt-accent);
+      margin-top: 8px; opacity: .55; transition: opacity .2s ease;
+    }
+    .ne-kpi.clickable:hover .drill-hint,
+    .ne-kpi.clickable:focus-within .drill-hint { opacity: 1; }
+
+    /* Deal drill-down modal (click a card → list the deals counted) */
+    .deals-backdrop { display: none; position: fixed; inset: 0; z-index: 200;
+      background: rgba(10, 14, 22, .55); align-items: center; justify-content: center; padding: 20px; }
+    .deals-modal { width: 100%; max-width: 640px; max-height: 82vh; display: flex; flex-direction: column;
+      background: var(--surface, #fff); color: var(--text, #111); border: 1px solid var(--border);
+      border-radius: 14px; box-shadow: 0 18px 50px rgba(0,0,0,.35); overflow: hidden; }
+    .deals-modal-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      padding: 16px 18px 12px; border-bottom: 1px solid var(--border); }
+    .deals-modal-head h3 { margin: 0; font-size: 16px; }
+    .deals-close { background: none; border: none; font-size: 24px; line-height: 1; cursor: pointer;
+      color: var(--text-muted); padding: 0 2px; }
+    .deals-close:hover { color: var(--text); }
+    .deals-modal-body { padding: 12px 18px 18px; overflow-y: auto; }
+    .deals-count { font-size: 12px; margin-bottom: 8px; }
+    table.deals-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    table.deals-table th, table.deals-table td {
+      padding: 8px 8px; text-align: right; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    table.deals-table th:first-child, table.deals-table td:first-child { text-align: left; white-space: normal; }
+    table.deals-table thead th {
+      font-size: 11px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .05em; }
+    table.deals-table tbody td { font-variant-numeric: tabular-nums; color: var(--text); }
+    table.deals-table tbody tr:last-child td { border-bottom: none; }
   </style>
 </head>
 <body>
@@ -235,6 +271,20 @@
     </main>
   </div>
 
+  <!-- Deal drill-down modal: the deals counted behind a clicked KPI card (cards 1–3) -->
+  <div id="dealsBackdrop" class="deals-backdrop" onclick="if(event.target===this)closeDeals()">
+    <div class="deals-modal" role="dialog" aria-modal="true" aria-labelledby="dealsTitle">
+      <div class="deals-modal-head">
+        <div>
+          <h3 id="dealsTitle">Deals</h3>
+          <div id="dealsSub" class="muted" style="font-size:12px;margin-top:2px"></div>
+        </div>
+        <button type="button" class="deals-close" aria-label="Close" onclick="closeDeals()">&times;</button>
+      </div>
+      <div id="dealsBody" class="deals-modal-body"></div>
+    </div>
+  </div>
+
   <script src="app.js?v=14"></script>
   <script>
     /* Nurture & Events.
@@ -286,6 +336,14 @@
         source: 'Computed client-side from the two cards above.' }
     ];
 
+    // Drill-down keys for the four cards (card 4 = derived ratio → not clickable).
+    var CARD_KEYS = ['keynote', 'enquiry', 'booked', null];
+    var CARD_META = {
+      keynote: { title: 'Past keynote clients in nurture',     sub: 'Won keynote deals · Keynotes/Workshops/Immersive (LIV)' },
+      enquiry: { title: 'Offsite enquiries from past clients', sub: 'All deals · Trojan Horse: Post-Conf' },
+      booked:  { title: 'Offsites booked by past clients',     sub: 'Won deals · Trojan Horse: Post-Conf' }
+    };
+
     function renderKpiRow() {
       var cards;
       if (NE_ERR) {
@@ -315,13 +373,19 @@
             sub: hasKey ? (numFmt(d.offsiteBooked) + ' of ' + numFmt(d.keynoteClients) + ' keynote clients') : 'No keynote clients in period', pos: hasKey }
         ];
       }
+      var clickable = !NE_ERR && !neLoading();   // only drill in once data is loaded
       var html = cards.map(function (k, i) {
         var subCls = k.pos ? 'sub pos' : 'sub';
         var info = NE_INFO[i] || {};
-        return '<div class="ne-kpi">' +
+        var ck = CARD_KEYS[i];                    // null for card 4 (the derived ratio)
+        var isLink = clickable && ck;
+        var cls = isLink ? 'ne-kpi clickable' : 'ne-kpi';
+        var attrs = isLink ? ' data-card="' + ck + '" role="button" tabindex="0"' : '';
+        var hint = isLink ? '<div class="drill-hint">View deals →</div>' : '';
+        return '<div class="' + cls + '"' + attrs + '>' +
           '<div class="label">' + esc(k.label) + infoTip(info.desc, info.source) + '</div>' +
           '<div class="value">' + esc(k.value) + '</div>' +
-          '<div class="' + subCls + '">' + esc(k.sub) + '</div>' +
+          '<div class="' + subCls + '">' + esc(k.sub) + '</div>' + hint +
         '</div>';
       }).join('');
       document.getElementById('neKpis').innerHTML = html;
@@ -393,6 +457,68 @@
       document.getElementById('eventsBody').innerHTML = rowsHtml;
     }
 
+    // ---- Card drill-down modal: the deals counted behind cards 1–3 --------------
+    // Deals come from NE_LIVE.deals (the full, unfiltered lists loaded at init) and
+    // are filtered client-side the SAME way the card count is — by the active FY, or
+    // by the custom date range when one is set — so the list matches the number.
+    function dealsForCard(cardKey) {
+      var all = (NE_LIVE && NE_LIVE.deals) || { keynote: [], offsite: [] };
+      var rows = (cardKey === 'keynote' ? all.keynote : all.offsite).slice();
+      if (cardKey === 'booked') rows = rows.filter(function (d) { return d.won; });
+      if (CUSTOM) {
+        var r = getDateRange();
+        rows = rows.filter(function (d) {
+          return (!r.from || d.date >= r.from) && (!r.to || d.date <= r.to);
+        });
+      } else {
+        var key = selFyKey();
+        if (key !== 'all') {
+          var end = 2000 + parseInt(key.slice(2), 10);
+          rows = rows.filter(function (d) { return d.fyEnd === end; });
+        }
+      }
+      return rows;
+    }
+
+    function showDeals(cardKey) {
+      var meta = CARD_META[cardKey];
+      if (!meta) return;
+      var scope = CUSTOM ? 'selected range' : (selFyKey() === 'all' ? 'all years' : selFyKey().toUpperCase());
+      document.getElementById('dealsTitle').textContent = meta.title;
+      document.getElementById('dealsSub').textContent = meta.sub + ' · ' + scope;
+      var body = document.getElementById('dealsBody');
+      if (neLoading()) {
+        body.innerHTML = '<div class="muted" style="padding:8px 0">Loading…</div>';
+      } else {
+        var rows = dealsForCard(cardKey);
+        if (!rows.length) {
+          body.innerHTML = '<div class="muted" style="padding:8px 0">No deals in the ' + esc(scope) + '.</div>';
+        } else {
+          var showStatus = cardKey === 'enquiry';   // only the enquiry card mixes statuses
+          var head = '<tr><th>Deal</th>' + (showStatus ? '<th>Status</th>' : '') +
+            '<th>Value</th><th>Created</th></tr>';
+          var trs = rows.map(function (d) {
+            var label = d.title || d.org || ('Deal ' + d.dealId);
+            return '<tr>' +
+              '<td>' + esc(label) + '</td>' +
+              (showStatus ? '<td>' + esc(d.status || '—') + '</td>' : '') +
+              '<td>' + esc(d.value ? aud(d.value) : '—') + '</td>' +
+              '<td>' + esc(d.date || '—') + '</td>' +
+            '</tr>';
+          }).join('');
+          body.innerHTML =
+            '<div class="deals-count muted">' + rows.length + ' deal' + (rows.length === 1 ? '' : 's') + '</div>' +
+            '<div class="ne-table-wrap"><table class="deals-table"><thead>' + head +
+            '</thead><tbody>' + trs + '</tbody></table></div>';
+        }
+      }
+      document.getElementById('dealsBackdrop').style.display = 'flex';
+    }
+    function closeDeals() {
+      var b = document.getElementById('dealsBackdrop');
+      if (b) b.style.display = 'none';
+    }
+
     function renderAll() {
       renderKpiRow();
       renderEventsTable();
@@ -432,6 +558,21 @@
     loadLiveCards();
     wireSeg('fySeg', renderAll);
     wireDateRange({ onChange: applyRange });
+
+    // Open the deal drill-down when a clickable card (1–3) is activated.
+    var neKpisEl = document.getElementById('neKpis');
+    neKpisEl.addEventListener('click', function (e) {
+      var card = e.target.closest('.ne-kpi.clickable');
+      if (card) showDeals(card.getAttribute('data-card'));
+    });
+    neKpisEl.addEventListener('keydown', function (e) {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      var card = e.target.closest('.ne-kpi.clickable');
+      if (card) { e.preventDefault(); showDeals(card.getAttribute('data-card')); }
+    });
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') closeDeals();
+    });
   </script>
 </body>
 </html>
