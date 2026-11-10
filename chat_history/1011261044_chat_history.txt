@@ -1,0 +1,103 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-10
+Session: Marketing > Monthly Log page (public/monthly_log.html) — added a toggleable
+"Deals behind the summary" table, made it FY- and date-range-aware, moved the FY
+toggle into that table, then began moving the custom date range the same way
+(cancelled mid-way). Also used /cm twice to draft commit lines and asked why the
+Marketing ROI change showed -32 pts.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Asked to add a new table to monthly_log.html containing the deals that account
+for the "Yearly summary" table, toggle hidden/shown, designed the same as the
+"See ACS Deals Table" toggle in sales_overview.html.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read monthly_log.html, the ACS deals toggle in sales_overview.html (button
+#acDealsToggle, .acs-reset pill style, section shown/hidden via style.display,
+table via renderSortableTable), and the leads_bookings.html "All leads" table.
+Identified the per-deal source for the Keynote enquiries/bookings rows as the
+`leads` payload of GET /api/marketing/leads-by-source
+(server/metrics/marketing-leads-by-source.js). Edited monthly_log.html: added
+.acs-reset and .src-dot CSS; added a "See deals behind the summary" toggle
+button next to the Download Excel button; added a hidden section
+#summaryDealsSection with a DESIGN_GUIDE info-tool heading and a
+renderSortableTable table (FY, Date, Source, Organisation, Deal, Status, Value),
+lazy-loaded on first open. Noted that this is frontend-only and needs a manual
+Cloud Run redeploy.
+
+USER:
+Asked that the "Deals behind the summary" table also update based on the active
+FY toggle.
+
+ASSISTANT:
+Noted the FY toggle was inert on the page. Added FY helpers (dealFyKey,
+dealFyEnd), currentDealRows() (custom date range overrides the FY toggle,
+day-level; otherwise filters by fyEnd), refreshDeals(), and wired the existing
+FY segmented toggle and applyRange() to re-render only the deals table once
+loaded. Updated the heading info tooltip.
+
+USER:
+Asked for a one-line git commit command (/cm). The assistant ran git status /
+diff (no staged changes) and returned a single `git commit -m "..."` line.
+
+ASSISTANT:
+Produced a feat(marketing) commit line describing the deals-behind-summary table
+and its live FY/date filtering. (No commit was made by the assistant.)
+
+USER:
+Asked why Marketing ROI showed "-32 pts" in the Yearly summary.
+
+ASSISTANT:
+Explained the FY26-vs-FY25 change column: for the ROI row it is the difference
+of the two rounded ROI percentages in points, not a % change. Derived from
+(marketingRevenue / marketingSpend - 1) x 100 per FY. Negative because spend
+grew faster than attributed revenue FY25 to FY26. Offered to pull the exact
+per-FY revenue and spend values.
+
+USER:
+Asked to move the per-"Financial year" toggle inside the "Deals behind the
+summary" table div, since the toggle does not affect the other tables.
+
+ASSISTANT:
+Checked app.js renderDateRange (it inserts after #fySeg and affects the Yearly
+summary through the "Selected range" column). Moved the FY segmented toggle
+(#fySeg) into the deals section; removed it from the top controls card and left
+a hidden #drAnchor span there so the date range stays at the top. Changed the
+init to renderDateRange({ after: 'drAnchor' }) and wireSeg('fySeg', refreshDeals)
+so the FY toggle re-renders only the deals table. Updated the stale comments.
+
+USER:
+Ran /cm again; the assistant returned a single refactor(marketing) commit line.
+
+USER:
+Asked to also move the Custom date range (into the deals table too).
+
+ASSISTANT:
+Started the change: removed the #drAnchor date-range anchor from the top card
+and was about to scope the date range to the deals table and drop the
+"Selected range" column from the Yearly summary.
+
+USER (mid-turn):
+"cancel last prompt"
+
+ASSISTANT:
+Cancelled. Reverted the top-card edit so the date range is back in the top
+controls card (#drAnchor restored). The FY toggle remains inside the deals
+table. No other changes were made for the cancelled request.
+
+USER:
+Invoked /dcp to document the session (save chat, update as_built.txt, CLAUDE.md,
+.gitignore; no git commands).
+
+ASSISTANT:
+Saved this transcript to chat_history/1011261044_chat_history.txt. Checked
+.gitignore coverage; no secrets appeared in this session, so no redactions
+were needed. Updated as_built.txt and CLAUDE.md only if the built state
+changed (see the report below).
+
+================================================================================
+END OF EXPORT
+================================================================================

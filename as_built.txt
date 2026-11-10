@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-10 (AI-SOURCE LIST: new public.ai_source_patterns table + ai-source-patterns-sync monthly edge fn (curated + OpenAI discovery, append-only) — WRITTEN, NOT YET APPLIED/DEPLOYED; ga4-website-traffic-sync rewired to read it with regex fallback — NOT YET DEPLOYED. SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
+Last updated: 2026-11-10 (MONTHLY LOG: "Deals behind the summary" table + FY toggle/date range moved into it — frontend-only, needs redeploy. AI-SOURCE LIST: new public.ai_source_patterns table + ai-source-patterns-sync monthly edge fn (curated + OpenAI discovery, append-only) — WRITTEN, NOT YET APPLIED/DEPLOYED; ga4-website-traffic-sync rewired to read it with regex fallback — NOT YET DEPLOYED. SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
 = row.marketingRevenue from /api/marketing/roi, FY-aware with vs-prior-FY delta) — 6 KPI cards now. (2) Channel results
 table: the Executive X row carries a small muted note "Updated at the close of each season." (3) NEW click-to-drill-down on
 the "Spend by type" bars: clicking a type opens a modal listing the distinct VENDOR names under that type (names only, no $),
@@ -104,7 +104,10 @@ Return (Rev÷Cost ×); DROPPED the "Orgs that enquired" column (no sheet source)
 + Autumn 2026; no FY27 session yet. STATIC — re-seed EXEC_X when the sheet changes (no live Sheets access). Since
 nothing on the page is sample anymore → renderMarketingHead(true) (badge dropped) + app.js bumped to ?v=11. NEEDS a
 manual Cloud Run redeploy (server + frontend + new route/migrations); weekly data refreshes thereafter need no
-redeploy. Previously 2026-11-09 (MONTHLY LOG PAGE (public/monthly_log.html) — "YEARLY SUMMARY" TABLE WIRED LIVE; the two
+redeploy. 2026-11-10 (monthly_log.html): added a hidden "Deals behind the summary" table (toggle button → per-deal rows
+from /api/marketing/leads-by-source `leads`, sortable/searchable), with the FY toggle + custom date range living inside
+that table (the FY toggle no longer affects the Yearly summary). Frontend-only; needs a Cloud Run redeploy.
+Previously 2026-11-09 (MONTHLY LOG PAGE (public/monthly_log.html) — "YEARLY SUMMARY" TABLE WIRED LIVE; the two
 remaining mock sections turned into pending placeholders. Frontend-only (no DB/server/migration/app.js change).
 (1) Yearly summary table: replaced the hardcoded YEARLY_SUMMARY_ROWS sample array with LIVE data from the SAME
 sources as the named Marketing cards — Keynote enquiries + Keynote bookings ← GET /api/marketing/overview (same as

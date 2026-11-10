@@ -344,7 +344,13 @@ Cloud Run.
   table + "October notes" sections are NOT tracked live yet → both render a `pending` chip + "Not tracked yet"**
   (the old `MOCK_BY_FY`/`selFyKey`/`currentData` mock machinery was removed). Because status/notes are still pending,
   the page keeps `renderMarketingHead()` with **no `live` arg** (the "Sample data — layout only" badge still shows),
-  and the top `#fySeg` FY toggle is now **inert** (every section is either live or pending). Frontend-only → needs a
+  and the **`#fySeg` FY toggle now lives INSIDE the "Deals behind the summary" table** (it no longer touches the
+  Yearly summary; the top card keeps only a hidden `#drAnchor` + the freshness note). **"Deals behind the summary"**
+  (`#summaryDealsSection`, toggled by `#summaryDealsToggle`, lazy-loaded once) = per-deal rows from
+  `GET /api/marketing/leads-by-source` `leads` (the same source behind the Keynote enquiries/bookings rows),
+  rendered with `renderSortableTable`; `currentDealRows()` filters by FY (`fyEnd`) or, when a custom range is set,
+  by day. The custom date range is still rendered at the top via `renderDateRange({ after: 'drAnchor' })` and still
+  adds the "Selected range" column to the Yearly summary (month-level). Frontend-only → needs a
   **Cloud Run redeploy**.
   **Nurture & Events page (`nurture_events.html` = Marketing sub-tab "Nurture & Events", now LIVE as of
   2026-11-09):** self-rendering page (`initPage('marketing')` + `renderMarketingHead(true)` — **NO sample
