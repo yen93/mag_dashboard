@@ -1,0 +1,108 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-10
+Session: Follow-up on the Spend & ROI "Channel results" Executive X work. Covers the
+program-delivery-account lookup, the Exec X spend wiring, the Exec X enquiries
+(companies per season from the ROI sheet), a /cm commit message, the rename of the
+"Executive X" row to "Offsite", and this /dcp run. Server + frontend changes; no DB or
+secret change. Needs a manual Cloud Run redeploy to go live.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret, token, password or connection string was
+pasted into this chat, and none appeared in tool output that was kept here.
+
+NOTE ON SCOPE: this export continues the earlier 1011261524 export. The first part
+(sheet lookup, account 376 finding, Exec X spend wiring) is recorded there in full and
+is recapped only briefly below.
+
+--------------------------------------------------------------------------------
+USER (earlier, recap):
+Asked which Xero account charges the Autumn 2025 program expenses on the budget sheet,
+then asked to change the Spend & ROI "Channel results" table so Executive X spend
+comes from the MAG program delivery expenses account.
+
+--------------------------------------------------------------------------------
+ASSISTANT (earlier, recap):
+Identified account 376 "MAG program delivery expenses" (cost of sales) as the account
+for program delivery costs. Found that account 376 is a shared all-programs account and
+that Xero has no tracking category to split it. Asked the user how to source Exec X
+spend; the user chose the whole account 376 total per FY. Wired it in
+server/metrics/marketing-channel-results.js (PROGRAM_DELIVERY_SQL from
+public.xero_pnl_accounts_fy; execXFrom now takes spend and computes ROAS total =
+revenue ÷ spend) and updated the ⓘ text in public/spend_roi.html. Not deployed.
+
+--------------------------------------------------------------------------------
+USER:
+Asked me to write a single pasteable git commit command for the current changes (/cm).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran git status and git diff. Four modified tracked files (CLAUDE.md, as_built.txt,
+public/spend_roi.html, server/metrics/marketing-channel-results.js), nothing staged,
+two untracked files. Gave one line:
+  git commit -m "feat(marketing): source Executive X spend in Spend & ROI channel
+  results from Xero MAG program delivery account (376) per FY, compute ROAS; note
+  shared-account overcount"
+(Git commands were run only to inspect, not to commit.)
+
+--------------------------------------------------------------------------------
+USER:
+Enquiries count of Executive X should be based on how many companies are listed in the
+rev sheet (the "Executive X ROI Report" Google Sheet, linked by the user).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the sheet. It has one tab per season: SPRING 2023, AUTUMN 2024, SPRING 2024,
+MAR - AUTUMN 2025, NOV - SPRING 2025 and MAR - AUTUMN 2026. Each lists attendee companies
+with an internal cost, and revenue only on the companies that converted.
+
+Counted the company rows per season: Spring 2023 = 12, Autumn 2024 = 9, Spring 2024 = 11,
+Autumn 2025 = 12, Spring 2025 = 13, Autumn 2026 = 10. These match the static EXEC_X array
+already on public/nurture_events.html. Summed by session-date FY: FY24 = 21, FY25 = 23,
+FY26 = 23 (total 67).
+
+Checked public.exec_x_revenue in Supabase. It holds only the 17 revenue-bearing rows, not
+the attendee list, and the dashboard has no live Sheets access. So the enquiry counts are a
+static hardcode, the same approach the Nurture & Events page uses. Flagged this to the user.
+
+Changes made in server/metrics/marketing-channel-results.js:
+  • added EXEC_X_ENQUIRIES_BY_FY = { 2024: 21, 2025: 23, 2026: 23 } and
+    EXEC_X_ENQUIRIES_TOTAL (67), with a comment on the source and the re-seed rule
+  • execXFrom(e, spend, enquiries) now sets enquiries (0 when no session that FY)
+  • wired the per-FY and all-years rows; updated the SRC string, the note, and the header
+    comment (enquiries by session FY; bookings/revenue by event FY, so a later FY can show
+    bookings with 0 same-FY enquiries)
+Changes made in public/spend_roi.html: the Channel results ⓘ data-info and data-src, the
+page comment block, and the header comment now mention the enquiries source.
+Syntax check (node --check) passed.
+
+Resulting Exec X row: FY24 21 enquiries, $143,152 spend, $6,817 cost per enquiry, 1
+booking, $10,000 revenue, 0.1x ROAS. FY25 23, $127,415, $5,540, 6, $113,255, 0.9x. FY26 23,
+$193,903, $8,431, 7, $177,315, 0.9x. FY27 0, $11,586, —, 3, $22,450, 1.9x. All years 67,
+$733,438, $10,947, 17, $323,020, 0.4x. Told the user a Cloud Run redeploy is needed.
+
+--------------------------------------------------------------------------------
+USER:
+Change "Executive X" in the "Channel results" table in spend_roi.html to "Offsite".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Changed the CH_COLOR key from 'Executive X' to 'Offsite' and the row label in
+channelRowHtml from 'Executive X' to 'Offsite'. Data, field name (execX) and the ⓘ text's
+source description were left unchanged. Frontend-only; needs a Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save this chat to chat_history/, update as_built.txt, CLAUDE.md and .gitignore; no
+git commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Running the dcp steps. Timestamp 1011261549, so this export is
+chat_history/1011261549_chat_history.txt. Security scan: no secrets found, so no
+redaction paragraph. as_built.txt and CLAUDE.md were updated to cover the enquiries
+source and the Offsite label. .gitignore was checked against the working tree; no new
+sensitive files have appeared since the last run.
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -176,8 +176,8 @@
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Channel results <span class="head-info"
-              data-info="Per-channel spend, enquiries, bookings, revenue and ROAS by financial year. Paid (Google/Bing/Agency) is fully tracked; Executive X shows bookings + revenue; Bureau and Tailor show enquiries, bookings and won revenue (spend/ROAS not tracked); Marketing EDM is not yet attributed. Columns with no source show a 'pending' chip."
-              data-src="GET /api/marketing/channel-results — Paid via the ROAS metric; Executive X via public.exec_x_revenue; Bureau/Tailor via the leads-by-source metric (ac_indirect_deals)"></span></h3>
+              data-info="Per-channel spend, enquiries, bookings, revenue and ROAS by financial year. Paid (Google/Bing/Agency) is fully tracked; Executive X shows bookings + revenue, spend from the Xero 'MAG program delivery expenses' account (code 376) — a shared all-programs account, so it overcounts Exec X and its ROAS reads low — and enquiries = companies listed per season in the Exec X ROI sheet (by session FY); Bureau and Tailor show enquiries, bookings and won revenue (spend/ROAS not tracked); Marketing EDM is not yet attributed. Columns with no source show a 'pending' chip."
+              data-src="GET /api/marketing/channel-results — Paid via the ROAS metric; Executive X bookings+revenue via public.exec_x_revenue, spend via the Xero 'MAG program delivery expenses' account (code 376) in xero_pnl_accounts_fy, enquiries = companies listed per season in the Exec X ROI sheet (static); Bureau/Tailor via the leads-by-source metric (ac_indirect_deals)"></span></h3>
           </div>
           <div class="sr-table-wrap">
             <table class="sr-table">
@@ -217,9 +217,11 @@
                               GET /api/marketing/overview (enquiry count, for Cost per enquiry)
        • "Spend by type"    ← GET /api/marketing/channel-summary (the `type` series — the SAME
                               buckets as roi.html's Channel Summary "By type"), summed over the FY
-       • "Channel results"  ← GET /api/marketing/channel-results (the two channel_list channels:
-                              Paid Google/Bing/Agency from the ROAS metric; Executive X from
-                              exec_x_revenue)
+       • "Channel results"  ← GET /api/marketing/channel-results (Paid Google/Bing/Agency from the
+                              ROAS metric; Executive X bookings+revenue from exec_x_revenue, spend
+                              from the Xero "MAG program delivery expenses" account (code 376) in
+                              xero_pnl_accounts_fy — a shared all-programs account, overcounts Exec X —
+                              and enquiries = companies listed per season in the Exec X ROI sheet)
        All FY-aware via the #fySeg toggle (AU FY, END-year). */
 
     // ----- FY helpers (mirror marketing.html / leads_bookings.html) -----
@@ -519,7 +521,7 @@
     // ===================================================================
     var CH_COLOR = {
       'Paid (Google, Bing, Agency)': '#3b6ef0',
-      'Executive X': '#7c5cff',
+      'Offsite': '#7c5cff',
       'Bureau': '#e8833a',
       'Tailor': '#e15b97',
       'Marketing EDM': '#9aa4b2',
@@ -571,7 +573,7 @@
       }
       body.innerHTML =
         channelRowHtml('Paid (Google, Bing, Agency)', row.paid) +
-        channelRowHtml('Executive X', row.execX, 'Updated at the close of each season.') +
+        channelRowHtml('Offsite', row.execX, 'Updated at the close of each season.') +
         channelRowHtml('Bureau', row.bureau) +
         channelRowHtml('Tailor', row.tailor) +
         channelRowHtml('Marketing EDM', row.edm, 'Not yet attributed to deals.');

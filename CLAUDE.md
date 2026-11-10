@@ -167,7 +167,18 @@ Cloud Run.
   reuses the canonical **ROAS metric `getRoas()`** (`server/metrics/roas.js`) — Spend = **All-in cost**
   (Google Xero + Bing + Simple Digital/agency), Enquiries = `leads` (won+lost+open), Bookings = `won`,
   Revenue = `wonRevenue`, ROAS total/ads = `roasAllin`/`roasGoogle`. **Executive X** = `public.exec_x_revenue`
-  — Bookings = count of engagements (one row/client), Revenue = `sum(revenue)`. **Bureau / Tailor
+  — Bookings = count of engagements (one row/client), Revenue = `sum(revenue)`. **Executive X SPEND** = the Xero
+  **"MAG program delivery expenses" account (code 376, cost of sales)** per FY, read from
+  `public.xero_pnl_accounts_fy` (no new sync — that cache already holds it). **Caveat:** 376 is MAG's SHARED
+  all-programs delivery account (Geocon + all immersive programs, not Exec X only; Xero has no tracking category
+  to split it), so Exec X spend OVERCOUNTS and its ROAS total (= revenue ÷ spend) reads low — a deliberate owner
+  choice (the Exec X ROI sheet's per-session internal cost is the Exec-X-only alternative, not used here).
+  **Executive X ENQUIRIES** = companies (attendees) listed per season in the "Executive X ROI Report" sheet, summed
+  by session-date FY (`EXEC_X_ENQUIRIES_BY_FY` in `marketing-channel-results.js`: FY24 21, FY25 23, FY26 23).
+  STATIC hardcode (the sheet has no live feed; `exec_x_revenue` holds only the 17 revenue rows) — keep in sync
+  with `nurture_events.html`'s `EXEC_X` `attendees`. **The row is LABELLED "Offsite"** in `spend_roi.html`
+  (CH_COLOR key + channelRowHtml label); the field name `execX` and the server key are still Exec X.
+  **Bureau / Tailor
   (added 2026-11-10)** = enquiries, bookings + won revenue from the **leads-by-source metric**
   (`getMarketingLeadsBySource().leads`, imported into `marketing-channel-results.js` — `ac_indirect_deals`
   split by `is_tailor`), so **these rows reconcile EXACTLY with the Leads & Bookings "By source" table**; the
@@ -176,7 +187,7 @@ Cloud Run.
   **Marketing EDM (added 2026-11-10)** = not yet attributed to deals → every column pending.
   **PENDING SENTINEL (as of 2026-11-10):** a column with **no known source** for a channel comes back as the
   string **`'pending'`** (NOT `null`) and the page renders it as the DESIGN_GUIDE §8 red **`pending` chip**;
-  `null` stays "—" (a genuine missing value). **Executive X's untracked columns (spend/enquiries/ROAS) were
+  `null` stays "—" (a genuine missing value). **Executive X's untracked column (ROAS ads only; spend and enquiries are now sourced — see above) was
   switched `null`→`'pending'`** (so they now show the chip, not "—"); Bureau/Tailor/Organic's
   spend/cost-per-enquiry/ROAS are `'pending'`; Marketing EDM is `'pending'` across the board. Cost-per-enquiry
   is derived client-side (`spend ÷ enquiries`; `'pending'` whenever spend or enquiries is `'pending'`). The

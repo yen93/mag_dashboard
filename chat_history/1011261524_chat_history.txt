@@ -1,0 +1,119 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-10
+Session: Looked up which Xero account the Autumn 2025 Executive X / Geocon program
+costs are coded to (answer: account 376 "MAG program delivery expenses"), then
+changed the Spend & ROI "Channel results" table so Executive X spend comes from
+that account per FY. Server + frontend change; no DB or secret change. Needs a
+manual Cloud Run redeploy to go live.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret, token, password or connection string
+was pasted into this chat, and none appeared in tool output that was kept here.
+
+--------------------------------------------------------------------------------
+USER:
+Asked me to check a Google Sheet (the "Autumn 2025 Program Budget and Expense
+Report") and say whether any specific Xero account charges the program expenses
+on it.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the spreadsheet. It has two tabs, "Geocon: March 17-19" and "Executive X:
+March 20-21". The Geocon tab lists program costs: Red Pepper Catering, Altitude
+lunch, coffee/nibbles, Enuites on-site camp, flowers, base camp setup, staff and
+guide lines, and a total of about $12,999 against $26,340 revenue.
+
+Pulled the MyAdventure Group Xero chart of accounts (the only connected org).
+Found account 376 "MAG program delivery expenses" (Direct Costs / cost of sales,
+GST on input). Checked Red Pepper Catering in Xero: two contacts exist, but no
+AP bills (get_bills returned zero), so the spend is reconciled bank/card
+transactions rather than bills. A cash-basis P&L for Feb–Apr 2025 showed account
+376 at $17,315.10, the largest cost-of-sales line for the period. Also noted that
+the bank-transaction tool returned no bank accounts for Oct 2026 (a tool
+limitation, not a finding). Concluded that 376 is the account for program
+delivery costs, with some items possibly split to other accounts (transport to
+465/400, fuel to 370, casual staff to 471, base camp setup to BASECAMP). Offered
+to trace the specific vendor transactions if wanted.
+
+--------------------------------------------------------------------------------
+USER:
+Update spend_roi.html "Channel results" table. Executive X spend should come from
+the MAG program delivery expenses account.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the Channel results metric (server/metrics/marketing-channel-results.js) and
+the page's rendering code in public/spend_roi.html. The page renders spend and
+roasTotal generically, so server-side changes flow through with no client JS
+change.
+
+Found that Xero has only one tracking category ("Salesperson: Sam"), so there is
+no way to isolate Exec X from account 376. Confirmed that the data already exists
+in Supabase: public.xero_pnl_accounts_fy holds account 376 per FY, with FY22
+$8,247, FY23 $249,236, FY24 $143,152, FY25 $127,415, FY26 $193,903 and FY27
+$11,586.
+
+Flagged a material problem before changing anything: 376 is the shared
+all-programs delivery account, not Exec X only. FY23 shows $249k of spend while
+Exec X revenue starts at FY24. Using the whole account would make Exec X ROAS
+read below 1x every year (e.g. FY25 0.89x, FY26 0.91x). Asked the user how to
+source the spend, with three options: whole account 376, the Exec X ROI sheet's
+internal cost, or a hybrid.
+
+USER answered: "Whole account 376 per FY" (use the full account total as Exec X
+spend, knowing it overcounts).
+
+Changes made:
+  • server/metrics/marketing-channel-results.js — added PROGRAM_DELIVERY_SQL
+    (sum of amount from xero_pnl_accounts_fy where account_name = 'MAG program
+    delivery expenses', grouped by fy_end). execXFrom(e, spend) now sets spend
+    from that account and computes roasTotal = revenue ÷ spend (null when spend is
+    0, 'pending' when no spend row exists). Enquiries and ROAS ads stay 'pending'.
+    The FY axis and the all-years total include the account; the SRC and note
+    strings and the header comment now describe the new source and its overcount.
+  • public/spend_roi.html — updated the Channel results ⓘ tooltip (data-info and
+    data-src) and the page header comment, which described the old two-channel
+    source.
+  • Syntax-checked the metric file with node --check (passed). Confirmed the
+    exec_x_revenue per-FY bookings and revenue (FY24 1/$10,000, FY25 6/$113,255,
+    FY26 7/$177,315, FY27 3/$22,450).
+
+Resulting Exec X rows (spend, revenue, ROAS total): FY22 $8,247 / — / 0.0x;
+FY23 $249,236 / — / 0.0x; FY24 $143,152 / $10,000 / 0.1x; FY25 $127,415 /
+$113,255 / 0.9x; FY26 $193,903 / $177,315 / 0.9x; FY27 $11,586 / $22,450 / 1.9x.
+The overcount caveat is in the ⓘ tooltip and in the metric note.
+
+Did not deploy. Told the user a manual Cloud Run redeploy is needed (the CLAUDE.md
+rule is that Claude never deploys).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save this chat to chat_history/, update as_built.txt, CLAUDE.md and
+.gitignore; no git commands).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran the dcp steps. Chat log: wrote this file as chat_history/1011261524_chat_history.txt
+(full ddMMyyHHmm name). Security scan: no secrets found, so no redaction paragraph.
+
+as_built.txt: updated the "Last updated" header entry to describe the Channel
+results change (Exec X spend from account 376, the shared-account caveat, the
+ROAS calculation, the two edited files, and the need for a redeploy).
+
+CLAUDE.md: corrected two stale statements in the Channel results section. Added a
+paragraph on the Exec X spend source (account 376 via xero_pnl_accounts_fy, its
+shared-account overcount, and ROAS = revenue ÷ spend). Changed the untracked
+columns note so it no longer lists spend.
+
+.gitignore: read it and checked the working tree. Credential-looking files
+(bing_credentials.txt, xero_credentials.txt, supabase-access-token.txt) are
+already covered by existing patterns. internal_id is empty. gpc_proj_id.txt is a
+project ID, not a secret. No change needed, so the file was left alone.
+Flagged to the user (not changed) that keynotes_liv_deals_excl_stages_69_71_113.csv
+sits untracked in the project root and may contain customer contact data.
+
+No git commands were run. The user commits and pushes.
+
+================================================================================
+END OF EXPORT
+================================================================================
