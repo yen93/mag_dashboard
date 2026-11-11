@@ -363,6 +363,23 @@ function renderOperationsSidebar(active) {
   }).join('');
 }
 
+/* AI & Automation left sidebar sub-nav. Fills the #aiAutomationNav <aside> on the
+   AI & Automation pages. `active` is the current page's key. Single source of truth
+   for the sub-nav list. (Pages are blank placeholders for now.) */
+function renderAiAutomationSidebar(active) {
+  var el = document.getElementById('aiAutomationNav');
+  if (!el) return;
+  var items = [
+    ['builds',    'Builds Monitoring', 'builds_monitoring.html'],
+    ['ticketing', 'Ticketing',         'ticketing.html'],
+  ];
+  el.innerHTML = items.map(function (it) {
+    var key = it[0], label = it[1], href = it[2];
+    var cls = 'subnav-link' + (key === active ? ' active' : '');
+    return '<a class="' + cls + '" href="' + href + '">' + label + '</a>';
+  }).join('');
+}
+
 /* Sales left sidebar sub-nav. Fills the #salesNav <aside> on the Sales page and
    its sub-pages (Conferences). `active` is the current page's key. Single source
    of truth for the sub-nav list. */

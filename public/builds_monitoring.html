@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Builds Monitoring — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab active" href="builds_monitoring.html">AI &amp; Automation</a>
+  </nav>
+
+  <div class="ai-automation-layout">
+    <aside class="subnav" id="aiAutomationNav"></aside>
+  <main class="content">
+    <div class="toolbar">
+      <strong>Builds Monitoring</strong>
+    </div>
+
+    <div class="card">
+      <div class="empty-state" style="padding:40px 16px; text-align:center; color:var(--text-muted)">
+        <h3 style="margin:0 0 6px">Builds Monitoring</h3>
+        <p class="muted" style="margin:0">Coming soon.</p>
+      </div>
+    </div>
+  </main>
+  </div>
+
+  <script src="app.js?v=15"></script>
+  <script>
+    initPage('ai-automation');
+    renderAiAutomationSidebar('builds');
+  </script>
+</body>
+</html>

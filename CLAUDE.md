@@ -15,8 +15,10 @@ Cloud Run.
   in `public/`. `/` redirects to `/home.html` (the dashboard homepage). No SPA
   fallback — each page is a real file.
 - **Frontend = static files in `public/`, no build.** One HTML file per screen
-  Tab bar (in order, **4 top tabs as of 2026-10-22**): `home.html` ("Home"),
-  `sales_overview.html` ("Sales"), `marketing.html`, `operations.html`; plus `login.html`.
+  Tab bar (in order, **5 top tabs as of 2026-11-11**): `home.html` ("Home"),
+  `sales_overview.html` ("Sales"), `marketing.html`, `operations.html`,
+  `builds_monitoring.html` ("AI & Automation" — its subtabs are blank placeholders for now:
+  Builds Monitoring + Ticketing, left sidebar via `renderAiAutomationSidebar()`); plus `login.html`.
   **`home.html` is the overall dashboard homepage** — the default landing (`/` redirects to
   it) with cross-area headline KPIs (pulled live from the Sales/Marketing/Operations
   endpoints) + navigation cards into each area; "Home" is the active top tab only there.
