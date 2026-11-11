@@ -1,0 +1,46 @@
+================================================================================
+UPDATE DOCUMENTATION: REMOVE EMAIL PARTNERS REPLIES AND SENT ON TIME
+Timestamp: 11/11/26 15:48 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. EMAIL & PARTNERS DASHBOARD CLEANUP
+--------------------------------------------------------------------------------
+* Problem / Context:
+  In `public/email_partners.html`, the "Replies" KPI card, as well as the
+  "Sent on time" and "Replies" table columns in the Partner Outreach table, were
+  displaying hardcoded "pending" chips because ActiveCampaign does not track
+  email replies or partner send cadence. The user requested removing:
+  - Replies column
+  - Sent on time column
+  - Replies card
+
+* Technical Changes:
+  - `public/email_partners.html`:
+    1. Grid Layout CSS:
+       - Updated `.ep-kpi-grid` from 5 columns (`repeat(5, minmax(0, 1fr))`) to
+         4 columns (`repeat(4, minmax(0, 1fr))`) to accommodate the remaining
+         tiles (Subscribed contacts, EDM sends, Click rate, Unsubscribes).
+       - Adjusted responsive breakpoints to collapse cleanly to 2 columns on
+         narrow screens (`@media (max-width: 960px)`).
+    2. KPI Cards:
+       - Removed the "Replies" `kpiCard()` block from `renderKpiRow()`.
+    3. Partner Outreach Table:
+       - Removed `<th>Sent on time</th>` and `<th>Replies</th>` table headers.
+       - Removed `Sent on time` and `Replies` `<td>` cells from `partnerRow()`.
+       - Updated fallback/loading `colspan` attributes from `8` to `6` in
+         `renderOutreachTable()` and `load()`.
+       - Updated the card header info tooltip (`data-info`) on `#outreachHeading`
+         to omit references to pending columns.
+       - Cleaned up obsolete `pendingChip` declaration and comment notes.
+
+2. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* None / Not applicable (frontend view cleanup only).
+
+3. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Verified `public/email_partners.html` diff via git diff check.
+* Validated JavaScript execution syntax in Node VM sandbox.
+* Confirmed remaining 4 KPI cards and 6 table columns align cleanly.
+================================================================================

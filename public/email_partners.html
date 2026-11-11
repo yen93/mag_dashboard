@@ -68,17 +68,14 @@
       box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
     }
 
-    /* Top 5 KPI cards */
+    /* Top 4 KPI cards */
     .ep-kpi-grid {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
+      grid-template-columns: repeat(4, minmax(0, 1fr));
       gap: 16px;
       margin: 16px 0;
     }
-    @media (max-width: 1080px) {
-      .ep-kpi-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
-    }
-    @media (max-width: 680px) {
+    @media (max-width: 960px) {
       .ep-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 480px) {
@@ -213,22 +210,20 @@
         </div>
       </div>
 
-      <!-- Top 5 KPI cards -->
+      <!-- Top 4 KPI cards -->
       <div class="ep-kpi-grid" id="epKpis"></div>
 
       <!-- Partner outreach table card -->
       <div class="card ep-outreach-card">
         <div class="card-head block-head">
-          <h3 id="outreachHeading">Partner outreach<span class="head-info" data-info="Indirect (bureau / tailor) partner deals for the selected financial year — contacts, enquiries, bookings and won revenue, with the prior FY's revenue alongside. The &quot;Sent on time&quot; and &quot;Replies&quot; columns are pending: send cadence and replies aren't tracked in ActiveCampaign." data-src="GET /api/marketing/email-partners — public.ac_indirect_deals (is_tailor split) via public.email_partner_metrics; partner contacts from the ActiveCampaign SPEAKERS BUREAUS list"></span></h3>
+          <h3 id="outreachHeading">Partner outreach<span class="head-info" data-info="Indirect (bureau / tailor) partner deals for the selected financial year — contacts, enquiries, bookings and won revenue, with the prior FY's revenue alongside." data-src="GET /api/marketing/email-partners — public.ac_indirect_deals (is_tailor split) via public.email_partner_metrics; partner contacts from the ActiveCampaign SPEAKERS BUREAUS list"></span></h3>
         </div>
         <div class="ep-table-wrap" tabindex="0" role="region" aria-labelledby="outreachHeading">
           <table class="ep-table">
             <thead>
               <tr>
                 <th>Partner</th>
-                <th>Sent on time</th>
                 <th>Contacts</th>
-                <th>Replies</th>
                 <th>Enquiries</th>
                 <th>Bookings</th>
                 <th>Revenue (won)</th>
@@ -248,9 +243,7 @@
        Email KPIs come from ActiveCampaign (run_campaign_performance_report), and
        partner deal figures from the CRM (ac_indirect_deals). Both are snapshotted
        WEEKLY by the email-partners-sync routine into public.email_partner_metrics
-       and served by /api/marketing/email-partners (latest row per FY). Replies and
-       send-cadence aren't tracked in ActiveCampaign, so those tiles show a
-       'pending' chip. */
+       and served by /api/marketing/email-partners (latest row per FY). */
 
     var EP = { byFy: {}, all: null, loaded: false, capturedAt: null };
     // Email & Partners is stored only as FY-aggregate rows (one row = whole-FY KPIs), so a
@@ -264,8 +257,6 @@
     }
     function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
     function fyName(key) { return key === 'all' ? 'All years' : key.toUpperCase(); }
-
-    var pendingChip = '<span class="chip warn" title="Not tracked in ActiveCampaign">pending</span>';
 
     function money(n) { return (n == null || isNaN(n)) ? '—' : '$' + Math.round(n).toLocaleString('en-AU'); }
     function pct(n)   { return (n == null || isNaN(n)) ? '—' : (Math.round(n * 10) / 10) + '%'; }
@@ -352,8 +343,6 @@
           infoTip('Email campaigns sent this FY (headline) and total emails delivered (below). Open rate ' + pct(e.openRate) + ', click-to-open ' + pct(e.clickToOpenRate) + ' — opens are inflated by Apple Mail Privacy.', EP_SRC)),
         kpiCard('Click rate', pct(e.clickRate), clkSub, clkCls,
           infoTip('Unique click rate across campaigns this FY; the sub-line is the change vs the prior FY in percentage points.', EP_SRC)),
-        kpiCard('Replies', '—', pendingChip, '',
-          infoTip('Replies received to partner / campaign emails. Not tracked in ActiveCampaign, so this tile stays pending.', EP_SRC)),
         kpiCard('Unsubscribes', num(e.totalUnsubscribes), pct(e.unsubscribeRate) + ' of sends', 'warn',
           infoTip('Unsubscribes this FY (headline) and as a percentage of emails sent (below).', EP_SRC))
       ].join('');
@@ -362,9 +351,7 @@
     function partnerRow(name, p, prevP) {
       return '<tr>' +
         '<td>' + esc(name) + '</td>' +
-        '<td>' + pendingChip + '</td>' +           // Sent on time — not tracked in AC
         '<td>' + num(p.contacts) + '</td>' +
-        '<td>' + pendingChip + '</td>' +           // Replies — not tracked in AC
         '<td>' + num(p.enquiries) + '</td>' +
         '<td>' + num(p.bookings) + '</td>' +
         '<td>' + money(p.revenue) + '</td>' +
@@ -375,10 +362,10 @@
     function renderOutreachTable() {
       var body = document.getElementById('outreachBody');
       if (!body) return;
-      if (CUSTOM) { body.innerHTML = '<tr><td colspan="8" class="range-na">Not available for custom ranges — reported by financial year. Clear the date range to view it.</td></tr>'; return; }
-      if (!EP.loaded) { body.innerHTML = '<tr><td colspan="8" class="muted">Loading…</td></tr>'; return; }
+      if (CUSTOM) { body.innerHTML = '<tr><td colspan="6" class="range-na">Not available for custom ranges — reported by financial year. Clear the date range to view it.</td></tr>'; return; }
+      if (!EP.loaded) { body.innerHTML = '<tr><td colspan="6" class="muted">Loading…</td></tr>'; return; }
       var r = curRow(), prev = prevRow();
-      if (!r) { body.innerHTML = '<tr><td colspan="8" class="muted">No snapshot for ' + esc(fyName(selFyKey())) + ' yet.</td></tr>'; return; }
+      if (!r) { body.innerHTML = '<tr><td colspan="6" class="muted">No snapshot for ' + esc(fyName(selFyKey())) + ' yet.</td></tr>'; return; }
       body.innerHTML =
         partnerRow('The Tailor',      r.partners.tailor, prev && prev.partners.tailor) +
         partnerRow('Speaker bureaus', r.partners.bureau, prev && prev.partners.bureau);
@@ -438,7 +425,7 @@
         EP.loaded = true;
         var grid = document.getElementById('epKpis');
         if (grid) grid.innerHTML = '<div class="muted" style="padding:8px 2px">Failed to load email &amp; partner metrics.</div>';
-        document.getElementById('outreachBody').innerHTML = '<tr><td colspan="8" class="muted">Failed to load.</td></tr>';
+        document.getElementById('outreachBody').innerHTML = '<tr><td colspan="6" class="muted">Failed to load.</td></tr>';
         var note = document.getElementById('fyNote'); if (note) note.textContent = '';
       });
     }
