@@ -384,7 +384,7 @@
             var cls = d >= 0 ? 'pos' : 'neg';
             var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
             deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(Math.round(d)) +
-              ' pts vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
+              '% vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
           }
         }
       }
@@ -470,7 +470,7 @@
               var cls = d >= 0 ? 'pos' : 'neg';
               var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
               deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(d) +
-                ' pts vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
+                '% vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
             }
           }
         }
