@@ -1,6 +1,7 @@
 // Marketing Channel Items — the distinct VENDORS (line items) behind each "Spend by type"
-// bucket, per month. Powers the drill-down modal on spend_roi.html: click a bar in the
-// "Spend by type" chart → list the specific vendors under that type (names only, no $).
+// bucket, per month, with ex-GST spend amounts (except Wages, which are never exposed or
+// displayed). Powers the drill-down modal on spend_roi.html: click a bar in the
+// "Spend by type" chart → list the specific vendors under that type.
 //
 // Mirrors marketing-channel-summary.js's BY_TYPE bucketing EXACTLY (same LEFT JOIN +
 // coalesce(type,'Uncategorized')) so the item list matches the bar it drills into. Each
@@ -18,12 +19,17 @@ function monLabel(d) {
   return `${MON[m - 1]}-${y}`;
 }
 
-// Distinct (type bucket, vendor, month). Grouped by vendor text so multiple contact_ids
-// with the same display name collapse to one item. 'Uncategorized' = unmapped vendors.
+// Distinct (type bucket, vendor, month) with summed ex-GST spend (NULL for Wages so
+// individual wage figures are never sent or displayed). Grouped by vendor text so
+// multiple contact_ids with the same display name collapse to one item.
+// 'Uncategorized' = unmapped vendors.
 const SQL = `
   SELECT coalesce(m.type, 'Uncategorized') AS type,
          c.vendor AS vendor,
-         to_char(c.month, 'YYYY-MM-01') AS month
+         to_char(c.month, 'YYYY-MM-01') AS month,
+         CASE WHEN lower(btrim(coalesce(m.type, ''))) = 'wages' THEN NULL
+              ELSE sum(c.amount)::numeric
+         END AS amount
   FROM public.marketing_channel_monthly c
   LEFT JOIN public.marketing_channel_vendor_map m ON m.contact_id = c.contact_id
   WHERE c.vendor IS NOT NULL AND btrim(c.vendor) <> ''
@@ -34,7 +40,12 @@ export async function getMarketingChannelItems() {
     return { items: [], meta: { source: SRC, status: 'pending', note: 'Supabase not configured (set SUPABASE_DB_URL).' } };
   }
   const rows = await q(SQL);
-  const items = rows.map((r) => ({ type: r.type, vendor: r.vendor, month: monLabel(r.month) }));
+  const isWages = (t) => String(t || '').trim().toLowerCase() === 'wages';
+  const items = rows.map((r) => {
+    const item = { type: r.type, vendor: r.vendor, month: monLabel(r.month) };
+    if (!isWages(r.type) && r.amount != null) item.amount = Number(r.amount) || 0;
+    return item;
+  });
   return {
     items,
     meta: {

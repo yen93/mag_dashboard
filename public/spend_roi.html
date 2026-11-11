@@ -117,8 +117,10 @@
     .items-modal-body { padding: 12px 18px 18px; overflow-y: auto; }
     .items-count { font-size: 12px; margin-bottom: 8px; }
     ol.items-list { margin: 0; padding-left: 22px; }
-    ol.items-list li { padding: 4px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
+    ol.items-list li { padding: 5px 0; font-size: 14px; border-bottom: 1px solid var(--border); }
     ol.items-list li:last-child { border-bottom: none; }
+    .item-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .item-val { font-variant-numeric: tabular-nums; font-weight: 600; color: var(--text); white-space: nowrap; }
   </style>
 </head>
 <body>
@@ -196,7 +198,7 @@
     </main>
   </div>
 
-  <!-- Spend-by-type drill-down modal: items under a clicked type (names only) -->
+  <!-- Spend-by-type drill-down modal: items under a clicked type (with $ except Wages) -->
   <div id="itemsBackdrop" class="items-backdrop" onclick="if(event.target===this)closeTypeItems()">
     <div class="items-modal" role="dialog" aria-modal="true" aria-labelledby="itemsTitle">
       <div class="items-modal-head">
@@ -471,8 +473,12 @@
 
     // ===================================================================
     //  Spend-by-type drill-down — click a bar → list the vendors (items)
-    //  under that type for the current FY/range. Names only, no $ values.
+    //  under that type for the current FY/range, with their monetary spend
+    //  figure beside each item EXCEPT for Wages (never display wages values).
     // ===================================================================
+    function isWagesType(typeName) {
+      return String(typeName || '').trim().toLowerCase() === 'wages';
+    }
     // Distinct vendors under `typeName`, filtered the SAME way the bar was
     // (selected FY, custom range, or all years) so the list matches the bar.
     function itemsForType(typeName) {
@@ -484,15 +490,22 @@
         var fe = fyEndOf(key);
         rows = rows.filter(function (it) { return channelMonthFyEnd(it.month) === fe; });
       }
-      var seen = {}, out = [];
+      var byKey = {}, out = [];
       rows.forEach(function (it) {
         var v = (it.vendor || '').trim();
-        if (v && !seen[v.toLowerCase()]) { seen[v.toLowerCase()] = 1; out.push(v); }
+        if (!v) return;
+        var k = v.toLowerCase();
+        if (!byKey[k]) {
+          byKey[k] = { vendor: v, amount: 0 };
+          out.push(byKey[k]);
+        }
+        byKey[k].amount += Number(it.amount) || 0;
       });
-      return out.sort(function (a, b) { return a.toLowerCase().localeCompare(b.toLowerCase()); });
+      return out.sort(function (a, b) { return a.vendor.toLowerCase().localeCompare(b.vendor.toLowerCase()); });
     }
     function showTypeItems(typeName) {
       var scope = CUSTOM ? 'selected range' : (selFyKey() === 'all' ? 'all years' : fyName(selFyKey()));
+      var hideValues = isWagesType(typeName);
       var titleEl = document.getElementById('itemsTitle');
       var subEl = document.getElementById('itemsSub');
       var bodyEl = document.getElementById('itemsBody');
@@ -508,7 +521,11 @@
           bodyEl.innerHTML =
             '<div class="items-count muted">' + items.length + ' item' + (items.length === 1 ? '' : 's') + '</div>' +
             '<ol class="items-list">' +
-            items.map(function (v) { return '<li>' + esc(v) + '</li>'; }).join('') +
+            items.map(function (it) {
+              if (hideValues) return '<li>' + esc(it.vendor) + '</li>';
+              return '<li><div class="item-row"><span>' + esc(it.vendor) + '</span>' +
+                '<span class="item-val">' + fmt(Math.round(it.amount) || 0, 'currency') + '</span></div></li>';
+            }).join('') +
             '</ol>';
         }
       }

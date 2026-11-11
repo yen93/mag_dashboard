@@ -1,0 +1,50 @@
+================================================================================
+UPDATE DOCUMENTATION: SPEND BY TYPE DRILLDOWN VALUES
+Timestamp: 11/11/26 15:00 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. SPEND BY TYPE DRILL-DOWN MODAL MONETARY VALUES (EXCLUDING WAGES)
+--------------------------------------------------------------------------------
+* Problem / Context:
+  When clicking a bar in the "Spend by type" chart on `public/spend_roi.html`,
+  the drill-down modal previously listed only the vendor/item names under that
+  spend type. The requirement is to display the monetary spend figure beside
+  each item that pops up for the selected FY / custom date range / all years,
+  EXCEPT for the "Wages" bar where monetary figures must NOT be displayed.
+
+* Technical Changes:
+  - `server/metrics/marketing-channel-items.js`
+    - Updated `SQL` in `getMarketingChannelItems()` to include summed ex-GST
+      monthly spend (`sum(c.amount)::numeric AS amount`) grouped by `(type,
+      vendor, month)` for non-Wages types, while returning `NULL` when
+      `lower(btrim(coalesce(m.type, ''))) = 'wages'`.
+    - Updated row mapping in `getMarketingChannelItems()` so `amount` is only
+      attached to non-Wages items, preventing individual staff wage amounts from
+      ever being exposed in the `/api/marketing/channel-items` payload.
+  - `public/spend_roi.html`
+    - Added `.item-row` and `.item-val` styles for right-aligned tabular AUD
+      currency values inside the ordered item list (`ol.items-list`).
+    - Added `isWagesType(typeName)` helper to check if the clicked bar is
+      `Wages` (case-insensitive).
+    - Updated `itemsForType(typeName)` to aggregate `amount` per distinct vendor
+      across all months matching the active FY toggle, custom date range, or
+      "All years" selection.
+    - Updated `showTypeItems(typeName)` to render the formatted AUD figure
+      (`fmt(Math.round(it.amount) || 0, 'currency')`) beside each vendor name
+      for all spend types except `Wages` (which renders vendor names only).
+
+2. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* None modified.
+
+3. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Verified syntax of `server/metrics/marketing-channel-items.js` with
+  `node --check server/metrics/marketing-channel-items.js` (exit code 0).
+* Confirmed both backend (`getMarketingChannelItems`) and frontend
+  (`showTypeItems`) enforce hiding/omitting monetary values for `Wages`.
+* Note: Since `server/metrics/marketing-channel-items.js` and
+  `public/spend_roi.html` were updated, a manual Cloud Run redeploy is needed
+  for production to reflect these changes.
+================================================================================
