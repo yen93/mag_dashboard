@@ -25,16 +25,24 @@
 //    Per-FY count and average star rating from public.google_reviews (by
 //    review_create_time).
 //
-// Phone enquiries has no live source yet and renders a "pending" chip.
+// 5. Phone enquiries (click-to-call):
+//    Monthly GA4 `click_to_call` (phone-number click) events by channel per AU FY,
+//    from public.ga4_click_to_call_monthly (weekly GA4 Data API snapshot via the
+//    ga4-click-to-call-sync edge function). Powers the "Phone enquiries" KPI card +
+//    the "Phone enquiries · Click-to-call" trend chart and by-channel table.
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
+
+// Fixed channel order for the click-to-call breakdown (matches the edge function's buckets).
+const C2C_CHANNELS = ['Google Ads', 'Bing Ads', 'Organic', 'Direct', 'Other'];
 
 const SRC =
   'Live (Supabase): website sessions + AI-tool visits from public.ga4_website_traffic_snapshots ' +
   '(weekly GA4 Data API snapshot per AU FY); enquiries (total/organic/cpc) = GA4 & Ads leads ' +
   '(ga4_ac_contact_source) matched to an existing saved AC contact; organic incl. unmatched = ' +
   'all organic-medium website form conversions from ga4_ac_event_matches; Google reviews from ' +
-  'public.google_reviews (review_create_time, star_rating).';
+  'public.google_reviews (review_create_time, star_rating); phone enquiries = GA4 click_to_call ' +
+  'events by channel from public.ga4_click_to_call_monthly.';
 
 // Primary enquiries = AC-matched contacts, split by medium, per FY.
 const MATCHED_SQL = `
@@ -109,6 +117,46 @@ const REVIEWS_SQL = `
   GROUP BY fy_end
   ORDER BY fy_end`;
 
+// Monthly GA4 click_to_call events by channel (phone enquiries). One row per
+// (year_month, channel); the page aggregates per FY (KPI + table) and plots the
+// monthly stacked trend. Monthly granularity only — not range-filterable.
+const CLICK_TO_CALL_SQL = `
+  SELECT
+    year_month                                   AS "yearMonth",
+    (substr(year_month, 1, 4) || '-' || substr(year_month, 5, 2)) AS "month",
+    channel,
+    fy_end                                       AS "fyEnd",
+    'FY' || lpad((fy_end - 2000)::text, 2, '0')  AS fy,
+    events::int                                  AS events
+  FROM public.ga4_click_to_call_monthly
+  ORDER BY year_month, channel`;
+
+// Build the click-to-call payload section from the raw (month, channel) rows:
+// { channels, byMonth:[{month,fy,fyEnd,channels{},total}], byFy:{FY:{fyEnd,total,channels{}}}, total:{total,channels{}} }
+function buildClickToCall(rows) {
+  const zeroCh = () => Object.fromEntries(C2C_CHANNELS.map((c) => [c, 0]));
+  const byMonthMap = new Map();          // 'YYYY-MM' -> {month, fy, fyEnd, channels, total}
+  const byFy = {};                       // 'FY27' -> {fyEnd, total, channels}
+  const total = { total: 0, channels: zeroCh() };
+
+  for (const r of rows) {
+    const ev = Number(r.events) || 0;
+    const ch = C2C_CHANNELS.includes(r.channel) ? r.channel : 'Other';
+
+    let m = byMonthMap.get(r.month);
+    if (!m) { m = { month: r.month, fy: r.fy, fyEnd: Number(r.fyEnd), channels: zeroCh(), total: 0 }; byMonthMap.set(r.month, m); }
+    m.channels[ch] += ev; m.total += ev;
+
+    if (!byFy[r.fy]) byFy[r.fy] = { fyEnd: Number(r.fyEnd), total: 0, channels: zeroCh() };
+    byFy[r.fy].channels[ch] += ev; byFy[r.fy].total += ev;
+
+    total.channels[ch] += ev; total.total += ev;
+  }
+
+  const byMonth = [...byMonthMap.values()].sort((a, b) => a.month.localeCompare(b.month));
+  return { channels: C2C_CHANNELS.slice(), byMonth, byFy, total };
+}
+
 // ---- Custom date-range variants (day-level; $1=from, $2=to, 'YYYY-MM-DD' or null) ----
 // Only the genuinely dated sources are range-filterable: AC-matched enquiries (cs.cdate),
 // organic-incl-unmatched (event_time), Google reviews (review_create_time). The weekly
@@ -172,16 +220,19 @@ export async function getWebsiteSearch(opts = {}) {
         total: 0, organic: 0, cpc: 0, organicAll: 0,
         sessions: null, aiVisits: null, reviews: 0, avgStars: null,
       },
+      clickToCall: { channels: C2C_CHANNELS.slice(), byMonth: [], byFy: {}, total: { total: 0, channels: {} } },
       meta: { status: 'pending', source: SRC, note: 'Supabase not configured.' },
     };
   }
   const n = (v) => Number(v) || 0;
-  const [matched, organicAll, trafficRows, reviewRows] = await Promise.all([
+  const [matched, organicAll, trafficRows, reviewRows, clickRows] = await Promise.all([
     q(MATCHED_SQL),
     q(ORGANIC_ALL_SQL),
     q(TRAFFIC_SNAPSHOT_SQL).catch(() => []), // graceful fallback if migration not yet applied
     q(REVIEWS_SQL).catch(() => []),
+    q(CLICK_TO_CALL_SQL).catch(() => []),    // graceful fallback until ga4-click-to-call-sync has run
   ]);
+  const clickToCall = buildClickToCall(clickRows);
 
   const byFy = {};                                  // keyed by "FY27"
   const total = {
@@ -240,5 +291,5 @@ export async function getWebsiteSearch(opts = {}) {
 
   const range = (from || to) ? await rangeRollup(from, to) : null;
 
-  return { byFy, total, range, meta: { status: 'live', source: SRC, note: null } };
+  return { byFy, total, clickToCall, range, meta: { status: 'live', source: SRC, note: null } };
 }

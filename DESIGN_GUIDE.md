@@ -228,6 +228,32 @@ Rules:
 - Put an "as of …/data through…" note at the right of the bar via a `.spacer` +
   muted span.
 
+### Sticky controls bar ⭐
+
+**The controls bar (FY toggle + custom date range) freezes under the top bar when
+the page scrolls** — a page's filters must stay reachable without scrolling back up.
+This is the standard (`roi.html` is the reference; applied on `website_search.html`).
+
+Make the controls container `position: sticky`, pinned just below the sticky
+`.topbar`, below any tooltips/menus but above page content:
+
+```css
+#wsControls {          /* the .card (or .roas-controls/.toolbar) wrapping #fySeg + the date range */
+  position: sticky;
+  top: var(--topbar-h, 58px);   /* pin under the sticky top bar */
+  z-index: 9;                    /* under .topbar (10), over content */
+}
+```
+
+- The sticky bar must have an **opaque background** (`.card` / `--surface`) so
+  scrolled content doesn't show through.
+- `renderDateRange()` injects the custom date range right after `#fySeg` **inside
+  this same bar**, so one sticky container freezes both controls together.
+- **Gotcha (tooltip clip):** the sticky bar (`z-index:9`) will clip the upward ⓘ
+  tooltip of any hover-lifted tile that scrolls up near it (same stacking-context
+  issue as §6). Give such tiles a hover/focus z-index lift above the bar:
+  `.ws-kpi:hover, .ws-kpi:focus-within { position: relative; z-index: 40; }`.
+
 ---
 
 ## 5. KPI tiles

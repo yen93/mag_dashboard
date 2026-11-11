@@ -42,6 +42,13 @@
     }
 
     /* Controls bar + segmented toggles (same as marketing.html) */
+    /* Sticky controls: the FY toggle + custom date range freeze under the top bar on scroll
+       (DESIGN_GUIDE §4 "Sticky controls bar"; mirrors roi.html's sticky toolbar). */
+    #wsControls {
+      position: sticky;
+      top: var(--topbar-h, 58px);
+      z-index: 9;
+    }
     .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
     .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
     .segmented { border-radius: 11px; padding: 4px; gap: 2px; flex-wrap: wrap; }
@@ -97,6 +104,10 @@
       transform: translateY(-2px);
       box-shadow: var(--mkt-shadow-lift);
     }
+    /* The hover-lift transform makes each KPI its own stacking context; without a z-index
+       lift its upward ⓘ tooltip would be clipped behind the sticky controls bar (z-index:9)
+       when the tile sits near the top of the scroll (DESIGN_GUIDE §4 / §6 gotcha). */
+    .ws-kpi:hover, .ws-kpi:focus-within { position: relative; z-index: 40; }
     .ws-kpi .label {
       font-size: 13px;
       color: var(--text-muted);
@@ -417,6 +428,72 @@
       color: var(--mkt-accent);
       font-variant-numeric: tabular-nums;
     }
+
+    /* ============================================================
+       Phone enquiries · Click-to-call — by-channel table
+       ============================================================ */
+    table.ws-c2c-table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      font-size: 13.5px;
+      min-width: 380px;
+    }
+    table.ws-c2c-table th,
+    table.ws-c2c-table td {
+      padding: 11px 12px;
+      border-bottom: 1px solid var(--border);
+      font-variant-numeric: tabular-nums;
+      text-align: right;
+      vertical-align: middle;
+    }
+    table.ws-c2c-table th:first-child,
+    table.ws-c2c-table td:first-child { text-align: left; }
+    table.ws-c2c-table thead th {
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .05em;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border);
+    }
+    table.ws-c2c-table tbody tr.ws-total td {
+      border-top: 2px solid var(--border);
+      font-weight: 700;
+      background: var(--surface-2);
+    }
+    .ws-chan-cell {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .ws-chan-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 3px;
+      flex: none;
+    }
+    .ws-share-cell {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      justify-content: flex-end;
+    }
+    .ws-share-track {
+      width: 90px;
+      height: 7px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--border) 75%, transparent);
+      overflow: hidden;
+      flex: none;
+    }
+    .ws-share-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--mkt-accent), var(--mkt-accent-2));
+    }
   </style>
 </head>
 <body>
@@ -439,8 +516,9 @@
     <nav class="subtabs" id="marketingNav"></nav>
 
     <main class="content">
-      <!-- Controls bar (same per-FY top toggle filter as marketing.html) -->
-      <div class="card" style="margin-bottom:16px">
+      <!-- Controls bar (same per-FY top toggle filter as marketing.html) — sticky: freezes
+           under the top bar when scrolling (see DESIGN_GUIDE §4 "Sticky controls bar"). -->
+      <div class="card" id="wsControls" style="margin-bottom:16px">
         <div class="mkt-controls">
           <span class="ctl-label">Financial year</span>
           <div class="segmented" id="fySeg">
@@ -523,6 +601,51 @@
           </div>
         </section>
       </div>
+
+      <!-- Row 4: Phone enquiries · Click-to-call — Graph + Table (GA4 click_to_call events) -->
+      <div class="ws-snapshots-grid">
+        <!-- Graph card -->
+        <section class="card ws-section-card" id="wsC2cGraphCard">
+          <div class="ws-card-head">
+            <h3 id="wsC2cGraphHeading">Phone enquiries · Click-to-call</h3>
+            <span class="head-info" id="wsC2cGraphInfo"></span>
+            <div class="spacer" style="flex:1"></div>
+            <div class="segmented" id="wsC2cModeSeg" aria-label="Chart view">
+              <button class="active" data-mode="month">Monthly trend</button>
+              <button data-mode="channel">By channel</button>
+            </div>
+          </div>
+
+          <!-- Selected FY summary strip (updates with #fySeg) -->
+          <div class="ws-fy-strip" id="wsC2cStrip"></div>
+
+          <div class="ws-chart-box" style="height:300px">
+            <canvas id="wsC2cCanvas"></canvas>
+          </div>
+        </section>
+
+        <!-- Table card -->
+        <section class="card ws-section-card" id="wsC2cTableCard">
+          <div class="ws-card-head">
+            <h3 id="wsC2cTableHeading">Click-to-call by channel</h3>
+            <span class="head-info" id="wsC2cTableInfo"></span>
+            <div class="spacer" style="flex:1"></div>
+            <span class="muted" style="font-size:12px">Selected: <strong id="wsC2cTableFy"></strong></span>
+          </div>
+          <div class="ws-table-wrap" tabindex="0" role="region" aria-labelledby="wsC2cTableHeading">
+            <table class="ws-c2c-table">
+              <thead>
+                <tr>
+                  <th scope="col">Channel</th>
+                  <th scope="col">Phone clicks</th>
+                  <th scope="col">Share of FY</th>
+                </tr>
+              </thead>
+              <tbody id="wsC2cTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </main>
   </div>
 
@@ -543,7 +666,11 @@
          fuller than the AC-matched organic card.
        • "New Google reviews" — count and average star rating per AU FY from
          public.google_reviews (by review_create_time).
-       • "Phone enquiries" has no live source and renders a red "pending" chip. */
+       • "Phone enquiries" — GA4 "click_to_call" (phone-number click) events per AU FY
+         from public.ga4_click_to_call_monthly (weekly GA4 Data API snapshot via
+         ga4-click-to-call-sync). Also drives the "Phone enquiries · Click-to-call"
+         monthly trend chart + by-channel table. Monthly granularity → greyed under a
+         custom date range. */
 
     // Per-FY + all-years counts and average ratings from public.google_reviews
     // (grouped by Australian FY of review_create_time; used as fallback if the
@@ -634,15 +761,26 @@
       { label: 'New Google reviews', kind: 'reviews', key: 'reviews',
         desc: 'New Google Business reviews created in the selected financial year (by review_create_time), with average star rating.',
         source: 'public.google_reviews (review_create_time, star_rating)' },
-      { label: 'Phone enquiries', kind: 'pending',
-        desc: 'Enquiries that arrived by phone. Needs a phone-click / call-tracking tag — not live yet.',
-        source: 'Pending — call tracking (not live)' }
+      { label: 'Phone enquiries', kind: 'c2c', key: 'phone',
+        desc: 'Phone-number clicks on the website (GA4 "click_to_call" event) for the selected financial year — a visitor tapping a tel: link to call. Synced weekly from the GA4 Data API. GA4 began recording it in April 2023 (FY23).',
+        source: 'public.ga4_click_to_call_monthly (GA4 click_to_call event, property 363754280)' }
     ];
 
     var WS = null;        // live payload once fetched (null = loading, false = failed)
     var WS_RANGE = null;  // custom date-range roll-up (null = not loaded yet)
     var CUSTOM = false;   // true while a custom date range is active (overrides the FY toggle)
     var _trafficChart = null;
+    var _c2cChart = null;  // Chart.js instance for the click-to-call graph
+
+    // Fixed channel order + colors for the click-to-call (phone enquiries) section.
+    var C2C_CHANNELS = ['Google Ads', 'Bing Ads', 'Organic', 'Direct', 'Other'];
+    var C2C_COLORS = {
+      'Google Ads': '#3b6ef0',
+      'Bing Ads': '#17a673',
+      'Organic': '#f0a63b',
+      'Direct': '#6a4bf5',
+      'Other': '#94a3b8'
+    };
 
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
@@ -821,10 +959,32 @@
       var body;
       if (c.kind === 'pending') {
         body = '<div class="value" style="margin-top:14px"><span class="chip warn">pending</span></div>';
-      } else if (CUSTOM && (c.key === 'sessions' || c.key === 'aiVisits')) {
-        // Weekly per-FY snapshot — no sub-FY history, so a custom range can't filter it.
+      } else if (CUSTOM && (c.key === 'sessions' || c.key === 'aiVisits' || c.kind === 'c2c')) {
+        // Weekly / monthly snapshot — no sub-FY day-level history, so a custom range can't filter it.
         body = '<div class="value" style="margin-top:14px"><span class="chip warn">FY only</span></div>' +
           '<div class="sub">Not available for custom ranges</div>';
+      } else if (c.kind === 'c2c') {
+        if (WS === false) {
+          body = '<div class="value">—</div>';
+        } else if (WS === null) {
+          body = '<div class="value">…</div>';
+        } else {
+          var cc = c2cForFy(selFyKey());
+          var prev = c2cPrevTotal(selFyKey());
+          var sub = '';
+          if (prev != null && prev > 0) {
+            var dd = (cc.total || 0) - prev;
+            var pct = Math.round((dd / prev) * 1000) / 10;
+            sub = '<div class="sub' + (dd >= 0 ? ' pos' : '') + '">' +
+              (dd >= 0 ? '▲ ' : '▼ ') + Math.abs(pct) + '% vs prior FY</div>';
+          } else {
+            var topCh = c2cTopChannel(cc.channels);
+            sub = topCh
+              ? '<div class="sub">Top: ' + esc(topCh.name) + ' (' + esc(fmtNum(topCh.events)) + ')</div>'
+              : '';
+          }
+          body = '<div class="value">' + esc(fmtNum(cc.total)) + '</div>' + sub;
+        }
       } else if (CUSTOM && !WS_RANGE) {
         body = '<div class="value">…</div>';
       } else if (c.kind === 'reviews') {
@@ -1210,11 +1370,264 @@
       });
     }
 
+    /* ============================================================
+       Phone enquiries · Click-to-call (GA4 click_to_call events)
+       Source: /api/marketing/website-search → payload.clickToCall
+         { channels, byMonth:[{month,fy,fyEnd,channels{},total}],
+           byFy:{FY:{fyEnd,total,channels{}}}, total:{total,channels{}} }
+       ============================================================ */
+
+    // Channel totals + overall total for the selected FY ('all' → all-years total).
+    function c2cForFy(fyKey) {
+      var empty = { total: 0, channels: {} };
+      if (!WS || WS === true || !WS.clickToCall) return empty;
+      var cc = WS.clickToCall;
+      if (fyKey === 'all') return { total: (cc.total && cc.total.total) || 0, channels: (cc.total && cc.total.channels) || {} };
+      var rec = cc.byFy && cc.byFy[fyKey.toUpperCase()];
+      return rec ? { total: rec.total || 0, channels: rec.channels || {} } : empty;
+    }
+
+    // Prior-FY total phone clicks (null for 'all' or when no prior-FY record exists).
+    function c2cPrevTotal(fyKey) {
+      if (fyKey === 'all' || !WS || WS === true || !WS.clickToCall || !WS.clickToCall.byFy) return null;
+      var end = parseInt(String(fyKey).replace(/\D/g, ''), 10) + 2000;  // 'fy27' → 2027
+      if (!isFinite(end)) return null;
+      var prevFy = 'FY' + String(end - 1 - 2000).padStart(2, '0');
+      var rec = WS.clickToCall.byFy[prevFy];
+      return rec ? (rec.total || 0) : null;
+    }
+
+    // Largest channel {name, events} from a channels map (ignores zeros).
+    function c2cTopChannel(channels) {
+      var best = null;
+      Object.keys(channels || {}).forEach(function (k) {
+        var v = Number(channels[k]) || 0;
+        if (v > 0 && (!best || v > best.events)) best = { name: k, events: v };
+      });
+      return best;
+    }
+
+    // The byMonth rows for the selected FY ('all' → every month), oldest→newest.
+    function c2cMonthsForFy(fyKey) {
+      if (!WS || WS === true || !WS.clickToCall || !WS.clickToCall.byMonth) return [];
+      var rows = WS.clickToCall.byMonth.slice();
+      if (fyKey === 'all') return rows;
+      var fyUpper = fyKey.toUpperCase();
+      return rows.filter(function (r) { return r.fy === fyUpper; });
+    }
+
+    // 'YYYY-MM' → 'Mon YY' (e.g. '2026-10' → 'Oct 26').
+    function c2cMonthLabel(m) {
+      if (!m || m.length < 7) return m || '';
+      var names = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      var yr = m.slice(2, 4), mo = parseInt(m.slice(5, 7), 10);
+      return (names[mo - 1] || '?') + ' ' + yr;
+    }
+
+    function renderC2cGraph() {
+      var infoEl = document.getElementById('wsC2cGraphInfo');
+      if (infoEl && !infoEl.querySelector('.src-info')) {
+        infoEl.innerHTML = infoTip(
+          'Monthly website phone-number clicks (GA4 "click_to_call" event — a visitor tapping a tel: link), split by acquisition channel. "Monthly trend" stacks the selected FY’s months by channel; "By channel" ranks channels for the selected FY. Synced weekly from the GA4 Data API.',
+          'public.ga4_click_to_call_monthly (GA4 property 363754280 · ga4-click-to-call-sync)'
+        );
+      }
+
+      var card = document.getElementById('wsC2cGraphCard');
+      var stripEl = document.getElementById('wsC2cStrip');
+      var canvas = document.getElementById('wsC2cCanvas');
+      var chartBox = card ? card.querySelector('.ws-chart-box') : null;
+
+      // Monthly snapshot — greyed while a custom date range is active.
+      if (CUSTOM) {
+        if (_c2cChart) { _c2cChart.destroy(); _c2cChart = null; }
+        if (chartBox) chartBox.style.display = 'none';
+        if (stripEl) stripEl.innerHTML = '<div class="range-na">Not available for custom ranges — click-to-call is a monthly GA4 snapshot. Clear the date range to view it.</div>';
+        return;
+      }
+      if (chartBox) chartBox.style.display = '';
+
+      var fyKey = selFyKey();
+      var sel = c2cForFy(fyKey);
+      var months = c2cMonthsForFy(fyKey);
+      var topCh = c2cTopChannel(sel.channels);
+      var paid = (Number(sel.channels['Google Ads']) || 0) + (Number(sel.channels['Bing Ads']) || 0);
+      var activeMonths = months.filter(function (r) { return (r.total || 0) > 0; }).length;
+
+      // Summary strip
+      if (stripEl) {
+        var fyName = fyKey === 'all' ? 'All years' : fyKey.toUpperCase();
+        stripEl.innerHTML =
+          '<div class="ws-strip-item"><div class="k">Selected Period</div>' +
+            '<div class="v">' + esc(fyName) + '</div>' +
+            '<div class="s">GA4 click_to_call</div></div>' +
+          '<div class="ws-strip-item"><div class="k">Phone clicks</div>' +
+            '<div class="v">' + esc(fmtNum(sel.total)) + '</div>' +
+            '<div class="s">' + esc(activeMonths + (activeMonths === 1 ? ' active month' : ' active months')) + '</div></div>' +
+          '<div class="ws-strip-item"><div class="k">From paid search</div>' +
+            '<div class="v">' + esc(fmtPct(paid, sel.total, 0)) + '</div>' +
+            '<div class="s">' + esc(fmtNum(paid)) + ' Google + Bing Ads</div></div>' +
+          '<div class="ws-strip-item"><div class="k">Top channel</div>' +
+            '<div class="v">' + esc(topCh ? fmtNum(topCh.events) : '—') + '</div>' +
+            '<div class="s">' + esc(topCh ? topCh.name : 'None recorded') + '</div></div>';
+      }
+
+      if (!canvas || typeof Chart === 'undefined') return;
+      if (_c2cChart) { _c2cChart.destroy(); _c2cChart = null; }
+      var tc = themeColors();
+      var mode = (function () {
+        var b = document.querySelector('#wsC2cModeSeg button.active');
+        return b ? b.getAttribute('data-mode') : 'month';
+      })();
+
+      // "By channel" mode: horizontal ranked bars for the selected FY.
+      if (mode === 'channel') {
+        var chList = C2C_CHANNELS
+          .map(function (c) { return { name: c, events: Number(sel.channels[c]) || 0 }; })
+          .filter(function (x) { return x.events > 0; })
+          .sort(function (a, b) { return b.events - a.events; });
+        var labels = chList.length ? chList.map(function (x) { return x.name; }) : ['No phone clicks in ' + (fyKey === 'all' ? 'range' : fyKey.toUpperCase())];
+        var values = chList.length ? chList.map(function (x) { return x.events; }) : [0];
+        _c2cChart = new Chart(canvas.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Phone clicks',
+              data: values,
+              backgroundColor: (chList.length ? chList : [{ name: 'Other' }]).map(function (x) { return C2C_COLORS[x.name] || '#94a3b8'; }),
+              borderRadius: 6,
+              maxBarThickness: 40
+            }]
+          },
+          options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 } },
+              y: { grid: { display: false }, ticks: { color: tc.text, font: { size: 12, weight: '600' } } }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: {
+                callbacks: {
+                  label: function (ctx) {
+                    var v = ctx.parsed.x || 0;
+                    return fmtNum(v) + ' phone clicks (' + fmtPct(v, sel.total, 1) + ' of ' + (fyKey === 'all' ? 'all years' : fyKey.toUpperCase()) + ')';
+                  }
+                }
+              }
+            }
+          }
+        });
+        return;
+      }
+
+      // Default "Monthly trend" mode: stacked bars by channel across the selected FY's months.
+      var monthLabels = months.map(function (r) { return c2cMonthLabel(r.month); });
+      if (!months.length) { monthLabels = ['No data']; }
+      var datasets = C2C_CHANNELS.map(function (ch) {
+        return {
+          label: ch,
+          data: months.map(function (r) { return (r.channels && Number(r.channels[ch])) || 0; }),
+          backgroundColor: C2C_COLORS[ch],
+          borderRadius: 3,
+          maxBarThickness: 34,
+          stack: 'c2c'
+        };
+      });
+      _c2cChart = new Chart(canvas.getContext('2d'), {
+        type: 'bar',
+        data: { labels: monthLabels, datasets: months.length ? datasets : [] },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: { color: tc.muted, font: { size: 10.5 }, maxRotation: 0, autoSkip: true, maxTicksLimit: 14 } },
+            y: { stacked: true, beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 } }
+          },
+          plugins: {
+            legend: { display: true, position: 'top', align: 'end', labels: { color: tc.text, boxWidth: 12, usePointStyle: true, font: { size: 11.5 } } },
+            tooltip: {
+              callbacks: {
+                footer: function (items) {
+                  var t = 0; items.forEach(function (i) { t += i.parsed.y || 0; });
+                  return 'Total: ' + fmtNum(t) + ' phone clicks';
+                }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderC2cTable() {
+      var infoEl = document.getElementById('wsC2cTableInfo');
+      if (infoEl && !infoEl.querySelector('.src-info')) {
+        infoEl.innerHTML = infoTip(
+          'GA4 click_to_call (phone-number click) events for the selected financial year, broken down by acquisition channel, with each channel’s share of that FY’s phone clicks.',
+          'public.ga4_click_to_call_monthly (GA4 click_to_call event, aggregated per FY)'
+        );
+      }
+
+      var fyLabelEl = document.getElementById('wsC2cTableFy');
+      var tbody = document.getElementById('wsC2cTableBody');
+      if (!tbody) return;
+
+      if (CUSTOM) {
+        if (fyLabelEl) fyLabelEl.textContent = 'custom range';
+        tbody.innerHTML = '<tr><td colspan="3" class="range-na">Not available for custom ranges — these are monthly GA4 snapshots. Clear the date range to view them.</td></tr>';
+        return;
+      }
+
+      var fyKey = selFyKey();
+      var fyName = fyKey === 'all' ? 'All years' : fyKey.toUpperCase();
+      if (fyLabelEl) fyLabelEl.textContent = fyName;
+
+      if (WS === null) { tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center;padding:20px">Loading…</td></tr>'; return; }
+      if (WS === false) { tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center;padding:20px">—</td></tr>'; return; }
+
+      var sel = c2cForFy(fyKey);
+      var rows = C2C_CHANNELS
+        .map(function (c) { return { name: c, events: Number(sel.channels[c]) || 0 }; })
+        .filter(function (x) { return x.events > 0; })
+        .sort(function (a, b) { return b.events - a.events; });
+
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="3" class="muted" style="text-align:center;padding:20px">No phone clicks recorded in ' + esc(fyName) + '.</td></tr>';
+        return;
+      }
+
+      var maxEv = rows[0].events || 1;
+      var html = rows.map(function (r) {
+        var pct = fmtPct(r.events, sel.total, 1);
+        var width = Math.max(4, Math.round((r.events / maxEv) * 100));
+        return '<tr>' +
+          '<td><span class="ws-chan-cell"><span class="ws-chan-dot" style="background:' + C2C_COLORS[r.name] + '"></span>' + esc(r.name) + '</span></td>' +
+          '<td><strong>' + esc(fmtNum(r.events)) + '</strong></td>' +
+          '<td><span class="ws-share-cell">' + esc(pct) +
+            '<span class="ws-share-track"><span class="ws-share-fill" style="width:' + width + '%"></span></span></span></td>' +
+        '</tr>';
+      }).join('');
+
+      html += '<tr class="ws-total">' +
+        '<td>Total · ' + esc(fyName) + '</td>' +
+        '<td><strong>' + esc(fmtNum(sel.total)) + '</strong></td>' +
+        '<td><span class="ws-share-cell">100%<span class="ws-share-track"><span class="ws-share-fill" style="width:100%"></span></span></span></td>' +
+      '</tr>';
+
+      tbody.innerHTML = html;
+    }
+
     function renderAll() {
       document.getElementById('wsTopKpis').innerHTML = TOP_CARDS.map(cardHtml).join('');
       document.getElementById('wsBottomKpis').innerHTML = BOTTOM_CARDS.map(cardHtml).join('');
       renderTrafficGraph();
       renderTrafficTable();
+      renderC2cGraph();
+      renderC2cTable();
     }
 
     function wireSeg(id, onChange) {
@@ -1248,9 +1661,11 @@
     wireSeg('fySeg', renderAll);
     wireSeg('wsChartModeSeg', renderTrafficGraph);
     wireSeg('wsTableScopeSeg', renderTrafficTable);
+    wireSeg('wsC2cModeSeg', renderC2cGraph);
     wireDateRange({ onChange: applyRange });
     window.onThemeChange = function () {
       renderTrafficGraph();
+      renderC2cGraph();
     };
 
     // Load the live website form-enquiry & traffic snapshot figures.
