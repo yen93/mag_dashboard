@@ -65,7 +65,7 @@
       box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
     }
 
-    /* Top 4 KPI cards */
+    /* 4 KPI cards grid */
     .cs-kpi-grid {
       display: grid;
       grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -271,9 +271,6 @@
         </div>
       </div>
 
-      <!-- Top KPI row -->
-      <div class="cs-kpi-grid" id="csKpis"></div>
-
       <!-- Followers per platform (live, FY-aware) -->
       <h3 class="cs-block-title" id="followersHeading">Followers by platform <span class="head-info" data-info="Current follower count per social platform, for the selected financial year (that FY's latest weekly snapshot)." data-src="GET /api/marketing/platforms — public.social_platform_stats, scraped weekly via Apify (public profile stats)."></span></h3>
       <div class="cs-kpi-grid" id="followerCards"></div>
@@ -330,6 +327,9 @@
           </div>
         </div>
       </div>
+
+      <!-- Pending KPI cards (cadence & content slots) -->
+      <div class="cs-kpi-grid" id="csKpis"></div>
     </main>
   </div>
 
