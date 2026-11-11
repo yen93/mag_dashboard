@@ -5,12 +5,12 @@
 // for a column, that column is returned as the sentinel 'pending' (the page renders it
 // as a red `pending` chip, DESIGN_GUIDE §8) — never a fabricated number.
 //
-//   • "Paid (Google, Bing, Agency)"  → the canonical ROAS metric (server/metrics/roas.js).
-//       Spend     = All-in ad cost (Google Ads + Bing + Simple Digital/agency, ex-GST, Xero)
+//   • "Paid Ads"  → the canonical ROAS metric (server/metrics/roas.js).
+//       Spend     = Ad cost excluding agency fees (Google Ads + Bing, ex-GST, Xero)
 //       Enquiries = paid leads (won+lost+open) counted into ROAS (public.roas_counted_deals)
 //       Bookings  = won paid deals
 //       Revenue   = won paid revenue (billed Xero engagement fee where invoiced, else value)
-//       ROAS total/ads = roasAllin / roasGoogle (won revenue ÷ all-in / ÷ Google-only cost)
+//       ROAS total = won revenue ÷ Paid Ads spend (Google + Bing)
 //
 //   • "Executive X"  → public.exec_x_revenue (static load of the Executive X ROI sheet).
 //       Bookings  = count of Exec X engagements (one row per client), Revenue = sum(revenue).
@@ -22,41 +22,42 @@
 //       Enquiries = companies listed per season in the Exec X ROI sheet (attendees), summed per
 //                   FY by the SESSION date (Spring Sep–Nov, Autumn Mar) — the SAME basis as the
 //                   Nurture & Events page's EXEC_X table. STATIC (the sheet has no live feed).
-//       ROAS total = revenue ÷ spend. Cost-per-enquiry is derived client-side. ROAS ads →
-//                   'pending'. NB bookings/revenue are attributed by EVENT date, enquiries by
-//                   SESSION date, so a later FY can show bookings with 0 same-FY enquiries.
+//       ROAS total = revenue ÷ spend. Cost-per-enquiry is derived client-side. NB bookings/revenue
+//                   are attributed by EVENT date, enquiries by SESSION date, so a later FY can
+//                   show bookings with 0 same-FY enquiries.
 //
 //   • "Bureau" / "Tailor"  → the leads-by-source metric (marketing-leads-by-source.js —
 //       ac_indirect_deals, split by is_tailor), so these rows reconcile EXACTLY with the
 //       Leads & Bookings "By source" table.
 //       Enquiries = leads for that source, Bookings = won, Revenue = won revenue (AUD).
-//       Spend / Cost-per-enquiry / ROAS are not tracked for these channels → 'pending'.
+//       Spend / Cost-per-enquiry / ROAS total are not applicable for these channels → 'N/A'.
 //
-//   • "Marketing EDM"  → not yet attributed to deals/revenue → every column 'pending'.
+//   • "Marketing EDM"  → 0 across all columns (pending tracking process).
 //
 // All channels are returned per FY plus an "all years" total, so the page's FY toggle can
-// filter client-side. Cost-per-enquiry is derived on the client (spend ÷ enquiries; 'pending'
-// whenever spend or enquiries is 'pending').
+// filter client-side. Cost-per-enquiry is derived on the client (spend ÷ enquiries; 'N/A' or
+// 'pending' whenever spend or enquiries is 'N/A' or 'pending').
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { getRoas } from './roas.js';
 import { getMarketingLeadsBySource } from './marketing-leads-by-source.js';
 
 export const CHANNELS = [
-  'Paid (Google, Bing, Agency)', 'Executive X', 'Bureau', 'Tailor', 'Marketing EDM',
+  'Paid Ads', 'Executive X', 'Bureau', 'Tailor', 'Marketing EDM',
 ];
 
 // Sentinel for a column with no known data source for a given channel.
 const PENDING = 'pending';
+const NA = 'N/A';
 
 const SRC =
-  'Live (Supabase): Paid row from the ROAS metric (roas_counted_deals + Xero ad spend — ' +
-  'Google/Bing/Simple Digital); Executive X bookings+revenue from exec_x_revenue (Exec X ROI ' +
+  'Live (Supabase): Paid Ads row from the ROAS metric (roas_counted_deals + Xero ad spend — ' +
+  'Google + Bing, excluding agency fees); Executive X bookings+revenue from exec_x_revenue (Exec X ROI ' +
   'sheet), spend from the Xero "MAG program delivery expenses" account (code 376, cost of ' +
   'sales) per FY via xero_pnl_accounts_fy — a shared all-programs account, so it overcounts ' +
   'Exec X; enquiries = companies listed per season in the Exec X ROI sheet (static, by session ' +
-  'FY); Bureau/Tailor from the leads-by-source metric (ac_indirect_deals); ' +
-  'Marketing EDM not yet tracked. Untracked columns return "pending".';
+  'FY); Bureau/Tailor from the leads-by-source metric (ac_indirect_deals, Spend/Cost per enquiry/ROAS total = N/A); ' +
+  'Marketing EDM = 0 (pending tracking process).';
 
 const EXEC_X_SQL = `
   SELECT fy_end AS "fyEnd",
@@ -87,23 +88,23 @@ const EXEC_X_ENQUIRIES_TOTAL = Object.values(EXEC_X_ENQUIRIES_BY_FY).reduce((a, 
 
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
-// Shape the Paid channel from one ROAS per-FY row.
+// Shape the Paid Ads channel from one ROAS per-FY row (Google + Bing spend, excluding agency fees).
 function paidFrom(r) {
-  if (!r) return { spend: 0, enquiries: 0, bookings: 0, revenue: 0, roasTotal: null, roasAds: null };
+  if (!r) return { spend: 0, enquiries: 0, bookings: 0, revenue: 0, roasTotal: null };
+  const spend = (r.googleSpend || 0) + (r.bingSpend || 0);
+  const revenue = r.wonRevenue || 0;
   return {
-    spend: r.totalCost || 0,
+    spend,
     enquiries: r.leads || 0,
     bookings: r.won || 0,
-    revenue: r.wonRevenue || 0,
-    roasTotal: r.roasAllin != null ? r.roasAllin : (r.totalCost ? (r.wonRevenue || 0) / r.totalCost : null),
-    roasAds: r.roasGoogle != null ? r.roasGoogle : (r.googleSpend ? (r.wonRevenue || 0) / r.googleSpend : null),
+    revenue,
+    roasTotal: spend ? revenue / spend : null,
   };
 }
 
 // Executive X — bookings + revenue from exec_x_revenue; spend from the Xero "MAG program
 // delivery expenses" account (code 376) for that FY; enquiries = companies listed that FY in
-// the Exec X ROI sheet (0 when no session that FY). ROAS total = revenue ÷ spend. ROAS ads has
-// no source → 'pending' (not "—": no source, not a zero value).
+// the Exec X ROI sheet (0 when no session that FY). ROAS total = revenue ÷ spend.
 function execXFrom(e, spend, enquiries) {
   const sp = (spend === null || spend === undefined) ? PENDING : num(spend);
   const revenue = e ? num(e.revenue) || 0 : 0;
@@ -113,32 +114,30 @@ function execXFrom(e, spend, enquiries) {
     bookings: e ? num(e.bookings) || 0 : 0,
     revenue,
     roasTotal: (typeof sp === 'number' && sp > 0) ? revenue / sp : (sp === 0 ? null : PENDING),
-    roasAds: PENDING,
   };
 }
 
 // Bureau / Tailor — enquiries, bookings and won revenue per FY from the leads-by-source
 // metric (so they reconcile with the Leads & Bookings "By source" table). Spend /
-// cost-per-enquiry / ROAS are not tracked for these channels → 'pending'.
+// cost-per-enquiry / ROAS total are 'N/A' for these channels.
 // `fyEnd` null → aggregate across all years.
 function indirectFrom(leads, source, fyEnd) {
   const rows = leads.filter((l) => l.source === source && (fyEnd == null || l.fyEnd === fyEnd));
   const won = rows.filter((l) => l.won);
   return {
-    spend: PENDING,
+    spend: NA,
     enquiries: rows.length,
     bookings: won.length,
     revenue: Math.round(won.reduce((a, l) => a + (num(l.value) || 0), 0)),
-    roasTotal: PENDING,
-    roasAds: PENDING,
+    roasTotal: NA,
   };
 }
 
-// Marketing EDM — no deal/revenue attribution source yet → every column 'pending'.
+// Marketing EDM — 0 across all columns (pending tracking process).
 function edmChannel() {
   return {
-    spend: PENDING, enquiries: PENDING, bookings: PENDING,
-    revenue: PENDING, roasTotal: PENDING, roasAds: PENDING,
+    spend: 0, enquiries: 0, costPerEnq: 0, bookings: 0,
+    revenue: 0, roasTotal: 0,
   };
 }
 
@@ -215,12 +214,12 @@ export async function getMarketingChannelResults() {
 
   const note = rows.length
     ? `${CHANNELS.length} channels per FY (${rows[0].fy}–${rows[rows.length - 1].fy}). ` +
-      `Paid = ROAS metric (All-in Google+Bing+agency cost vs won paid revenue); ` +
+      `Paid Ads = ROAS metric (Google+Bing ad cost excluding agency fees vs won paid revenue); ` +
       `Executive X = exec_x_revenue (bookings+revenue), spend from the Xero "MAG program ` +
       `delivery expenses" account (code 376, a shared all-programs account — overcounts Exec X), ` +
       `enquiries = companies listed per season in the Exec X ROI sheet (static, by session FY); ` +
-      `Bureau/Tailor = leads-by-source (enquiries, bookings, won revenue); ` +
-      `Marketing EDM not yet tracked. Untracked columns = "pending".`
+      `Bureau/Tailor = leads-by-source (enquiries, bookings, won revenue; Spend/Cost per enquiry/ROAS total = N/A); ` +
+      `Marketing EDM = 0 (pending tracking process).`
     : 'No channel results yet.';
 
   return {

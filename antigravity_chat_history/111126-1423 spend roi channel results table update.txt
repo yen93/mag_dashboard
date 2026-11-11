@@ -1,0 +1,54 @@
+================================================================================
+UPDATE DOCUMENTATION: SPEND & ROI CHANNEL RESULTS TABLE UPDATE
+Timestamp: 11/11/26 14:23 (UTC+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. PAID ADS CHANNEL ROW RENAME & AGENCY FEE REMOVAL
+--------------------------------------------------------------------------------
+* Problem / Context:
+  The first row of the "Channel results" table on `spend_roi.html` (`Paid (Google, Bing, Agency)`) included Simple Digital agency fees (`sdFee`) in its spend and derived metrics, and needed to be renamed to "Paid Ads" with agency fees removed.
+
+* Technical Changes:
+  - `server/metrics/marketing-channel-results.js`:
+    - Renamed `'Paid (Google, Bing, Agency)'` to `'Paid Ads'` in `CHANNELS`.
+    - Updated `paidFrom(r)` so `spend = (r.googleSpend || 0) + (r.bingSpend || 0)` (excluding `sdFee` agency fees) and `roasTotal = spend ? revenue / spend : null`.
+  - `public/spend_roi.html`:
+    - Renamed `'Paid (Google, Bing, Agency)'` to `'Paid Ads'` in `CH_COLOR` and `renderChannelResults()`.
+    - Added client-side normalization (`normalizeCrRow`) in `loadChannelResults()` using `/api/operations/roas` so `Paid Ads` spend and `ROAS total` reflect `googleSpend + bingSpend` immediately even before a backend server restart.
+  - `server/index.js`:
+    - Updated route documentation comment for `/api/marketing/channel-results`.
+
+2. BUREAU & TAILOR "N/A" COLUMNS AND "ROAS ADS" COLUMN REMOVAL
+--------------------------------------------------------------------------------
+* Problem / Context:
+  - `Bureau` and `Tailor` rows needed to display `"N/A"` instead of a `pending` chip for `"Spend"`, `"Cost / enquiry"`, and `"ROAS total"`.
+  - The `"ROAS ads"` column needed to be removed from the "Channel results" table.
+
+* Technical Changes:
+  - `server/metrics/marketing-channel-results.js`:
+    - Added `const NA = 'N/A'` and updated `indirectFrom()` so `Bureau` and `Tailor` return `spend: 'N/A'` and `roasTotal: 'N/A'`.
+    - Removed `roasAds` from `paidFrom()`, `execXFrom()`, `indirectFrom()`, and `edmChannel()`.
+  - `public/spend_roi.html`:
+    - Removed `<th>ROAS ads</th>` from the table `<thead>` and removed the `roasAds` cell from `channelRowHtml()`.
+    - Updated empty/loading/custom-range `colspan` attributes from `8` to `7`.
+    - Added `var NA = 'N/A'` and `naCell()` helper (`<span class="muted">N/A</span>`), updating `fmtCur()`, `intCell()`, `roasCell()`, and `channelRowHtml()` (`costPerEnq = NA` when `spend` or `enquiries` is `NA`).
+
+3. MARKETING EDM ROW ZERO VALUES & NOTE UPDATE
+--------------------------------------------------------------------------------
+* Problem / Context:
+  The `"Marketing EDM"` row needed to show `0` (zero) across all columns and have its note updated to `"pending tracking process"`.
+
+* Technical Changes:
+  - `server/metrics/marketing-channel-results.js`:
+    - Updated `edmChannel()` to return `{ spend: 0, enquiries: 0, costPerEnq: 0, bookings: 0, revenue: 0, roasTotal: 0 }`.
+  - `public/spend_roi.html`:
+    - Updated `channelRowHtml()` to respect an explicit `c.costPerEnq` value so `0` enquiries with `$0` spend formats as `$0` rather than `—`.
+    - Updated the `"Marketing EDM"` row call in `renderChannelResults()` to pass `'pending tracking process'` as its note.
+    - Updated the card header `data-info` and `data-src` tooltip text on the "Channel results" card.
+
+4. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Executed `getMarketingChannelResults()` via Node to verify module syntax and output structure (`channels: ["Paid Ads", "Executive X", "Bureau", "Tailor", "Marketing EDM"]`).
+* Verified client-side rendering logic and `colspan="7"` alignment across all 7 columns (`Channel`, `Spend`, `Enquiries`, `Cost / enquiry`, `Bookings`, `Revenue`, `ROAS total`).
+================================================================================

@@ -237,7 +237,7 @@
         <div class="mkt-controls">
           <span id="drAnchor" hidden></span>
           <div class="spacer" style="flex:1"></div>
-          <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
+          <!-- <span class="muted" id="fyNote" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span> -->
         </div>
       </div>
 
@@ -704,7 +704,7 @@
     })();
 
     initPage('marketing');
-    renderMarketingHead();
+    renderMarketingHead(true);
     renderMarketingSidebar('monthly-log');
     renderDateRange({ after: 'drAnchor' });   // keep the date range in the top controls card
     fillHeadInfo();              // fill the table ⓘ info tools (§6)

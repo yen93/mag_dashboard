@@ -1,0 +1,18 @@
+**row_a:** 
+Paid (Google, Bing, Agency)
+
+**rows_b:**
+Bureau
+Tailor
+
+**cols_na:**
+"Spend"
+"Cost / enquiry"
+"ROAS total"
+
+## main task: update spend_roi.html "Channel results" table
+1. remove agency fees in row_a.
+2. rename row_a to "Paid Ads"
+3. rows_b should be "N/A" for cols_na
+4. remove "ROAS ads" column
+5. "Marketing EDM" to be 0 (zero) in all columns. and note to be changed to "pending tracking process"

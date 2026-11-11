@@ -343,8 +343,8 @@ marketing.get('/channel-summary', async (_req, res) => {
     res.status(502).json({ error: 'Failed to load channel summary from data source.', detail: err.message });
   }
 });
-// Channel results — the two channel_list channels (Paid Google/Bing/Agency + Executive X)
-// per FY for the "Spend & ROI" tab's Channel results table. Paid from the ROAS metric,
+// Channel results — per-channel results (Paid Ads + Executive X + Bureau/Tailor + Marketing EDM)
+// per FY for the "Spend & ROI" tab's Channel results table. Paid Ads from the ROAS metric,
 // Executive X from exec_x_revenue. See server/metrics/marketing-channel-results.js.
 marketing.get('/channel-results', async (_req, res) => {
   try {

@@ -177,15 +177,15 @@
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Channel results <span class="head-info"
-              data-info="Per-channel spend, enquiries, bookings, revenue and ROAS by financial year. Paid (Google/Bing/Agency) is fully tracked; Executive X shows bookings + revenue, spend from the Xero 'MAG program delivery expenses' account (code 376) — a shared all-programs account, so it overcounts Exec X and its ROAS reads low — and enquiries = companies listed per season in the Exec X ROI sheet (by session FY); Bureau and Tailor show enquiries, bookings and won revenue (spend/ROAS not tracked); Marketing EDM is not yet attributed. Columns with no source show a 'pending' chip."
-              data-src="GET /api/marketing/channel-results — Paid via the ROAS metric; Executive X bookings+revenue via public.exec_x_revenue, spend via the Xero 'MAG program delivery expenses' account (code 376) in xero_pnl_accounts_fy, enquiries = companies listed per season in the Exec X ROI sheet (static); Bureau/Tailor via the leads-by-source metric (ac_indirect_deals)"></span></h3>
+              data-info="Per-channel spend, enquiries, bookings, revenue and ROAS by financial year. Paid Ads (Google + Bing, excluding agency fees) is fully tracked; Offsite (Executive X) shows bookings + revenue, spend from the Xero 'MAG program delivery expenses' account (code 376) — a shared all-programs account, so it overcounts Exec X and its ROAS reads low — and enquiries = companies listed per season in the Exec X ROI sheet (by session FY); Bureau and Tailor show enquiries, bookings and won revenue (Spend, Cost / enquiry and ROAS total are N/A); Marketing EDM is 0 across all columns (pending tracking process)."
+              data-src="GET /api/marketing/channel-results — Paid Ads via the ROAS metric (Google + Bing spend); Executive X bookings+revenue via public.exec_x_revenue, spend via the Xero 'MAG program delivery expenses' account (code 376) in xero_pnl_accounts_fy, enquiries = companies listed per season in the Exec X ROI sheet (static); Bureau/Tailor via the leads-by-source metric (ac_indirect_deals)"></span></h3>
           </div>
           <div class="sr-table-wrap">
             <table class="sr-table">
               <thead>
                 <tr>
                   <th>Channel</th><th>Spend</th><th>Enquiries</th><th>Cost / enquiry</th>
-                  <th>Bookings</th><th>Revenue</th><th>ROAS total</th><th>ROAS ads</th>
+                  <th>Bookings</th><th>Revenue</th><th>ROAS total</th>
                 </tr>
               </thead>
               <tbody id="channelBody"></tbody>
@@ -218,7 +218,7 @@
                               GET /api/marketing/overview (enquiry count, for Cost per enquiry)
        • "Spend by type"    ← GET /api/marketing/channel-summary (the `type` series — the SAME
                               buckets as roi.html's Channel Summary "By type"), summed over the FY
-       • "Channel results"  ← GET /api/marketing/channel-results (Paid Google/Bing/Agency from the
+       • "Channel results"  ← GET /api/marketing/channel-results (Paid Ads Google/Bing from the
                               ROAS metric; Executive X bookings+revenue from exec_x_revenue, spend
                               from the Xero "MAG program delivery expenses" account (code 376) in
                               xero_pnl_accounts_fy — a shared all-programs account, overcounts Exec X —
@@ -233,11 +233,14 @@
     function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
     function fyName(key) { return key === 'all' ? 'All years' : key.toUpperCase(); }
     // A column with no known data source for a channel comes back as the string 'pending'
-    // and renders as the DESIGN_GUIDE §8 chip; null is a genuine missing value → "—".
+    // and renders as the DESIGN_GUIDE §8 chip; 'N/A' renders as "N/A"; null is a genuine missing value → "—".
     var PENDING = 'pending';
+    var NA = 'N/A';
     function pendChip() { return '<span class="chip warn">pending</span>'; }
+    function naCell() { return '<span class="muted">N/A</span>'; }
     function fmtCur(v) {
       if (v === PENDING) return pendChip();
+      if (v === NA) return naCell();
       return (v == null) ? '<span class="muted">—</span>' : fmt(v, 'currency');
     }
 
@@ -518,10 +521,10 @@
     }
 
     // ===================================================================
-    //  Channel results table — the two channel_list channels for the FY.
+    //  Channel results table — the channels for the selected FY.
     // ===================================================================
     var CH_COLOR = {
-      'Paid (Google, Bing, Agency)': '#3b6ef0',
+      'Paid Ads': '#3b6ef0',
       'Offsite': '#7c5cff',
       'Bureau': '#e8833a',
       'Tailor': '#e15b97',
@@ -535,16 +538,20 @@
     }
     function intCell(v) {
       if (v === PENDING) return pendChip();
+      if (v === NA) return naCell();
       return (v == null) ? '<span class="muted">—</span>' : String(v);
     }
     function roasCell(v) {
       if (v === PENDING) return pendChip();
+      if (v === NA) return naCell();
       return (v == null) ? '<span class="muted">—</span>' : v.toFixed(1) + '×';
     }
     function channelRowHtml(name, c, note) {
-      // Cost / enquiry is derived (spend ÷ enquiries); 'pending' if either input is 'pending'.
+      // Cost / enquiry is derived (spend ÷ enquiries); 'N/A' or 'pending' if either input is 'N/A' or 'pending'.
       var costPerEnq;
-      if (c.spend === PENDING || c.enquiries === PENDING) costPerEnq = PENDING;
+      if (c.costPerEnq !== undefined) costPerEnq = c.costPerEnq;
+      else if (c.spend === NA || c.enquiries === NA) costPerEnq = NA;
+      else if (c.spend === PENDING || c.enquiries === PENDING) costPerEnq = PENDING;
       else costPerEnq = (c.spend != null && c.enquiries) ? c.spend / c.enquiries : null;
       var dot = '<span class="ch-dot" style="background:' + (CH_COLOR[name] || '#9aa4b2') + '"></span>';
       var noteHtml = note ? '<div class="muted" style="font-size:11px;font-weight:400;margin-top:2px">' + esc(note) + '</div>' : '';
@@ -556,28 +563,27 @@
         '<td>' + intCell(c.bookings) + '</td>' +
         '<td>' + fmtCur(c.revenue) + '</td>' +
         '<td>' + roasCell(c.roasTotal) + '</td>' +
-        '<td>' + roasCell(c.roasAds) + '</td>' +
         '</tr>';
     }
     function renderChannelResults() {
       var body = document.getElementById('channelBody');
       if (!body) return;
       if (CUSTOM) {   // FY-snapshot data (ROAS + Exec X) — no sub-FY history to filter
-        body.innerHTML = '<tr><td colspan="8" class="range-na">Not available for custom ranges — this table is reported by financial year. Clear the date range to view it.</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" class="range-na">Not available for custom ranges — this table is reported by financial year. Clear the date range to view it.</td></tr>';
         return;
       }
-      if (!CR.loaded) { body.innerHTML = '<tr><td colspan="8" class="muted">Loading…</td></tr>'; return; }
+      if (!CR.loaded) { body.innerHTML = '<tr><td colspan="7" class="muted">Loading…</td></tr>'; return; }
       var row = crRowFor(selFyKey());
       if (!row) {
-        body.innerHTML = '<tr><td colspan="8" class="muted">No channel data for ' + fyName(selFyKey()) + '.</td></tr>';
+        body.innerHTML = '<tr><td colspan="7" class="muted">No channel data for ' + fyName(selFyKey()) + '.</td></tr>';
         return;
       }
       body.innerHTML =
-        channelRowHtml('Paid (Google, Bing, Agency)', row.paid) +
+        channelRowHtml('Paid Ads', row.paid) +
         channelRowHtml('Offsite', row.execX, 'Updated at the close of each season.') +
         channelRowHtml('Bureau', row.bureau) +
         channelRowHtml('Tailor', row.tailor) +
-        channelRowHtml('Marketing EDM', row.edm, 'Not yet attributed to deals.');
+        channelRowHtml('Marketing EDM', row.edm, 'pending tracking process');
     }
 
     // ===================================================================
@@ -617,10 +623,38 @@
         try { renderSpendByType(); } catch (e) { console.error('spend chart', e); }
       }).catch(function (err) { console.error('channel-summary', err); CH.loaded = true; });
     }
+    function normalizeCrRow(row, roasRow) {
+      if (!row) return row;
+      if (roasRow) {
+        var adSpend = (Number(roasRow.googleSpend) || 0) + (Number(roasRow.bingSpend) || 0);
+        var rev = Number(roasRow.wonRevenue) || 0;
+        row.paid = {
+          spend: adSpend,
+          enquiries: Number(roasRow.leads) || 0,
+          bookings: Number(roasRow.won) || 0,
+          revenue: rev,
+          roasTotal: adSpend ? rev / adSpend : null,
+        };
+      }
+      if (row.bureau) { row.bureau.spend = NA; row.bureau.roasTotal = NA; }
+      if (row.tailor) { row.tailor.spend = NA; row.tailor.roasTotal = NA; }
+      row.edm = { spend: 0, enquiries: 0, costPerEnq: 0, bookings: 0, revenue: 0, roasTotal: 0 };
+      return row;
+    }
     function loadChannelResults() {
-      return fetchJSON('/api/marketing/channel-results').then(function (d) {
-        CR.rows = (d && d.rows) || [];
-        CR.total = d && d.total;
+      return Promise.all([
+        fetchJSON('/api/marketing/channel-results'),
+        fetchJSON('/api/operations/roas').catch(function () { return null; }),
+      ]).then(function (res) {
+        var d = res[0], roas = res[1];
+        var roasByFy = {};
+        if (roas && roas.rows && roas.rows.data) {
+          roas.rows.data.forEach(function (r) { roasByFy[r.fyEnd] = r; });
+        }
+        CR.rows = ((d && d.rows) || []).map(function (r) {
+          return normalizeCrRow(r, roasByFy[r.fyEnd]);
+        });
+        CR.total = d && d.total ? normalizeCrRow(d.total, roas && roas.total) : null;
         CR.loaded = true;
         renderChannelResults();
       }).catch(function (err) { console.error('channel-results', err); CR.loaded = true; renderChannelResults(); });
