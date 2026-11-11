@@ -1,0 +1,39 @@
+================================================================================
+UPDATE DOCUMENTATION: ADD ADOBE TO SOFTWARE SPEND SPEC AND MAP
+Timestamp: 11/11/26 15:35 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. ADOBE XERO INVESTIGATION & VENDOR MAP CLASSIFICATION
+--------------------------------------------------------------------------------
+* Problem / Context:
+  User queried which Xero account holds "%adobe%" charges and requested to add
+  Adobe to `Marketing Expenses - Xero Account - Description.md` as well as map
+  it to the dashboard's "Software" spend type.
+
+* Technical Changes:
+  - Discovered Adobe charges via Xero bank transactions discovery mode on
+    `xero-channel-summary-sync` (?discover=1):
+    1. Contact ID: `30d0112e-13e3-434c-a94e-94155847e37d` ('Adobe', $3,758.88 on Account 332)
+    2. Contact ID: `54fbce61-34ee-4fc0-87fe-0a70e2898484` ('Adobe membership', $791.88 on Account 332)
+    Both sit on Account 332 (`Software subscriptions`).
+  - `Marketing Expenses - Xero Account - Description.md`:
+    Added entries for `"Adobe"` and `"Adobe membership"` under
+    `"Software subscriptions"`.
+  - `supabase/migrations/20261111153000_add_adobe_to_marketing_vendor_map.sql`:
+    Created migration inserting both contact IDs into `public.marketing_channel_vendor_map`
+    with `type = 'Software'`, `include = TRUE`, and `platform = NULL`.
+
+2. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* Edge Function:
+  - `xero-channel-summary-sync` (https://aivitcomiywiysrfwqxt.supabase.co/functions/v1/xero-channel-summary-sync)
+  - Post-migration execution of `?sync=1` will pull and populate the historical
+    Adobe transactions on Account 332 into `public.marketing_channel_monthly`.
+
+3. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Confirmed Xero discovery output contains exact contact IDs and amounts ($4,550.76 total).
+* Markdown diff verified cleanly.
+* Migration SQL prepared for manual review and deployment per workspace rules.
+================================================================================
