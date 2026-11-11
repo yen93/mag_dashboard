@@ -1,0 +1,51 @@
+================================================================================
+UPDATE DOCUMENTATION: MARKETING KPI CARDS TAB ROUTING
+Timestamp: 12/11/26 07:53 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. MARKETING OVERVIEW: KPI CARD ROUTING TO SOURCE TABS
+--------------------------------------------------------------------------------
+* Problem / Context:
+  In `public/marketing.html`, the headline KPI cards in `#mktKpis` displayed live
+  metrics across enquiries, bookings, rate, revenue, spend, and ROI, but clicking
+  them did not route users to the underlying source data tabs.
+  Requirements:
+  1. "Keynote enquiries", "Keynote bookings", and "Enquiry → booking rate" cards
+     must route to the "All leads" table in `leads_bookings` (`leads_bookings.html#all-leads`).
+  2. "Marketing revenue", "Marketing spend", and "Marketing ROI" cards must route
+     to the `spend_roi` tab (`spend_roi.html`).
+
+* Technical Changes:
+  - `public/marketing.html`:
+    - Added CSS rules for `a.kpi`: `display: block; color: inherit; text-decoration: none; cursor: pointer;`
+      with `:visited` color preservation and `:focus-visible` outline for keyboard navigation.
+    - Updated `kpiHtml(label, val, info, deltaHtml, href)` and `liveCard(cfg)` helpers
+      to conditionally render `<a>` tags with `href` attributes.
+    - Configured card destinations:
+      - `enqCard()` -> `leads_bookings.html#all-leads`
+      - `bookCard()` -> `leads_bookings.html#all-leads`
+      - `rateCard()` -> `leads_bookings.html#all-leads`
+      - `revenueCard()` -> `spend_roi.html`
+      - `spendCard()` -> `spend_roi.html`
+      - `roiCard()` -> `spend_roi.html`
+    - Added delegated `click` and `keydown` event listeners to `#mktKpis` to prevent
+      navigation when clicking `.src-info` (the circular ⓘ button) so provenance/source
+      tooltips can be inspected without triggering page routing.
+
+  - `public/leads_bookings.html`:
+    - Added `id="all-leads"` to the "All leads" card container (`<div class="card" id="all-leads" style="margin-top:16px">`).
+    - Added `#all-leads { scroll-margin-top: 110px; }` in `<style>` so anchor navigation
+      does not obscure the table header behind sticky topbars/navigation.
+    - Added smooth scroll handler in `loadBySource()` if `location.hash === '#all-leads'`
+      to ensure the table remains positioned in view after asynchronous deal rows render.
+
+2. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Verified JS syntax across both modified HTML pages using Node vm compilation:
+  - `public/marketing.html` (all scripts OK)
+  - `public/leads_bookings.html` (all scripts OK)
+* Verified preserved behavior:
+  - Middle-click and Cmd/Ctrl+click natively open tabs in new windows.
+  - Hover lift transitions and tooltip popovers remain intact.
+================================================================================

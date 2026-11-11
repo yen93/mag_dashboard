@@ -1,0 +1,64 @@
+================================================================================
+AGY CHAT HISTORY EXPORT — 2026-11-12
+Session: Updated marketing.html KPI cards to route to source tabs ("All leads"
+table in leads_bookings.html and spend_roi.html) on click with anchor scrolling.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+## update marketing.html kpi cards so the page is routed to source tab when a card is clicked:
+1. "Keynote enquiries," "Keynote bookings," and "Enquiry → booking rate" cards -  route to "All leads" table in leads_bookings
+2. "Marketing revenue," "Marketing spend" and "Marketing ROI" - spend_roi tab
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected public/marketing.html, public/leads_bookings.html, public/spend_roi.html,
+public/app.js, and public/app.css:
+- Identified the six live KPI cards in #mktKpis:
+  1. "Keynote enquiries" (enqCard)
+  2. "Keynote bookings" (bookCard)
+  3. "Enquiry → booking rate" (rateCard)
+  4. "Marketing revenue" (revenueCard)
+  5. "Marketing spend" (spendCard)
+  6. "Marketing ROI" (roiCard)
+- Checked the structure of public/leads_bookings.html:
+  - The "All leads" individual deal table is housed inside a card above the script tags with container id="leadsRows".
+- Checked the layout: sticky topbar and tabbar consume ~93px at the top of the viewport.
+- Checked DESIGN_GUIDE.md guidelines regarding clickable cards and info tips.
+
+Technical changes executed:
+1. In public/marketing.html:
+   - Added styles for a.kpi: `display: block; color: inherit; text-decoration: none; cursor: pointer;` with `:visited` color preservation and `:focus-visible` outline for keyboard accessibility.
+   - Enhanced `kpiHtml(label, val, info, deltaHtml, href)` and `liveCard(cfg)` to render an `<a>` element with `href` attribute when `href` is supplied (falling back to `<div>` otherwise).
+   - Updated card generators:
+     - `enqCard()` -> `leads_bookings.html#all-leads`
+     - `bookCard()` -> `leads_bookings.html#all-leads`
+     - `rateCard()` -> `leads_bookings.html#all-leads`
+     - `revenueCard()` -> `spend_roi.html`
+     - `spendCard()` -> `spend_roi.html`
+     - `roiCard()` -> `spend_roi.html`
+   - Added event delegation on `#mktKpis` for `.src-info` click and keydown (Enter/Space) to prevent default and stop propagation, ensuring that inspecting provenance/source tooltips on touch devices or desktop does not trigger link navigation.
+
+2. In public/leads_bookings.html:
+   - Added `id="all-leads"` to the "All leads" card container (`<div class="card" id="all-leads" style="margin-top:16px">`).
+   - Added `#all-leads { scroll-margin-top: 110px; }` to the inline stylesheet so the card header does not become hidden behind the sticky navigation bar when targeted by anchor jump.
+   - Added a smooth scroll trigger in `loadBySource()` after `renderLeadsTable()` resolves if `location.hash === '#all-leads'` to keep the table cleanly in view after asynchronous table rendering.
+
+Verified JavaScript syntax for inline scripts across both files using Node vm compilation without errors.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+/antigravity-chat-documentation
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Executed /dcp and /antigravity-chat-documentation workflows:
+- Created agy_chat_history/1211260753_agy_chat_history.txt.
+- Created antigravity_chat_history/121126-0753 marketing kpi cards tab routing.txt.
+- Reviewed and maintained agy_as_built.txt, agy_CLAUDE.md, and agy_.gitignore.
+- Ensured no git commands were executed and Claude-created files remained untouched.
+
+================================================================================
+END OF EXPORT
+================================================================================

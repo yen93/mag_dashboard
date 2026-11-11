@@ -81,6 +81,7 @@
     table.lb-table .src-dot { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 8px; vertical-align: baseline; }
     table.lb-table tfoot td { padding: 10px; font-weight: 700; border-top: 2px solid var(--border); font-variant-numeric: tabular-nums; }
     table.lb-table tfoot td:first-child { text-align: left; }
+    #all-leads { scroll-margin-top: 110px; }
   </style>
 </head>
 <body>
@@ -167,7 +168,7 @@
       </div>
 
       <!-- All leads (one row per individual lead/deal from the four sources) -->
-      <div class="card" style="margin-top:16px">
+      <div class="card" id="all-leads" style="margin-top:16px">
         <div class="card-head" style="display:block;margin-bottom:10px">
           <h3>All leads <span class="head-info" data-info="Every individual lead/deal behind the counts above — one row per deal, for the selected FY (or custom range). Columns: date, source, organisation, deal, status and value (AUD). FY27 onwards paid leads show as Google Ads / Bing Ads (from the GA4 & Ads Leads tracker, excl. non-keynote funnel pages); earlier years as Paid Ads from the ROAS view." data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); booking = won deal; FY from cdate."></span></h3>
           <div class="muted" style="font-size:12px;margin-top:4px" id="leadsCount"></div>
@@ -233,6 +234,14 @@
         renderSourceTable();
         renderLeadsTable();
         try { renderSourceChart(); } catch (e) { console.error('source chart', e); }
+        if (location.hash === '#all-leads' || location.hash === '#allLeads') {
+          var target = document.getElementById('all-leads');
+          if (target) {
+            setTimeout(function () {
+              target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }, 60);
+          }
+        }
       }).catch(function (err) {
         console.error('leads-by-source', err);
         BYSRC.loaded = true; renderSourceTable(); renderLeadsTable();

@@ -92,6 +92,9 @@
     .kpi:hover { transform: translateY(-3px); box-shadow: var(--mkt-shadow-lift); }
     .kpi:hover::after { opacity: .9; }
     .kpi:hover, .kpi:focus-within { z-index: 2; }   /* keep ℹ tooltip above neighbours (§6 gotcha) */
+    a.kpi { display: block; color: inherit; text-decoration: none; cursor: pointer; }
+    a.kpi:visited { color: inherit; }
+    a.kpi:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: 2px; }
     .kpi .label { font-size: 12px; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: 4px; }
     .kpi .value { font-size: 29px; font-weight: 800; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 11px 0 6px; }
     /* Emphasise the first tile — the page's headline KPI (§5). */
@@ -272,9 +275,11 @@
       return '<div class="delta ' + cls + '">' + arrow + ' ' + fmt(Math.abs(d), 'currency') +
         ' vs FY' + String(prevFyEnd).slice(-2) + '</div>';
     }
-    function kpiHtml(label, val, info, deltaHtml) {
-      return '<div class="kpi"><div class="label">' + esc(label) + infoSpan(info) + '</div>' +
-        '<div class="value">' + esc(val) + '</div>' + (deltaHtml || '') + '</div>';
+    function kpiHtml(label, val, info, deltaHtml, href) {
+      var tag = href ? 'a' : 'div';
+      var hrefAttr = href ? ' href="' + esc(href) + '"' : '';
+      return '<' + tag + ' class="kpi"' + hrefAttr + '><div class="label">' + esc(label) + infoSpan(info) + '</div>' +
+        '<div class="value">' + esc(val) + '</div>' + (deltaHtml || '') + '</' + tag + '>';
     }
     // Cost delta vs prior FY where LOWER is better (cost per enquiry/booking) — a drop is green.
     function costDelta(d, prevFyEnd) {
@@ -299,7 +304,7 @@
       if (key === 'all') return state.total;
       return state.byFy[fyEndOf(key)] || { ads: 0, indirect: 0, total: 0 };
     }
-    // Generic live KPI card. cfg: { state, title, unloadedInfo, loadedInfo(fyName,r) }.
+    // Generic live KPI card. cfg: { state, title, unloadedInfo, loadedInfo(fyName,r), href }.
     function liveCard(cfg) {
       var key = selFyKey();
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
@@ -322,12 +327,15 @@
           }
         }
       }
-      return '<div class="kpi"><div class="label">' + cfg.title + infoSpan(info) + '</div>' +
-        '<div class="value">' + esc(val) + '</div>' + deltaHtml + '</div>';
+      var tag = cfg.href ? 'a' : 'div';
+      var hrefAttr = cfg.href ? ' href="' + esc(cfg.href) + '"' : '';
+      return '<' + tag + ' class="kpi"' + hrefAttr + '><div class="label">' + cfg.title + infoSpan(info) + '</div>' +
+        '<div class="value">' + esc(val) + '</div>' + deltaHtml + '</' + tag + '>';
     }
     function enqCard() {
       return liveCard({
         state: ENQ, title: 'Keynote enquiries',
+        href: 'leads_bookings.html#all-leads',
         unloadedInfo: 'Total deals/leads created across three sources — paid ads, ' +
           'organic search and indirect/bureau. Created = deal date (Australian FY, Jul–Jun).',
         loadedInfo: function (fyName, r) {
@@ -344,6 +352,7 @@
     function bookCard() {
       return liveCard({
         state: BOOKINGS, title: 'Keynote bookings',
+        href: 'leads_bookings.html#all-leads',
         unloadedInfo: 'WON deals/leads created across three sources — paid ads, organic ' +
           'search and indirect/bureau. Created = deal date (Australian FY, Jul–Jun).',
         loadedInfo: function (fyName, r) {
@@ -389,8 +398,7 @@
           }
         }
       }
-      return '<div class="kpi"><div class="label">Enquiry → booking rate' + infoSpan(info) + '</div>' +
-        '<div class="value">' + esc(val) + '</div>' + deltaHtml + '</div>';
+      return kpiHtml('Enquiry → booking rate', val, info, deltaHtml, 'leads_bookings.html#all-leads');
     }
     // Marketing revenue = marketing-attributed WON revenue per FY (ROAS-paid + organic
     // search + bureau/tailor + Exec X, deduped by deal) — row.marketingRevenue from the
@@ -417,7 +425,7 @@
           }
         }
       }
-      return kpiHtml('Marketing revenue', val, info, deltaHtml);
+      return kpiHtml('Marketing revenue', val, info, deltaHtml, 'spend_roi.html');
     }
     // Marketing spend = Xero marketing accounts only (Advertising, Website, Software,
     // Printing, WrkPod), ex-GST — row.totalSpend from the ROI payload (same as the ROI tab).
@@ -439,7 +447,7 @@
           if (prev && prev.hasSpend) deltaHtml = currencyDelta(spend - prev.totalSpend, fyEndOf(key) - 1);
         }
       }
-      return kpiHtml('Marketing spend', val, info, deltaHtml);
+      return kpiHtml('Marketing spend', val, info, deltaHtml, 'spend_roi.html');
     }
     // Marketing ROI = NET return on marketing spend = (marketing revenue ÷ marketing spend − 1)
     // × 100, computed from the two live $ cards above (same MROI source as the ROI tab's
@@ -476,7 +484,7 @@
           }
         }
       }
-      return kpiHtml('Marketing ROI', val, info, deltaHtml);
+      return kpiHtml('Marketing ROI', val, info, deltaHtml, 'spend_roi.html');
     }
     function renderMktKpis() {
       var rest = KPIS.map(function (k) {
@@ -756,6 +764,15 @@
     renderDateRange();                   // inject the Custom date range control beside #fySeg
     fillHeadInfo();                      // fill the static chart/bottom-card ⓘ placeholders once (§6)
     renderMktKpis();                     // initial paint (enquiries shows … until loaded)
+    var mktKpisEl = document.getElementById('mktKpis');
+    if (mktKpisEl) {
+      mktKpisEl.addEventListener('click', function (e) {
+        if (e.target.closest('.src-info')) { e.preventDefault(); e.stopPropagation(); }
+      });
+      mktKpisEl.addEventListener('keydown', function (e) {
+        if (e.target.closest('.src-info') && (e.key === 'Enter' || e.key === ' ')) { e.stopPropagation(); }
+      });
+    }
     renderBottomCards();                 // initial paint (cost per enquiry shows … until loaded)
     loadEnquiries();                     // fetch live per-FY enquiry counts FIRST (independent of charts)
     loadRoiCards();                      // fetch live per-FY marketing revenue + spend (same source as ROI tab)
