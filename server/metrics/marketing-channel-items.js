@@ -19,17 +19,15 @@ function monLabel(d) {
   return `${MON[m - 1]}-${y}`;
 }
 
-// Distinct (type bucket, vendor, month) with summed ex-GST spend (NULL for Wages so
-// individual wage figures are never sent or displayed). Grouped by vendor text so
-// multiple contact_ids with the same display name collapse to one item.
+// Distinct (type bucket, vendor, month) with summed ex-GST spend.
+// In the JS mapping below, Wages spend is completely omitted so individual wage
+// figures are never exposed in the API or to the client.
 // 'Uncategorized' = unmapped vendors.
 const SQL = `
   SELECT coalesce(m.type, 'Uncategorized') AS type,
          c.vendor AS vendor,
          to_char(c.month, 'YYYY-MM-01') AS month,
-         CASE WHEN lower(btrim(coalesce(m.type, ''))) = 'wages' THEN NULL
-              ELSE sum(c.amount)::numeric
-         END AS amount
+         round(sum(c.amount))::numeric AS amount
   FROM public.marketing_channel_monthly c
   LEFT JOIN public.marketing_channel_vendor_map m ON m.contact_id = c.contact_id
   WHERE c.vendor IS NOT NULL AND btrim(c.vendor) <> ''

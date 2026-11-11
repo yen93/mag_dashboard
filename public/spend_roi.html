@@ -253,7 +253,7 @@
     var OV  = { byFy: {}, total: null, loaded: false, range: null };  // /api/marketing/overview (enquiries)
     var CH  = { months: [], type: [], loaded: false };           // /api/marketing/channel-summary
     var CR  = { rows: [], total: null, loaded: false };          // /api/marketing/channel-results
-    var CI  = { items: [], loaded: false };                      // /api/marketing/channel-items (bar drill-down)
+    var CI  = { items: [], loaded: false, error: false };        // /api/marketing/channel-items (bar drill-down)
 
     // Custom date range (beside the FY toggle). When active it overrides the FY toggle:
     // the KPI cards + Spend-by-type aggregate the already-loaded MONTHLY series within the
@@ -513,6 +513,8 @@
       if (subEl) subEl.textContent = 'Items under this type · ' + scope;
       if (!CI.loaded) {
         bodyEl.innerHTML = '<div class="muted" style="padding:8px 0">Loading…</div>';
+      } else if (CI.error) {
+        bodyEl.innerHTML = '<div class="muted" style="padding:8px 0">Could not load items from the server.</div>';
       } else {
         var items = itemsForType(typeName);
         if (!items.length) {
@@ -680,7 +682,12 @@
       return fetchJSON('/api/marketing/channel-items').then(function (d) {
         CI.items = (d && d.items) || [];
         CI.loaded = true;
-      }).catch(function (err) { console.error('channel-items', err); CI.loaded = true; });
+        CI.error = false;
+      }).catch(function (err) {
+        console.error('channel-items', err);
+        CI.loaded = true;
+        CI.error = true;
+      });
     }
 
     // ----- Segmented toggle -----

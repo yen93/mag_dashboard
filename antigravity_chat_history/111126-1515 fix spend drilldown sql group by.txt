@@ -1,0 +1,43 @@
+================================================================================
+UPDATE DOCUMENTATION: FIX SPEND DRILLDOWN SQL GROUP BY
+Timestamp: 11/11/26 15:15 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. FIX SPEND BY TYPE DRILL-DOWN SQL GROUP BY & LOAD ERROR HANDLING
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Clicking any bar in the "Spend by type" chart on `spend_roi.html` displayed
+  "No items for this type in the FY...".
+  Root cause analysis identified that the SQL query in `server/metrics/marketing-channel-items.js`
+  attempted a `CASE WHEN lower(btrim(coalesce(m.type, ''))) = 'wages' THEN NULL ELSE sum(c.amount)::numeric END`
+  with `GROUP BY 1, 2, 3`. In PostgreSQL, unaggregated expression `m.type` was not
+  in the `GROUP BY` clause, causing PostgreSQL to reject the query with:
+  "ERROR: column m.type must appear in the GROUP BY clause or be used in an aggregate function".
+  This led `/api/marketing/channel-items` to return 502, leaving `CI.items` empty and
+  displaying the "No items" message.
+
+* Technical Changes:
+  - `server/metrics/marketing-channel-items.js`
+    - Simplified `SQL` to valid standard aggregation:
+      `round(sum(c.amount))::numeric AS amount` with `GROUP BY 1, 2, 3`
+      (matching `server/metrics/marketing-channel-summary.js`).
+    - Enforced Wages privacy in JavaScript: `isWages(r.type)` check omits the
+      `amount` property entirely on Wages rows, ensuring wage values are never
+      serialized into the API response or sent to the client.
+  - `public/spend_roi.html`
+    - Added `error: false` to `CI` state.
+    - Updated `loadChannelItems()` to flag `CI.error = true` upon network/fetch rejection.
+    - Updated `showTypeItems(typeName)` to render "Could not load items from the server."
+      when `CI.error` is true instead of falsely reporting "No items for this type".
+
+2. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* None modified.
+
+3. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Syntax verified via `node --check server/metrics/marketing-channel-items.js` (exit code 0).
+* Noted that local Node server process or Cloud Run needs a restart/redeploy
+  to pick up the updated server route and SQL query.
+================================================================================
