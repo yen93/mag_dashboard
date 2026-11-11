@@ -126,6 +126,19 @@
       padding: 22px 24px;
       margin-bottom: 14px;
     }
+    /* Indirect Deals table card */
+    .ep-deals-card {
+      padding: 22px 24px;
+      margin-bottom: 14px;
+    }
+    .src-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 2px;
+      margin-right: 8px;
+      vertical-align: baseline;
+    }
     .ep-table-wrap {
       overflow-x: auto;
     }
@@ -234,6 +247,22 @@
           </table>
         </div>
       </div>
+
+      <!-- Indirect Deals table card -->
+      <div class="card ep-deals-card">
+        <div class="card-head block-head">
+          <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
+            <div>
+              <h3 id="indirectDealsHeading">Indirect Deals<span class="head-info" data-info="Every individual indirect deal (Speaker bureaus and The Tailor) from ActiveCampaign — one row per deal. Filtered by the selected financial year and optional custom date range; sort, search, and filter per column." data-src="GET /api/marketing/indirect-deals — public.ac_indirect_deals; booking = won deal (status = 1); value = value_aud; FY from cdate."></span></h3>
+              <div class="muted" style="font-size:12px;margin-top:4px" id="indirectDealsCount"></div>
+            </div>
+            <div class="mkt-controls" style="margin:0">
+              <span id="drAnchor" hidden></span>
+            </div>
+          </div>
+        </div>
+        <div id="indirectDealsRows"></div>
+      </div>
     </main>
   </div>
 
@@ -246,10 +275,8 @@
        and served by /api/marketing/email-partners (latest row per FY). */
 
     var EP = { byFy: {}, all: null, loaded: false, capturedAt: null };
-    // Email & Partners is stored only as FY-aggregate rows (one row = whole-FY KPIs), so a
-    // custom date range narrower than an FY can't be computed. While a range is active the
-    // whole page greys out (the FY toggle is dimmed by the shared control).
-    var CUSTOM = false;
+    var DEALS = { rows: null, loading: false };
+    var DEALS_TABLE_STATE = {};
 
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
@@ -320,7 +347,6 @@
     function renderKpiRow() {
       var grid = document.getElementById('epKpis');
       if (!grid) return;
-      if (CUSTOM) { grid.innerHTML = '<div class="range-na">Not available for custom ranges — Email &amp; Partners is reported by financial year. Clear the date range to view it.</div>'; return; }
       if (!EP.loaded) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">Loading…</div>'; return; }
       var r = curRow();
       if (!r) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">No snapshot for ' + esc(fyName(selFyKey())) + ' yet.</div>'; return; }
@@ -362,7 +388,6 @@
     function renderOutreachTable() {
       var body = document.getElementById('outreachBody');
       if (!body) return;
-      if (CUSTOM) { body.innerHTML = '<tr><td colspan="6" class="range-na">Not available for custom ranges — reported by financial year. Clear the date range to view it.</td></tr>'; return; }
       if (!EP.loaded) { body.innerHTML = '<tr><td colspan="6" class="muted">Loading…</td></tr>'; return; }
       var r = curRow(), prev = prevRow();
       if (!r) { body.innerHTML = '<tr><td colspan="6" class="muted">No snapshot for ' + esc(fyName(selFyKey())) + ' yet.</td></tr>'; return; }
@@ -371,9 +396,77 @@
         partnerRow('Speaker bureaus', r.partners.bureau, prev && prev.partners.bureau);
     }
 
+    // Rows for the Indirect Deals table: filtered by FY AND custom date range (if active).
+    function currentDealRows() {
+      var rows = DEALS.rows || [];
+      var key = selFyKey();
+      if (key !== 'all') {
+        var fyEnd = fyEndOf(key);
+        rows = rows.filter(function (r) {
+          return r.fyEnd === fyEnd || (r.fy && r.fy.toLowerCase() === key);
+        });
+      }
+      if (dateRangeActive()) {
+        var r = getDateRange();
+        if (r.from) rows = rows.filter(function (d) { return d.date >= r.from; });
+        if (r.to)   rows = rows.filter(function (d) { return d.date <= r.to; });
+      }
+      return rows;
+    }
+
+    function renderIndirectDealsTable() {
+      var host = document.getElementById('indirectDealsRows');
+      var cnt = document.getElementById('indirectDealsCount');
+      if (!host) return;
+      if (DEALS.rows === null) {
+        host.innerHTML = '<div class="muted" style="padding:10px 2px">Loading…</div>';
+        if (cnt) cnt.textContent = '';
+        return;
+      }
+      var rows = currentDealRows();
+      function txt(v) { return (v == null || v === '') ? '—' : esc(v); }
+      function fyCell(v, r) {
+        var val = v || (r && r.fyEnd ? 'FY' + String(r.fyEnd).slice(-2) : '');
+        return val ? esc(val) : '—';
+      }
+      function partnerCell(v) {
+        var col = (v === 'The Tailor') ? '#d9663a' : '#6a4bf5';
+        return '<span class="src-dot" style="background:' + col + '"></span>' + esc(v || '—');
+      }
+      function statusCell(v, row) {
+        return row.won ? '<strong>' + esc(v || 'Won') + '</strong>' : esc(v || '—');
+      }
+      var cols = [
+        { key: 'fy', label: 'FY', render: fyCell, text: function (v, r) { return r.fy || (r.fyEnd ? 'FY' + String(r.fyEnd).slice(-2) : ''); } },
+        { key: 'date', label: 'Date', unit: 'date' },
+        { key: 'partner', label: 'Partner', render: partnerCell, text: function (v) { return v || ''; } },
+        { key: 'org', label: 'Organisation', render: txt },
+        { key: 'title', label: 'Deal', render: txt },
+        { key: 'contact', label: 'Contact', render: txt },
+        { key: 'status', label: 'Status', render: statusCell, text: function (v, row) { return row.won ? (v || 'Won') : (v || ''); } },
+        { key: 'value', label: 'Value', unit: 'currency' },
+      ];
+      renderSortableTable('indirectDealsRows', rows, cols, {
+        stateStore: DEALS_TABLE_STATE,
+        searchPlaceholder: 'Search indirect deals…',
+        sortKey: 'date', sortDir: 'desc',
+        emptyText: 'No indirect deals match the selected filters.',
+        pageSize: 50,
+        onCount: function (shown, total, list) {
+          var won = (list || []).filter(function (r) { return r.won; }).length;
+          var wonRev = (list || []).filter(function (r) { return r.won; }).reduce(function (a, r) { return a + (r.value || 0); }, 0);
+          if (cnt) {
+            cnt.textContent = (shown === total ? total : shown + ' of ' + total) +
+              ' deal' + (total === 1 ? '' : 's') + ' · ' + won + ' booked (' + money(wonRev) + ')';
+          }
+        },
+      });
+    }
+
     function renderAll() {
       renderKpiRow();
       renderOutreachTable();
+      renderIndirectDealsTable();
     }
 
     function setFyNote() {
@@ -408,6 +501,22 @@
       });
     }
 
+    function loadIndirectDeals() {
+      if (DEALS.rows !== null || DEALS.loading) return;
+      DEALS.loading = true;
+      renderIndirectDealsTable();
+      fetchJSON('/api/marketing/indirect-deals').then(function (d) {
+        DEALS.rows = (d && d.deals) || [];
+        DEALS.loading = false;
+        renderIndirectDealsTable();
+      }).catch(function (err) {
+        console.error('indirect-deals', err);
+        DEALS.rows = [];
+        DEALS.loading = false;
+        renderIndirectDealsTable();
+      });
+    }
+
     function load() {
       fetchJSON('/api/marketing/email-partners').then(function (d) {
         var rows = (d && d.data) || [];
@@ -419,6 +528,12 @@
         EP.loaded = true;
         if (d && d.defaultFy) setActiveFy(d.defaultFy);
         setFyNote();
+        if (d && d.deals) {
+          DEALS.rows = d.deals;
+          DEALS.loading = false;
+        } else {
+          loadIndirectDeals();
+        }
         renderAll();
       }).catch(function (err) {
         console.error('email-partners', err);
@@ -427,15 +542,19 @@
         if (grid) grid.innerHTML = '<div class="muted" style="padding:8px 2px">Failed to load email &amp; partner metrics.</div>';
         document.getElementById('outreachBody').innerHTML = '<tr><td colspan="6" class="muted">Failed to load.</td></tr>';
         var note = document.getElementById('fyNote'); if (note) note.textContent = '';
+        loadIndirectDeals();
       });
     }
 
-    function applyRange() { CUSTOM = dateRangeActive(); renderAll(); }
+    function applyRange() {
+      setFySegDisabled(false);
+      renderIndirectDealsTable();
+    }
 
     initPage('marketing');
     renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('email-partners');
-    renderDateRange();
+    renderDateRange({ after: 'drAnchor' });
     fillHeadInfo();              // fill the static table-heading info tool(s)
     wireSeg('fySeg', renderAll);
     wireDateRange({ onChange: applyRange });

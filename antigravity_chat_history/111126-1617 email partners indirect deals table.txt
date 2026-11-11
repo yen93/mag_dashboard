@@ -1,0 +1,75 @@
+================================================================================
+UPDATE DOCUMENTATION: EMAIL PARTNERS INDIRECT DEALS TABLE AND DATE RANGE FILTER
+Timestamp: 11/11/26 16:17 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. EMAIL & PARTNERS: INDIRECT DEALS TABLE & DATE RANGE MIGRATION
+--------------------------------------------------------------------------------
+* Problem / Context:
+  In `public/email_partners.html`, users needed visibility into the individual
+  ActiveCampaign partner deals that feed the Partner Outreach aggregate summary.
+  Previously, the shared "Custom date range" control resided at the top controls
+  bar next to the Financial Year toggle, which greyed out the entire page when
+  active because snapshot metrics are stored strictly by FY.
+  Requirements:
+  1. Add a new table below "Partner outreach" table called "Indirect Deals".
+  2. Move "Custom date range" to this new Indirect Deals table and filter deals
+     using this Custom date range filter on top of the per-FY toggle filter.
+  3. Source the new table from `public.ac_indirect_deals` from the database.
+
+* Technical Changes:
+  - `server/metrics/indirect-deals.js`:
+    - Created dedicated metric service querying `public.ac_indirect_deals`.
+    - Selected deal attributes: dealId, title, dealSource, pipelineName, status,
+      statusLabel ('Open', 'Won', 'Lost'), won (status = 1), contactName,
+      contactEmail, contact, organization, org, value (value_aud), currency,
+      cdate, date (YYYY-MM-DD), month, eventDate, calYr, fy, fyEnd, isTailor,
+      partner ('The Tailor' when is_tailor = true, 'Speaker bureaus' otherwise).
+    - Added graceful fallback when Supabase is not configured locally.
+  - `server/metrics/email-partner-metrics.js`:
+    - Imported `getIndirectDeals` and called it in `getEmailPartnerMetrics()`.
+    - Added `deals` array directly to the payload of `GET /api/marketing/email-partners`
+      for fast, single-roundtrip page loading.
+  - `server/index.js`:
+    - Imported `getIndirectDeals` and registered route `GET /api/marketing/indirect-deals`
+      with a 10-minute cache window (`cached('marketing:indirect-deals', ...)`).
+  - `public/email_partners.html`:
+    - Markup & CSS:
+      - Added card `.ep-deals-card` below the Partner outreach card with header
+        `<h3>Indirect Deals</h3>` and a placeholder counter `#indirectDealsCount`.
+      - Added `.src-dot` CSS class for color-coding partners (#d9663a for The Tailor,
+        #6a4bf5 for Speaker bureaus).
+      - Added hidden `#drAnchor` inside the card header controls to mount the
+        date range popover specifically inside the Indirect Deals card.
+    - Script & Filter Architecture:
+      - Injected Custom date range via `renderDateRange({ after: 'drAnchor' })`.
+      - Removed the `CUSTOM = dateRangeActive()` block that previously disabled
+        and greyed out the top KPI cards and Partner outreach table. The top cards
+        now always remain active and display the selected FY.
+      - Implemented `currentDealRows()`: filters deals by the active FY toggle
+        (`key !== 'all'` matches `r.fyEnd` or `r.fy`) AND on top of that applies
+        the custom date range (`from` / `to`) when active.
+      - Integrated design system's `renderSortableTable` for `#indirectDealsRows`:
+        columns (FY, Date, Partner, Organisation, Deal, Contact, Status, Value),
+        sortable by date desc, searchable, with per-column filtering and pagination (50/page).
+      - In `applyRange()`, invoked `setFySegDisabled(false)` to prevent `app.js`
+        from dimming the top `#fySeg` toggle, keeping both controls interactive.
+      - Implemented dual-load strategy: uses `d.deals` from `/api/marketing/email-partners`
+        with automatic fallback to `GET /api/marketing/indirect-deals`.
+
+2. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* None modified. Reads existing `public.ac_indirect_deals` table populated by the
+  `ac-bureau-deals-sync` edge function and weekly `email-partners-sync` routine.
+
+3. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Syntax & Execution Checks:
+  - `node --check server/index.js` passed.
+  - `node --check server/metrics/indirect-deals.js` passed.
+  - `node --check server/metrics/email-partner-metrics.js` passed.
+  - Node VM execution test on `public/email_partners.html` inline JS verified valid syntax.
+  - Evaluated `getIndirectDeals()` and `getEmailPartnerMetrics()` directly; confirmed
+    correct payload shape, default statuses, and zero unhandled errors.
+================================================================================

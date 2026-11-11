@@ -23,6 +23,7 @@ import { getMarketingOverview } from './metrics/marketing-overview.js';
 import { getMarketingLeadsBySource } from './metrics/marketing-leads-by-source.js';
 import { getMarketingNurtureEvents } from './metrics/marketing-nurture-events.js';
 import { getEmailPartnerMetrics } from './metrics/email-partner-metrics.js';
+import { getIndirectDeals } from './metrics/indirect-deals.js';
 import { getMarketingPlatforms } from './metrics/marketing-platforms.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
@@ -430,6 +431,17 @@ marketing.get('/email-partners', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:email-partners]', err);
     res.status(502).json({ error: 'Failed to load email & partner metrics from data source.', detail: err.message });
+  }
+});
+// Indirect Deals — every deal in public.ac_indirect_deals for public/email_partners.html.
+// See server/metrics/indirect-deals.js. Cached briefly.
+marketing.get('/indirect-deals', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:indirect-deals', getIndirectDeals, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:indirect-deals]', err);
+    res.status(502).json({ error: 'Failed to load indirect deals from data source.', detail: err.message });
   }
 });
 // Platforms — latest weekly snapshot per social platform (followers / posts / engagement)

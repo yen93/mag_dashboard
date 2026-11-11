@@ -9,6 +9,7 @@
 // row per FY — no source calls at request time.
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
+import { getIndirectDeals } from './indirect-deals.js';
 
 const SRC =
   'Live (Supabase cache email_partner_metrics, refreshed weekly): email KPIs from ' +
@@ -32,11 +33,14 @@ const LATEST_SQL = `
 export async function getEmailPartnerMetrics() {
   if (!supabaseConfigured()) {
     return {
-      data: [], defaultFy: null, capturedAt: null,
+      data: [], defaultFy: null, capturedAt: null, deals: [],
       meta: { status: 'pending', source: SRC, note: 'Supabase not configured.' },
     };
   }
-  const rows = await q(LATEST_SQL);
+  const [rows, dealsRes] = await Promise.all([
+    q(LATEST_SQL),
+    getIndirectDeals().catch(() => ({ deals: [] })),
+  ]);
   const n = (v) => (v == null ? null : Number(v));
   const data = rows.map((r) => ({
     fyEnd: n(r.fy_end),
@@ -85,6 +89,7 @@ export async function getEmailPartnerMetrics() {
     data,
     defaultFy,
     capturedAt,
+    deals: (dealsRes && dealsRes.deals) || [],
     meta: {
       status: data.length ? 'live' : 'pending',
       source: SRC,
