@@ -32,6 +32,7 @@ import { getMarketingChannelResults } from './metrics/marketing-channel-results.
 import { getMarketingChannelItems } from './metrics/marketing-channel-items.js';
 import { getAdPlatforms } from './metrics/ad-platforms.js';
 import { getWebsiteSearch } from './metrics/marketing-website-search.js';
+import { getDbAutomations } from './metrics/db-automations.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
@@ -304,6 +305,21 @@ operations.get('/contact-sources/roas-counted', async (_req, res) => {
     res.status(502).json({ error: 'Failed to load ROAS-counted deals from data source.', detail: err.message });
   }
 });
+// DB Automations — live telemetry, schedules, and last-run notes for all active
+// edge functions, pg_cron scheduled jobs, and sync routines.
+operations.get('/db-automations', async (req, res) => {
+  const fresh = req.query.fresh === '1';
+  try {
+    const payload = fresh
+      ? await getDbAutomations()
+      : await cached('operations:db-automations', getDbAutomations, 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:db-automations]', err);
+    res.status(502).json({ error: 'Failed to load DB automations data.', detail: err.message });
+  }
+});
+
 app.use('/api/operations', operations);
 
 // Marketing sub-resources. The ROI page (whole-business revenue vs ad spend by Australian
@@ -510,6 +526,20 @@ app.use('/api/roas-assistant', roasAssistantRouter);
 // ROI tab read-only chat assistant (context-stuffed OpenAI call; no DB tools). See
 // server/roiAssistant.js. Needs OPENAI_API_KEY (same key as the ROAS assistant).
 app.use('/api/roi-assistant', roiAssistantRouter);
+
+// DB Automations endpoint alias
+app.get('/api/db-automations', requireAuth, async (req, res) => {
+  const fresh = req.query.fresh === '1';
+  try {
+    const payload = fresh
+      ? await getDbAutomations()
+      : await cached('operations:db-automations', getDbAutomations, 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[api:db-automations]', err);
+    res.status(502).json({ error: 'Failed to load DB automations data.', detail: err.message });
+  }
+});
 
 // Serve the plain HTML/CSS/JS pages from public/.
 const publicDir = path.join(__dirname, '..', 'public');

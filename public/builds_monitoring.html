@@ -3,8 +3,352 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Builds Monitoring — MAG Metrics</title>
+  <title>DB Automations — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
+  <style>
+    /* Full-width container for wide monitoring table */
+    .content { max-width: 1560px; }
+
+    .header-box {
+      margin-bottom: 20px;
+    }
+    .header-title-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 6px;
+    }
+    .header-title-row h1 {
+      margin: 0;
+      font-size: 22px;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .live-dot {
+      display: inline-block;
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--pos);
+      box-shadow: 0 0 0 3px color-mix(in srgb, var(--pos) 25%, transparent);
+      animation: pulse-dot 2s infinite ease-in-out;
+    }
+    @keyframes pulse-dot {
+      0%, 100% { transform: scale(1); opacity: 1; }
+      50% { transform: scale(1.15); opacity: 0.75; }
+    }
+    .header-desc {
+      color: var(--text-muted);
+      font-size: 13.5px;
+      margin: 0;
+    }
+
+    /* KPI Cards row */
+    .kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 14px;
+      margin-bottom: 22px;
+    }
+    .kpi-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+      box-shadow: var(--shadow);
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .kpi-card .kpi-label {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .kpi-card .kpi-val {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text);
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+    .kpi-card .kpi-sub {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Filters Bar */
+    .filter-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-bottom: 14px;
+    }
+    .filter-tabs {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .filter-btn {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 6px 12px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .filter-btn:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+    .filter-btn.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .search-box {
+      position: relative;
+      min-width: 240px;
+    }
+    .search-input {
+      width: 100%;
+      padding: 7px 12px 7px 32px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      color: var(--text);
+      font-size: 13px;
+    }
+    .search-input:focus {
+      outline: 2px solid var(--accent);
+      border-color: transparent;
+    }
+    .search-icon {
+      position: absolute;
+      left: 10px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      font-size: 13px;
+      pointer-events: none;
+    }
+
+    /* Monitoring Table */
+    .table-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .table-container {
+      width: 100%;
+      overflow-x: auto;
+    }
+    table.automations-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+    table.automations-table th {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 11px 16px;
+      border-bottom: 1px solid var(--border);
+      white-space: nowrap;
+      user-select: none;
+    }
+    table.automations-table td {
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    table.automations-table tr:hover td {
+      background: color-mix(in srgb, var(--accent) 3.5%, transparent);
+    }
+
+    /* Cell styles */
+    .fn-name-wrap {
+      display: flex;
+      flex-direction: column;
+      gap: 3px;
+      min-width: 190px;
+    }
+    .fn-name {
+      font-weight: 700;
+      color: var(--text);
+      font-size: 13.5px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .fn-slug {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+    }
+    .badge-cat {
+      display: inline-block;
+      font-size: 10.5px;
+      font-weight: 600;
+      padding: 2px 6px;
+      border-radius: 4px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+    }
+
+    .desc-cell {
+      max-width: 320px;
+      line-height: 1.45;
+      color: var(--text);
+      font-size: 12.5px;
+    }
+    .desc-meta {
+      margin-top: 4px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .code-tag {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 10.5px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      padding: 1px 5px;
+      border-radius: 4px;
+      color: var(--text-muted);
+    }
+
+    .sched-cell {
+      min-width: 170px;
+      line-height: 1.4;
+    }
+    .sched-desc {
+      font-weight: 600;
+      color: var(--text);
+      font-size: 12.5px;
+    }
+    .sched-cron {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    .notes-cell {
+      min-width: 280px;
+      line-height: 1.45;
+      font-size: 12.5px;
+    }
+    .notes-box {
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      word-break: break-word;
+    }
+    .notes-box.succeeded {
+      background: color-mix(in srgb, var(--pos) 9%, transparent);
+      color: var(--pos);
+      border: 1px solid color-mix(in srgb, var(--pos) 25%, transparent);
+    }
+    .notes-box.warning {
+      background: color-mix(in srgb, #f0a63b 10%, transparent);
+      color: #b9791d;
+      border: 1px solid color-mix(in srgb, #f0a63b 28%, transparent);
+    }
+    html[data-theme='dark'] .notes-box.warning { color: #f0a63b; }
+    .notes-box.failed {
+      background: color-mix(in srgb, var(--neg) 10%, transparent);
+      color: var(--neg);
+      border: 1px solid color-mix(in srgb, var(--neg) 25%, transparent);
+    }
+    .notes-box.active {
+      background: var(--surface-2);
+      color: var(--text-muted);
+      border: 1px solid var(--border);
+    }
+
+    .time-cell {
+      white-space: nowrap;
+      min-width: 125px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    /* Modal / Drawer for raw payload inspection */
+    .modal-backdrop {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(10, 15, 25, 0.6);
+      backdrop-filter: blur(2px);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-window {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      max-width: 720px;
+      width: 100%;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+    .modal-header h3 { margin: 0; font-size: 16px; font-weight: 700; }
+    .modal-body {
+      padding: 20px;
+      overflow-y: auto;
+      font-size: 13px;
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+    }
+    .modal-pre {
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 12px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 11.5px;
+      white-space: pre-wrap;
+      overflow-x: auto;
+      margin: 0;
+    }
+  </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
 <body>
@@ -26,24 +370,350 @@
 
   <div class="ai-automation-layout">
     <aside class="subnav" id="aiAutomationNav"></aside>
-  <main class="content">
-    <div class="toolbar">
-      <strong>Builds Monitoring</strong>
-    </div>
-
-    <div class="card">
-      <div class="empty-state" style="padding:40px 16px; text-align:center; color:var(--text-muted)">
-        <h3 style="margin:0 0 6px">Builds Monitoring</h3>
-        <p class="muted" style="margin:0">Coming soon.</p>
+    <main class="content">
+      <!-- Page Header -->
+      <div class="header-box">
+        <div class="header-title-row">
+          <h1>
+            <span class="live-dot" title="Live status connected"></span>
+            DB Automations
+          </h1>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="muted" id="lastUpdatedLabel" style="font-size:12.5px;">Loading status…</span>
+            <button class="icon-btn" id="refreshBtn" onclick="loadAutomations(true)">🔄 Refresh</button>
+          </div>
+        </div>
+        <p class="header-desc">
+          Live monitoring of active Supabase Edge Functions, pg_cron scheduled routines, webhooks, and sync pipelines.
+        </p>
       </div>
-    </div>
-  </main>
+
+      <!-- KPI Summary Tiles -->
+      <div class="kpi-row" id="kpiSummaryRow">
+        <div class="kpi-card">
+          <span class="kpi-label">Total Automations</span>
+          <span class="kpi-val" id="kpiTotal">—</span>
+          <span class="kpi-sub">Active edge functions & routines</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Scheduled Jobs</span>
+          <span class="kpi-val" id="kpiScheduled">—</span>
+          <span class="kpi-sub">Managed via pg_cron</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Webhooks & On-Demand</span>
+          <span class="kpi-val" id="kpiWebhooks">—</span>
+          <span class="kpi-sub">Event-driven triggers</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Healthy / Succeeded</span>
+          <span class="kpi-val" id="kpiHealthy" style="color:var(--pos)">—</span>
+          <span class="kpi-sub" id="kpiHealthySub">Operating nominally</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Warnings & Errors</span>
+          <span class="kpi-val" id="kpiIssues">—</span>
+          <span class="kpi-sub" id="kpiIssuesSub">Requires attention</span>
+        </div>
+      </div>
+
+      <!-- Filters & Search Toolbar -->
+      <div class="filter-bar">
+        <div class="filter-tabs" id="typeFilters">
+          <button class="filter-btn active" data-filter="all" onclick="setFilter('type', 'all', this)">All Automations</button>
+          <button class="filter-btn" data-filter="Scheduled" onclick="setFilter('type', 'Scheduled', this)">Scheduled Only</button>
+          <button class="filter-btn" data-filter="Webhook" onclick="setFilter('type', 'Webhook', this)">Webhooks & On-Demand</button>
+          <button class="filter-btn" data-filter="Issues" onclick="setFilter('type', 'Issues', this)">Warnings & Errors</button>
+        </div>
+        <div class="search-box">
+          <span class="search-icon">🔍</span>
+          <input type="text" id="searchInput" class="search-input" placeholder="Search functions, tables, notes…" oninput="onSearch(this.value)" />
+        </div>
+      </div>
+
+      <!-- Table Card -->
+      <div class="table-card">
+        <div class="table-container">
+          <table class="automations-table" id="automationsTable">
+            <thead>
+              <tr>
+                <th style="min-width:210px">Edge Function / Automation</th>
+                <th style="min-width:280px">Description (What It Is &amp; Does)</th>
+                <th style="min-width:180px">Schedule / Trigger</th>
+                <th style="min-width:110px">Status</th>
+                <th style="min-width:320px">Last Run Notes (Success / Error Details)</th>
+                <th style="min-width:130px">Last Executed</th>
+                <th style="width:50px; text-align:center">Info</th>
+              </tr>
+            </thead>
+            <tbody id="automationsTbody">
+              <tr>
+                <td colspan="7" style="text-align:center; padding:36px; color:var(--text-muted)">
+                  Loading DB automations…
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
   </div>
 
-  <script src="app.js?v=15"></script>
+  <!-- Detail Modal -->
+  <div class="modal-backdrop" id="detailModal" onclick="closeModal(event)">
+    <div class="modal-window" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modalTitle">Automation Details</h3>
+        <button class="icon-btn" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body" id="modalBody"></div>
+    </div>
+  </div>
+
+  <script src="app.js?v=16"></script>
   <script>
     initPage('ai-automation');
     renderAiAutomationSidebar('builds');
+
+    var currentData = [];
+    var activeTypeFilter = 'all';
+    var searchQuery = '';
+
+    // Formatter helpers
+    function esc(s) {
+      if (s === null || s === undefined) return '';
+      return String(s)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+    }
+
+    function timeAgo(iso) {
+      if (!iso) return '—';
+      var d = new Date(iso);
+      var now = new Date();
+      var diffSec = Math.floor((now - d) / 1000);
+      if (diffSec < 60) return 'Just now';
+      var diffMin = Math.floor(diffSec / 60);
+      if (diffMin < 60) return diffMin + 'm ago';
+      var diffHr = Math.floor(diffMin / 60);
+      if (diffHr < 24) return diffHr + 'h ago';
+      var diffDay = Math.floor(diffHr / 24);
+      if (diffDay === 1) return 'Yesterday';
+      if (diffDay < 30) return diffDay + 'd ago';
+      return d.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' });
+    }
+
+    function formatFullDate(iso) {
+      if (!iso) return '';
+      var d = new Date(iso);
+      return d.toLocaleString('en-AU', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        timeZoneName: 'short'
+      });
+    }
+
+    function renderStatusPill(status, statusLabel) {
+      var cls = 'pill';
+      if (status === 'succeeded') cls += ' pos';
+      else if (status === 'warning') cls += ' partial';
+      else if (status === 'failed') cls += ' neg';
+      else cls += ' pos'; // active or listening
+      return '<span class="' + cls + '">' + esc(statusLabel || status) + '</span>';
+    }
+
+    function renderNotesBox(status, notes) {
+      var boxCls = 'notes-box ' + (status || 'active');
+      return '<div class="' + boxCls + '">' + esc(notes || 'No recent notes') + '</div>';
+    }
+
+    function loadAutomations(isFresh) {
+      var label = document.getElementById('lastUpdatedLabel');
+      var refreshBtn = document.getElementById('refreshBtn');
+      if (refreshBtn) refreshBtn.disabled = true;
+      if (label) label.textContent = 'Refreshing status…';
+
+      var url = '/api/operations/db-automations' + (isFresh ? '?fresh=1' : '');
+
+      fetchJSON(url).then(function (res) {
+        if (refreshBtn) refreshBtn.disabled = false;
+        var summary = res.summary || {};
+        currentData = res.automations || [];
+
+        // Update KPIs
+        document.getElementById('kpiTotal').textContent = summary.total || 0;
+        document.getElementById('kpiScheduled').textContent = summary.scheduled || 0;
+        document.getElementById('kpiWebhooks').textContent = summary.webhook || 0;
+        document.getElementById('kpiHealthy').textContent = (summary.succeeded || 0) + ' (' + (summary.healthyPct || 100) + '%)';
+        
+        var issuesEl = document.getElementById('kpiIssues');
+        if (issuesEl) {
+          issuesEl.textContent = summary.issues || 0;
+          issuesEl.style.color = (summary.issues > 0) ? '#f0a63b' : 'var(--text-muted)';
+        }
+
+        if (label) {
+          var t = new Date(res.lastPolledAt || Date.now());
+          label.textContent = 'Last synced ' + t.toLocaleTimeString('en-AU', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        }
+
+        renderTable();
+      }).catch(function (err) {
+        if (refreshBtn) refreshBtn.disabled = false;
+        if (label) label.textContent = 'Sync error';
+        console.error('Failed to load DB automations:', err);
+        var tbody = document.getElementById('automationsTbody');
+        if (tbody) {
+          tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:30px; color:var(--neg)">Failed to load DB automations: ' + esc(err.message || 'Unknown error') + '</td></tr>';
+        }
+      });
+    }
+
+    function setFilter(type, value, btn) {
+      if (type === 'type') {
+        activeTypeFilter = value;
+        var btns = document.querySelectorAll('#typeFilters .filter-btn');
+        btns.forEach(function (b) { b.classList.remove('active'); });
+        if (btn) btn.classList.add('active');
+      }
+      renderTable();
+    }
+
+    function onSearch(val) {
+      searchQuery = (val || '').toLowerCase().trim();
+      renderTable();
+    }
+
+    function renderTable() {
+      var tbody = document.getElementById('automationsTbody');
+      if (!tbody) return;
+
+      var filtered = currentData.filter(function (it) {
+        // Type filter
+        if (activeTypeFilter === 'Scheduled' && it.triggerType !== 'Scheduled') return false;
+        if (activeTypeFilter === 'Webhook' && it.triggerType === 'Scheduled') return false;
+        if (activeTypeFilter === 'Issues' && it.status !== 'failed' && it.status !== 'warning') return false;
+
+        // Search query
+        if (searchQuery) {
+          var haystack = (
+            (it.name || '') + ' ' +
+            (it.slug || '') + ' ' +
+            (it.description || '') + ' ' +
+            (it.category || '') + ' ' +
+            (it.scheduleDesc || '') + ' ' +
+            (it.lastRunNotes || '') + ' ' +
+            (it.targetTables || []).join(' ')
+          ).toLowerCase();
+          if (haystack.indexOf(searchQuery) === -1) return false;
+        }
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:36px; color:var(--text-muted)">No automations match the current filter.</td></tr>';
+        return;
+      }
+
+      var rowsHtml = filtered.map(function (it) {
+        var targets = (it.targetTables || []).map(function (t) {
+          return '<span class="code-tag">' + esc(t) + '</span>';
+        }).join(' ');
+
+        var dateTip = it.lastRunAt ? formatFullDate(it.lastRunAt) : '';
+
+        return '<tr>' +
+          '<td>' +
+            '<div class="fn-name-wrap">' +
+              '<div class="fn-name">' +
+                esc(it.name) +
+              '</div>' +
+              '<span class="fn-slug">' + esc(it.slug) + '</span>' +
+              '<div><span class="badge-cat">' + esc(it.category || 'General') + '</span></div>' +
+            '</div>' +
+          '</td>' +
+          '<td>' +
+            '<div class="desc-cell">' +
+              esc(it.description) +
+              (targets ? '<div class="desc-meta">' + targets + '</div>' : '') +
+            '</div>' +
+          '</td>' +
+          '<td>' +
+            '<div class="sched-cell">' +
+              '<div class="sched-desc">' + esc(it.scheduleDesc) + '</div>' +
+              (it.cronExpression ? '<div class="sched-cron">cron: ' + esc(it.cronExpression) + '</div>' : '<div class="sched-cron">mode: ' + esc(it.triggerType) + '</div>') +
+            '</div>' +
+          '</td>' +
+          '<td>' +
+            renderStatusPill(it.status, it.statusLabel) +
+          '</td>' +
+          '<td>' +
+            '<div class="notes-cell">' +
+              renderNotesBox(it.status, it.lastRunNotes) +
+            '</div>' +
+          '</td>' +
+          '<td>' +
+            '<div class="time-cell" title="' + esc(dateTip) + '">' +
+              timeAgo(it.lastRunAt) +
+              (it.lastRunAt ? '<div class="muted" style="font-size:11px">' + esc(dateTip.split(',')[0]) + '</div>' : '') +
+            '</div>' +
+          '</td>' +
+          '<td style="text-align:center">' +
+            '<button class="icon-btn" style="padding:4px 8px; font-size:11px" onclick="openModal(\'' + esc(it.id) + '\')">Details</button>' +
+          '</td>' +
+        '</tr>';
+      }).join('');
+
+      tbody.innerHTML = rowsHtml;
+    }
+
+    function openModal(id) {
+      var item = currentData.find(function (it) { return it.id === id; });
+      if (!item) return;
+
+      document.getElementById('modalTitle').textContent = item.name + ' (' + item.slug + ')';
+      var body = document.getElementById('modalBody');
+
+      var outputJson = '';
+      if (item.rawOutput) {
+        outputJson = typeof item.rawOutput === 'object' ? JSON.stringify(item.rawOutput, null, 2) : String(item.rawOutput);
+      } else {
+        outputJson = 'No raw JSON telemetry stored for this execution.';
+      }
+
+      body.innerHTML = '' +
+        '<div><strong>Description:</strong> ' + esc(item.description) + '</div>' +
+        '<div><strong>Category:</strong> <span class="badge-cat">' + esc(item.category) + '</span> · <strong>Trigger:</strong> ' + esc(item.triggerType) + '</div>' +
+        '<div><strong>Schedule:</strong> ' + esc(item.scheduleDesc) + (item.cronExpression ? ' (<code>' + esc(item.cronExpression) + '</code>)' : '') + '</div>' +
+        '<div><strong>Target Tables:</strong> ' + esc((item.targetTables || []).join(', ') || 'None') + '</div>' +
+        '<div><strong>Source File:</strong> <code>' + esc(item.sourceFile || '—') + '</code></div>' +
+        '<div><strong>Last Run Timestamp:</strong> ' + esc(item.lastRunAt ? formatFullDate(item.lastRunAt) : 'None recorded') + '</div>' +
+        '<div><strong>Last Run Notes:</strong> ' + renderNotesBox(item.status, item.lastRunNotes) + '</div>' +
+        '<div><strong>Raw Execution Output / Telemetry:</strong><pre class="modal-pre">' + esc(outputJson) + '</pre></div>';
+
+      document.getElementById('detailModal').classList.add('open');
+    }
+
+    function closeModal(e) {
+      if (!e || e.target.id === 'detailModal' || e.target.tagName === 'BUTTON') {
+        document.getElementById('detailModal').classList.remove('open');
+      }
+    }
+
+    // Initial load
+    loadAutomations(false);
+
+    // Auto-refresh every 2 minutes
+    setInterval(function () {
+      loadAutomations(false);
+    }, 120000);
   </script>
 </body>
 </html>

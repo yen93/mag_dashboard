@@ -1,0 +1,110 @@
+================================================================================
+UPDATE DOCUMENTATION: DB AUTOMATIONS EDGE FUNCTIONS MONITORING
+Timestamp: 12/11/26 09:46 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. MAIN TASK & REQUIREMENTS: BUILDS MONITORING TO DB AUTOMATIONS
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Prompt `prompts/121126_db_automations.txt` requested updating `public/builds_monitoring.html`
+  from an empty "coming soon" placeholder into an active monitoring hub for database
+  automations and Supabase Edge Functions:
+  - Display all edge functions on schedule or actively being used.
+  - Monitor edge functions and track whether they were able to run successfully
+    during their last schedule or invocation.
+  - Required table columns:
+    1. Description of what it is and does.
+    2. Schedule / if it is on demand or used through webhook only.
+    3. Last run notes if it is successful or not or if there was an error.
+  - Rename tab from "Builds Monitoring" to "DB Automations".
+
+* Technical Changes:
+  - `public/app.js`:
+    - Updated `renderAiAutomationSidebar(active)`: renamed subnav item label from
+      `'Builds Monitoring'` to `'DB Automations'` for `builds_monitoring.html`.
+
+2. BACKEND TELEMETRY & CATALOG SERVICE (server/metrics/db-automations.js)
+--------------------------------------------------------------------------------
+* Created `server/metrics/db-automations.js`:
+  - Contains canonical catalog of 34 active database automations:
+    - ActiveCampaign & Deals: activecampaign-deals-sync, activecampaign-contacts-sync,
+      ac-indirect-deals-sync, sales-deals-sync, buyer-sheet-sync, new-paid-leads-sync,
+      ac-ad-leads-sync, contact-sources-sync, paid-google-enquiries-sync, calendly-source-sync.
+    - Advertising & Analytics: google-ads-campaign-monthly-sync, bing-ads-campaign-monthly-sync,
+      ga4-website-traffic-sync, ga4-click-to-call-sync, ai-source-patterns-sync.
+    - Financial & Accounting: xero-ad-spend-sync, xero-channel-summary-sync,
+      invoice-tracking-sync, xero-oauth-callback.
+    - Social & Content: apify-platforms-sync, linkedin-newsletter-sync,
+      weekly-reviews-sync, sync-insta-stories, analyze-insta-stories.
+    - Webhooks & Leads: process-bounced-leads, alternate-lead-finder,
+      process-unresponsive-lost-leads, ac-poc-position-sync, ac-account-contact-sync,
+      renew-gmail-watch, draft-james-reply.
+    - Scheduled SQL Procedures: update_ga4_contact_deals, reconcile_calendly_booking_channels,
+      reload_post_conference_deals.
+  - Telemetry correlation:
+    - Reads `cron.job` joined with `cron.job_run_details` via LATERAL subquery to fetch
+      latest run status (`run_status`, `start_time`, `end_time`, `return_message`).
+    - Reads recent asynchronous responses from `net._http_response` (`status_code`,
+      `error_msg`, `content`, `created`).
+    - Correlates cron executions with HTTP payloads to extract real-time metrics
+      (rows synced, duration, pagination count, HTTP status codes, timeout warnings).
+  - Database fallback resilience:
+    - Queries via direct Postgres pool (`q()`) when `SUPABASE_DB_URL` is set.
+    - Falls back to Supabase Management API (`/database/query`) using `SUPABASE_ACCESS_TOKEN`
+      when developing locally without a local database connection string.
+
+3. SERVER ROUTING & API ENDPOINTS (server/index.js & server/config.js)
+--------------------------------------------------------------------------------
+* `server/config.js`:
+  - Added `accessToken` (`SUPABASE_ACCESS_TOKEN`) and `projectId` (`aivitcomiywiysrfwqxt`)
+    to `config.supabase` configuration block.
+* `server/index.js`:
+  - Added import `import { getDbAutomations } from './metrics/db-automations.js'`.
+  - Registered route `operations.get('/db-automations', ...)` under `/api/operations`
+    with short 60s cache and bypass on `?fresh=1`.
+  - Registered direct alias route `app.get('/api/db-automations', requireAuth, ...)`.
+
+4. FRONTEND UI & INTERACTIVE DASHBOARD (public/builds_monitoring.html)
+--------------------------------------------------------------------------------
+* Implemented full monitoring dashboard interface:
+  - Header: Live pulsing status dot, page title "DB Automations", last-polled timestamp,
+    and "🔄 Refresh" action button.
+  - KPI Summary Tiles:
+    - Total Automations (34 active routines)
+    - Scheduled Jobs (28 pg_cron jobs)
+    - Webhooks & On-Demand (6 event-driven functions)
+    - Healthy / Succeeded (count + percentage)
+    - Warnings & Errors (accented warning pill)
+  - Filtering & Search Controls:
+    - Type filter tabs: All Automations, Scheduled Only, Webhooks & On-Demand, Warnings & Errors.
+    - Real-time search input filtering across names, slugs, descriptions, tables, and notes.
+  - Telemetry Table Columns:
+    1. Edge Function / Automation: Name, slug, category badge (Sales, Marketing, Operations, System).
+    2. Description (What It Is & Does): Clear purpose and target database tables.
+    3. Schedule / Trigger: Human-readable local & UTC times, raw cron syntax, or trigger type.
+    4. Status: Styled pills (`pos`, `neg`, `partial`).
+    5. Last Run Notes: Formatted status boxes with execution metrics, duration, rows affected,
+       HTTP codes, or timeout/error notices.
+    6. Last Executed: Relative time with full timestamp hover tooltip.
+    7. Details button: Opens modal drawer displaying complete raw JSON telemetry, source file,
+       and target schemas.
+  - Auto-refresh: Polls `/api/operations/db-automations` every 2 minutes or manually via button.
+
+5. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Node syntax verification:
+  - `node --check server/index.js` (passed)
+  - `node --check server/metrics/db-automations.js` (passed)
+* Service execution test:
+  - Tested `getDbAutomations()` directly via node:
+    - Total automations: 34
+    - Scheduled: 28
+    - Webhook/On-demand: 6
+    - Succeeded/Active: 30
+    - Warnings/Issues: 2 (timeouts on historical Instagram media routines)
+    - Health rate: 88%
+* Read-only and local workspace safety compliance maintained:
+  - All writes restricted to `C:\Users\Cloverly\claude_code\dashboard`.
+  - No database mutations executed; git state left untouched.
+===============================================================================

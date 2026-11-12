@@ -13,6 +13,8 @@ export const config = {
     // Full Postgres connection string, e.g.
     // postgresql://postgres:<pw>@db.<ref>.supabase.co:5432/postgres
     dbUrl: env.SUPABASE_DB_URL || '',
+    accessToken: env.SUPABASE_ACCESS_TOKEN || '',
+    projectId: env.SUPABASE_PROJECT_ID || 'aivitcomiywiysrfwqxt',
   },
   activecampaign: {
     apiUrl: env.AC_API_URL || '',

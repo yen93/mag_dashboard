@@ -370,7 +370,7 @@ function renderAiAutomationSidebar(active) {
   var el = document.getElementById('aiAutomationNav');
   if (!el) return;
   var items = [
-    ['builds',    'Builds Monitoring', 'builds_monitoring.html'],
+    ['builds',    'DB Automations',    'builds_monitoring.html'],
     ['ticketing', 'Ticketing',         'ticketing.html'],
   ];
   el.innerHTML = items.map(function (it) {

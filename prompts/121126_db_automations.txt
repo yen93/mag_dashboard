@@ -1,0 +1,10 @@
+**all_req_cols:**
+1. Description of what it is and does
+2. schedule/if it is on demand or used thru webhook only
+3. last run notes if it is successful or not or if there was an error
+
+## main task: update builds_monitoring.html
+1. kindly display all edge functions on sched or those actively being used. 
+2. this tab should be used to monitor the edge functions and see if they were able to run successfully during last sched or call.
+3. each edge function should have all_req_cols
+4. rename tab to DB Automations
