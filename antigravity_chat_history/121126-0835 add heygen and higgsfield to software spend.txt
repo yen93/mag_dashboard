@@ -1,0 +1,46 @@
+================================================================================
+UPDATE DOCUMENTATION: ADD HEYGEN AND HIGGSFIELD TO SOFTWARE SPEND
+Timestamp: 12/11/26 08:35 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. HEYGEN & HIGGSFIELD XERO INVESTIGATION & VENDOR MAP CLASSIFICATION
+--------------------------------------------------------------------------------
+* Problem / Context:
+  User queried which Xero account holds HeyGen and Higgsfield charges, and
+  requested to add them to `Marketing Expenses - Xero Account - Description.md`
+  and map them to the dashboard under the Software spend category.
+
+* Technical Changes:
+  - Discovered HeyGen and Higgsfield charges via Xero bank transactions discovery
+    mode on `xero-channel-summary-sync` (?discover=1):
+    1. Contact ID: `d5f90dff-f710-4f35-862d-dd29889eec80` ('HEYGEN', $196.29 on Account 332)
+    2. Contact ID: `421b36c0-612d-4388-9997-81a338a37191` ('HIGGSFIELD INC', $340.88 on Account 332)
+    Both sit on Account 332 (`Software subscriptions`).
+  - `Marketing Expenses - Xero Account - Description.md`:
+    Added entries for `"HEYGEN"` and `"HIGGSFIELD INC"` under `"Software subscriptions"`.
+  - `supabase/migrations/20261112083000_add_heygen_higgsfield_to_marketing_vendor_map.sql`:
+    Created migration inserting both contact IDs into `public.marketing_channel_vendor_map`
+    with `type = 'Software'`, `include = TRUE`, and `platform = NULL`.
+
+2. EDGE FUNCTIONS & SYNC EXECUTION
+--------------------------------------------------------------------------------
+* Edge Function:
+  - `xero-channel-summary-sync` (https://aivitcomiywiysrfwqxt.supabase.co/functions/v1/xero-channel-summary-sync?sync=1)
+* Execution Summary:
+  - Processed 9,595 Xero bank transactions across the FY22–FY27 window.
+  - Kept and wrote 500 monthly vendor rows into `public.marketing_channel_monthly`.
+  - Reconciled grand total of $430,302.64 across kept marketing spend.
+
+3. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Confirmed live database entries in `public.marketing_channel_monthly` joined with
+  `public.marketing_channel_vendor_map`:
+  - 2026-07-01: HEYGEN ($66.16, Software, Account 332)
+  - 2026-07-01: HIGGSFIELD INC ($340.88, Software, Account 332)
+  - 2026-08-01: HEYGEN ($65.25, Software, Account 332)
+  - 2026-09-01: HEYGEN ($64.88, Software, Account 332)
+  Total: $537.17 ex-GST across FY27 is now populated and attributed to the
+  Software spend category across the dashboard (Spend ROI, Channel Summary,
+  and Marketing Overview).
+================================================================================

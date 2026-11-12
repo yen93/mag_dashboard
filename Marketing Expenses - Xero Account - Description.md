@@ -122,6 +122,22 @@
 
 &#x20; {
 
+&#x20;   "Xero Account": "Software subscriptions",
+
+&#x20;   "Description": "HEYGEN"
+
+&#x20; },
+
+&#x20; {
+
+&#x20;   "Xero Account": "Software subscriptions",
+
+&#x20;   "Description": "HIGGSFIELD INC"
+
+&#x20; },
+
+&#x20; {
+
 &#x20;   "Xero Account": "WrkPod Staff",
 
 &#x20;   "Description": "Cloverly Yadao"
