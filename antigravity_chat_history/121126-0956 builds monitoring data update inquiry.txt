@@ -1,0 +1,49 @@
+================================================================================
+UPDATE DOCUMENTATION: BUILDS MONITORING DATA UPDATE INQUIRY
+Timestamp: 12/11/26 09:56 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. INVESTIGATION: BUILDS MONITORING DATA FEED & SCHEDULE MECHANISM
+--------------------------------------------------------------------------------
+* User Query / Context:
+  Inquiry on whether there is an Edge Function that automatically updates the data
+  displayed in `builds_monitoring` (DB Automations) on schedule.
+
+* Investigation & Code Analysis:
+  - Frontend Client (`public/builds_monitoring.html`):
+    - Fetches telemetry data on page load from `/api/operations/db-automations`.
+    - Auto-refreshes every 2 minutes in the client via `setInterval(loadAutomations, 120000)`.
+    - Offers manual fresh fetch with `loadAutomations(true)` triggering `?fresh=1`.
+  - Backend API Endpoint (`server/index.js` & `server/metrics/db-automations.js`):
+    - Handled by Express endpoint `GET /api/operations/db-automations`.
+    - Caches results for 60 seconds unless `?fresh=1` is provided.
+    - Directly queries PostgreSQL system tables in real time:
+      * `cron.job` joined with `cron.job_run_details` via lateral query to get
+        `jobid`, `schedule`, `run_status`, `start_time`, `end_time`, `return_message`.
+      * `net._http_response` to inspect asynchronous HTTP responses from `pg_net`
+        calls (`status_code`, `error_msg`, `content`, `created`).
+    - Synthesizes runtime telemetry with the in-code `AUTOMATIONS_CATALOG` (34 automations)
+      to extract row counts, durations, and health statuses.
+
+2. ARCHITECTURAL FINDINGS
+--------------------------------------------------------------------------------
+* No Edge Function Updates the Monitoring Page:
+  - There is no background Edge Function or database procedure writing or storing
+    the monitoring view data.
+  - The telemetry is aggregated dynamically on demand directly from Postgres system
+    logs (`pg_cron` and `pg_net`).
+* Distinction Between Monitored Entities and Monitoring System:
+  - The Supabase Edge Functions listed in the table (e.g. `activecampaign-deals-sync`,
+    `bing-ads-campaign-monthly-sync`, `xero-ad-spend-sync`) are the scheduled workloads
+    being monitored.
+  - They sync business data (CRM, advertising, accounting) into public database tables,
+    and their execution events are captured by `pg_cron` and `pg_net`.
+
+3. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Confirmed exact endpoints and timers:
+  - `public/builds_monitoring.html` (Lines 537-575, 710-716)
+  - `server/index.js` (Lines 310-321)
+  - `server/metrics/db-automations.js` (Lines 10-500, 765-871)
+================================================================================
