@@ -61,10 +61,17 @@ export const config = {
     apiKey: env.OPENAI_API_KEY || '',
     model: env.OPENAI_MODEL || 'gpt-4o-mini',
   },
+  n8n: {
+    apiUrl: env.N8N_API_URL || 'https://n8n-659687081407.australia-southeast1.run.app',
+    apiKey: env.N8N_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI0NTdjMGEzZC1kYTY2LTRmMjEtODEwNS0xYzY5M2IyNzQ5NzMiLCJpc3MiOiJuOG4iLCJhdWQiOiJwdWJsaWMtYXBpIiwianRpIjoiNzk4MDQ0NGItY2E2Ny00MmY4LTg5ZDAtZTdkOWY1NjY5YjM2IiwiaWF0IjoxNzg5OTQ5Mjg4fQ.fAbaEfHljQGm20jpFHOxWlPfqLPwlgksA4h-1O3IOs4',
+    supabaseProjectId: env.N8N_SUPABASE_PROJECT_ID || 'uwsncuowtzydylfabikj',
+  },
 };
 
 export function hasSource(name) {
   switch (name) {
+    case 'n8n':
+      return Boolean(config.n8n.apiKey);
     case 'supabase':
       return Boolean(config.supabase.dbUrl);
     case 'activecampaign':

@@ -34,6 +34,7 @@ import { getAdPlatforms } from './metrics/ad-platforms.js';
 import { getWebsiteSearch } from './metrics/marketing-website-search.js';
 import { getDbAutomations } from './metrics/db-automations.js';
 import { getClaudeRoutines } from './metrics/claude-routines.js';
+import { getN8nAutomations } from './metrics/n8n-automations.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
@@ -336,6 +337,21 @@ operations.get('/claude-routines', async (req, res) => {
   }
 });
 
+// n8n Automations — live telemetry, schedules, and last-run notes for all active
+// n8n workflows triggered via webhooks and Supabase pg_cron.
+operations.get('/n8n-automations', async (req, res) => {
+  const fresh = req.query.fresh === '1';
+  try {
+    const payload = fresh
+      ? await getN8nAutomations()
+      : await cached('operations:n8n-automations', getN8nAutomations, 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:n8n-automations]', err);
+    res.status(502).json({ error: 'Failed to load n8n automations data.', detail: err.message });
+  }
+});
+
 app.use('/api/operations', operations);
 
 // Marketing sub-resources. The ROI page (whole-business revenue vs ad spend by Australian
@@ -568,6 +584,20 @@ app.get('/api/claude-routines', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[api:claude-routines]', err);
     res.status(502).json({ error: 'Failed to load Claude Code routines data.', detail: err.message });
+  }
+});
+
+// n8n Automations endpoint alias
+app.get('/api/n8n-automations', requireAuth, async (req, res) => {
+  const fresh = req.query.fresh === '1';
+  try {
+    const payload = fresh
+      ? await getN8nAutomations()
+      : await cached('operations:n8n-automations', getN8nAutomations, 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[api:n8n-automations]', err);
+    res.status(502).json({ error: 'Failed to load n8n automations data.', detail: err.message });
   }
 });
 

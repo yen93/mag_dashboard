@@ -1,0 +1,91 @@
+================================================================================
+UPDATE DOCUMENTATION: N8N AUTOMATIONS MONITORING TAB CREATED
+Timestamp: 12/11/26 10:42 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. MAIN TASK & USER REQUIREMENTS
+--------------------------------------------------------------------------------
+* Context & Objective:
+  The user requested creating a new dedicated monitoring tab for all active n8n workflows
+  hosted on Google Cloud Run at:
+  https://n8n-659687081407.australia-southeast1.run.app
+
+* Strict Rules & Criteria Met:
+  - Mirrored the structure, layout, styles, and telemetry logic from `public/claude_routines.html`
+    and `public/builds_monitoring.html`.
+  - Filtered exclusively for workflows running via webhook, triggered by Supabase, and active/published.
+  - Enforced 1 webhook = 1 automation rule: Workflows containing multiple webhook trigger nodes
+    were broken down into discrete monitoring rows (totaling 30 automations across 12 active workflows).
+  - Wired into the AI & Automation sub-navigation sidebar.
+
+2. TECHNICAL CHANGES & IMPLEMENTATION DETAILS
+--------------------------------------------------------------------------------
+* Configuration (`server/config.js`):
+  - Added `n8n` service configuration:
+    * `apiUrl`: Default `https://n8n-659687081407.australia-southeast1.run.app`.
+    * `apiKey`: Read from environment `N8N_API_KEY` or fallback to secret key.
+    * `supabaseProjectId`: `uwsncuowtzydylfabikj` (n8n-production Supabase instance).
+  - Added `hasSource('n8n')` check.
+
+* Telemetry Service (`server/metrics/n8n-automations.js`):
+  - Created canonical catalog of 30 automations spanning 12 active parent workflows:
+    1. Insta Story Scraper (2 automations: scraper pipeline & sheet logger)
+    2. Sales Batch Mailer V2 (5 automations: AI social media leads, manual leads, alternate leads, etc.)
+    3. AC Notes Automation (9 automations: intro + follow-ups 1 to 4 for outreach and cold leads)
+    4. Cold Leads Follow Up Sequence (multi-stage engine)
+    5. Cold Leads Scraper (automated directory scraper)
+    6. LinkedIn Outbound Sales Automations (proposal & deck generator)
+    7. LinkedIn Comments Scraping POC Enrichment (4 automations: post queue, org finder, email finder, sheet logger)
+    8. LinkedIn Company Lead Finder (corporate event lead finder)
+    9. Soc Med Follow Up Sequence (social media outreach engine)
+    10. Closed Threads Processing (conversation archiver)
+    11. Sales Daily Email Notification (daily action digest)
+    12. AC Caching (accounts active; contacts & deals paused/superseded)
+  - Live Telemetry Integration:
+    * Queries Supabase `cron.job` and `cron.job_run_details` on `uwsncuowtzydylfabikj` for trigger health.
+    * Queries n8n REST API (`GET /api/v1/executions?limit=100`) for execution durations and error states.
+    * Computes KPI summary: total, active, paused, workflows, succeeded, issues, and healthy percentage.
+
+* Server Routing (`server/index.js`):
+  - Imported `getN8nAutomations` from `./metrics/n8n-automations.js`.
+  - Registered route `operations.get('/n8n-automations', ...)` with 60-second caching.
+  - Registered route alias `app.get('/api/n8n-automations', requireAuth, ...)` for client fetch calls.
+
+* Subnav Navigation (`public/app.js`):
+  - Updated `renderAiAutomationSidebar` to include:
+    `['n8n-automations', 'n8n Automations', 'n8n_automations.html']` alongside DB Automations,
+    Claude Code Routines, and Ticketing.
+
+* Frontend Dashboard View (`public/n8n_automations.html`):
+  - Container layout: Wide monitoring view (`.content { max-width: 1560px; }`).
+  - Header: Live pulsing status indicator, last synced timestamp, and manual refresh button.
+  - KPI Cards Row: Active Automations (28), Parent Workflows (12), Sales & Outreach (11),
+    Healthy / Nominal (89%), and Paused / Issues (2).
+  - Filter Tabs: Active Only (default), All Automations, Sales & Outreach, Marketing & Scrapers,
+    Operations & Notes, and Paused / Superseded.
+  - Search Toolbar: Client-side search across names, slugs, crons, descriptions, and connectors.
+  - Data Table:
+    * Column 1: Automation & Parent Workflow with node identifier and category pills.
+    * Column 2: Business description with connector badges and downstream node counts.
+    * Column 3: Supabase pg_cron job name, Manila/UTC schedules, and cron expression.
+    * Column 4: Status pill (Succeeded, Active / Scheduled, Paused, Execution Failed).
+    * Column 5: Last Run Notes with execution IDs, durations, or cron return messages.
+    * Column 6: Relative last execution time with full timestamp hover tooltip.
+    * Column 7: Info drawer button triggering technical modal with full JSON telemetry.
+  - Auto-refresh: Polls `/api/operations/n8n-automations` every 2 minutes.
+
+3. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Telemetry Engine Verification:
+  - Invoked `getN8nAutomations()` directly:
+    * Total Automations: 30
+    * Active in pg_cron: 28
+    * Paused in pg_cron: 2 (AC contacts & deals caching superseded by Edge Functions)
+    * Distinct Workflows: 12
+    * Succeeded Executions: 25
+    * Nominal Health Rate: 89%
+* Route & Syntax Verification:
+  - Verified clean syntax across `server/config.js`, `server/metrics/n8n-automations.js`,
+    `server/index.js`, `public/app.js`, and `public/n8n_automations.html`.
+================================================================================
