@@ -1,0 +1,111 @@
+================================================================================
+UPDATE DOCUMENTATION: CLAUDE CODE ROUTINES MONITORING TAB
+Timestamp: 12/11/26 10:12 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. MAIN TASK & REQUIREMENTS
+--------------------------------------------------------------------------------
+* Context & Objective:
+  Create a new monitoring tab with the same structure and logic as the existing
+  "DB Automations" tab (`public/builds_monitoring.html`). The new tab monitors all
+  Claude Code Routines (both scheduled routines and API-driven workers) that are
+  active in the system.
+
+2. BACKEND TELEMETRY & CATALOG SERVICE (server/metrics/claude-routines.js)
+--------------------------------------------------------------------------------
+* Created `server/metrics/claude-routines.js`:
+  - Contains canonical catalog of Claude Code Routines:
+    1. email-partners-sync (trig_01KHNc3jpp27VePeheDqk2FA):
+       - Runner: Claude Code Cloud Routine
+       - Category: Marketing
+       - Cadence: Weekly, Mon 06:00 AM PH (Sun 22:00 UTC, cron: 0 22 * * 0)
+       - Connectors: ActiveCampaign MCP + Supabase MCP (execute_sql)
+       - Target: public.email_partner_metrics, public.ac_indirect_deals
+       - Docs: routines/email-partners-sync.md
+    2. sales-topline-sync (trig_011z2MX6Sh5gsBY6JncmDmss):
+       - Runner: Claude Code Cloud Routine
+       - Category: Sales
+       - Cadence: Weekly, Mon 06:00 AM PH (Sun 22:00 UTC, cron: 0 22 * * 0)
+       - Connectors: Supabase MCP (execute_sql)
+       - Target: public.sales_topline, public.invoice_tracking, public.activecampaign_deals
+       - Docs: routines/sales-topline-sync.md
+    3. invoice-tracking-sync (trig_013TGsR7euBvPbAz45UpS8tb):
+       - Runner: Claude Code Cloud Routine (Claude 3.7 Sonnet)
+       - Category: Operations
+       - Cadence: Mon–Fri 06:00 AM PH (Sun–Thu 22:00 UTC, cron: 0 22 * * 0-4)
+       - Connectors: Xero MCP (read-only) + Supabase MCP (execute_sql)
+       - Target: public.invoice_tracking, public.activecampaign_deals
+       - Docs: as_built.txt (AUTOMATIONS / ROUTINES)
+    4. ga4-on-demand (trig_01DFkHgvzKJUDCNcHwM87gyS):
+       - Runner: Claude Code Cloud Worker (On-Demand)
+       - Category: Analytics
+       - Trigger: API Call / Webhook (POST /api/ga4-agent/run via GA4_ROUTINE_FIRE_URL)
+       - Connectors: GA4 Service Account, Google Ads API, Supabase MCP, Cloud Container
+       - Target: public.ga4_agent_requests
+       - Docs: routines/ga4-on-demand.md
+    5. roas-year-on-year-sync (trig_011wFrti6fguprMJa9nqujTo):
+       - Historical/Retired status (retired 2026-10-20, replaced by roas.js)
+    6. simple-digital-fees-sync:
+       - Historical/Superseded status (superseded 2026-10-23 by xero-ad-spend-sync)
+  - Live Telemetry Correlation:
+    - Queries `public.email_partner_metrics` for latest captured snapshot and row counts.
+    - Queries `public.sales_topline` for last updated timestamp and metric buckets.
+    - Queries `public.invoice_tracking` for total tracked invoices and matched deals.
+    - Queries `public.ga4_agent_requests` for recent query status, prompt, duration, errors.
+  - Safe Fallback Handling:
+    - Gracefully handles local offline development when Supabase DB credentials are not loaded,
+      returning clean nominal statuses.
+
+3. SERVER API ROUTING (server/index.js)
+--------------------------------------------------------------------------------
+* `server/index.js`:
+  - Imported `getClaudeRoutines` from `./metrics/claude-routines.js`.
+  - Registered route: `operations.get('/claude-routines', ...)` under `/api/operations`
+    with 60-second caching and `?fresh=1` cache bypass.
+  - Registered direct alias: `app.get('/api/claude-routines', requireAuth, ...)`.
+
+4. FRONTEND MONITORING DASHBOARD (public/claude_routines.html)
+--------------------------------------------------------------------------------
+* Created `public/claude_routines.html`:
+  - Full-width layout matching `public/builds_monitoring.html`.
+  - Header: Live pulsing status dot, page title "Claude Code Routines", last-polled timestamp,
+    and "🔄 Refresh" action button.
+  - KPI Summary Tiles:
+    - Active Routines (count of active routines)
+    - Scheduled Routines (weekly and daily cloud agents)
+    - API & On-Demand (event / fire endpoint workers)
+    - Healthy / Nominal (count + percentage)
+    - Warnings & Issues (accented pill)
+  - Filtering & Search Controls:
+    - Filter tabs: Active Only, All Routines, Scheduled Only, API & On-Demand, Retired / Superseded.
+    - Real-time instant search input across routine names, trigger IDs, descriptions,
+      connectors, target tables, and notes.
+  - Telemetry Table Columns:
+    1. Routine / Cloud Agent: Name, slug, trigger ID, category badge, runner type badge.
+    2. Description (What It Is & Does): Purpose, target tables, and MCP connector badges.
+    3. Schedule / Trigger: Local & UTC schedules, cron syntax, API invocation trigger, model.
+    4. Status: Styled status pills (`pos`, `neg`, `partial`, `muted`).
+    5. Last Run Notes: Execution notes with record counts, sync metrics, or query snippets.
+    6. Last Executed: Relative time with full timestamp hover tooltip.
+    7. Details button: Opens modal drawer displaying complete JSON telemetry, connectors,
+       prompt notes, and target schemas.
+  - Auto-refresh: Polls `/api/operations/claude-routines` every 2 minutes or manually via button.
+
+5. SIDEBAR NAVIGATION INTEGRATION (public/app.js)
+--------------------------------------------------------------------------------
+* `public/app.js`:
+  - Updated `renderAiAutomationSidebar(active)` to add:
+    `['claude-routines', 'Claude Code Routines', 'claude_routines.html']`
+  - Appears in the AI & Automation sidebar alongside "DB Automations" and "Ticketing".
+
+6. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Syntax Validation:
+  - `node --check server/metrics/claude-routines.js` (PASSED)
+  - `node --check server/index.js` (PASSED)
+* Telemetry & Route Service Test:
+  - Executed `getClaudeRoutines()` test script: successfully returned 6 routines (4 active:
+    3 scheduled, 1 API-driven, 2 retired) with 100% nominal health status and correct
+    notes and connector tags.
+================================================================================

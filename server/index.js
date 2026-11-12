@@ -33,6 +33,7 @@ import { getMarketingChannelItems } from './metrics/marketing-channel-items.js';
 import { getAdPlatforms } from './metrics/ad-platforms.js';
 import { getWebsiteSearch } from './metrics/marketing-website-search.js';
 import { getDbAutomations } from './metrics/db-automations.js';
+import { getClaudeRoutines } from './metrics/claude-routines.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
@@ -320,6 +321,21 @@ operations.get('/db-automations', async (req, res) => {
   }
 });
 
+// Claude Code Routines — live telemetry, schedules, and last-run notes for all active
+// Claude Code scheduled routines, API triggers, and cloud workers.
+operations.get('/claude-routines', async (req, res) => {
+  const fresh = req.query.fresh === '1';
+  try {
+    const payload = fresh
+      ? await getClaudeRoutines()
+      : await cached('operations:claude-routines', getClaudeRoutines, 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[operations:claude-routines]', err);
+    res.status(502).json({ error: 'Failed to load Claude Code routines data.', detail: err.message });
+  }
+});
+
 app.use('/api/operations', operations);
 
 // Marketing sub-resources. The ROI page (whole-business revenue vs ad spend by Australian
@@ -538,6 +554,20 @@ app.get('/api/db-automations', requireAuth, async (req, res) => {
   } catch (err) {
     console.error('[api:db-automations]', err);
     res.status(502).json({ error: 'Failed to load DB automations data.', detail: err.message });
+  }
+});
+
+// Claude Code Routines endpoint alias
+app.get('/api/claude-routines', requireAuth, async (req, res) => {
+  const fresh = req.query.fresh === '1';
+  try {
+    const payload = fresh
+      ? await getClaudeRoutines()
+      : await cached('operations:claude-routines', getClaudeRoutines, 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[api:claude-routines]', err);
+    res.status(502).json({ error: 'Failed to load Claude Code routines data.', detail: err.message });
   }
 });
 
