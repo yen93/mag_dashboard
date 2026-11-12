@@ -459,76 +459,29 @@ function buildEmailHtml(
   // Generate Issues Cards
   let issuesHtml = "";
   if (totalIssues > 0) {
-    issuesHtml = `
-      <div style="margin-bottom: 28px;">
-        <h3 style="margin: 0 0 14px; font-size: 16px; color: #1e293b; text-transform: uppercase; letter-spacing: 0.5px;">
-          Action Required: Issues &amp; Warnings
-        </h3>
-        <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse: separate; border-spacing: 0 10px;">
-          ${issues
-            .map((it) => {
-              const isErr = it.severity === "error";
-              const pillBg = isErr ? "#fee2e2" : "#fef3c7";
-              const pillColor = isErr ? "#b91c1c" : "#b45309";
-              const borderColor = isErr ? "#fca5a5" : "#fcd34d";
+    const issueCards = issues.map((it) => {
+      const isErr = it.severity === "error";
+      const pillBg = isErr ? "#fee2e2" : "#fef3c7";
+      const pillColor = isErr ? "#b91c1c" : "#b45309";
+      const borderColor = isErr ? "#fca5a5" : "#fcd34d";
+      const timeStr = it.time ? new Date(it.time).toLocaleTimeString("en-AU", { timeZone: "Asia/Manila" }) + " PH" : "";
 
-              return `
-              <tr>
-                <td style="background: #ffffff; border: 1px solid ${borderColor}; border-left: 5px solid ${isErr ? "#ef4444" : "#f59e0b"}; border-radius: 8px; padding: 14px 16px;">
-                  <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px;">
-                    <div>
-                      <span style="display: inline-block; background: ${pillBg}; color: ${pillColor}; font-weight: 700; font-size: 11px; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; letter-spacing: 0.5px;">
-                        ${it.severity.toUpperCase()}
-                      </span>
-                      <span style="color: #64748b; font-size: 12px; margin-left: 8px; font-weight: 600;">
-                        ${it.tab}
-                      </span>
-                    </div>
-                    <span style="font-size: 11px; color: #94a3b8; font-family: monospace;">
-                      ${it.time ? new Date(it.time).toLocaleTimeString("en-AU", { timeZone: "Asia/Manila" }) + " PH" : ""}
-                    </span>
-                  </div>
-                  <div style="font-size: 14px; font-weight: 700; color: #0f172a; margin-bottom: 4px;">
-                    ${it.name}
-                  </div>
-                  <div style="font-size: 12.5px; color: #334155; margin-bottom: 8px; line-height: 1.45;">
-                    ${it.message}
-                  </div>
-                  <div style="font-size: 12px; color: #64748b; background: #f8fafc; padding: 6px 10px; border-radius: 4px; border: 1px solid #e2e8f0;">
-                    <strong style="color: #475569;">Triage:</strong> ${it.triage}
-                  </div>
-                </td>
-              </tr>
-            `;
-            })
-            .join("")}
-        </table>
-      </div>
-    `;
+      return `<tr><td style="background:#ffffff;border:1px solid ${borderColor};border-left:5px solid ${isErr ? "#ef4444" : "#f59e0b"};border-radius:8px;padding:14px 16px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;"><div><span style="display:inline-block;background:${pillBg};color:${pillColor};font-weight:700;font-size:11px;padding:2px 8px;border-radius:4px;text-transform:uppercase;letter-spacing:0.5px;">${it.severity.toUpperCase()}</span><span style="color:#64748b;font-size:12px;margin-left:8px;font-weight:600;">${it.tab}</span></div><span style="font-size:11px;color:#94a3b8;font-family:monospace;">${timeStr}</span></div><div style="font-size:14px;font-weight:700;color:#0f172a;margin-bottom:4px;">${it.name}</div><div style="font-size:12.5px;color:#334155;margin-bottom:8px;line-height:1.45;">${it.message}</div><div style="font-size:12px;color:#64748b;background:#f8fafc;padding:6px 10px;border-radius:4px;border:1px solid #e2e8f0;"><strong style="color:#475569;">Triage:</strong> ${it.triage}</div></td></tr>`;
+    }).join("");
+
+    issuesHtml = `<div style="margin-bottom:28px;"><h3 style="margin:0 0 14px;font-size:16px;color:#1e293b;text-transform:uppercase;letter-spacing:0.5px;">Action Required: Issues &amp; Warnings</h3><table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;border-spacing:0 10px;"><tbody>${issueCards}</tbody></table></div>`;
   }
 
   // Generate Tab Summaries Table
-  const summaryRowsHtml = summaries
-    .map((s) => {
-      const hasTabIssues = s.errors > 0 || s.warnings > 0;
-      const statusBadge = s.errors > 0
-        ? `<span style="background:#fee2e2; color:#b91c1c; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11px;">${s.errors} ERRORS</span>`
-        : s.warnings > 0
-        ? `<span style="background:#fef3c7; color:#b45309; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11px;">${s.warnings} WARN</span>`
-        : `<span style="background:#dcfce7; color:#15803d; padding:3px 8px; border-radius:4px; font-weight:700; font-size:11px;">NOMINAL</span>`;
+  const summaryRowsHtml = summaries.map((s) => {
+    const statusBadge = s.errors > 0
+      ? `<span style="background:#fee2e2;color:#b91c1c;padding:3px 8px;border-radius:4px;font-weight:700;font-size:11px;">${s.errors} ERRORS</span>`
+      : s.warnings > 0
+      ? `<span style="background:#fef3c7;color:#b45309;padding:3px 8px;border-radius:4px;font-weight:700;font-size:11px;">${s.warnings} WARN</span>`
+      : `<span style="background:#dcfce7;color:#15803d;padding:3px 8px;border-radius:4px;font-weight:700;font-size:11px;">NOMINAL</span>`;
 
-      return `
-        <tr style="border-bottom: 1px solid #e2e8f0;">
-          <td style="padding: 12px 14px; font-weight: 600; color: #0f172a;">
-            <a href="${s.url}" style="color: #2563eb; text-decoration: none;">${s.tabName} &rarr;</a>
-          </td>
-          <td style="padding: 12px 14px; text-align: center; color: #475569;">${s.active} / ${s.total}</td>
-          <td style="padding: 12px 14px; text-align: center; color: #16a34a; font-weight: 700;">${s.healthy}</td>
-          <td style="padding: 12px 14px; text-align: center;">${statusBadge}</td>
-        </tr>
-      `;
-    })
-    .join("");
+    return `<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:12px 14px;font-weight:600;color:#0f172a;"><a href="${s.url}" style="color:#2563eb;text-decoration:none;">${s.tabName} &rarr;</a></td><td style="padding:12px 14px;text-align:center;color:#475569;">${s.active} / ${s.total}</td><td style="padding:12px 14px;text-align:center;color:#16a34a;font-weight:700;">${s.healthy}</td><td style="padding:12px 14px;text-align:center;">${statusBadge}</td></tr>`;
+  }).join("");
 
   return `
   <!DOCTYPE html>
@@ -632,6 +585,19 @@ function buildEmailHtml(
 }
 
 /**
+ * Strips trailing whitespace and inter-tag spacing to prevent MIME Quoted-Printable
+ * "=20" artifacts and phantom <tr><td> wrappers inserted by email parsers.
+ */
+function sanitizeEmailHtml(html: string): string {
+  return html
+    .split("\n")
+    .map((line) => line.trimEnd())
+    .join("\n")
+    .replace(/>\s+</g, "><")
+    .trim();
+}
+
+/**
  * Sends the compiled digest email via Gmail SMTP.
  */
 async function sendDigestEmail(
@@ -664,12 +630,12 @@ async function sendDigestEmail(
   }
 
   try {
+    const cleanHtml = sanitizeEmailHtml(htmlContent);
     await client.send({
       from: GMAIL_USER,
       to: toEmail,
       subject,
-      content: "auto",
-      html: htmlContent
+      html: cleanHtml
     });
     console.log(`[monitoring-digest] Successfully dispatched health digest email to ${toEmail}`);
   } finally {

@@ -1,0 +1,72 @@
+================================================================================
+UPDATE DOCUMENTATION: FIX EMAIL HTML QUOTED-PRINTABLE ARTIFACTS & SECRET REMOVAL
+Timestamp: 12/11/26 11:30 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. SECRET REMEDIATION & GIT PUSH PROTECTION
+--------------------------------------------------------------------------------
+* Problem / Context:
+  GitHub Push Protection rejected the user's `git push` with error GH013:
+  "Repository rule violations found for refs/heads/main ... Push cannot contain secrets
+  (Supabase Personal Access Token in commit 470e2645cd49d9ea10a55a4bad505bf9bfa83f33,
+  path: supabase/functions/monitoring-health-digest/index.ts:22)".
+
+* Technical Changes:
+  - `supabase/functions/monitoring-health-digest/index.ts`:
+    * Removed hardcoded fallback access token (redacted).
+    * Token strictly reads from `Deno.env.get("SUPABASE_ACCESS_TOKEN") ?? ""`.
+    * Removed hardcoded JWT fallback from `N8N_API_KEY`.
+  - `server/config.js`:
+    * Removed fallback JWT token from `n8n.apiKey`, reading strictly from `env.N8N_API_KEY || ''`.
+  - `.gitignore`:
+    * Added wildcard patterns `*error.txt`, `*_error.txt`, and `*-error.txt` under throwaway files.
+  - Resolution Workflow:
+    * Instructed user to stage cleaned files and run `git commit --amend --no-edit` to replace
+      the rejected commit in local history before pushing to GitHub.
+
+2. EMAIL HTML QUOTED-PRINTABLE "=20" & PHANTOM TABLE CELL FIX
+--------------------------------------------------------------------------------
+* Problem / Context:
+  When inspecting the received digest email (`email_html.txt`), multiple `=20` characters
+  and phantom `<tbody><tr><td> =20 </td></tr>` table rows appeared across the email layout.
+
+* Root Causes Identified:
+  1. Quoted-Printable Encoding (RFC 2045):
+     In email MIME transmission, any trailing whitespace or space character at the end of
+     a line before a newline is encoded as `=20` (0x20 = ASCII space) to prevent mail transfer
+     agents from stripping whitespace. Multiline template literals left trailing spaces on blank lines.
+  2. Gmail HTML Table Auto-Correction:
+     Multiline template literals introduced newline and space indentation directly inside `<table>`
+     before `<tr>` tags. Because loose text or whitespace directly under `<table>` is invalid HTML,
+     Gmail's HTML parser repaired it by creating anonymous table rows/cells containing the whitespace:
+     `<tbody><tr><td> =20 </td></tr>`.
+
+* Technical Changes in `supabase/functions/monitoring-health-digest/index.ts`:
+  - Compacted Table Row Generation:
+    * Refactored `${issueCards}` and `${summaryRowsHtml}` loop generators to produce compact
+      inline `<tr><td style="...">...</td></tr>` rows without leading or trailing newlines.
+  - Added HTML Sanitizer (`sanitizeEmailHtml`):
+    * Iterates through all lines and runs `.trimEnd()` to eliminate trailing line spaces,
+      preventing quoted-printable from emitting `=20`.
+    * Collapses inter-tag whitespace between all table tags using regex:
+      `.replace(/>\s+</g, "><")`
+    * Ensures zero stray text or newlines exist inside `<table>`, `<thead>`, or `<tbody>`.
+  - Cleaned SMTP Payload:
+    * Passed sanitized HTML into `client.send({ ... })`.
+    * Removed `content: "auto"` so denomailer sends pure, properly encoded HTML.
+
+3. EDGE FUNCTIONS & CRON SCHEDULES
+--------------------------------------------------------------------------------
+* Functions Modified:
+  - `monitoring-health-digest` (`supabase/functions/monitoring-health-digest/index.ts`)
+* Schedules:
+  - Retained `30 22 * * 0-4` (Mon–Fri 6:30 AM PH / Sun–Thu 22:30 UTC via `cron.job`).
+
+4. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Regex Sanitizer Verification:
+  - Verified regex transformation converts multiline indented tables into clean
+    `<table role="presentation"><tbody><tr><td>...</td></tr></tbody></table>`.
+  - Confirmed zero trailing spaces and zero loose inter-tag whitespace.
+================================================================================
