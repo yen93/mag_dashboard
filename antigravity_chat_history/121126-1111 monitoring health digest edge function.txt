@@ -1,0 +1,80 @@
+================================================================================
+UPDATE DOCUMENTATION: MONITORING HEALTH DIGEST EDGE FUNCTION & SCHEDULE
+Timestamp: 12/11/26 11:11 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. FEATURE & REQUIREMENTS
+--------------------------------------------------------------------------------
+* Context & Objective:
+  The user requested an automated Supabase Edge Function running once a day, Monday
+  through Friday at 6:30 AM Philippine time, that audits the health status of all
+  dashboard monitoring tabs (DB Automations, Claude Code Routines, and n8n Automations),
+  highlights any errors and warnings requiring triage, and delivers an HTML digest email
+  to julienne@myadventuregroup.com.au.
+
+* Key Requirements:
+  - Daily weekday execution schedule: Mon–Fri 06:30 AM PH (22:30 UTC of previous day).
+  - Scope: Cross-tab audit spanning:
+    1. DB Automations (`builds_monitoring.html` -> Supabase Edge Functions & pg_cron jobs in `aivitcomiywiysrfwqxt`).
+    2. Claude Code Routines (`claude_routines.html` -> Email partners, Sales topline, Invoice tracking, GA4 agent).
+    3. n8n Automations (`n8n_automations.html` -> 30 webhook automations across 12 active workflows).
+  - Priority Highlighting: Errors and warnings are surfaced prominently at the top with
+    exact workflow/job names, error messages, and triage instructions.
+  - SMTP Delivery: Dispatched via Gmail SMTP using `denomailer` to `ALERT_EMAIL`.
+  - Testing flags: `?dry=1` (skips email dispatch for dry-run preview) and `?to=...` (recipient override).
+
+2. TECHNICAL CHANGES & IMPLEMENTATION DETAILS
+--------------------------------------------------------------------------------
+* Edge Function (`supabase/functions/monitoring-health-digest/index.ts`):
+  - Audit Engine 1: DB Automations
+    * Queries `cron.job` and `cron.job_run_details` on `aivitcomiywiysrfwqxt` for failed runs.
+    * Queries `net._http_response` for non-2xx responses or timeouts within the last 24 hours.
+    * Correlates timeout timestamps with specific cron jobs (`sync-insta-stories` at 22:20 UTC,
+      `analyze-insta-stories-daily` at 22:30 UTC, `renew-gmail-watch-daily` at 02:00 UTC).
+  - Audit Engine 2: Claude Code Routines
+    * Verifies data freshness against expected update intervals:
+      - `public.email_partner_metrics`: Max captured_at within 8 days.
+      - `public.sales_topline`: Max updated_at within 8 days.
+      - `public.invoice_tracking`: Max updated_at within 3.5 days.
+    * Inspects `public.ga4_agent_requests` for errors or queries stuck in `pending` for > 24 hours.
+  - Audit Engine 3: n8n Automations
+    * Queries n8n REST API (`GET /api/v1/executions?limit=60`) for failures in the last 24 hours.
+    * Enriches failed executions with deep details (`GET /api/v1/executions/${id}?includeData=true`)
+      to extract the exact failing node name and error message (e.g. Google Sheets 400, OpenAI 429).
+    * Queries Supabase `cron.job` and `cron.job_run_details` on `uwsncuowtzydylfabikj` (n8n-production).
+  - Responsive HTML Email Template:
+    * Action Required banner (Red for errors, Amber for warnings, Green for nominal).
+    * Issue cards detailing severity, tab, node/job name, error trace, and triage recommendations.
+    * Summary table breaking down active vs nominal items across all 3 monitoring tabs.
+    * Direct call-to-action link to the live dashboard.
+
+* Database Migration (`supabase/migrations/20261112105500_schedule_monitoring_health_digest.sql`):
+  - Creates cron job `monitoring-health-digest-daily` in `cron.job`.
+  - Schedule: `30 22 * * 0-4` (Monday–Friday 06:30 AM PH / Sunday–Thursday 22:30 UTC).
+  - Trigger command: Dispatches `net.http_post` to the Edge Function with 120s timeout.
+
+* Dashboard Catalog Update (`server/metrics/db-automations.js`):
+  - Added `monitoring-health-digest` to `AUTOMATIONS_CATALOG` so it appears on `builds_monitoring.html`.
+
+3. TROUBLESHOOTING & VERIFICATION (monitoring-health-digest-error.txt)
+--------------------------------------------------------------------------------
+* User Test Analysis:
+  - The user deployed and tested the function with `curl -s ".../monitoring-health-digest?dry=1"`.
+  - The function executed successfully (`ok: true`) and caught 6 live system issues:
+    1. DB Automations (Warnings): HTTP Dispatches #154, #155, and #157 timed out at 5000ms.
+       * Root Cause: `sync-insta-stories`, `analyze-insta-stories-daily`, and `renew-gmail-watch-daily`
+         omit `timeout_milliseconds` in their `net.http_post` command, falling back to pg_net's
+         5000ms default. Cold starts taking ~5001ms trigger timeout warnings.
+       * Fix: Add `timeout_milliseconds := 60000` to the cron commands.
+    2. n8n Automations (Errors):
+       * Exec #1413 (Sales Batch Mailer V2): Failed on node `Delete rows or columns from sheet`
+         with Google Sheets 400 parameter error.
+       * Exec #1406 (LinkedIn Outbound Sales): Failed on node `Message a model8` with OpenAI 429
+         rate limit error.
+       * Exec #1403 (LinkedIn Company Lead Finder): Failed on node `Run an Actor and get dataset2`
+         with JSON syntax error (trailing comma in queries body).
+  - Why no email was sent: The user's curl included `?dry=1`. By design, `dry=1` skips SMTP dispatch
+    to allow previewing JSON telemetry. Running without `?dry=1` sends the live email.
+  - Secret verification: Confirmed `GMAIL_USER` and `GMAIL_APP_PASSWORD` are active in `aivitcomiywiysrfwqxt`.
+================================================================================

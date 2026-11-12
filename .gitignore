@@ -121,6 +121,9 @@ scratch_*
 scratch/
 tmp/
 *.tmp
+*error.txt
+*_error.txt
+*-error.txt
 
 # ── Logs ────────────────────────────────────────────────────
 *.log

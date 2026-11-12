@@ -440,6 +440,20 @@ export const AUTOMATIONS_CATALOG = [
     sourceFile: 'supabase/functions/renew-gmail-watch'
   },
   {
+    id: 'monitoring-health-digest',
+    name: 'Monitoring Health Daily Digest',
+    slug: 'monitoring-health-digest',
+    type: 'edge_function',
+    category: 'System',
+    description: 'Daily morning audit of all dashboard monitoring tabs (DB Automations, Claude Code Routines, and n8n Automations). Highlights errors and warnings and emails HTML digest via Gmail SMTP.',
+    triggerType: 'Scheduled',
+    scheduleDesc: 'Mon–Fri 6:30 AM PH (22:30 UTC)',
+    cronName: 'monitoring-health-digest-daily',
+    cronExpression: '30 22 * * 0-4',
+    targetTables: ['System / Telemetry Email'],
+    sourceFile: 'supabase/functions/monitoring-health-digest/index.ts'
+  },
+  {
     id: 'draft-james-reply',
     name: 'Draft James Reply AI',
     slug: 'draft-james-reply',
