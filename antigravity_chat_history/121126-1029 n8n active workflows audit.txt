@@ -1,0 +1,159 @@
+================================================================================
+UPDATE DOCUMENTATION: N8N ACTIVE WORKFLOWS AUDIT & TAB ARCHITECTURE
+Timestamp: 12/11/26 10:29 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. INVESTIGATION OBJECTIVE & USER CRITERIA
+--------------------------------------------------------------------------------
+* Context & Objective:
+  The user requested an investigation (/q) regarding creating a new monitoring tab
+  in the MAG Metrics Dashboard for all active n8n workflows hosted at:
+  https://n8n-659687081407.australia-southeast1.run.app
+
+* Strict Inclusion Criteria:
+  1. Active / Published: Workflow must be active (`active = true`).
+  2. Webhook-triggered: Must run via a webhook trigger node.
+  3. Triggered by Supabase: Webhook must be invoked/triggered by Supabase (via pg_cron net.http_get).
+  4. 1 Webhook = 1 Automation: Workflows containing multiple webhooks are decomposed so that
+     each webhook node constitutes its own discrete monitoring row/automation.
+  5. UI/UX Mirroring: Follow the identical layout, KPI tiles, filtering, and telemetry patterns
+     established in `public/claude_routines.html` and `public/builds_monitoring.html`.
+
+2. LIVE DISCOVERY & INFRASTRUCTURE AUDIT
+--------------------------------------------------------------------------------
+* Cloud Infrastructure:
+  - Cloud Run Service: `n8n` in project `claudegwscli-502400`, region `australia-southeast1`.
+  - Credentials: n8n API key accessed via GCP Secret Manager (`n8n-api-key`).
+  - Underlying Postgres Database: Backed by Supabase project `uwsncuowtzydylfabikj`
+    (`n8n-production` on `aws-0-ap-southeast-2.pooler.supabase.com`).
+
+* Workflow & Trigger Findings:
+  - Total Cataloged Workflows in n8n: 57 workflows.
+  - Active / Published Workflows: 12 workflows.
+  - Total Webhook Nodes in Active Workflows: 31 webhooks.
+  - Supabase pg_cron Triggers in `uwsncuowtzydylfabikj`: 33 cron jobs total.
+  - Matched Webhook Automations: 30 discrete webhooks are directly scheduled and triggered
+    by Supabase `cron.job` entries via `net.http_get('https://n8n-.../webhook/<path>')`.
+    * 28 automations are actively firing on schedules (`cron.job.active = true`).
+    * 2 automations are paused in cron (`active = false`: `n8n-get-all-ac-contacts` and
+      `n8n-get-all-ac-deals` in `AC Caching`, superseded by Supabase Edge Functions).
+    * 1 active webhook node (`Webhook1` in `Closed Threads Processing`) exists without an
+      independent cron entry (used for on-demand / manual execution).
+
+3. CATALOG OF 30 DISCRETE N8N AUTOMATIONS
+--------------------------------------------------------------------------------
+1. Insta Story Scraper (Workflow ID: R6VdvISsfVnq39Tr)
+   - Automation 1: Webhook (c2fa45b3-49b1-496b-9dd0-8193897caa2f)
+     * Cron: [n8n-insta-story-scraper] | Schedule: 0 22 * * 0-4 (Mon–Fri 6:00 AM PH) | Active: true
+   - Automation 2: Webhook1 (57fe4813-a476-4f26-b27b-e011e5c17092)
+     * Cron: [Insta Story Scraper: Log to sheet and notify Liv] | Schedule: 0 23 * * 0-4 (Mon–Fri 7:00 AM PH) | Active: true
+
+2. Sales Batch Mailer V2 (Workflow ID: cMQvsiTLhNoHK1Fm)
+   - Automation 3: Webhook (86d26274-f8f8-4abf-9457-e144c42d5ee1) - AI Scraped Soc Med Leads
+     * Cron: [n8n-batch-mailer-ai-scraped-soc-med-leads] | Schedule: 30 22 * * 0-4 (Mon–Fri 6:30 AM PH) | Active: true
+   - Automation 4: Webhook1 (49bc9abe-eaed-49ec-b749-8e051090896c) - Manually Found Leads
+     * Cron: [n8n-batch-mailer-manually-found-leads] | Schedule: 30 22 * * 0-4 (Mon–Fri 6:30 AM PH) | Active: true
+   - Automation 5: Webhook2 (b17ac35b-0235-484b-be50-c3783ac77a8c) - AI Soc Med Alternate Leads
+     * Cron: [n8n-batch-mailer-ai-soc-med-alternate-leads] | Schedule: 30 22 * * 0-4 (Mon–Fri 6:30 AM PH) | Active: true
+   - Automation 6: Webhook3 (e64817f4-c359-4bc2-a40f-ca9e23b92fe7) - Alternate Cold Leads
+     * Cron: [n8n-batch-mailer-alternate-cold-leads] | Schedule: 30 22 * * 0-4 (Mon–Fri 6:30 AM PH) | Active: true
+   - Automation 7: Webhook4 (d363d508-d222-4783-acef-35efa48240b7) - AI Scraped Cold Leads
+     * Cron: [n8n-batch-mailer-ai-scraped-cold-leads] | Schedule: 30 22 * * 0-4 (Mon–Fri 6:30 AM PH) | Active: true
+
+3. AC Notes Automation (Follow up sequence) (Workflow ID: 8vZG1SAYwSmcHJ2x)
+   - Automation 8: Webhook (3c2a741d-656f-41fe-846e-a84d4b0ae530) - AC Notes Intro
+     * Cron: [n8n-ac-notes-intro] | Schedule: 40 22 * * 0-4 (Mon–Fri 6:40 AM PH) | Active: true
+   - Automation 9: Webhook1 (968fa7b5-c233-4488-b09a-8b57975dd512) - AC Notes 1st Followup
+     * Cron: [n8n-ac-notes-1st-followup] | Schedule: 45 22 * * 0-4 (Mon–Fri 6:45 AM PH) | Active: true
+   - Automation 10: Webhook2 (f8e3664b-0c56-479e-8702-e4bfa6a8aeba) - AC Notes 2nd Followup
+     * Cron: [n8n-ac-notes-2nd-followup] | Schedule: 50 22 * * 0-4 (Mon–Fri 6:50 AM PH) | Active: true
+   - Automation 11: Webhook3 (2a30ffcf-4f94-44f4-9a83-59ec3b18abf4) - AC Notes 3rd Followup
+     * Cron: [n8n-ac-notes-3rd-followup] | Schedule: 55 22 * * 0-4 (Mon–Fri 6:55 AM PH) | Active: true
+   - Automation 12: Webhook4 (2dcf9990-d794-43c7-9fb4-b81f1caad619) - Cold Leads Notes Intro
+     * Cron: [n8n-cold-leads-notes-intro] | Schedule: 40 22 * * 0-4 (Mon–Fri 6:40 AM PH) | Active: true
+   - Automation 13: Webhook5 (d1ab03b4-fb68-460f-8a4a-24f057c59480) - Cold Leads Notes 1st Followup
+     * Cron: [n8n-cold-leads-notes-1st-followup] | Schedule: 45 22 * * 0-4 (Mon–Fri 6:45 AM PH) | Active: true
+   - Automation 14: Webhook6 (358613aa-1325-40e8-b2b2-af3ec223d579) - Cold Leads Notes 2nd Followup
+     * Cron: [n8n-cold-leads-notes-2nd-followup] | Schedule: 50 22 * * 0-4 (Mon–Fri 6:50 AM PH) | Active: true
+   - Automation 15: Webhook7 (be7e4d56-a267-4f41-8616-c5e1be9fdab9) - Cold Leads Notes 3rd Followup
+     * Cron: [n8n-cold-leads-notes-3rd-followup] | Schedule: 55 22 * * 0-4 (Mon–Fri 6:55 AM PH) | Active: true
+   - Automation 16: Webhook8 (2b234727-e9ac-4f3c-ab32-f010c257bed4) - Cold Leads Notes 4th Followup
+     * Cron: [n8n-cold-leads-notes-4th-followup] | Schedule: 0 23 * * 0-4 (Mon–Fri 7:00 AM PH) | Active: true
+
+4. Cold Leads Follow Up Sequence (Workflow ID: JZkIKy3LsaLx0q5z)
+   - Automation 17: Webhook (cf04a824-5636-40ec-b75c-bb5d5ff6743c)
+     * Cron: [n8n-cold-leads-follow-up] | Schedule: 25 22 * * 0-4 (Mon–Fri 6:25 AM PH) | Active: true
+
+5. Cold Leads Scraper (Workflow ID: ww6XNc05nJlf54Vb)
+   - Automation 18: Webhook (f5ca40e6-06cf-42a0-a829-0a938c03bebc)
+     * Cron: [n8n-cold-leads-scraper] | Schedule: 35 22 * * 0-4 (Mon–Fri 6:35 AM PH) | Active: true
+
+6. LinkedIn Outbound Sales Automations (Workflow ID: d5NAgNp9XRLFIM0R)
+   - Automation 19: Webhook (50798cda-7448-45bf-9168-d887756fb8c8)
+     * Cron: [n8n-linkedin-outbound-sales] | Schedule: 15 22 * * 0-4 (Mon–Fri 6:15 AM PH) | Active: true
+
+7. LinkedIn Comments Scraping POC Enrichment (Workflow ID: YAexztVMLu7zp3TN)
+   - Automation 20: Webhook (e7e0b196-e1a4-4340-8af7-c6eb93509e46) - Get LinkedIn Posts to Process
+     * Cron: [n8n-get-linkedin-posts-to-be-processed] | Schedule: 30 22 * * 0-4 (Mon–Fri 6:30 AM PH) | Active: true
+   - Automation 21: Webhook1 (d13096b0-03af-400a-8f4c-1b37cdaf8a9b) - Find Org of Commentor
+     * Cron: [n8n-find-org-of-commentor] | Schedule: 40 22 * * 0-4 (Mon–Fri 6:40 AM PH) | Active: true
+   - Automation 22: Webhook2 (5ed8979a-e286-4b3a-b5f8-c9003fb2d3b5) - Comments Scraper Email Finder
+     * Cron: [n8n-comments-scraper-email-finder] | Schedule: 0 22 * * 0-4 (Mon–Fri 6:00 AM PH) | Active: true
+   - Automation 23: Webhook3 (74242e51-395e-4086-a157-7a3977f31b58) - Log Email to Sheet
+     * Cron: [n8n-comments-scraper-log-email-to-sheet] | Schedule: 30 22 * * 0-4 (Mon–Fri 6:30 AM PH) | Active: true
+
+8. LinkedIn Company Lead Finder (Workflow ID: HvLDCK6pfxYOgCWw)
+   - Automation 24: Webhook (e70fe2f8-2d48-4fca-8849-dbafcdff6164)
+     * Cron: [n8n-linkedin-company-lead-finder] | Schedule: 0 22 * * 0-4 (Mon–Fri 6:00 AM PH) | Active: true
+
+9. Soc Med Follow Up Sequence (Workflow ID: gI2MaSOvuxrzJ4m4)
+   - Automation 25: Webhook (be8d0706-4150-4358-8e0d-be4108b88615)
+     * Cron: [n8n-soc-med-follow-up] | Schedule: 20 22 * * 0-4 (Mon–Fri 6:20 AM PH) | Active: true
+
+10. Closed Threads Processing (Workflow ID: MveMnP6j7IIQ6UYM)
+    - Automation 26: Webhook (8fe86e56-7c2f-45cd-9658-ab653f9f2559)
+      * Cron: [n8n-closed-threads-processing] | Schedule: 0 22 * * 0 (Sun 6:00 AM PH) | Active: true
+
+11. Sales Daily Email Notification (Workflow ID: lPgAcjCPUytZ4pph)
+    - Automation 27: Webhook (7dc5b0a7-071a-4a66-99e4-ab48cc23aeff)
+      * Cron: [n8n-sales-daily-email-notification] | Schedule: 50 22 * * 0-4 (Mon–Fri 6:50 AM PH) | Active: true
+
+12. AC Caching (Workflow ID: ik1kyavpU8RrC8F3)
+    - Automation 28: Webhook2 (ae6f429c-99a2-428c-91f9-db2cb62c16c6) - All AC Accounts
+      * Cron: [n8n-get-all-ac-accounts] | Schedule: 10 22 * * 0-4 (Mon–Fri 6:10 AM PH) | Active: true
+    - Automation 29: Webhook1 (8388b39d-9c99-494e-9991-2fefb0081a87) - All AC Contacts
+      * Cron: [n8n-get-all-ac-contacts] | Schedule: 5 22 * * 0-4 | Active: false (Paused)
+    - Automation 30: Webhook (02b6362d-b828-4f40-908c-45e98a943a2b) - All AC Deals
+      * Cron: [n8n-get-all-ac-deals] | Schedule: 0 22 * * 0-4 | Active: false (Paused)
+
+4. ARCHITECTURAL SPECIFICATION FOR IMPLEMENTATION
+--------------------------------------------------------------------------------
+* Frontend:
+  - File: `public/n8n_automations.html`
+  - Style & Container: Max-width 1560px, header box with live pulsing status indicator,
+    5 KPI summary cards (Active Automations, Parent Workflows, Nominal/Healthy, Paused/Pending,
+    and Warnings/Errors).
+  - Filter Tabs: Active Only, All Automations, Sales & Outreach, Social & Lead Scrapers, Paused.
+  - Table Columns:
+    1. Automation & Parent Workflow: Name, slug, workflow ID, category, webhook tag.
+    2. Description & Downstream Flow: Functional description and services involved.
+    3. Trigger & Cron Schedule: pg_cron name, schedule (UTC & PH local), webhook method.
+    4. Status: Status pill (Active, Nominal, Paused, Error).
+    5. Last Run Telemetry: Run duration, execution status, timestamp.
+    6. Actions / Detail Drawer: Full JSON payload, downstream nodes, parameters.
+
+* Navigation Integration:
+  - File: `public/app.js`
+  - Function: `renderAiAutomationSidebar`
+  - Entry: `['n8n-automations', 'n8n Automations', 'n8n_automations.html']` placed alongside
+    DB Automations, Claude Code Routines, and Ticketing.
+
+* Backend Telemetry Service:
+  - File: `server/metrics/n8n-automations.js`
+  - Endpoint: `GET /api/operations/n8n-automations` registered in `server/index.js`.
+  - Data Sources:
+    1. Static Canonical Catalog of all 30 automations with metadata and descriptions.
+    2. Live telemetry from n8n API (`GET /api/v1/executions?limit=50`).
+    3. Live telemetry from Supabase `cron.job` and `net._http_response` in `uwsncuowtzydylfabikj`.
+================================================================================
