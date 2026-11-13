@@ -26,6 +26,11 @@
 //               the EXCLUDED_LINKS pages; earlier FYs are left untouched).
 //   • Tailor  → ac_indirect_deals WHERE is_tailor=true  (excl. paid deals)
 //   • Bureau  → ac_indirect_deals WHERE is_tailor=false (excl. paid deals)
+//   • Google-Ads flag → public.ac_google_ads_yes_deals (every AC deal whose
+//               "Google Ads?" custom field = Yes) that ISN'T already counted by any
+//               bucket above, folded into the paid source: 'Paid Ads' before FY27,
+//               'Google Ads' from FY27 (same PAID_SPLIT_FY convention). Deduped by
+//               deal_id against the FY-correct counted set (see GADS_YES_CTES).
 //
 // Booking = won deal (roas status='won' / ga4 deal_status='won' / ac_indirect
 // status=1). Tailor/Bureau EXCLUDE any deal already in the ROAS view (precedence
@@ -50,8 +55,10 @@ const SRC =
   'Live (Supabase): enquiries + bookings per source — paid is roas_counted_deals ' +
   'before FY27 (one "Paid Ads" row) and ga4_ac_contact_source cpc rows from FY27+ ' +
   '(split Google Ads / Bing Ads), Organic from ga4_ac_contact_source (medium=organic), ' +
-  'Tailor/Bureau from ac_indirect_deals (excl. paid deals). FY27+ ga4 rows on certain ' +
-  'non-keynote conversion pages or free-gift opt-ins are excluded. Booking = won deal; AU FY from cdate.';
+  'Tailor/Bureau from ac_indirect_deals (excl. paid deals), plus ac_google_ads_yes_deals ' +
+  '("Google Ads?"=Yes) not already counted (Paid Ads <FY27, Google Ads FY27+). FY27+ ga4 ' +
+  'rows on certain non-keynote conversion pages or free-gift opt-ins are excluded. ' +
+  'Booking = won deal; AU FY from cdate.';
 
 // AU financial-year END year from a date column (calendar year + 1 if month >= July).
 const FY = (col) =>
@@ -84,6 +91,54 @@ const GA_ACTION_OK = `(lower(coalesce(conversion_action, '')) <> 'free_gifts_opt
 // A ga4 row that still counts (not a non-keynote funnel page, not a free-gift opt-in).
 export const GA_ROW_OK = `(${GA_LINK_OK} AND ${GA_ACTION_OK})`;
 
+// Google-Ads-flagged deals (public.ac_google_ads_yes_deals = every AC deal whose
+// "Google Ads?" custom field = Yes, 2022→present) that AREN'T already counted by any
+// bucket here, added to the paid source: labelled 'Paid Ads' before FY27 and
+// 'Google Ads' from FY27 (the same PAID_SPLIT_FY convention). `counted_ids` is the
+// FY-correct set of deal_ids the union already counts — roas paid (<FY27), ALL
+// ac_indirect_deals, FY27+ ga4 cpc Google/Bing rows, and organic ga4 rows — and `gy`
+// is the Google-Ads deals minus that set (so nothing double-counts). Both CTEs
+// reference the local `roas` CTE, so they are spliced in AFTER it in each WITH below.
+// Exported so marketing-overview.js adds the IDENTICAL population and the Overview
+// "Keynote enquiries/bookings" cards stay reconciled with this by-source total.
+export const GADS_YES_CTES = `
+  counted_ids AS (
+    SELECT deal_id::text AS deal_id FROM roas
+      WHERE deal_id IS NOT NULL AND (${FY('cdate')}) < ${PAID_SPLIT_FY}
+    UNION
+    SELECT deal_id::text FROM public.ac_indirect_deals WHERE deal_id IS NOT NULL
+    UNION
+    SELECT deal_id::text FROM public.ga4_ac_contact_source
+      WHERE deal_id IS NOT NULL AND cdate IS NOT NULL
+        AND (${FY('cdate')}) >= ${PAID_SPLIT_FY}
+        AND ${GA_IS_CPC} AND (${GA_PLATFORM}) IS NOT NULL AND ${GA_ROW_OK}
+    UNION
+    SELECT deal_id::text FROM public.ga4_ac_contact_source
+      WHERE deal_id IS NOT NULL AND cdate IS NOT NULL AND medium = 'organic'
+        AND ( (${FY('cdate')}) < ${PAID_SPLIT_FY} OR ${GA_ROW_OK} )
+  ),
+  gy AS (
+    SELECT deal_id::text AS deal_id, cdate, status, status_label, title,
+           organization, contact_name, value_aud,
+           (${FY('cdate')}) AS fy_end
+      FROM public.ac_google_ads_yes_deals
+      WHERE cdate IS NOT NULL
+        AND deal_id::text NOT IN (SELECT deal_id FROM counted_ids)
+  )`;
+
+// Counts arm (source, cdate, won) for the by-source union.
+export const GADS_SRC_ARM = `
+    SELECT CASE WHEN fy_end >= ${PAID_SPLIT_FY} THEN 'Google Ads' ELSE 'Paid Ads' END AS source,
+           cdate, (status = 1) AS won
+      FROM gy`;
+
+// Per-lead detail arm (full columns) for the "All leads" table.
+export const GADS_LEADS_ARM = `
+    SELECT CASE WHEN fy_end >= ${PAID_SPLIT_FY} THEN 'Google Ads' ELSE 'Paid Ads' END AS source, cdate,
+           coalesce(nullif(organization, ''), contact_name) AS org, title,
+           coalesce(status_label, '') AS status, (status = 1) AS won, value_aud AS value
+      FROM gy`;
+
 // The source UNION, shared by the per-FY payload and the custom-range variant.
 // `roas` is the paid set (pre-FY27 paid bucket + the Tailor/Bureau exclusion list).
 const SRC_CTE = `
@@ -92,6 +147,7 @@ const SRC_CTE = `
            (${FY('cdate')}) AS fy_end
       FROM public.roas_counted_deals WHERE cdate IS NOT NULL
   ),
+  ${GADS_YES_CTES},
   src AS (
     -- Paid, earlier FYs (< FY27): one combined "Paid Ads" bucket from the ROAS view.
     SELECT 'Paid Ads'::text AS source, cdate, won
@@ -120,6 +176,10 @@ const SRC_CTE = `
       FROM public.ac_indirect_deals
       WHERE is_tailor = false AND cdate IS NOT NULL
         AND deal_id::text NOT IN (SELECT deal_id FROM roas WHERE deal_id IS NOT NULL)
+    UNION ALL
+    -- Google Ads flag (ac_google_ads_yes_deals) not already counted above:
+    -- 'Paid Ads' before FY27, 'Google Ads' FY27+.
+    ${GADS_SRC_ARM}
   )`;
 
 const BY_SOURCE_SQL = `${SRC_CTE}
@@ -158,6 +218,7 @@ const LEADS_CTE = `
            (${FY('cdate')}) AS fy_end
       FROM public.roas_counted_deals WHERE cdate IS NOT NULL
   ),
+  ${GADS_YES_CTES},
   leads AS (
     -- Paid, earlier FYs (< FY27): one combined "Paid Ads" row from the ROAS view.
     SELECT 'Paid Ads'::text AS source, cdate,
@@ -187,6 +248,10 @@ const LEADS_CTE = `
       FROM public.ac_indirect_deals
       WHERE cdate IS NOT NULL
         AND deal_id::text NOT IN (SELECT deal_id FROM roas WHERE deal_id IS NOT NULL)
+    UNION ALL
+    -- Google Ads flag (ac_google_ads_yes_deals) not already counted above:
+    -- 'Paid Ads' before FY27, 'Google Ads' FY27+.
+    ${GADS_LEADS_ARM}
   )`;
 
 const LEADS_SELECT = `

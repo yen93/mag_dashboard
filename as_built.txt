@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-13 (RESTRICTED PARTNER ROLE EXTENDED: also roas.html — see RESTRICTED PARTNER ACCESS entry; earlier same day RESTRICTED PARTNER ROLE: simpledigital.net.au + testertwo gmail can log in but see only leads_bookings.html; needs redeploy; earlier 2026-11-11 AI & AUTOMATION TAB: new top tab + blank Builds Monitoring / Ticketing subtabs; earlier 2026-11-10 — SPEND & ROI CHANNEL RESULTS: the Executive X row is now labelled "Offsite" in the table. Its spend comes from the Xero "MAG program delivery expenses" account (code 376, cost of sales) per FY via public.xero_pnl_accounts_fy — a shared all-programs account (Geocon + all immersive programs; Xero has no tracking category to split it), so spend overcounts and ROAS total reads low (owner's deliberate choice). ROAS total = revenue ÷ that spend. Enquiries = companies listed per season in the Executive X ROI Report sheet, static: FY24 21, FY25 23, FY26 23 (EXEC_X_ENQUIRIES_BY_FY, same basis as the Nurture & Events EXEC_X table). ROAS ads stays pending. Edited server/metrics/marketing-channel-results.js (new PROGRAM_DELIVERY_SQL, execXFrom(e, spend), FY axis + all-years total) and public/spend_roi.html (Channel results ⓘ + source text). Server + frontend change → NEEDS a manual Cloud Run redeploy). Then 2026-11-10 (CONFERENCES PAGE (public/sales.html) + server/metrics/liv-deals.js: NEW Deal column (live join to activecampaign_deals.title by deal id, 340/340 match), NEW Custom Date Range popover (Created date, mirrors ac_contact_sources.html) and NEW "Export CSV" of the current filtered/sorted view — server + frontend, NEEDS a manual Cloud Run redeploy. MONTHLY LOG: "Deals behind the summary" table + FY toggle/date range moved into it — frontend-only, needs redeploy. AI-SOURCE LIST: new public.ai_source_patterns table + ai-source-patterns-sync monthly edge fn (curated + OpenAI discovery, append-only) — WRITTEN, NOT YET APPLIED/DEPLOYED; ga4-website-traffic-sync rewired to read it with regex fallback — NOT YET DEPLOYED. SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
+Last updated: 2026-11-13 (GOOGLE ADS? = YES DEALS: new table public.ac_google_ads_yes_deals + upsert-only RPC reload_ac_google_ads_yes_deals + edge fn ac-google-ads-yes-deals-sync + WEEKLY cron (Mon 06:20 PH) — all APPLIED/DEPLOYED, 95 rows backfilled; Leads & Bookings + Marketing Overview server metrics now add the not-already-counted ones (Paid Ads FY22–26, Google Ads FY27) — server change, NEEDS a manual Cloud Run redeploy; earlier same day RESTRICTED PARTNER ROLE EXTENDED: also roas.html — see RESTRICTED PARTNER ACCESS entry; earlier same day RESTRICTED PARTNER ROLE: simpledigital.net.au + testertwo gmail can log in but see only leads_bookings.html; needs redeploy; earlier 2026-11-11 AI & AUTOMATION TAB: new top tab + blank Builds Monitoring / Ticketing subtabs; earlier 2026-11-10 — SPEND & ROI CHANNEL RESULTS: the Executive X row is now labelled "Offsite" in the table. Its spend comes from the Xero "MAG program delivery expenses" account (code 376, cost of sales) per FY via public.xero_pnl_accounts_fy — a shared all-programs account (Geocon + all immersive programs; Xero has no tracking category to split it), so spend overcounts and ROAS total reads low (owner's deliberate choice). ROAS total = revenue ÷ that spend. Enquiries = companies listed per season in the Executive X ROI Report sheet, static: FY24 21, FY25 23, FY26 23 (EXEC_X_ENQUIRIES_BY_FY, same basis as the Nurture & Events EXEC_X table). ROAS ads stays pending. Edited server/metrics/marketing-channel-results.js (new PROGRAM_DELIVERY_SQL, execXFrom(e, spend), FY axis + all-years total) and public/spend_roi.html (Channel results ⓘ + source text). Server + frontend change → NEEDS a manual Cloud Run redeploy). Then 2026-11-10 (CONFERENCES PAGE (public/sales.html) + server/metrics/liv-deals.js: NEW Deal column (live join to activecampaign_deals.title by deal id, 340/340 match), NEW Custom Date Range popover (Created date, mirrors ac_contact_sources.html) and NEW "Export CSV" of the current filtered/sorted view — server + frontend, NEEDS a manual Cloud Run redeploy. MONTHLY LOG: "Deals behind the summary" table + FY toggle/date range moved into it — frontend-only, needs redeploy. AI-SOURCE LIST: new public.ai_source_patterns table + ai-source-patterns-sync monthly edge fn (curated + OpenAI discovery, append-only) — WRITTEN, NOT YET APPLIED/DEPLOYED; ga4-website-traffic-sync rewired to read it with regex fallback — NOT YET DEPLOYED. SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
 = row.marketingRevenue from /api/marketing/roi, FY-aware with vs-prior-FY delta) — 6 KPI cards now. (2) Channel results
 table: the Executive X row carries a small muted note "Updated at the close of each season." (3) NEW click-to-drill-down on
 the "Spend by type" bars: clicking a type opens a modal listing the distinct VENDOR names under that type (names only, no $),
@@ -940,6 +940,18 @@ DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
 - Most metrics are read live from MAG's existing AC-mirror / leads / reviews
   tables. In addition, several dashboard-owned cache tables are filled on a
   schedule and only SELECTed at request time:
+- public.ac_google_ads_yes_deals (NEW 2026-11-13) — every AC deal whose deal custom
+  field "Google Ads?" (dealCustomFieldMeta id 18) = "Yes", 2022→present (field was
+  created in AC 2022-05-24; 95 rows, 30 won at build). Same shape as ac_indirect_deals
+  (deal_id PK, title, google_ads, pipeline, status/status_label, contact/account names,
+  value_raw/value_aud, cdate/mdate, cal_yr, fy, synced_at). DELIBERATELY separate from
+  the contact-sources table public.ac_google_ads_deals. Filled by RPC
+  reload_ac_google_ads_yes_deals(_ids jsonb) — UPSERT-ONLY on deal_id (never
+  truncates/deletes; refuses empty payload), so a deal later flipped to "No" in AC keeps
+  its last-synced row ("is or was flagged Yes"). Migrations 20261113120000 (table+rpc)
+  / 20261113121000 (cron). Read by marketing-leads-by-source.js + marketing-overview.js
+  (GADS_YES_CTES dedup: only deals not already counted by roas<FY27 / ac_indirect_deals /
+  FY27+ ga4 cpc / organic are added — labelled Paid Ads <FY27, Google Ads FY27+).
   - public.sales_liv_deals — LIV pipeline deal rows (Conferences page). The deal title
     is NOT stored here; liv-deals.js joins public.activecampaign_deals (title) by deal id.
   - public.mag_buyer_sheet — Buyer Analysis rows (one per WON deal). As of
@@ -1391,6 +1403,13 @@ PENDING METRICS (flagged "needs setup" in the UI, not silently faked)
   Keynote Management boards — real data exists there, just not wired in).
 
 AUTOMATIONS / ROUTINES
+- ac-google-ads-yes-deals-sync (Supabase edge fn, deployed --no-verify-jwt; pg_cron
+  `ac-google-ads-yes-deals-sync-weekly`, jobid 41, `20 22 * * 0` UTC = Mon 06:20 PH,
+  ?sync=1, 120s timeout) — one paginated sweep of AC /dealCustomFieldMeta/18/
+  dealCustomFieldData (value rows come back under JSON key `dealCustomFieldMeta`), keeps
+  fieldValue=Yes, calls reload_ac_google_ads_yes_deals (upsert-only). ?dry=1/?sync=1/bg
+  modes; emails ALERT_EMAIL on failure; secrets AC_API_URL/AC_API_TOKEN + GMAIL_* (edge
+  secrets, already set). File: supabase/functions/ac-google-ads-yes-deals-sync/index.ts.
 - email-partners-sync (Claude cloud routine, trig_01KHNc3jpp27VePeheDqk2FA) —
   runs weekly, Mon 06:00 Asia/Manila (cron `0 22 * * 0` UTC), connectors
   ActiveCampaign + Supabase. Pulls per-FY email KPIs from the ActiveCampaign MCP

@@ -1,0 +1,48 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-13
+Session: New Supabase table + weekly upsert-only sync for AC deals where "Google Ads?" = Yes; then fold those deals into Leads & Bookings (and the Marketing Overview) as Paid Ads / Google Ads.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"create a new sync and table to fetch all deals in AC from 2021 to present where Google Ads? = Yes". Mid-turn clarifications: "dont touch dashboard. this is just a db to do"; "sync sched to run once a week only. upsert only"; "upsert never truncate".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the existing ac-indirect-deals-sync edge fn and the ac_bureau/ac_indirect_deals migrations (create, upsert RPC, cron) and mirrored that pattern. Looked up the AC deal custom fields: "Google Ads?" is dealCustomFieldMeta id 18 (dropdown Yes/No). Noticed an existing public.ac_google_ads_deals (101 rows, contact-sources pipeline) and deliberately left it alone, building a separate dedicated table.
+
+Built (Supabase only, no dashboard code):
+- Migration 20261113120000: table public.ac_google_ads_yes_deals + upsert-only RPC reload_ac_google_ads_yes_deals(_ids) (ON CONFLICT deal_id DO UPDATE, no delete/truncate, refuses empty payload).
+- Edge fn ac-google-ads-yes-deals-sync (deployed verify_jwt=false) sweeping /dealCustomFieldMeta/18/dealCustomFieldData, keeping value "Yes".
+- Migration 20261113121000: pg_cron ac-google-ads-yes-deals-sync-weekly, '20 22 * * 0' (Mon 06:20 PH), jobid 41 (changed from daily to weekly per the user).
+Applied the table/RPC and cron via apply_migration, deployed the fn, ran a live ?sync=1: 29 pages, 2,800 field rows, 95 Yes deals, 95 upserted. Validated: 95 rows, 30 won, cdate 2022-05-12 → 2026-10-02, FY22–FY27.
+
+--------------------------------------------------------------------------------
+USER:
+"wait, 95 is all from 2021-present? /q"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran /q (read-only). Confirmed 95 is complete: the sweep was untruncated, the mirror spans 2021-07-29 onward, and the "Google Ads?" field only exists since 2022-05-24 (by year: 2022 8, 2023 13, 2024 28, 2025 28, 2026 18). The 6-deal gap vs the old ac_google_ads_deals (101) is staleness: that table was last refreshed 2026-10-20; the 6 deals (2450, 3467, 3739, 3744, 3782, 3822) read "No" live in AC, flipped 2026-10-21/22. Noted the upsert-only table means "is or was flagged Yes".
+
+--------------------------------------------------------------------------------
+USER:
+"update leads_bookings data. it should include ac_google_ads_yes_deals that arent already there only. they will be counted as "Google Ads" for FY27 and "Paid Ads" from FY22 to FY25. i mean leads_bookings.html"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read server/metrics/marketing-leads-by-source.js and marketing-overview.js. Measured the FY-correct set of Yes deals not already counted (FY22 +3/+1 won, FY23 +5/+1, FY24 0, FY25 +4/0, FY26 +8/+1, FY27 +2/+1). Asked two questions: how to handle FY26 (user: add as Paid Ads) and whether to keep the Overview cards reconciled (user: keep both in sync).
+
+Implemented: exported GADS_YES_CTES (counted_ids dedup + gy CTE) and GADS_SRC_ARM / GADS_LEADS_ARM in marketing-leads-by-source.js, spliced into SRC_CTE and LEADS_CTE (so range variants too); marketing-overview.js imports GADS_YES_CTES and adds gy to its paid ('ads') bucket; updated provenance strings/comments. Live SQL validation reproduced the documented baselines exactly and the added counts matched; node --check passed on both files; confirmed marketing-channel-results.js filters leads to Bureau/Tailor only, so it is unaffected. FY27 now 43 enq / 9 booked. No client/app.js change, no migration, no new secrets; needs a manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat history; updated as_built.txt (header, DATA STORES entry for ac_google_ads_yes_deals, AUTOMATIONS entry for the weekly sync) and CLAUDE.md (Leads & Bookings Google-Ads-flag addition + new data-store bullet); .gitignore already covers sensitive patterns, left as is. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

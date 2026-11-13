@@ -7,7 +7,10 @@
 //                  ROAS tab counts). FY27 ONWARDS: ga4_ac_contact_source cpc
 //                  Google/Bing rows (collapsed to one 'ads' bucket), excl. rows on
 //                  non-keynote funnel pages / free-gift opt-ins — the same basis as
-//                  the Leads & Bookings Google Ads + Bing Ads buckets. FY from cdate.
+//                  the Leads & Bookings Google Ads + Bing Ads buckets. PLUS
+//                  ac_google_ads_yes_deals ("Google Ads?"=Yes) not already counted by
+//                  any bucket (deduped via GADS_YES_CTES, imported from the by-source
+//                  metric so the two stay reconciled). FY from cdate.
 //   • organic    → organic-search leads, public.ga4_ac_contact_source
 //                  WHERE medium='organic' (FY27+ also drops the excluded pages /
 //                  free-gift opt-ins). FY from the contact cdate.
@@ -34,16 +37,18 @@ import { q, supabaseConfigured } from '../providers/supabase.js';
 // Shared FY27+ ga4 sourcing fragments — the SAME definitions the Leads & Bookings
 // metric uses, imported so the Overview "Keynote enquiries/bookings" headline stays
 // byte-for-byte reconciled with the by-source table (same paid/organic population).
-import { PAID_SPLIT_FY, GA_PLATFORM, GA_IS_CPC, GA_ROW_OK } from './marketing-leads-by-source.js';
+import { PAID_SPLIT_FY, GA_PLATFORM, GA_IS_CPC, GA_ROW_OK, GADS_YES_CTES } from './marketing-leads-by-source.js';
 
 const SRC_ENQ =
   'Live (Supabase): count of deals/leads created per FY across three sources — ' +
-  'paid (roas_counted_deals before FY27, ga4_ac_contact_source cpc rows FY27+) + ' +
+  'paid (roas_counted_deals before FY27, ga4_ac_contact_source cpc rows FY27+, plus ' +
+  'ac_google_ads_yes_deals not already counted) + ' +
   'organic (ga4_ac_contact_source, medium=organic) + indirect/bureau (ac_indirect_deals, ' +
   'excl. paid deals). FY27+ ga4 rows on non-keynote funnel pages / free-gift opt-ins excluded.';
 const SRC_BOOK =
   'Live (Supabase): count of WON deals/leads created per FY across three sources — ' +
-  'paid (roas_counted_deals before FY27, ga4_ac_contact_source cpc FY27+; status/deal_status=won) + ' +
+  'paid (roas_counted_deals before FY27, ga4_ac_contact_source cpc FY27+, plus ' +
+  'ac_google_ads_yes_deals not already counted; status/deal_status=won) + ' +
   'organic (ga4_ac_contact_source organic, deal_status=won) + indirect/bureau (ac_indirect_deals ' +
   'status=Won, excl. paid deals). FY27+ ga4 rows on non-keynote pages / free-gift opt-ins excluded.';
 
@@ -65,6 +70,7 @@ const BUCKETS_CTE = `
     SELECT deal_id::text AS deal_id, cdate, (status = 'won') AS won
     FROM public.roas_counted_deals WHERE cdate IS NOT NULL
   ),
+  ${GADS_YES_CTES},
   paid AS (
     SELECT 'ads'::text AS grp, cdate, won
       FROM roas WHERE (${FY('cdate')}) < ${PAID_SPLIT_FY}
@@ -74,6 +80,10 @@ const BUCKETS_CTE = `
       WHERE cdate IS NOT NULL
         AND (${FY('cdate')}) >= ${PAID_SPLIT_FY}
         AND ${GA_IS_CPC} AND (${GA_PLATFORM}) IS NOT NULL AND ${GA_ROW_OK}
+    UNION ALL
+    -- Google Ads flag (ac_google_ads_yes_deals) not already counted — collapsed to 'ads'
+    -- here (identical population to the Leads & Bookings Paid Ads / Google Ads additions).
+    SELECT 'ads'::text, cdate, (status = 1) FROM gy
   ),
   organic AS (
     SELECT 'organic'::text AS grp, cdate, (deal_status = 'won') AS won

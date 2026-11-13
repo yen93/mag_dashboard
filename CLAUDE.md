@@ -110,6 +110,15 @@ Cloud Run.
   `EXCL_LINKS_SQL`) and `PAID_SPLIT_FY=2027` drive BOTH the counts `SRC_CTE` and the per-lead `LEADS_CTE` — and
   **`PAID_SPLIT_FY` / `GA_PLATFORM` / `GA_IS_CPC` / `GA_ROW_OK` are EXPORTED and RE-IMPORTED by
   `marketing-overview.js`** (see below) so the Overview headline uses the identical FY27 population.
+  **GOOGLE-ADS-FLAG ADDITION (2026-11-13):** the union ALSO folds in `public.ac_google_ads_yes_deals`
+  (every AC deal with "Google Ads?" = Yes — see the data-stores bullet below) **that isn't already counted**,
+  labelled **Paid Ads for FY22–FY26** and **Google Ads for FY27+**. Shared exported `GADS_YES_CTES`
+  (`counted_ids` = FY-correct set of deal_ids already counted: roas <FY27 ∪ all `ac_indirect_deals` ∪ FY27+ ga4
+  cpc Google/Bing ∪ organic ga4; `gy` = the table minus that set) + `GADS_SRC_ARM`/`GADS_LEADS_ARM` are spliced
+  into `SRC_CTE`, `LEADS_CTE` (so range variants too) AND **`marketing-overview.js` imports `GADS_YES_CTES`**
+  (collapsed to its 'ads' bucket) so the Overview "Keynote" cards still reconcile. Added vs the prior baseline:
+  FY22 +3/+1 won · FY23 +5/+1 · FY24 0 · FY25 +4/0 · FY26 +8/+1 · FY27 +2/+1 (FY27 now 43 enq / 9 booked).
+  `marketing-channel-results.js` is unaffected (it filters leads to Bureau/Tailor). Server-only → redeploy.
   **KEY CONSEQUENCE — FY27's membership CHANGED from the old roas-only basis** (Clover-audited paid deals with
   **no ga4 row drop out** — e.g. the FY27 won keynote "Tilray" + open "Lutheran" — and ga4 **raw cpc leads with
   no deal are added in**), but because `marketing-overview.js` was switched to the SAME basis, **the Overview
@@ -787,6 +796,18 @@ Cloud Run.
     doesn't rewrite the body, so the rpc body was re-created vs the renamed table). The
     old `ac-bureau-deals-sync` slug + the throwaway `ac-probe-tmp` probe are inert 410
     stubs (deletable from the Supabase dashboard; the MCP has no delete-function tool).
+  - **Google-Ads-flag deals cache (`public.ac_google_ads_yes_deals`, NEW 2026-11-13)** — every AC deal
+    whose deal custom field **"Google Ads?" (dealCustomFieldMeta id 18) = "Yes"** (95 rows; the field only
+    exists in AC from 2022-05-24, so there are no 2021 rows). Same family/shape as `ac_indirect_deals`;
+    **DELIBERATELY separate from the contact-sources `ac_google_ads_deals`** (different pipeline, goes
+    stale — it still had 6 deals flipped to No on 2026-10-21/22). Filled by the
+    **`ac-google-ads-yes-deals-sync`** edge fn (`--no-verify-jwt`; sweeps `/dealCustomFieldMeta/18/
+    dealCustomFieldData` — **GOTCHA: rows come back under JSON key `dealCustomFieldMeta`**) → RPC
+    **`reload_ac_google_ads_yes_deals(_ids)`** (**UPSERT-ONLY on `deal_id`, never truncates**, refuses empty
+    payload). **WEEKLY** cron `ac-google-ads-yes-deals-sync-weekly` (`20 22 * * 0` = Mon 06:20 PH; owner
+    asked weekly, not daily). Because it never deletes, a deal later flipped to "No" stays ("is or was
+    flagged Yes"). Consumed by `marketing-leads-by-source.js` + `marketing-overview.js` (see the
+    Leads & Bookings paragraph). Migrations `20261113120000`/`20261113121000`.
   - **ROAS** (`roas.html` = Marketing sidebar item "ROAS", `/api/operations/roas`,
     `server/metrics/roas.js`) is a self-rendering page: Google Ads ROAS by **Australian
     FINANCIAL YEAR** (Jul–Jun, **END-year** convention: FY25 = Jul 2024–Jun 2025).
