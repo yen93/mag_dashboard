@@ -1,7 +1,7 @@
 import express from 'express';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { authRouter, requireAuth } from './auth.js';
+import { authRouter, requireAuth, requireFullAccess } from './auth.js';
 import { getSales } from './metrics/sales.js';
 import { getMarketing } from './metrics/marketing.js';
 import { getOperations } from './metrics/operations.js';
@@ -60,6 +60,7 @@ app.use('/api', authRouter);
 const composers = { sales: getSales, marketing: getMarketing, operations: getOperations };
 const metrics = express.Router();
 metrics.use(requireAuth);
+metrics.use(requireFullAccess);  // restricted (partner) users can't read area metrics
 metrics.get('/:area', async (req, res) => {
   const composer = composers[req.params.area];
   if (!composer) return res.status(404).json({ error: 'Unknown metrics area.' });
@@ -81,6 +82,7 @@ app.use('/api/metrics', metrics);
 // range is ignored.
 const sales = express.Router();
 sales.use(requireAuth);
+sales.use(requireFullAccess);  // restricted (partner) users can't read sales data
 sales.get('/deals', async (_req, res) => {
   try {
     const payload = await cached('sales:deals', getLivDeals, 10 * 60 * 1000);
@@ -135,6 +137,15 @@ app.use('/api/sales', sales);
 // function. It's a plain SELECT, so a short cache is plenty.
 const operations = express.Router();
 operations.use(requireAuth);
+// Restricted (partner) users are scoped to the Leads & Bookings + ROAS pages. The ROAS
+// page reads these two operations endpoints; every other operations resource 403s for them.
+const RESTRICTED_OPERATIONS_PATHS = ['/roas', '/roas/deals'];
+operations.use((req, res, next) => {
+  if (req.user && req.user.role === 'restricted' && !RESTRICTED_OPERATIONS_PATHS.includes(req.path)) {
+    return res.status(403).json({ error: 'Your account does not have access to this resource.' });
+  }
+  return next();
+});
 operations.get('/buyer-sheet', async (_req, res) => {
   try {
     const payload = await cached('operations:buyer-sheet', getMagBuyerSheet, 10 * 60 * 1000);
@@ -361,6 +372,16 @@ app.use('/api/operations', operations);
 const marketing = express.Router();
 marketing.use(requireAuth);
 
+// Restricted (partner) users are scoped to the Leads & Bookings page, which only
+// reads these two endpoints. Every other marketing resource 403s for them.
+const RESTRICTED_MARKETING_PATHS = ['/leads-by-source', '/overview'];
+marketing.use((req, res, next) => {
+  if (req.user && req.user.role === 'restricted' && !RESTRICTED_MARKETING_PATHS.includes(req.path)) {
+    return res.status(403).json({ error: 'Your account does not have access to this resource.' });
+  }
+  return next();
+});
+
 // Parse + validate the optional ?from=&to= (YYYY-MM-DD) date-range params shared by the
 // range-aware marketing routes (overview / leads-by-source / website-search / nurture-events).
 // Returns {from,to} (null when absent/invalid) and a cache-key `suffix` ('' when no range) so a
@@ -549,18 +570,20 @@ marketing.get('/insight', async (req, res) => {
 app.use('/api/marketing', marketing);
 
 // MAG GA4 Agent — on-demand GA4 reports via the GA4 On-Demand Report Claude routine.
-app.use('/api/ga4-agent', ga4AgentRouter);
+// (requireAuth here so requireFullAccess has req.user before the router's own guard.)
+app.use('/api/ga4-agent', requireAuth, requireFullAccess, ga4AgentRouter);
 
 // ROAS tab read-only chat assistant (context-stuffed OpenAI call; no DB tools). See
-// server/roasAssistant.js. Needs OPENAI_API_KEY.
-app.use('/api/roas-assistant', roasAssistantRouter);
+// server/roasAssistant.js. Needs OPENAI_API_KEY. Not requireFullAccess-gated: restricted
+// (partner) users have ROAS-page access, and this only exposes ROAS data they can already see.
+app.use('/api/roas-assistant', requireAuth, roasAssistantRouter);
 
 // ROI tab read-only chat assistant (context-stuffed OpenAI call; no DB tools). See
 // server/roiAssistant.js. Needs OPENAI_API_KEY (same key as the ROAS assistant).
-app.use('/api/roi-assistant', roiAssistantRouter);
+app.use('/api/roi-assistant', requireAuth, requireFullAccess, roiAssistantRouter);
 
 // DB Automations endpoint alias
-app.get('/api/db-automations', requireAuth, async (req, res) => {
+app.get('/api/db-automations', requireAuth, requireFullAccess, async (req, res) => {
   const fresh = req.query.fresh === '1';
   try {
     const payload = fresh
@@ -574,7 +597,7 @@ app.get('/api/db-automations', requireAuth, async (req, res) => {
 });
 
 // Claude Code Routines endpoint alias
-app.get('/api/claude-routines', requireAuth, async (req, res) => {
+app.get('/api/claude-routines', requireAuth, requireFullAccess, async (req, res) => {
   const fresh = req.query.fresh === '1';
   try {
     const payload = fresh
@@ -588,7 +611,7 @@ app.get('/api/claude-routines', requireAuth, async (req, res) => {
 });
 
 // n8n Automations endpoint alias
-app.get('/api/n8n-automations', requireAuth, async (req, res) => {
+app.get('/api/n8n-automations', requireAuth, requireFullAccess, async (req, res) => {
   const fresh = req.query.fresh === '1';
   try {
     const payload = fresh

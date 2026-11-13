@@ -22,6 +22,52 @@ function currentUser() {
 
 function logout() { setToken(null); window.location.href = 'login.html'; }
 
+/* ---------- Restricted (partner) access ----------
+   Some accounts (e.g. @simpledigital.net.au) sign in with role 'restricted' and
+   may view ONLY the pages in RESTRICTED_PAGES (Leads & Bookings + ROAS). The server
+   is the real gate (it 403s every other API); this just keeps the UI honest — lands
+   them on the right page, redirects them off any other page, hides the full cross-page
+   navigation, and (when more than one page is allowed) shows a slim switcher. */
+var RESTRICTED_PAGES = ['leads_bookings.html', 'roas.html'];
+var RESTRICTED_PAGE_LABELS = { 'leads_bookings.html': 'Leads & Bookings', 'roas.html': 'ROAS' };
+function isRestrictedUser() { var u = currentUser(); return !!(u && u.role === 'restricted'); }
+/** Where a signed-in user should land. */
+function landingPage() { return isRestrictedUser() ? RESTRICTED_PAGES[0] : 'sales_overview.html'; }
+/** The current page's file name (e.g. 'leads_bookings.html'; '' for '/'). */
+function currentPageName() { return (window.location.pathname || '').split('/').pop() || ''; }
+/** True iff the signed-in user may view `page` (non-restricted users may view all). */
+function pageAllowedForUser(page) {
+  if (!isRestrictedUser()) return true;
+  return RESTRICTED_PAGES.indexOf(page) !== -1;
+}
+/* Restricted users have the full nav hidden; when they have more than one allowed
+   page, inject a slim switcher into the top bar so they can move between them.
+   Inline-styled on purpose — app.css is not cache-busted, so we don't rely on a new
+   class reaching returning visitors. */
+function renderRestrictedNav() {
+  if (!isRestrictedUser() || RESTRICTED_PAGES.length < 2) return;
+  var bar = document.querySelector('.topbar');
+  if (!bar || bar.querySelector('.restricted-nav')) return;
+  var cur = currentPageName();
+  var nav = document.createElement('nav');
+  nav.className = 'restricted-nav';
+  nav.style.cssText = 'display:flex;gap:6px;margin-left:18px;';
+  RESTRICTED_PAGES.forEach(function (p) {
+    var a = document.createElement('a');
+    a.href = p;
+    a.textContent = RESTRICTED_PAGE_LABELS[p] || p;
+    var active = (p === cur);
+    a.style.cssText =
+      'padding:6px 12px;border-radius:8px;font-size:13px;font-weight:600;text-decoration:none;' +
+      'color:' + (active ? '#fff' : 'var(--muted,#64748b)') + ';' +
+      'background:' + (active ? 'var(--accent,#4f46e5)' : 'transparent') + ';';
+    nav.appendChild(a);
+  });
+  var brand = bar.querySelector('.brand');
+  if (brand && brand.nextSibling) bar.insertBefore(nav, brand.nextSibling);
+  else bar.appendChild(nav);
+}
+
 /** Redirect to login if not signed in. Call at the top of each protected page. */
 function requireLogin() {
   if (!currentUser()) { window.location.href = 'login.html'; return false; }
@@ -927,6 +973,17 @@ function wireViewToggle(baseId, buildTable) {
    change, and on theme toggle (with cached data for theme). */
 function initPage(area, renderFn) {
   if (!requireLogin()) return;
+
+  // Restricted (partner) users may only view the Leads & Bookings page — send
+  // them there from anywhere else, and hide all cross-page navigation here.
+  if (isRestrictedUser()) {
+    if (!pageAllowedForUser(currentPageName())) {
+      window.location.href = 'leads_bookings.html';
+      return;
+    }
+    if (document.body) document.body.classList.add('restricted-view');
+    renderRestrictedNav();
+  }
 
   // top bar
   var u = currentUser();

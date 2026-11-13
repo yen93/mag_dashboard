@@ -21,7 +21,7 @@ export const authRouter = Router();
 authRouter.post('/request-code', async (req, res) => {
   const { email } = req.body || {};
   if (!isAllowedEmail(email)) {
-    return res.status(400).json({ error: 'Use your @myadventuregroup.com.au email address.' });
+    return res.status(400).json({ error: 'That email address is not allowed to sign in.' });
   }
   try {
     const code = await createCode(email);
@@ -39,7 +39,7 @@ authRouter.post('/request-code', async (req, res) => {
 authRouter.post('/verify-code', async (req, res) => {
   const { email, code } = req.body || {};
   if (!isAllowedEmail(email)) {
-    return res.status(400).json({ error: 'Use your @myadventuregroup.com.au email address.' });
+    return res.status(400).json({ error: 'That email address is not allowed to sign in.' });
   }
   let ok = false;
   try {
@@ -73,6 +73,17 @@ export function requireAuth(req, res, next) {
   } catch {
     return res.status(401).json({ error: 'Invalid or expired token.' });
   }
+}
+
+// Middleware: block `restricted` (partner) users from a full-access resource.
+// Must run AFTER requireAuth (it reads req.user). Restricted users are scoped to the
+// Leads & Bookings page (two marketing endpoints) + the ROAS page (two operations
+// endpoints, allowed via a per-path exception on the operations router); everything else 403s.
+export function requireFullAccess(req, res, next) {
+  if (req.user && req.user.role === 'restricted') {
+    return res.status(403).json({ error: 'Your account does not have access to this resource.' });
+  }
+  return next();
 }
 
 // GET /api/me -> current user (from token)

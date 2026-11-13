@@ -1,0 +1,55 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-13
+Session: Give restricted partner users (@simpledigital.net.au + testertwo gmail) additional access to roas.html
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Update @simpledigital.net.au users and testertwo.myadventuregroup@gmail.com
+access and give them access to roas.html as well. This is ADDITIONAL access
+(they keep leads_bookings.html).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read server/users.js, server/auth.js, server/index.js, public/app.js, app.css,
+leads_bookings.html and roas.html to understand the restricted-role gate.
+Findings: the server is the real gate. The operations router had a blanket
+requireFullAccess that 403'd all restricted users; roas.html reads
+/api/operations/roas and /api/operations/roas/deals and posts to
+/api/roas-assistant (also requireFullAccess-gated). The frontend had
+RESTRICTED_PAGES = ['leads_bookings.html'] and the nav is hidden for restricted
+users via body.restricted-view.
+
+Changes made:
+- server/index.js: replaced the blanket requireFullAccess on the operations
+  router with a per-path exception (RESTRICTED_OPERATIONS_PATHS = ['/roas',
+  '/roas/deals']), mirroring the existing marketing-router pattern; all other
+  operations routes still 403 for restricted users. Removed requireFullAccess
+  from /api/roas-assistant (read-only, context-stuffed; only exposes ROAS data
+  they can now see) and flagged this to the user as reversible.
+- server/users.js, server/auth.js: comments updated to the two-page scope;
+  allowlists unchanged.
+- public/app.js: RESTRICTED_PAGES now ['leads_bookings.html','roas.html'];
+  added RESTRICTED_PAGE_LABELS and renderRestrictedNav() (inline-styled slim
+  switcher injected in the top bar, since app.css isn't cache-busted); called
+  from initPage for restricted users; landingPage() uses RESTRICTED_PAGES[0].
+- All 29 pages bumped app.js?v=18 -> ?v=19 via sed (byte-safe; verified UTF-8
+  em dashes intact, no BOM). node --check passed on server/index.js and
+  public/app.js.
+
+Reported: needs a manual Cloud Run redeploy (server + frontend); no DB migration
+or new secrets. Did not deploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (save chat history, update as_built.txt / CLAUDE.md / .gitignore, no git)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat history and updated as_built.txt and CLAUDE.md to reflect the
+two-page restricted scope (Leads & Bookings + ROAS), app.js?v=19. No secrets
+appeared in the session. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

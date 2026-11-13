@@ -95,6 +95,12 @@ body {
 }
 .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
 
+/* Restricted (partner) users view a single page only — hide every cross-page nav
+   (top tab bar + any sub-nav / marketing sub-tab bar). Added to <body> by initPage. */
+.restricted-view .tabbar,
+.restricted-view .subnav,
+.restricted-view #marketingNav { display: none !important; }
+
 .content { padding: 24px; max-width: 1200px; width: 100%; margin: 0 auto; }
 .toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
 .toolbar .spacer { flex: 1; }
