@@ -343,7 +343,7 @@ function renderMarketingSidebar(active) {
     ['leads-bookings', 'Leads & Bookings',  'leads_bookings.html'],
     ['spend-roi',      'Spend & ROI',       'spend_roi.html'],
     ['content-social', 'Content & Social',  'content_social.html'],
-    ['email-partners', 'Email & Partners',  'email_partners.html'],
+    ['email-partners', 'Outreach Campaign', 'email_partners.html'],
     ['website-search', 'Website & Search',  'website_search.html'],
     ['nurture-events', 'Nurture & Events',  'nurture_events.html'],
     ['monthly-log',    'Monthly Log',       'monthly_log.html'],

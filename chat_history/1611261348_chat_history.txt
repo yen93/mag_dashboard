@@ -1,0 +1,40 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-16
+Session: Rename "Email & Partners" tab to "Outreach Campaign"; fix marketing.html cards 1-3 showing zero/null by pointing all enquiry/booking cards at the same /leads-by-source source as the Leads & Bookings tables.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"change email_partners.html name to 'Outreach Campaign'"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Found the sub-tab label lives in the shared app.js renderMarketingSidebar (['email-partners','Email & Partners','email_partners.html']) plus the page <title>. Changed the label to "Outreach Campaign" and the title to "Outreach Campaign — MAG Metrics", and bumped app.js?v=19 -> ?v=20 across all 29 pages via sed so returning visitors get the new label. Left the key, filename and API route unchanged. Frontend-only; needs a Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+"fix 1st 3 cards. they are now showing zero or null. in marketing.html"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Investigated read-only first. The composed OVERVIEW_SQL/OVERVIEW_MONTH_SQL ran fine against the live DB (FY27 43 enq / 9 booked, ~90ms), the module imported cleanly, the SQL had no undefined, the route handler and marketing.html render logic were correct, and the working tree had no corrupting edits. Asked the user where it was seen: deployed Cloud Run site, with cards 4-6 working and only 1-3 broken. Cloud Run request logs then showed /api/marketing/overview -> 502 and /api/marketing/insight -> 502 (insight calls getMarketingOverview) while /roi and /leads-by-source were 200/304 and the deployed app.js already had "Outreach Campaign" (so current code was deployed). The exact server-side throw was not pinned down (log reads for the error text were interrupted by the user).
+
+--------------------------------------------------------------------------------
+USER:
+(Interrupted a log-read tool call.) "it should use the 'all leads' table in leads_bookings.html as reference. the cards and table in leads_bookings.html, and the 1st 3 cards in marketing.html should be connected or pointing to same source"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Rewired everything to the working /api/marketing/leads-by-source source (the one behind the By source + All leads tables). marketing.html: added aggByFy/aggByMonth/srcGroup helpers (Paid = Google Ads+Bing Ads+Paid Ads, Organic, Indirect = Tailor+Bureau); loadEnquiries now fetches /leads-by-source and derives ENQ/BOOKINGS (byFy, total, byMonth); the custom-range path uses range.data; removed the dead /overview loader; updated the info-tip data-src strings and comments. leads_bookings.html: added aggByFy/buildCardStates so the Events Booked/Enquiries cards sum the same BYSRC rows as the tables; removed loadOverview and the /overview call in the range path; updated source strings/comments. server/marketingInsight.js: buildSnapshot now aggregates per-FY enquiries/bookings from getMarketingLeadsBySource instead of the throwing getMarketingOverview. Verified: no /api/marketing/overview refs remain in either page, helpers defined once, both inline scripts pass node --check, marketingInsight.js passes syntax + import. The /overview route and marketing-overview.js remain but are unused by public/. Needs a Cloud Run redeploy (2 pages + 1 server file); no app.js bump, no DB/secret change.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat history; updated CLAUDE.md (new "ONE SOURCE OF TRUTH FOR THE CARDS" paragraph + the Outreach Campaign rename note) and as_built.txt (header entry). .gitignore already covers sensitive patterns; left as is. No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================

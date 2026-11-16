@@ -1,0 +1,56 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-16
+Session: New AC "Google Ads? = Yes" deals table + weekly upsert-only sync; fold uncounted Google Ads deals into Leads & Bookings / Overview; then refactor so roas_counted_deals is an explicit paid source for all FYs (fixing the missing Tilray FY27 deal).
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+"create a new sync and table to fetch all deals in AC from 2021 to present where Google Ads? = Yes". Mid-turn: "dont touch dashboard. this is just a db to do"; "sync sched to run once a week only. upsert only"; "upsert never truncate".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Mirrored the ac-indirect-deals-sync pattern. Found "Google Ads?" = dealCustomFieldMeta id 18 (dropdown Yes/No). Left the existing contact-sources table public.ac_google_ads_deals alone; built a dedicated one. Created migration 20261113120000 (table public.ac_google_ads_yes_deals + upsert-only RPC reload_ac_google_ads_yes_deals, ON CONFLICT deal_id DO UPDATE, refuses empty payload, never truncates), edge fn ac-google-ads-yes-deals-sync (deployed verify_jwt=false, sweeps /dealCustomFieldMeta/18/dealCustomFieldData), and migration 20261113121000 (weekly cron Mon 06:20 PH, jobid 41). Applied/deployed via Supabase MCP; live ?sync=1 backfilled 95 rows (30 won, cdate 2022-05 → 2026-10, FY22–FY27).
+
+--------------------------------------------------------------------------------
+USER:
+"wait, 95 is all from 2021-present? /q"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+/q read-only. Confirmed 95 complete: sweep untruncated, mirror spans 2021-07-29+, field only exists since 2022-05-24 so no 2021 rows. The 6-deal gap vs old ac_google_ads_deals (101) is staleness — that table last refreshed 2026-10-20; the 6 deals (2450,3467,3739,3744,3782,3822) read "No" live in AC, flipped 2026-10-21/22.
+
+--------------------------------------------------------------------------------
+USER:
+"update leads_bookings data. include ac_google_ads_yes_deals that arent already there only; counted as Google Ads for FY27 and Paid Ads from FY22 to FY25. i mean leads_bookings.html"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Measured FY-correct new-to-add (FY22 +3/+1, FY23 +5/+1, FY24 0, FY25 +4/0, FY26 +8/+1, FY27 +2/+1). Asked two questions: FY26 handling (answer: add as Paid Ads) and Overview reconciliation (answer: keep in sync). Added exported GADS_YES_CTES (counted_ids + gy) + GADS_SRC_ARM/GADS_LEADS_ARM in marketing-leads-by-source.js, spliced into SRC_CTE/LEADS_CTE; marketing-overview.js imported GADS_YES_CTES into its paid bucket. Validated: baselines reproduced exactly, additions matched, node --check passed, channel-results unaffected (filters to Bureau/Tailor). FY27 → 43/9. No client/migration/secret; needs Cloud Run redeploy. Ran /dcp (saved 1311261559_chat_history.txt, updated as_built + CLAUDE.md) and produced a /cm commit line.
+
+--------------------------------------------------------------------------------
+USER:
+"/q why is Tilray still not in the table? deal Tilray // Immersive // 3 September 2026, it's in ROAS deals"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+/q read-only. Deal 4245 (FY27 won) is in roas_counted_deals, ac_google_ads_yes_deals, and has its own ga4 row — but that ga4 row has channel/source/medium all NULL (not cpc, not organic), so the FY27 ga4-sourced paid bucket drops it; and FY27 paid no longer read roas. Confirmed the new gy arm WOULD add it once deployed; the real reason it wasn't visible was that the change hadn't been deployed to Cloud Run.
+
+--------------------------------------------------------------------------------
+USER:
+"leads_bookings.html should be from roas_counted_deals used by roas.html, ga4_ac_contact_source, and the new ac_google_ads_yes_deals, and ofc the indirect leads table"
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Measured source overlaps: ga4_cpc has rows only in FY27; FY27 roas (5 deals) is the superset (all 5 ga4-cpc/gads deals ⊂ roas). Refactored the paid bucket to use roas_counted_deals as an explicit source for ALL FYs, precedence ga4-cpc (FY27 platform authority) > roas (all FYs) > ac_google_ads_yes_deals. GADS_YES_CTES now also exports a ga_cpc_ids CTE (FY27+ ga4 cpc deal_ids); counted_ids's roas arm spans all FYs; the roas paid arm (SRC_CTE, LEADS_CTE, and overview paid) is Paid Ads <FY27 / Google Ads FY27+, excluding FY27 deals already in ga_cpc_ids. node --check passed both files; live validation reproduced the same per-FY totals (FY27 43/9 — aggregate unchanged, as roas is the FY27 superset) and confirmed Tilray now flows through the roas arm as Google Ads FY27 won. Still server-only; needs a Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp  (then /cm continue)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this chat history; updated as_built.txt (header refactor note) and CLAUDE.md (added PAID SOURCING REFACTOR paragraph under the Google-Ads-flag addition). .gitignore already covers sensitive patterns, left as is. No git commands run. Provided the /cm commit line.
+
+================================================================================
+END OF EXPORT
+================================================================================

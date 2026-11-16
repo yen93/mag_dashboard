@@ -119,6 +119,29 @@ Cloud Run.
   (collapsed to its 'ads' bucket) so the Overview "Keynote" cards still reconcile. Added vs the prior baseline:
   FY22 +3/+1 won · FY23 +5/+1 · FY24 0 · FY25 +4/0 · FY26 +8/+1 · FY27 +2/+1 (FY27 now 43 enq / 9 booked).
   `marketing-channel-results.js` is unaffected (it filters leads to Bureau/Tailor). Server-only → redeploy.
+  **PAID SOURCING REFACTOR (2026-11-16, same feature):** `roas_counted_deals` is now an EXPLICIT paid source for
+  **ALL FYs** (not just <FY27), so any roas deal is guaranteed in — fixing e.g. the FY27 won keynote "Tilray"
+  (a roas deal with no ga4 cpc row, which previously vanished). Paid precedence is **ga4-cpc (platform authority,
+  FY27+) > roas (all FYs) > google-ads-flag**: `GADS_YES_CTES` now also exports a **`ga_cpc_ids`** CTE (FY27+ ga4
+  cpc Google/Bing deal_ids), `counted_ids`'s roas arm spans ALL FYs, and the roas paid arm in `SRC_CTE`/`LEADS_CTE`
+  (and `marketing-overview.js`'s `paid`) is labelled Paid Ads <FY27 / Google Ads FY27+ **EXCLUDING** FY27 deals
+  already in `ga_cpc_ids` (ga4 keeps the Google/Bing split). Aggregate totals are UNCHANGED (roas is the FY27
+  superset) — it's a sourcing/robustness change; Tilray now flows through the roas arm as Google Ads FY27 won.
+  Still server-only → needs redeploy.
+  **ONE SOURCE OF TRUTH FOR THE CARDS (2026-11-16, later):** on the deployed site `/api/marketing/overview` (and
+  `/api/marketing/insight`, which called it) returned **502** while `/leads-by-source` and `/roi` were fine — so
+  marketing.html cards 1–3 and leads_bookings.html's "Events Booked"/"Enquiries" cards showed zero/null (exact
+  server-side throw never pinned down; the same SQL runs fine directly). Per the owner, **all enquiry/booking
+  cards now derive from `/api/marketing/leads-by-source`** — the same rows as leads_bookings.html's "By source" +
+  "All leads" tables: `aggByFy`/`aggByMonth` (marketing.html) and `aggByFy`/`buildCardStates` (leads_bookings.html)
+  sum `data[]` by FY, grouping Paid = Google Ads+Bing Ads+Paid Ads, Organic, Indirect = Tailor+Bureau (custom
+  range uses `range.data`). marketing.html's chart/cost-per-enquiry/rate card follow. `server/marketingInsight.js`
+  now builds its snapshot from `getMarketingLeadsBySource` (not `getMarketingOverview`). **Nothing in `public/`
+  calls `/api/marketing/overview` anymore** — the route + `marketing-overview.js` still exist (dead; `roi`/other
+  consumers untouched). Don't re-point cards at `/overview`; keep cards, tables and insight on `/leads-by-source`.
+  Also: the Marketing sub-tab **"Email & Partners" is now labelled "Outreach Campaign"** (label in
+  `renderMarketingSidebar` + page `<title>`; key `email-partners`, file `email_partners.html`, route unchanged);
+  all pages bumped to `app.js?v=20`.
   **KEY CONSEQUENCE — FY27's membership CHANGED from the old roas-only basis** (Clover-audited paid deals with
   **no ga4 row drop out** — e.g. the FY27 won keynote "Tilray" + open "Lutheran" — and ga4 **raw cpc leads with
   no deal are added in**), but because `marketing-overview.js` was switched to the SAME basis, **the Overview

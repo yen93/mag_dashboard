@@ -3,14 +3,15 @@
 // Two FY-aware headlines, both counting over THREE disjoint lead sources (the
 // SAME population the Leads & Bookings "By source" table sums, so the two pages
 // reconcile EXACTLY — including the FY-split paid source below):
-//   • paid (ads) → EARLIER FYs: public.roas_counted_deals (the canonical view the
-//                  ROAS tab counts). FY27 ONWARDS: ga4_ac_contact_source cpc
-//                  Google/Bing rows (collapsed to one 'ads' bucket), excl. rows on
-//                  non-keynote funnel pages / free-gift opt-ins — the same basis as
-//                  the Leads & Bookings Google Ads + Bing Ads buckets. PLUS
-//                  ac_google_ads_yes_deals ("Google Ads?"=Yes) not already counted by
-//                  any bucket (deduped via GADS_YES_CTES, imported from the by-source
-//                  metric so the two stay reconciled). FY from cdate.
+//   • paid (ads) → THREE deduped sources collapsed to one 'ads' bucket, the SAME paid
+//                  population as the Leads & Bookings metric: public.roas_counted_deals
+//                  (the canonical ROAS-tab view) for ALL FYs; ga4_ac_contact_source cpc
+//                  Google/Bing rows FY27+ (platform authority, excl. non-keynote funnel
+//                  pages / free-gift opt-ins) — FY27 roas deals already on a ga4 cpc row
+//                  are excluded from the roas arm to avoid double count; PLUS
+//                  ac_google_ads_yes_deals ("Google Ads?"=Yes) not already counted by any
+//                  bucket. Deduped via GADS_YES_CTES, imported from the by-source metric
+//                  so the two stay reconciled. FY from cdate.
 //   • organic    → organic-search leads, public.ga4_ac_contact_source
 //                  WHERE medium='organic' (FY27+ also drops the excluded pages /
 //                  free-gift opt-ins). FY from the contact cdate.
@@ -72,17 +73,21 @@ const BUCKETS_CTE = `
   ),
   ${GADS_YES_CTES},
   paid AS (
-    SELECT 'ads'::text AS grp, cdate, won
-      FROM roas WHERE (${FY('cdate')}) < ${PAID_SPLIT_FY}
-    UNION ALL
-    SELECT 'ads'::text, cdate, (deal_status = 'won')
+    -- ga4 cpc rows (FY27+, platform authority) — same basis as the by-source Google/Bing.
+    SELECT 'ads'::text AS grp, cdate, (deal_status = 'won')
       FROM public.ga4_ac_contact_source
       WHERE cdate IS NOT NULL
         AND (${FY('cdate')}) >= ${PAID_SPLIT_FY}
         AND ${GA_IS_CPC} AND (${GA_PLATFORM}) IS NOT NULL AND ${GA_ROW_OK}
     UNION ALL
+    -- roas_counted_deals, ALL FYs (excl FY27 deals already carried by the ga4 cpc arm).
+    SELECT 'ads'::text, cdate, won
+      FROM roas
+      WHERE NOT ((${FY('cdate')}) >= ${PAID_SPLIT_FY} AND deal_id IS NOT NULL
+                 AND deal_id IN (SELECT deal_id FROM ga_cpc_ids))
+    UNION ALL
     -- Google Ads flag (ac_google_ads_yes_deals) not already counted — collapsed to 'ads'
-    -- here (identical population to the Leads & Bookings Paid Ads / Google Ads additions).
+    -- here (identical paid population to the Leads & Bookings metric).
     SELECT 'ads'::text, cdate, (status = 1) FROM gy
   ),
   organic AS (

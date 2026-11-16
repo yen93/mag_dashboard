@@ -9,7 +9,7 @@
 // GET /api/marketing/insight?fy=fy27 in server/index.js.
 
 import { config, hasSource } from './config.js';
-import { getMarketingOverview } from './metrics/marketing-overview.js';
+import { getMarketingLeadsBySource } from './metrics/marketing-leads-by-source.js';
 import { getMarketingRoi } from './metrics/marketing-roi.js';
 
 const OPENAI_URL = 'https://api.openai.com/v1/chat/completions';
@@ -48,11 +48,22 @@ function shapeFy(fyLabel, enqRow, bookRow, roiRow) {
 }
 
 async function buildSnapshot(fy) {
-  const [overview, roi] = await Promise.all([getMarketingOverview(), getMarketingRoi()]);
+  const [lbs, roi] = await Promise.all([getMarketingLeadsBySource(), getMarketingRoi()]);
   const fyEnd = fyEndOf(fy);
 
-  const enqAt = (e) => (fyEnd == null ? overview.enquiries.total : (overview.enquiries.byFy || []).find((r) => r.fyEnd === e));
-  const bookAt = (e) => (fyEnd == null ? overview.bookings.total : (overview.bookings.byFy || []).find((r) => r.fyEnd === e));
+  // Per-FY enquiry/booking totals aggregated from the by-source rows — the SAME source
+  // (and definition) as the Leads & Bookings tables and the marketing.html cards.
+  const rows = (lbs && lbs.data) || [];
+  const enqBy = {}, bookBy = {};
+  let enqTot = 0, bookTot = 0;
+  rows.forEach((r) => {
+    enqBy[r.fyEnd] = (enqBy[r.fyEnd] || 0) + (Number(r.enquiries) || 0);
+    bookBy[r.fyEnd] = (bookBy[r.fyEnd] || 0) + (Number(r.bookings) || 0);
+    enqTot += Number(r.enquiries) || 0;
+    bookTot += Number(r.bookings) || 0;
+  });
+  const enqAt = (e) => (fyEnd == null ? { total: enqTot } : { total: enqBy[e] || 0 });
+  const bookAt = (e) => (fyEnd == null ? { total: bookTot } : { total: bookBy[e] || 0 });
   const roiAt = (e) => (fyEnd == null ? roi.total : ((roi.rows && roi.rows.data) || []).find((r) => r.fyEnd === e));
 
   const fyLabel = fyEnd == null ? 'All years' : 'FY' + String(fyEnd).slice(-2);
@@ -92,5 +103,5 @@ export async function getMarketingInsight(fy) {
     (data.choices && data.choices[0] && data.choices[0].message && data.choices[0].message.content) || ''
   ).trim();
   if (!insight) return { insight: null, note: 'The insight came back empty.', meta: { status: 'pending' } };
-  return { insight, meta: { status: 'live', source: 'OpenAI (' + config.openai.model + ') over the live Overview + ROI figures' } };
+  return { insight, meta: { status: 'live', source: 'OpenAI (' + config.openai.model + ') over the live Leads & Bookings + ROI figures' } };
 }

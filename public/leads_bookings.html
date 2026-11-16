@@ -179,7 +179,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
   <script>
     /* Leads & Bookings — LIVE.
        • "Enquiries by source" chart + "By source" table  ← GET /api/marketing/leads-by-source
@@ -189,8 +189,9 @@
           Bureau from ac_indirect_deals (excl. paid deals); booking = won deal.
           Total == the Overview "Keynote enquiries/bookings" cards — marketing-overview.js now
           applies the SAME FY27 ga4 sourcing + exclusions, so both pages reconcile).
-       • "Events Booked" + "Enquiries" cards              ← GET /api/marketing/overview
-         (the SAME figures as marketing.html's "Keynote bookings" / "Keynote enquiries").
+       • "Events Booked" + "Enquiries" cards              ← derived from the SAME
+         /api/marketing/leads-by-source rows as the table (summed across all sources),
+         so the cards, the By-source table and the All-leads table share ONE source.
        All FY-aware via the #fySeg toggle (AU FY, END-year). */
 
     // Master source order + colours (stacked chart + table dots). FY27 onwards the
@@ -231,6 +232,8 @@
         BYSRC.rows = (d && d.data) || [];
         LEADS.rows = (d && d.leads) || [];
         BYSRC.loaded = true;
+        buildCardStates();     // cards share the by-source rows (same source as the tables)
+        renderCards();
         renderSourceTable();
         renderLeadsTable();
         try { renderSourceChart(); } catch (e) { console.error('source chart', e); }
@@ -244,7 +247,7 @@
         }
       }).catch(function (err) {
         console.error('leads-by-source', err);
-        BYSRC.loaded = true; renderSourceTable(); renderLeadsTable();
+        BYSRC.loaded = true; buildCardStates(); renderCards(); renderSourceTable(); renderLeadsTable();
       });
     }
 
@@ -391,10 +394,34 @@
 
     // =====================================================================
     //  Summary cards — SAME data as marketing.html "Keynote enquiries" /
-    //  "Keynote bookings" (GET /api/marketing/overview; deduped two-source set).
+    //  "Keynote bookings" — derived from the by-source rows (GET /api/marketing/leads-by-source).
     // =====================================================================
     var ENQ = { byFy: {}, total: null, loaded: false };       // all deals (enquiries)
     var BOOKINGS = { byFy: {}, total: null, loaded: false };   // won deals (bookings)
+
+    // The summary cards are built from the SAME by-source rows (BYSRC) that drive the
+    // "By source" + "All leads" tables — ONE source of truth. Paid (ads) = Google Ads +
+    // Bing Ads + Paid Ads; Organic; Indirect = Tailor + Bureau.
+    function srcGroup(s) { return s === 'Organic' ? 'organic' : (s === 'Tailor' || s === 'Bureau') ? 'indirect' : 'ads'; }
+    function aggByFy(rows, field) {
+      var byFy = {}, total = { ads: 0, organic: 0, indirect: 0, total: 0 };
+      (rows || []).forEach(function (r) {
+        var g = srcGroup(r.source), v = Number(r[field]) || 0;
+        var o = byFy[r.fyEnd] || (byFy[r.fyEnd] = { ads: 0, organic: 0, indirect: 0, total: 0 });
+        o[g] += v; o.total += v; total[g] += v; total.total += v;
+      });
+      return { byFy: byFy, total: total };
+    }
+    function buildCardStates() {
+      var e = aggByFy(BYSRC.rows, 'enquiries'), b = aggByFy(BYSRC.rows, 'bookings');
+      ENQ.byFy = e.byFy; ENQ.total = e.total;
+      BOOKINGS.byFy = b.byFy; BOOKINGS.total = b.total;
+      ENQ.loaded = BOOKINGS.loaded = true;
+      if (CUSTOM && BYSRC.rangeRows) {
+        ENQ.range = aggByFy(BYSRC.rangeRows, 'enquiries').total;
+        BOOKINGS.range = aggByFy(BYSRC.rangeRows, 'bookings').total;
+      }
+    }
 
     function rowFor(state, key) {
       if (CUSTOM) return state.range || { ads: 0, indirect: 0, total: 0 };
@@ -431,7 +458,7 @@
     function renderCards() {
       paintCard({
         state: BOOKINGS, valueEl: 'bookValue', deltaEl: 'bookDelta', labelEl: 'bookLabel', title: 'Events Booked',
-        source: 'GET /api/marketing/overview — roas_counted_deals + ga4 organic + ac_indirect_deals, won deals; FY from cdate.',
+        source: 'GET /api/marketing/leads-by-source — the SAME rows as the By source + All leads tables, won deals summed across all sources; FY from cdate.',
         loadedInfo: function (fName, r) {
           return 'Won deals/leads created in ' + fName + ' across three sources — Paid ' + r.ads +
             ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect +
@@ -440,7 +467,7 @@
       });
       paintCard({
         state: ENQ, valueEl: 'enqValue', deltaEl: 'enqDelta', labelEl: 'enqLabel', title: 'Enquiries',
-        source: 'GET /api/marketing/overview — roas_counted_deals + ga4 organic + ac_indirect_deals, all deals; FY from cdate.',
+        source: 'GET /api/marketing/leads-by-source — the SAME rows as the By source + All leads tables, all deals summed across all sources; FY from cdate.',
         loadedInfo: function (fName, r) {
           return 'Deals/leads created in ' + fName + ' across three sources — Paid ' + r.ads +
             ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect +
@@ -448,15 +475,7 @@
         },
       });
     }
-    function loadOverview() {
-      fetchJSON('/api/marketing/overview').then(function (d) {
-        var e = d && d.enquiries, b = d && d.bookings;
-        if (e) { (e.byFy || []).forEach(function (r) { ENQ.byFy[r.fyEnd] = r; }); ENQ.total = e.total; }
-        if (b) { (b.byFy || []).forEach(function (r) { BOOKINGS.byFy[r.fyEnd] = r; }); BOOKINGS.total = b.total; }
-        ENQ.loaded = BOOKINGS.loaded = true;
-        renderCards();
-      }).catch(function (err) { console.error('overview', err); ENQ.loaded = BOOKINGS.loaded = true; renderCards(); });
-    }
+    // (Cards are built from the by-source rows in buildCardStates() — no separate fetch.)
 
     // ----- Segmented toggle -----
     function wireSeg(id, onChange) {
@@ -485,18 +504,14 @@
       if (!CUSTOM) { renderLB(); return; }
       BYSRC.rangeRows = null; LEADS.rangeRows = null; ENQ.range = BOOKINGS.range = null;   // loading
       renderLB();
-      Promise.all([
-        fetchJSON('/api/marketing/leads-by-source' + dateRangeQS()),
-        fetchJSON('/api/marketing/overview' + dateRangeQS()),
-      ]).then(function (res) {
-        BYSRC.rangeRows = (res[0] && res[0].range && res[0].range.data) || [];
-        LEADS.rangeRows = (res[0] && res[0].range && res[0].range.leads) || [];
-        ENQ.range = (res[1] && res[1].enquiries && res[1].enquiries.range) || { ads: 0, indirect: 0, total: 0 };
-        BOOKINGS.range = (res[1] && res[1].bookings && res[1].bookings.range) || { ads: 0, indirect: 0, total: 0 };
+      fetchJSON('/api/marketing/leads-by-source' + dateRangeQS()).then(function (d) {
+        BYSRC.rangeRows = (d && d.range && d.range.data) || [];
+        LEADS.rangeRows = (d && d.range && d.range.leads) || [];
+        buildCardStates();   // range cards derive from the same by-source range rows
         renderLB();
       }).catch(function (err) {
         console.error('range', err);
-        BYSRC.rangeRows = []; LEADS.rangeRows = []; ENQ.range = BOOKINGS.range = { ads: 0, indirect: 0, total: 0 };
+        BYSRC.rangeRows = []; LEADS.rangeRows = []; ENQ.range = BOOKINGS.range = { ads: 0, organic: 0, indirect: 0, total: 0 };
         renderLB();
       });
     }
@@ -509,8 +524,7 @@
     renderSourceTable();   // initial (shows Loading…)
     renderLeadsTable();    // initial (shows Loading…)
     renderCards();         // initial (shows …)
-    loadBySource();
-    loadOverview();
+    loadBySource();   // also builds the summary cards (same source as the tables)
     wireSeg('fySeg', renderLB);
     wireDateRange({ onChange: applyRange });
     window.onThemeChange = function () { try { renderSourceChart(); } catch (e) {} };

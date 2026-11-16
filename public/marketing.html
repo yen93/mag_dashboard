@@ -183,7 +183,7 @@
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Enquiries vs bookings <span class="head-info"
               data-info="Keynote enquiries (all created deals) vs bookings (won deals) by month for the selected financial year, across the paid + organic + indirect sources."
-              data-src="GET /api/marketing/overview (byMonth) — paid: roas_counted_deals before FY27, ga4 cpc rows FY27+ (excl. non-keynote pages / free-gift opt-ins); + ga4 organic + ac_indirect_deals (excl. paid)"></span></h3>
+              data-src="GET /api/marketing/leads-by-source (same source as the Leads & Bookings tables) — paid: roas_counted_deals all FYs + ga4 cpc rows FY27+ (excl. non-keynote pages / free-gift opt-ins) + ac_google_ads_yes_deals; + ga4 organic + ac_indirect_deals (excl. paid)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="enqBookCanvas"></canvas></div>
         </div>
@@ -199,7 +199,7 @@
         <div class="card">
           <div class="label-sm">Cost per enquiry <span class="head-info"
             data-info="Marketing spend ÷ keynote enquiries for the selected financial year. The line below, when shown, is the change vs the prior FY (lower is better)."
-            data-src="GET /api/marketing/roi (spend) ÷ GET /api/marketing/overview (enquiries)"></span></div>
+            data-src="GET /api/marketing/roi (spend) ÷ GET /api/marketing/leads-by-source (enquiries)"></span></div>
           <div class="big" id="cpeValue">…</div>
           <div id="cpeSub"></div>
         </div>
@@ -214,7 +214,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
   <script>
     /* Sample-data mockup — this Overview is "layout only" (see the head badge).
        The KPIs, charts and notes are illustrative placeholders, not live metrics. */
@@ -224,7 +224,7 @@
     // per-FY counts across three sources (ads = roas_counted_deals before FY27 /
     // ga4 cpc rows FY27+ excl. non-keynote pages & free-gift opt-ins, organic =
     // ga4 medium=organic, indirect = ac_indirect_deals excl. paid) — from
-    // GET /api/marketing/overview. Total == Leads & Bookings by-source total.
+    // GET /api/marketing/leads-by-source (same source as the Leads & Bookings tables).
     //   • Enquiries = ALL deals created in the FY.
     //   • Bookings  = only WON deals created in the FY.
     // Cards 3–6 ("Enquiry → booking rate", "Marketing revenue", "Marketing spend",
@@ -237,6 +237,29 @@
     // byMonth = [{ month:'YYYY-MM', fyEnd, total }] feeding the Enquiries vs bookings chart.
     var ENQ = { byFy: {}, byMonth: [], total: null, loaded: false, range: null };      // all deals
     var BOOKINGS = { byFy: {}, byMonth: [], total: null, loaded: false, range: null };  // won deals
+
+    // The enquiry/booking cards + the Enquiries-vs-bookings chart are built from the SAME
+    // rows that drive leads_bookings.html's "By source" + "All leads" tables
+    // (GET /api/marketing/leads-by-source), so the two pages share ONE source of truth.
+    // Paid (ads) = Google Ads + Bing Ads + Paid Ads; Organic; Indirect = Tailor + Bureau.
+    function srcGroup(s) { return s === 'Organic' ? 'organic' : (s === 'Tailor' || s === 'Bureau') ? 'indirect' : 'ads'; }
+    function aggByFy(rows, field) {
+      var byFy = {}, total = { ads: 0, organic: 0, indirect: 0, total: 0 };
+      (rows || []).forEach(function (r) {
+        var g = srcGroup(r.source), v = Number(r[field]) || 0;
+        var o = byFy[r.fyEnd] || (byFy[r.fyEnd] = { ads: 0, organic: 0, indirect: 0, total: 0 });
+        o[g] += v; o.total += v; total[g] += v; total.total += v;
+      });
+      return { byFy: byFy, total: total };
+    }
+    function aggByMonth(rows, field) {
+      var by = {};
+      (rows || []).forEach(function (r) {
+        var o = by[r.month] || (by[r.month] = { month: r.month, fyEnd: r.fyEnd, total: 0 });
+        o.total += Number(r[field]) || 0;
+      });
+      return Object.keys(by).sort().map(function (k) { return by[k]; });
+    }
 
     // Custom date range (beside the FY toggle). While active it overrides the FY toggle:
     // the count cards (enquiries/bookings/rate) use the day-level /overview?from=&to= roll-up;
@@ -511,21 +534,16 @@
       }).catch(function (err) { console.error('roi cards', err); MROI.loaded = true; renderMktKpis(); renderBottomCards(); });
     }
     function loadEnquiries() {
-      fetchJSON('/api/marketing/overview').then(function (d) {
-        var e = d && d.enquiries, b = d && d.bookings;
-        if (e) {
-          (e.byFy || []).forEach(function (r) { ENQ.byFy[r.fyEnd] = r; });
-          ENQ.byMonth = e.byMonth || [];
-          ENQ.total = e.total;
-        }
-        if (b) {
-          (b.byFy || []).forEach(function (r) { BOOKINGS.byFy[r.fyEnd] = r; });
-          BOOKINGS.byMonth = b.byMonth || [];
-          BOOKINGS.total = b.total;
-        }
+      // Derive the enquiry/booking card states from the by-source rows (same source as
+      // leads_bookings.html's tables), instead of the separate /overview endpoint.
+      fetchJSON('/api/marketing/leads-by-source').then(function (d) {
+        var rows = (d && d.data) || [];
+        var e = aggByFy(rows, 'enquiries'), b = aggByFy(rows, 'bookings');
+        ENQ.byFy = e.byFy; ENQ.total = e.total; ENQ.byMonth = aggByMonth(rows, 'enquiries');
+        BOOKINGS.byFy = b.byFy; BOOKINGS.total = b.total; BOOKINGS.byMonth = aggByMonth(rows, 'bookings');
         ENQ.loaded = BOOKINGS.loaded = true;
         renderMktKpis();
-        renderBottomCards();   // Cost per enquiry needs the enquiry count
+        renderBottomCards();
         try { renderEnqBookChart(); } catch (e2) { console.error('enq/book chart', e2); }
       }).catch(function (err) { console.error(err); ENQ.loaded = BOOKINGS.loaded = true; renderMktKpis(); renderBottomCards(); });
     }
@@ -579,7 +597,7 @@
     var _c2 = null;
 
     // "Enquiries vs bookings" — LIVE monthly keynote enquiries vs bookings for the selected
-    // FY, from /api/marketing/overview (ENQ.byMonth / BOOKINGS.byMonth), deduped by deal.
+    // FY, from /api/marketing/leads-by-source (ENQ.byMonth / BOOKINGS.byMonth), by deal.
     function currentEnqBookMonths() {
       var key = selFyKey();
       var fyEnd = key === 'all' ? null : fyEndOf(key);
@@ -748,12 +766,13 @@
       renderMktKpis(); renderBottomCards();
       try { renderMonthChart(); renderEnqBookChart(); } catch (e) { console.error('chart', e); }
       loadInsight();                        // shows the "not available for custom ranges" note
-      fetchJSON('/api/marketing/overview' + dateRangeQS()).then(function (d) {
-        ENQ.range = (d && d.enquiries && d.enquiries.range) || { ads: 0, indirect: 0, total: 0 };
-        BOOKINGS.range = (d && d.bookings && d.bookings.range) || { ads: 0, indirect: 0, total: 0 };
+      fetchJSON('/api/marketing/leads-by-source' + dateRangeQS()).then(function (d) {
+        var rr = (d && d.range && d.range.data) || [];
+        ENQ.range = aggByFy(rr, 'enquiries').total;
+        BOOKINGS.range = aggByFy(rr, 'bookings').total;
         renderMktKpis(); renderBottomCards();
       }).catch(function (e) {
-        ENQ.range = BOOKINGS.range = { ads: 0, indirect: 0, total: 0 };
+        ENQ.range = BOOKINGS.range = { ads: 0, organic: 0, indirect: 0, total: 0 };
         renderMktKpis(); renderBottomCards();
       });
     }

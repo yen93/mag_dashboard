@@ -4,41 +4,39 @@
 // "Enquiries by source" stacked chart and the "By source" table on
 // public/leads_bookings.html. LIVE, computed at request time from Supabase.
 //
-// Sources, with a DELIBERATE FY split for the paid + organic buckets:
+// Sources (all four draw into the same per-source × month union). The PAID bucket is
+// built from THREE deduped sources — roas_counted_deals, ga4_ac_contact_source, and
+// ac_google_ads_yes_deals — plus Organic (ga4) and Tailor/Bureau (ac_indirect_deals):
 //
-//   EARLIER FYs (< FY27) — unchanged, from the ROAS-counted view:
-//   • Paid Ads → public.roas_counted_deals (one combined Google+Bing row).
-//
-//   FY27 ONWARDS — paid + organic come straight from ga4_ac_contact_source
-//   (so the page reconciles with the GA4 & Ads Leads tracker, NOT the Overview
-//   card), EXCLUDING rows that aren't keynote enquiries — either conversion_link
-//   is a non-keynote funnel page (careers / free-gift / Executive X / Leader X —
-//   see EXCLUDED_LINKS) OR conversion_action is a free-gift opt-in
-//   (free_gifts_opt_ins — same rule the GA4 & Ads Leads page uses; catches the
-//   /free-gift-delivery-page/ variant that isn't in EXCLUDED_LINKS):
-//   • Google Ads → ga4 cpc rows whose channel/source is google.
-//   • Bing Ads   → ga4 cpc rows whose channel/source is bing.
-//     (platform read from `channel`, e.g. "bing / cpc", which holds the real
-//      platform even when `source` is "(calendly)"; fallback `source`.)
+//   PAID — precedence ga4-cpc (platform) > roas > google-ads-flag:
+//   • roas_counted_deals → the SAME view the ROAS tab counts, for ALL FYs:
+//       'Paid Ads' before FY27 (one combined Google+Bing row), 'Google Ads' from FY27.
+//       (FY27 roas deals already carried by a ga4 cpc row below are excluded here so the
+//        Google/Bing split isn't lost — e.g. Tilray, a FY27 roas won deal with no ga4
+//        cpc row, now shows as Google Ads instead of vanishing.)
+//   • ga4_ac_contact_source cpc rows → FY27+ Google Ads / Bing Ads (the platform
+//       authority), EXCLUDING non-keynote rows — conversion_link on a non-keynote funnel
+//       page (careers / free-gift / Executive X / Leader X — see EXCLUDED_LINKS) OR a
+//       free-gift opt-in conversion_action (same rule the GA4 & Ads Leads page uses).
+//       platform read from `channel` ("bing / cpc"), fallback `source`. This also brings
+//       in raw cpc leads that have no deal yet.
+//   • ac_google_ads_yes_deals ("Google Ads?"=Yes) → only deals NOT already counted by
+//       roas / ga4-cpc / indirect / organic (deduped via counted_ids). 'Paid Ads' <FY27,
+//       'Google Ads' FY27+.
 //
 //   ALL FYs:
 //   • Organic → ga4_ac_contact_source WHERE medium='organic' (FY27+ also drops
 //               the EXCLUDED_LINKS pages; earlier FYs are left untouched).
-//   • Tailor  → ac_indirect_deals WHERE is_tailor=true  (excl. paid deals)
-//   • Bureau  → ac_indirect_deals WHERE is_tailor=false (excl. paid deals)
-//   • Google-Ads flag → public.ac_google_ads_yes_deals (every AC deal whose
-//               "Google Ads?" custom field = Yes) that ISN'T already counted by any
-//               bucket above, folded into the paid source: 'Paid Ads' before FY27,
-//               'Google Ads' from FY27 (same PAID_SPLIT_FY convention). Deduped by
-//               deal_id against the FY-correct counted set (see GADS_YES_CTES).
+//   • Tailor  → ac_indirect_deals WHERE is_tailor=true  (excl. paid/roas deals)
+//   • Bureau  → ac_indirect_deals WHERE is_tailor=false (excl. paid/roas deals)
 //
 // Booking = won deal (roas status='won' / ga4 deal_status='won' / ac_indirect
-// status=1). Tailor/Bureau EXCLUDE any deal already in the ROAS view (precedence
-// paid > indirect). Month + Australian FY (END-year, Jul–Jun) from cdate.
-// NB because FY27+ paid is now ga4-sourced, its total NO LONGER matches the
-// Overview "Keynote enquiries/bookings" cards (those stay roas_counted_deals):
-// Clover-audited paid deals with no ga4 row drop out, and ga4 raw cpc leads with
-// no deal are added. Organic reads only within GA4's ~60-day retention.
+// status=1 / ac_google_ads_yes_deals status=1). Tailor/Bureau EXCLUDE any deal already
+// in the ROAS view (precedence paid > indirect). Month + Australian FY (END-year,
+// Jul–Jun) from cdate. Because roas_counted_deals now feeds paid for ALL FYs (not just
+// pre-FY27), the by-source total again RECONCILES with the Overview "Keynote
+// enquiries/bookings" cards (marketing-overview.js imports GADS_YES_CTES + builds the
+// identical paid population). Organic reads only within GA4's ~60-day retention.
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 
@@ -91,27 +89,33 @@ const GA_ACTION_OK = `(lower(coalesce(conversion_action, '')) <> 'free_gifts_opt
 // A ga4 row that still counts (not a non-keynote funnel page, not a free-gift opt-in).
 export const GA_ROW_OK = `(${GA_LINK_OK} AND ${GA_ACTION_OK})`;
 
-// Google-Ads-flagged deals (public.ac_google_ads_yes_deals = every AC deal whose
-// "Google Ads?" custom field = Yes, 2022→present) that AREN'T already counted by any
-// bucket here, added to the paid source: labelled 'Paid Ads' before FY27 and
-// 'Google Ads' from FY27 (the same PAID_SPLIT_FY convention). `counted_ids` is the
-// FY-correct set of deal_ids the union already counts — roas paid (<FY27), ALL
-// ac_indirect_deals, FY27+ ga4 cpc Google/Bing rows, and organic ga4 rows — and `gy`
-// is the Google-Ads deals minus that set (so nothing double-counts). Both CTEs
-// reference the local `roas` CTE, so they are spliced in AFTER it in each WITH below.
-// Exported so marketing-overview.js adds the IDENTICAL population and the Overview
-// "Keynote enquiries/bookings" cards stay reconciled with this by-source total.
+// Shared CTEs for the paid bucket's dedup (spliced into every WITH below, AFTER the
+// local `roas` CTE which they reference):
+//   • ga_cpc_ids — FY27+ ga4_ac_contact_source cpc Google/Bing deal_ids. The ga4 cpc
+//       arm keeps platform authority for FY27, so these are the deals the roas arm must
+//       NOT re-count (it would otherwise lose the Google/Bing split).
+//   • counted_ids — EVERY deal_id the paid/organic/indirect buckets already count:
+//       roas (ALL FYs — roas_counted_deals is now an explicit paid source for every FY,
+//       so FY27 roas deals like Tilray that have no ga4 cpc row still appear), ALL
+//       ac_indirect_deals, the FY27 ga4 cpc rows (ga_cpc_ids), and organic ga4 rows.
+//   • gy — ac_google_ads_yes_deals ("Google Ads?"=Yes) MINUS counted_ids, i.e. only the
+//       Google-Ads-flagged deals no other source already has. Labelled 'Paid Ads'
+//       before FY27 and 'Google Ads' from FY27 (the PAID_SPLIT_FY convention).
+// Exported so marketing-overview.js builds the IDENTICAL paid population and the
+// Overview "Keynote enquiries/bookings" cards stay reconciled with this by-source total.
 export const GADS_YES_CTES = `
-  counted_ids AS (
-    SELECT deal_id::text AS deal_id FROM roas
-      WHERE deal_id IS NOT NULL AND (${FY('cdate')}) < ${PAID_SPLIT_FY}
-    UNION
-    SELECT deal_id::text FROM public.ac_indirect_deals WHERE deal_id IS NOT NULL
-    UNION
-    SELECT deal_id::text FROM public.ga4_ac_contact_source
+  ga_cpc_ids AS (
+    SELECT deal_id::text AS deal_id FROM public.ga4_ac_contact_source
       WHERE deal_id IS NOT NULL AND cdate IS NOT NULL
         AND (${FY('cdate')}) >= ${PAID_SPLIT_FY}
         AND ${GA_IS_CPC} AND (${GA_PLATFORM}) IS NOT NULL AND ${GA_ROW_OK}
+  ),
+  counted_ids AS (
+    SELECT deal_id::text AS deal_id FROM roas WHERE deal_id IS NOT NULL
+    UNION
+    SELECT deal_id::text FROM public.ac_indirect_deals WHERE deal_id IS NOT NULL
+    UNION
+    SELECT deal_id FROM ga_cpc_ids
     UNION
     SELECT deal_id::text FROM public.ga4_ac_contact_source
       WHERE deal_id IS NOT NULL AND cdate IS NOT NULL AND medium = 'organic'
@@ -149,9 +153,14 @@ const SRC_CTE = `
   ),
   ${GADS_YES_CTES},
   src AS (
-    -- Paid, earlier FYs (< FY27): one combined "Paid Ads" bucket from the ROAS view.
-    SELECT 'Paid Ads'::text AS source, cdate, won
-      FROM roas WHERE fy_end < ${PAID_SPLIT_FY}
+    -- Paid from roas_counted_deals (the ROAS tab's view), ALL FYs: 'Paid Ads' before
+    -- FY27, 'Google Ads' FY27+. FY27 roas deals already counted by the ga4 cpc arm below
+    -- (which owns the Google/Bing platform) are excluded here to avoid double counting.
+    SELECT CASE WHEN fy_end >= ${PAID_SPLIT_FY} THEN 'Google Ads' ELSE 'Paid Ads' END AS source,
+           cdate, won
+      FROM roas
+      WHERE NOT (fy_end >= ${PAID_SPLIT_FY} AND deal_id IS NOT NULL
+                 AND deal_id IN (SELECT deal_id FROM ga_cpc_ids))
     UNION ALL
     -- Paid, FY27+: Google Ads / Bing Ads from ga4_ac_contact_source cpc rows,
     -- dropping the non-keynote conversion pages.
@@ -220,11 +229,14 @@ const LEADS_CTE = `
   ),
   ${GADS_YES_CTES},
   leads AS (
-    -- Paid, earlier FYs (< FY27): one combined "Paid Ads" row from the ROAS view.
-    SELECT 'Paid Ads'::text AS source, cdate,
+    -- Paid from roas_counted_deals, ALL FYs: 'Paid Ads' before FY27, 'Google Ads' FY27+.
+    -- FY27 roas deals already counted by the ga4 cpc arm below are excluded here.
+    SELECT CASE WHEN fy_end >= ${PAID_SPLIT_FY} THEN 'Google Ads' ELSE 'Paid Ads' END AS source, cdate,
            coalesce(nullif(org, ''), email) AS org, title,
            initcap(status) AS status, (status = 'won') AS won, value
-      FROM roas WHERE fy_end < ${PAID_SPLIT_FY}
+      FROM roas
+      WHERE NOT (fy_end >= ${PAID_SPLIT_FY} AND deal_id IS NOT NULL
+                 AND deal_id IN (SELECT deal_id FROM ga_cpc_ids))
     UNION ALL
     -- Paid, FY27+: Google Ads / Bing Ads from ga4_ac_contact_source cpc rows.
     SELECT ${GA_PLATFORM} AS source, cdate,
