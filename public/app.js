@@ -435,8 +435,9 @@ function renderSalesSidebar(active) {
   var el = document.getElementById('salesNav');
   if (!el) return;
   var items = [
-    ['overview',    'Overview',    'sales_overview.html'],
-    ['conferences', 'Conferences', 'sales.html'],
+    ['overview',    'Overview',            'sales_overview.html'],
+    ['conferences', 'Conferences',         'sales.html'],
+    ['education',   'Education Outreach',  'education_outreach.html'],
   ];
   el.innerHTML = items.map(function (it) {
     var key = it[0], label = it[1], href = it[2];

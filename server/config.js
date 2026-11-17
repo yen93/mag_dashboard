@@ -61,6 +61,15 @@ export const config = {
     apiKey: env.OPENAI_API_KEY || '',
     model: env.OPENAI_MODEL || 'gpt-4o-mini',
   },
+  gemini: {
+    // Google Gemini API key for the Education Sector Outreach tab's AI insights
+    // panel (server/educationInsight.js). Server-side only — never sent to the
+    // browser. On Cloud Run, mount the Secret Manager secret
+    // `gemini-ai-api-key-131126` as the env var GEMINI_API_KEY
+    // (--update-secrets GEMINI_API_KEY=gemini-ai-api-key-131126:latest).
+    apiKey: env.GEMINI_API_KEY || '',
+    model: env.GEMINI_MODEL || 'gemini-3.8-flash',
+  },
   n8n: {
     apiUrl: env.N8N_API_URL || 'https://n8n-659687081407.australia-southeast1.run.app',
     apiKey: env.N8N_API_KEY || '',
@@ -90,6 +99,8 @@ export function hasSource(name) {
       return Boolean(config.ga4Agent.fireUrl && config.ga4Agent.fireToken);
     case 'openai':
       return Boolean(config.openai.apiKey);
+    case 'gemini':
+      return Boolean(config.gemini.apiKey);
     default:
       return false;
   }

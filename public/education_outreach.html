@@ -1,0 +1,416 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Education Outreach — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    /* Wide layout — the per-lead table is wide, so use the full screen width. */
+    .content { max-width: none; }
+
+    .eo-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .eo-toolbar .spacer { flex: 1; }
+    .ctl-label { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-right: 6px; }
+
+    /* Clickable KPI cards (the Responded / Bounced / Contacted drill-downs). */
+    .kpi-click { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
+    .kpi-click:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
+    .kpi-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+    .kpi .label { display: inline-flex; align-items: center; gap: 4px; }
+
+    /* Active-drill chip above the table. */
+    .eo-filterchip { display: none; align-items: center; gap: 8px; margin: 2px 0 10px; }
+    .eo-filterchip.show { display: inline-flex; }
+    .eo-filterchip .pill { cursor: default; }
+    .eo-clear { background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 999px; padding: 4px 11px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .eo-clear:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* AI insights panel. */
+    .ai-panel { border-left: 3px solid var(--accent); }
+    .ai-summary { margin: 2px 0 0; font-size: 14.5px; line-height: 1.6; color: var(--text); }
+    .ai-suggestions { list-style: none; margin: 14px 0 0; padding: 0; display: grid; gap: 10px;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+    .ai-suggestions li { background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px;
+      padding: 12px 14px; }
+    .ai-suggestions li strong { display: block; font-size: 13.5px; margin-bottom: 3px; }
+    .ai-suggestions li span { font-size: 12.5px; color: var(--text-muted); line-height: 1.5; }
+    .ai-refresh { background: var(--surface); color: var(--text); border: 1px solid var(--border);
+      border-radius: 999px; padding: 5px 12px; font-size: 12px; font-weight: 600; cursor: pointer; }
+    .ai-refresh:hover { border-color: var(--accent); color: var(--accent); }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab active" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="builds_monitoring.html">AI &amp; Automation</a>
+  </nav>
+
+  <div class="sales-layout">
+    <aside class="subnav" id="salesNav"></aside>
+    <main class="content">
+      <div class="toolbar eo-toolbar">
+        <strong>Education Sector Outreach</strong>
+        <span class="head-info" data-info="Cold-email outreach to Australian schools & education associations. Each lead moves through a drafted → sent → responded workflow; this tab tracks delivery, replies and bounces." data-src="Supabase → manually_found_educ_leads + educ_processed_messages (+ the status dictionary)"></span>
+        <div class="spacer"></div>
+        <span class="ctl-label">Segment</span>
+        <div class="segmented" id="typeSeg">
+          <button type="button" class="active" data-kind="all">All</button>
+          <button type="button" data-kind="school">Schools</button>
+          <button type="button" data-kind="association">Associations</button>
+        </div>
+        <span class="muted" id="eoAsOf" style="font-size:13px"></span>
+      </div>
+
+      <!-- ============ 1. KPI CARDS ============ -->
+      <div class="section-head">
+        <span class="step">1</span><h2>At a glance</h2>
+        <span class="sub">Click <strong>Responded</strong>, <strong>Bounced</strong> or <strong>Contacted</strong> to filter the leads table below</span>
+      </div>
+      <div class="kpi-grid" id="kpis"></div>
+
+      <!-- ============ 2. AI INSIGHTS ============ -->
+      <div class="section-head">
+        <span class="step">2</span><h2>AI insights &amp; suggestions</h2>
+        <span class="head-info" data-info="Auto-generated read-only analysis of the LIVE outreach figures (all education leads, not affected by the Segment filter), with concrete suggestions to lift replies and win more deals." data-src="Google Gemini over the live Education Outreach figures"></span>
+        <div class="spacer"></div>
+        <button type="button" class="ai-refresh" id="aiRefresh">↻ Refresh</button>
+      </div>
+      <div class="card ai-panel" style="margin-bottom:22px">
+        <div id="aiBody"><div class="muted" style="padding:8px">Generating AI insights…</div></div>
+      </div>
+
+      <!-- ============ 3. CHARTS ============ -->
+      <div class="section-head">
+        <span class="step">3</span><h2>How the campaign is converting</h2>
+      </div>
+      <div class="grid">
+        <div class="card col-7">
+          <div class="card-head">
+            <h3>Outreach funnel</h3>
+            <span class="head-info" data-info="Conversion through the campaign: every lead added → emails that reached the inbox (sent, not bounced) → leads that replied. The drop-off shows where to focus." data-src="Derived from manually_found_educ_leads + educ_processed_messages"></span>
+          </div>
+          <div class="chart-box" id="funnel-box"><canvas id="funnelCanvas"></canvas></div>
+        </div>
+        <div class="card col-5">
+          <div class="card-head">
+            <h3>Current status breakdown</h3>
+            <span class="head-info" data-info="Where every lead currently sits in the workflow (in-sequence, responded, bounced, etc.), from the status code on each lead." data-src="manually_found_educ_leads.status → status dictionary"></span>
+          </div>
+          <div class="chart-box" id="status-box"><canvas id="statusCanvas"></canvas></div>
+        </div>
+      </div>
+
+      <!-- ============ 4. LEADS TABLE ============ -->
+      <div class="section-head">
+        <span class="step">4</span><h2>All leads</h2>
+        <span class="head-info" data-info="Every outreach lead with its workflow status, number of emails sent, last send date, and whether it responded or bounced. Search & sort any column." data-src="Supabase → manually_found_educ_leads (+ responded flag from educ_processed_messages)"></span>
+        <div class="spacer"></div>
+        <span class="muted" id="eoCount" style="font-size:13px"></span>
+      </div>
+      <div class="eo-filterchip" id="eoFilterChip">
+        <span class="muted" style="font-size:13px">Showing:</span>
+        <span class="pill pos" id="eoFilterLabel"></span>
+        <button type="button" class="eo-clear" id="eoClear">Clear filter</button>
+      </div>
+      <div class="card col-12">
+        <div id="leadsRows"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js?v=21"></script>
+  <script>
+    var DATA = null;        // full payload from /api/sales/education-outreach
+    var KIND = 'all';       // segment filter: all | school | association
+    var VIEW = 'all';       // card drill filter for the table: all | responded | bounced | contacted
+    var TABLE_STATE = {};   // persists search / sort across re-renders
+
+    function numfmt(n) { return (n == null) ? '—' : fmt(n, 'count'); }
+    function pctfmt(n) { return (n == null) ? '—' : (n + '%'); }
+
+    /* ---- helpers to slice the data ---- */
+    function kindLeads() {
+      var ls = (DATA && DATA.leads) || [];
+      return KIND === 'all' ? ls : ls.filter(function (l) { return l.kind === KIND; });
+    }
+    function viewLeads(rows) {
+      if (VIEW === 'responded') return rows.filter(function (l) { return l.responded; });
+      if (VIEW === 'bounced')   return rows.filter(function (l) { return l.bounced; });
+      if (VIEW === 'contacted') return rows.filter(function (l) { return l.emailsSent >= 1; });
+      return rows;
+    }
+
+    /* ---- card aggregation (client-side, so the Segment toggle updates them) ---- */
+    function computeCards(leads) {
+      var total = leads.length;
+      var contacted = 0, delivered = 0, responded = 0, bounced = 0, inSeq = 0, emailSum = 0;
+      leads.forEach(function (l) {
+        if (l.emailsSent >= 1) { contacted++; emailSum += l.emailsSent; if (!l.bounced) delivered++; }
+        if (l.responded) responded++;
+        if (l.bounced) bounced++;
+        if (l.stage === 'in_sequence') inSeq++;
+      });
+      return {
+        total: total, contacted: contacted, delivered: delivered, responded: responded,
+        bounced: bounced, inSequence: inSeq,
+        replyRate: delivered > 0 ? Math.round((responded / delivered) * 1000) / 10 : null,
+        bounceRate: contacted > 0 ? Math.round((bounced / contacted) * 1000) / 10 : null,
+        contactedPct: total > 0 ? Math.round((contacted / total) * 1000) / 10 : null,
+        avgEmails: contacted > 0 ? Math.round((emailSum / contacted) * 10) / 10 : null,
+      };
+    }
+
+    function kpiCard(o) {
+      var active = o.view && o.view === VIEW;
+      var cls = 'kpi' + (o.view ? ' kpi-click' : '') + (active ? ' kpi-active' : '');
+      var dv = o.view ? ' data-view="' + o.view + '"' : '';
+      return '<div class="' + cls + '"' + dv + '>' +
+        '<div class="label">' + esc(o.label) + (o.info ? ' ' + infoTip(o.info, o.source || '') : '') + '</div>' +
+        '<div class="value">' + o.value + '</div>' +
+        (o.sub ? '<div class="kpi-sub">' + o.sub + '</div>' : '') +
+        '</div>';
+    }
+
+    function renderCards() {
+      var leads = kindLeads();
+      var c = computeCards(leads);
+      // Campaign segment mix always reflects the FULL list (independent of the toggle).
+      var full = (DATA && DATA.cards) || {};
+      var mix = (full.schools || 0) + ' schools · ' + (full.associations || 0) + ' associations';
+
+      var cards = [
+        { label: 'Total leads', value: numfmt(c.total), sub: KIND === 'all' ? mix : ('Segment: ' + KIND),
+          info: 'Education prospects found and loaded into the outreach campaign.' },
+        { label: 'Contacted', value: numfmt(c.contacted), sub: pctfmt(c.contactedPct) + ' of leads · click to view',
+          view: 'contacted', info: 'Leads that have been sent at least one email (initial + any follow-ups).' },
+        { label: 'Responded', value: numfmt(c.responded), sub: pctfmt(c.replyRate) + ' reply rate · click to view',
+          view: 'responded', info: 'Leads that replied — status "received a lead response" (8A), cross-checked against the inbox log (action=responded).' },
+        { label: 'Reply rate', value: pctfmt(c.replyRate), sub: 'replies ÷ delivered emails',
+          info: 'Responded leads as a share of leads whose email was delivered (sent and not bounced).' },
+        { label: 'Bounced', value: numfmt(c.bounced), sub: pctfmt(c.bounceRate) + ' of contacted · click to view',
+          view: 'bounced', info: 'Leads whose email bounced — status "Delivery has failed" (10A). Often an invalid address worth cleaning.' },
+        { label: 'In sequence', value: numfmt(c.inSequence), sub: 'sent, awaiting a reply',
+          info: 'Leads mid-workflow: an email has been sent and the follow-up sequence is still active (no reply/bounce yet).' },
+        { label: 'Avg emails / lead', value: (c.avgEmails == null ? '—' : c.avgEmails), sub: 'across contacted leads',
+          info: 'Average number of emails sent (initial + follow-ups) per contacted lead.' },
+        { label: 'Delivered', value: numfmt(c.delivered), sub: 'reached inbox (not bounced)',
+          info: 'Contacted leads whose email was delivered (excludes bounces).' },
+      ];
+      document.getElementById('kpis').innerHTML = cards.map(kpiCard).join('');
+      // wire clicks
+      document.querySelectorAll('#kpis .kpi-click').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var v = el.getAttribute('data-view');
+          VIEW = (VIEW === v) ? 'all' : v;   // toggle off if already active
+          renderCards();                     // refresh active-state highlight
+          renderTable();
+          updateFilterChip();
+          if (VIEW !== 'all') {
+            document.getElementById('leadsRows').scrollIntoView({ behavior: 'smooth', block: 'center' });
+          }
+        });
+      });
+    }
+
+    function updateFilterChip() {
+      var chip = document.getElementById('eoFilterChip');
+      var label = document.getElementById('eoFilterLabel');
+      var MAP = { responded: 'Responded leads', bounced: 'Bounced leads', contacted: 'Contacted leads' };
+      if (VIEW === 'all') { chip.classList.remove('show'); return; }
+      label.className = 'pill ' + (VIEW === 'bounced' ? 'neg' : VIEW === 'responded' ? 'pos' : 'partial');
+      label.textContent = MAP[VIEW] || VIEW;
+      chip.classList.add('show');
+    }
+
+    /* ---- charts ---- */
+    var FUNNEL_COLORS = ['#3b6ef0', '#7c5cff', '#17a673'];
+    function renderCharts() {
+      var leads = kindLeads();
+      var c = computeCards(leads);
+
+      // Funnel
+      var fLabels = ['Leads added', 'Emails delivered', 'Responses'];
+      var fValues = [c.total, c.delivered, c.responded];
+      if (fValues.every(function (v) { return !v; })) {
+        var fb = document.getElementById('funnel-box');
+        if (_charts['funnelCanvas']) { _charts['funnelCanvas'].destroy(); delete _charts['funnelCanvas']; }
+        fb.innerHTML = '<div class="muted" style="padding:40px;text-align:center">No leads in this segment.</div>';
+      } else {
+        if (!document.getElementById('funnelCanvas')) document.getElementById('funnel-box').innerHTML = '<canvas id="funnelCanvas"></canvas>';
+        barChart('funnelCanvas', fLabels, fValues, { horizontal: true, colors: FUNNEL_COLORS });
+      }
+
+      // Status breakdown doughnut
+      var STAGE_ORDER = [
+        ['in_sequence', 'In sequence'], ['responded', 'Responded'], ['bounced', 'Bounced'],
+        ['drafted', 'Drafted'], ['archived', 'Archived'], ['skipped', 'Skipped'],
+        ['deleted', 'Deleted'], ['other', 'Other'],
+      ];
+      var counts = {};
+      leads.forEach(function (l) { counts[l.stage] = (counts[l.stage] || 0) + 1; });
+      var items = STAGE_ORDER.filter(function (s) { return (counts[s[0]] || 0) > 0; })
+        .map(function (s) { return { label: s[1], value: counts[s[0]] }; });
+      if (!items.length) {
+        var sb = document.getElementById('status-box');
+        if (_charts['statusCanvas']) { _charts['statusCanvas'].destroy(); delete _charts['statusCanvas']; }
+        sb.innerHTML = '<div class="muted" style="padding:40px;text-align:center">No leads in this segment.</div>';
+      } else {
+        if (!document.getElementById('statusCanvas')) document.getElementById('status-box').innerHTML = '<canvas id="statusCanvas"></canvas>';
+        pieChart('statusCanvas', items);
+      }
+    }
+
+    /* ---- leads table ---- */
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    function typePill(v) {
+      if (v === 'school') return '<span class="pill partial">School</span>';
+      if (v === 'association') return '<span class="pill pos">Association</span>';
+      return '—';
+    }
+    function stagePill(v, row) {
+      var cls = row.stage === 'responded' ? 'pos'
+        : row.stage === 'bounced' ? 'neg'
+        : (row.stage === 'in_sequence' || row.stage === 'archived' || row.stage === 'skipped') ? 'partial' : '';
+      var label = row.stageLabel || v || '—';
+      var title = row.statusDesc ? (row.statusDesc + (row.statusCode ? ' (' + row.statusCode + ')' : '')) : '';
+      if (row.responded && row.respondedAt) title += (title ? ' · ' : '') + 'Replied ' + fmtDate(row.respondedAt);
+      return '<span class="pill ' + cls + '"' + (title ? ' title="' + esc(title) + '"' : '') + '>' + esc(label) + '</span>';
+    }
+    function contactCell(v, row) {
+      var name = txt(row.name);
+      var role = row.role ? '<div class="muted" style="font-size:12px">' + esc(row.role) + '</div>' : '';
+      return name + role;
+    }
+    function emailCell(v) {
+      if (!v) return '—';
+      return '<a href="mailto:' + esc(v) + '">' + esc(v) + '</a>';
+    }
+
+    function renderTable() {
+      var rows = viewLeads(kindLeads());
+      renderSortableTable('leadsRows', rows, [
+        { key: 'account', label: 'Account', render: txt },
+        { key: 'name', label: 'Contact', render: contactCell, text: function (v, r) { return (r.name || '') + ' ' + (r.role || ''); } },
+        { key: 'email', label: 'Email', render: emailCell, text: function (v) { return v || ''; } },
+        { key: 'kind', label: 'Type', render: typePill, text: function (v) { return v || ''; } },
+        { key: 'stageLabel', label: 'Status', render: stagePill, text: function (v, r) { return (r.stageLabel || '') + ' ' + (r.statusDesc || '') + ' ' + (r.statusCode || ''); } },
+        { key: 'emailsSent', label: 'Emails sent', unit: 'count' },
+        { key: 'lastEmailSent', label: 'Last email sent', unit: 'date' },
+      ], {
+        searchPlaceholder: 'Search leads (account, contact, email, status)…',
+        sortKey: 'account', sortDir: 'asc',
+        pageSize: 15,
+        stateStore: TABLE_STATE,
+        emptyText: 'No leads match this filter.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('eoCount');
+          if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
+        },
+      });
+    }
+
+    /* ---- AI insights ---- */
+    function renderInsight(p) {
+      var host = document.getElementById('aiBody');
+      if (!p || !p.insight) {
+        var pending = p && p.meta && p.meta.status === 'pending';
+        host.innerHTML = '<div class="needs-setup"><strong>' + (pending ? 'AI insights not available yet' : 'No insight returned') +
+          '</strong><span>' + esc((p && p.note) || 'Try refreshing in a moment.') + '</span></div>';
+        return;
+      }
+      var ins = p.insight;
+      var sugg = (ins.suggestions || []).map(function (s) {
+        return '<li><strong>' + esc(s.title) + '</strong>' + (s.detail ? '<span>' + esc(s.detail) + '</span>' : '') + '</li>';
+      }).join('');
+      var m = p.meta || {};
+      var when = m.generatedAt ? fmtDate(m.generatedAt) : '';
+      var foot = (when || m.note)
+        ? '<div class="muted" style="font-size:12px;margin-top:12px">' +
+            (when ? 'Generated ' + esc(when) + ' · refreshes once daily' : '') +
+            (m.note ? (when ? ' · ' : '') + esc(m.note) : '') +
+          '</div>'
+        : '';
+      host.innerHTML =
+        (ins.summary ? '<p class="ai-summary">' + esc(ins.summary) + '</p>' : '') +
+        (sugg ? '<ul class="ai-suggestions">' + sugg + '</ul>' : '') +
+        foot;
+    }
+    function loadInsight() {
+      var host = document.getElementById('aiBody');
+      host.innerHTML = '<div class="muted" style="padding:8px">Generating AI insights…</div>';
+      fetchJSON('/api/sales/education-insight').then(renderInsight).catch(function (err) {
+        host.innerHTML = '<div class="needs-setup"><strong>Couldn’t generate insights</strong><span>' + esc(err.message) + '</span></div>';
+      });
+    }
+
+    /* ---- render everything ---- */
+    function renderAll() {
+      renderCards();
+      renderCharts();
+      renderTable();
+      updateFilterChip();
+    }
+
+    function wireControls() {
+      document.querySelectorAll('#typeSeg button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          document.querySelectorAll('#typeSeg button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          KIND = b.getAttribute('data-kind');
+          renderAll();
+        });
+      });
+      document.getElementById('eoClear').addEventListener('click', function () {
+        VIEW = 'all'; renderCards(); renderTable(); updateFilterChip();
+      });
+      document.getElementById('aiRefresh').addEventListener('click', loadInsight);
+    }
+
+    function loadData() {
+      fetchJSON('/api/sales/education-outreach').then(function (data) {
+        DATA = data;
+        var el = document.getElementById('eoAsOf');
+        if (el) {
+          el.textContent = data.lastActivityAt
+            ? ('Last activity ' + fmtDate(data.lastActivityAt))
+            : (data.meta && data.meta.status === 'pending' ? 'Needs setup' : '');
+        }
+        if (data.meta && data.meta.status === 'pending') {
+          document.getElementById('kpis').innerHTML =
+            '<div class="needs-setup" style="grid-column:1/-1"><strong>Needs setup</strong><span>' +
+            esc((data.meta && data.meta.note) || 'Data source not configured.') + '</span></div>';
+          return;
+        }
+        renderAll();
+      }).catch(function (err) {
+        console.error('[education outreach]', err);
+        document.getElementById('kpis').innerHTML =
+          '<div class="needs-setup" style="grid-column:1/-1"><strong>Couldn’t load outreach data</strong><span>' +
+          esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('sales');                 // login / top-bar / theme only — self-rendering page
+    renderSalesSidebar('education');
+    fillHeadInfo();                    // fill the static ⓘ placeholders
+    window.onThemeChange = function () { if (DATA) { renderCharts(); } };  // re-colour charts on theme toggle
+    if (currentUser()) { wireControls(); loadData(); loadInsight(); }
+  </script>
+</body>
+</html>

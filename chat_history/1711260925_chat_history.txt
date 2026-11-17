@@ -1,0 +1,96 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-17
+Session: Built the Sales → "Education Outreach" tab (school/association cold-email
+campaign tracker) with KPI cards, funnel/status charts, leads table and Gemini AI
+insights, DB-cached once per day.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Pointed at prompts/171126_ed_sector.txt: add an Education Sector Outreach tab to
+the sales dashboard, backed by Supabase tables manually_found_educ_leads and
+educ_processed_messages. Needs: a leads table with status (responded / bounced /
+last email sent); a clickable "responded" KPI card listing repliers plus other
+cards; a useful campaign graph; and an AI insights & suggestions section below the
+cards using the Gemini key secret gemini-ai-api-key-131126.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected the tables and asked about status-code meaning; the user said to use the
+public.status dictionary table (8A = responded, 10A = bounced, B-codes = sent,
+A-codes = drafted, 5A skipped, 6A archived, 7A deleted). Built
+server/metrics/education-outreach.js (classify leads, KPIs, funnel, status
+breakdown; validated 50 leads / 47 delivered / 4 responded / 3 bounced),
+server/educationInsight.js (Gemini call), routes GET /api/sales/education-outreach
+and /education-insight in server/index.js, config.gemini in server/config.js, a
+sidebar entry in app.js (app.js?v=21 on sales pages) and public/education_outreach.html
+(segment toggle, clickable Responded/Bounced/Contacted cards that filter the table,
+AI panel, funnel bar + status doughnut, sortable leads table).
+
+--------------------------------------------------------------------------------
+USER:
+Remove the responded and bounced columns (redundant with Status).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Removed both columns; the reply date moved into the status pill tooltip.
+
+--------------------------------------------------------------------------------
+USER:
+Reported "AI insights not available yet", then "Couldn't generate insights".
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Root causes, in order: GEMINI_API_KEY was not in the Cloud Run env, so I mounted the
+Secret Manager secret with --update-secrets after granting secretAccessor to the
+compute service account (the first attempt hit Permission denied). Then Gemini
+returned 404 because gemini-2.0-flash is retired, so I listed the available models.
+
+--------------------------------------------------------------------------------
+USER:
+Asked why 2.5 flash and requested a smarter, newer model. Also asked whether their
+gcloud run deploy ... /q command would still work.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Switched the default to gemini-3.8-flash (config.js + GEMINI_MODEL env var). Noted
+that /q is not a valid gcloud flag (use --quiet or omit it) and that a deploy with no
+--set-secrets/--set-env-vars preserves the existing env and secrets.
+
+--------------------------------------------------------------------------------
+USER:
+The AI output looked cut off (raw truncated JSON).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Gemini 3.x are thinking models, and maxOutputTokens 900 starved the answer. Raised it
+to 8192 and now detect finishReason MAX_TOKENS to show a clean message instead of raw
+JSON. The user confirmed it works.
+
+--------------------------------------------------------------------------------
+USER:
+Create a cache table in the DB so the AI insights only use tokens once a day.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Applied migration create_educ_ai_insight_cache (public.educ_ai_insight_cache,
+cache_key PK, insight jsonb, model, source, generated_at; RLS on). Rewrote
+educationInsight.js: it reads the stored row; if fresh (<24h) it serves it with no
+Gemini call; otherwise it regenerates and UPSERTs (never truncates); on any failure it
+falls back to the stored row. The UI footer shows "Generated <date> · refreshes once
+daily". Updated the memory note. Told the user to run the manual Cloud Run --source
+redeploy (Claude does not deploy).
+
+--------------------------------------------------------------------------------
+USER:
+/dcp (document this session, no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Saved this transcript, updated as_built.txt and CLAUDE.md, and checked .gitignore
+(it already covers secrets, keys and env files, so no change was needed). No git
+commands were run.
+
+================================================================================
+END OF EXPORT
+================================================================================

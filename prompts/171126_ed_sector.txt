@@ -1,0 +1,10 @@
+**supabase_tables:**
+manually_found_educ_leads
+educ_processed_messages
+
+## main_task
+1. create a new tab in sales dashboard to display the Education Sector Outreach. 
+2. there has to be a table for all leads processed with the status of each (like if they have responded, was it bounced, last email sent).
+3. there also has to be a kpi card for leads that have responded. and if i click on this card, it should display the list of leads that replied. and add other cards which will help us in terms of data analysis.
+4. also create a useful graph that will help us interpret how we are doing.
+5. Below the kpi cards, there should be an AI insights and suggestions section. this should help us improve our outreach even more and help us make more sales/won deals. use gemini-ai-api-key-131126

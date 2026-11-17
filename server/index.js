@@ -9,6 +9,8 @@ import { getLivDeals } from './metrics/liv-deals.js';
 import { getSalesTopline } from './metrics/sales-topline.js';
 import { getToplineCards, cleanDate } from './metrics/sales-topline-cards.js';
 import { getAcDealsTable } from './metrics/ac-deals-table.js';
+import { getEducationOutreach } from './metrics/education-outreach.js';
+import { getEducationInsight } from './educationInsight.js';
 import { getMagBuyerSheet } from './metrics/mag-buyer-sheet.js';
 import { getInvoiceTracking } from './metrics/invoice-tracking.js';
 import { getAcContactSources } from './metrics/ac-contact-sources.js';
@@ -128,6 +130,28 @@ sales.get('/ac-deals', async (_req, res) => {
   } catch (err) {
     console.error('[sales:ac-deals]', err);
     res.status(502).json({ error: 'Failed to load AC deals from data source.', detail: err.message });
+  }
+});
+// Education Sector Outreach — leads, KPI cards, funnel + status breakdown, and the
+// per-lead table. Plain SELECTs of the educ_* tables + the status dictionary,
+// cached briefly.
+sales.get('/education-outreach', async (_req, res) => {
+  try {
+    const payload = await cached('sales:education-outreach', getEducationOutreach, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[sales:education-outreach]', err);
+    res.status(502).json({ error: 'Failed to load education outreach from data source.', detail: err.message });
+  }
+});
+// Education Outreach — AI insights & suggestions (Google Gemini, read-only, cached).
+sales.get('/education-insight', async (_req, res) => {
+  try {
+    const payload = await cached('sales:education-insight', getEducationInsight, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[sales:education-insight]', err);
+    res.status(502).json({ error: 'Could not generate AI insights right now.', detail: err.message });
   }
 });
 app.use('/api/sales', sales);
