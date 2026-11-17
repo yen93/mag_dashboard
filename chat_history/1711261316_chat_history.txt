@@ -1,0 +1,66 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-17
+Session: Fortnightly Team Check-in — new AI & Automation form tab, anonymous auto-ticketing, scheduled fortnightly invite email
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Pasted a main_task: (1) set up a fortnightly check-in form for the whole MAG team to
+proactively check what's working, what's not and where we can improve; (2) the form
+link is used by an automated email sent fortnightly — create a scheduled job that
+sends it to everyone in the organization_users db table; (3) when someone fills the
+form it should automatically create a ticket in ticketing.html; (4) the form can be a
+new tab in the AI & Automation dept.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the codebase: server/metrics/tickets.js and the /api/tickets router in
+server/index.js, public/ticketing.html, renderAiAutomationSidebar() in public/app.js,
+the dashboard_tickets migration, and the monitoring-health-digest edge fn + its
+pg_cron migration (the pattern for a scheduled Gmail SMTP email). Queried Supabase
+(MAGTestProject): organization_users has id/email/first_name/last_name/display_name/
+created_at and 10 rows. Entered plan mode and asked three questions.
+
+--------------------------------------------------------------------------------
+USER:
+Answers: send Friday 2:00 PM Manila; responses ANONYMOUS; use a NEW 'Check-in'
+ticket type.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Wrote and got approval for a plan, then implemented:
+- Migration 20261117180000_add_checkin_ticket_type.sql widens the
+  dashboard_tickets ticket_type CHECK to include 'check_in' (applied via Supabase MCP).
+- server/metrics/tickets.js: 'check_in' added to TICKET_TYPES; new createCheckin(body)
+  takes NO user — identity is discarded server-side; every row stamped
+  team-checkin@myadventuregroup.com.au / "Team check-in (anonymous)". Builds a title
+  "Fortnightly check-in — <area|General> · <date>" and a sectioned description;
+  needsAttention => priority high, else low.
+- server/index.js: new POST /api/checkin (requireAuth + requireFullAccess).
+- public/checkin.html (new): sentiment picker, three textareas, optional area /
+  anything-else / needs-attention, anonymity note, success state; posts via postJSON.
+- public/app.js: sidebar item ['checkin','Team Check-in','checkin.html'] above Ticketing.
+- public/ticketing.html: teal .t-check_in badge (+dark variant), "Check-ins" filter
+  button, TYPE_LABELS entry. app.js bumped ?v=20 -> ?v=21 on builds_monitoring,
+  claude_routines, n8n_automations, ticketing (sed, UTF-8 safe); checkin.html uses v=21.
+- Edge fn supabase/functions/fortnightly-checkin-email (deployed v1,
+  verify_jwt=false): reads organization_users with the service role, emails each a
+  personalized invite linking to /checkin.html via Gmail SMTP (existing GMAIL_*
+  secrets). Gate: CHECKIN_ANCHOR default 2026-11-20, sends when
+  weeksSinceAnchor % 2 === 0. Modes ?dry=1 / ?force=1 / ?to=.
+- Migration 20261117181000_schedule_fortnightly_checkin_email.sql: pg_cron job
+  fortnightly-checkin-email-weekly '0 6 * * 5' (Fri 14:00 Manila), applied + active.
+Verification: node --check passed on tickets.js and index.js; dry-run listed all 10
+recipients and correctly reported not-due (weeksSinceAnchor -1); a throwaway
+check_in row proved the constraint accepts the type (the CTE delete didn't see the
+same-statement insert, so it was deleted in a follow-up query — row id 4 removed).
+Saved a project memory (fortnightly-checkin-feature) + MEMORY.md pointer. Reminded the
+user a manual Cloud Run redeploy is needed (new route + pages); no deploy was run.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /dcp (save chat history, update as_built.txt, CLAUDE.md, .gitignore; no git).
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -107,9 +107,11 @@
     .badge.t-feedback       { background: color-mix(in srgb, #3b6ef0 15%, transparent); color: #2b55c8; }
     .badge.t-build_feedback { background: color-mix(in srgb, #7c5cff 16%, transparent); color: #6a46ff; }
     .badge.t-build_request  { background: color-mix(in srgb, var(--pos) 14%, transparent); color: var(--pos); }
+    .badge.t-check_in       { background: color-mix(in srgb, #14b8a6 16%, transparent); color: #0d9488; }
     .badge.t-other          { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
     html[data-theme='dark'] .badge.t-feedback { color: #7ea0ff; }
     html[data-theme='dark'] .badge.t-build_feedback { color: #a98cff; }
+    html[data-theme='dark'] .badge.t-check_in { color: #2dd4bf; }
 
     .prio { font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
     .prio .dot { width: 8px; height: 8px; border-radius: 50%; }
@@ -238,6 +240,7 @@
           <button class="filter-btn" data-type="feedback" onclick="setTypeFilter('feedback', this)">Feedback</button>
           <button class="filter-btn" data-type="build_feedback" onclick="setTypeFilter('build_feedback', this)">Build feedback</button>
           <button class="filter-btn" data-type="build_request" onclick="setTypeFilter('build_request', this)">Build requests</button>
+          <button class="filter-btn" data-type="check_in" onclick="setTypeFilter('check_in', this)">Check-ins</button>
         </div>
         <div class="filter-right">
           <select class="status-select" id="statusFilter" onchange="onStatusFilter(this.value)">
@@ -383,7 +386,7 @@
     </div>
   </div>
 
-  <script src="app.js?v=20"></script>
+  <script src="app.js?v=21"></script>
   <script>
     initPage('ai-automation');
     renderAiAutomationSidebar('ticketing');
@@ -399,7 +402,7 @@
 
     var TYPE_LABELS = {
       issue: 'Issue', feedback: 'Feedback', build_feedback: 'Build feedback',
-      build_request: 'Build request', other: 'Other'
+      build_request: 'Build request', check_in: 'Check-in', other: 'Other'
     };
     var STATUS_LABELS = { open: 'Open', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed' };
     var PRIO_LABELS = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };

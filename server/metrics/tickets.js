@@ -8,9 +8,16 @@
 
 import { q } from '../providers/supabase.js';
 
-export const TICKET_TYPES = ['issue', 'feedback', 'build_feedback', 'build_request', 'other'];
+export const TICKET_TYPES = ['issue', 'feedback', 'build_feedback', 'build_request', 'check_in', 'other'];
 export const TICKET_PRIORITIES = ['low', 'medium', 'high', 'urgent'];
 export const TICKET_STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+
+// Fortnightly team check-in tickets (public/checkin.html → POST /api/checkin) are
+// filed ANONYMOUSLY: we deliberately discard the signed-in user's identity and
+// stamp every check-in with this generic submitter, so candid feedback can't be
+// traced back. (The route still requires a valid login — internal team only.)
+const CHECKIN_SUBMITTER_EMAIL = 'team-checkin@myadventuregroup.com.au';
+const CHECKIN_SUBMITTER_NAME = 'Team check-in (anonymous)';
 
 function clip(v, max) {
   const s = (v == null ? '' : String(v)).trim();
@@ -105,6 +112,77 @@ export async function createTicket(user, body) {
       priority,
       user.email,
       user.name || null,
+    ]
+  );
+  return toApi(rows[0]);
+}
+
+// Sentiment choices the check-in form may send (optional). Maps the stored value
+// to a readable label for the ticket body.
+const CHECKIN_SENTIMENTS = {
+  great: '😄 Great',
+  good: '🙂 Good',
+  okay: '😐 Okay',
+  rough: '😟 Rough',
+};
+
+/**
+ * File an ANONYMOUS fortnightly team check-in as a `check_in` ticket. There is no
+ * `user` argument on purpose — identity is never recorded (see CHECKIN_SUBMITTER_*).
+ * `body` carries the form answers; every field is optional, but at least one of the
+ * three main free-text answers (or an "anything else") must be present. Returns the
+ * created ticket. Throws Error with `.status = 400` when the submission is empty.
+ */
+export async function createCheckin(body) {
+  body = body || {};
+
+  const sentimentKey = String(body.sentiment || '').trim();
+  const sentiment = CHECKIN_SENTIMENTS[sentimentKey] || '';
+  const working = clip(body.working, 4000);
+  const notWorking = clip(body.notWorking, 4000);
+  const improve = clip(body.improve, 4000);
+  const anythingElse = clip(body.anythingElse, 4000);
+  const area = clip(body.area, 120);
+
+  // Needs-attention flag bumps priority; otherwise these are low-urgency pulse-checks.
+  const priority = body.needsAttention ? 'high' : 'low';
+
+  if (!working && !notWorking && !improve && !anythingElse && !sentiment) {
+    const err = new Error('Please fill in at least one part of the check-in.');
+    err.status = 400;
+    throw err;
+  }
+
+  // Readable date for the title (AU/Manila-ish — just a human stamp, not tz-critical).
+  const dateStr = new Date().toLocaleDateString('en-AU', {
+    day: 'numeric', month: 'short', year: 'numeric',
+  });
+  const title = `Fortnightly check-in — ${area || 'General'} · ${dateStr}`;
+
+  // Compose a single readable description from the sections the person filled in.
+  const parts = [];
+  if (sentiment) parts.push(`Overall this fortnight: ${sentiment}`);
+  if (working) parts.push(`✅ What's working well:\n${working}`);
+  if (notWorking) parts.push(`⚠️ What's not working / blockers:\n${notWorking}`);
+  if (improve) parts.push(`💡 Where we can improve / ideas:\n${improve}`);
+  if (anythingElse) parts.push(`📝 Anything else:\n${anythingElse}`);
+  const description = clip(parts.join('\n\n'), 8000);
+
+  const rows = await q(
+    `insert into public.dashboard_tickets
+       (ticket_type, title, description, related_build, priority,
+        submitted_by_email, submitted_by_name)
+     values ('check_in', $1, $2, $3, $4, $5, $6)
+     returning id, ticket_type, title, description, related_build, priority, status,
+               submitted_by_email, submitted_by_name, assignee, admin_notes,
+               created_at, updated_at`,
+    [
+      title,
+      description || null,
+      area || null,
+      priority,
+      CHECKIN_SUBMITTER_EMAIL,
+      CHECKIN_SUBMITTER_NAME,
     ]
   );
   return toApi(rows[0]);

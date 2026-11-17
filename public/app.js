@@ -419,6 +419,7 @@ function renderAiAutomationSidebar(active) {
     ['builds',          'DB Automations',       'builds_monitoring.html'],
     ['claude-routines', 'Claude Code Routines', 'claude_routines.html'],
     ['n8n-automations', 'n8n Automations',      'n8n_automations.html'],
+    ['checkin',         'Team Check-in',        'checkin.html'],
     ['ticketing',       'Ticketing',            'ticketing.html'],
   ];
   el.innerHTML = items.map(function (it) {

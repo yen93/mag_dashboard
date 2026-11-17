@@ -37,7 +37,7 @@ import { getWebsiteSearch } from './metrics/marketing-website-search.js';
 import { getDbAutomations } from './metrics/db-automations.js';
 import { getClaudeRoutines } from './metrics/claude-routines.js';
 import { getN8nAutomations } from './metrics/n8n-automations.js';
-import { getTickets, createTicket, updateTicket } from './metrics/tickets.js';
+import { getTickets, createTicket, updateTicket, createCheckin } from './metrics/tickets.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
@@ -696,6 +696,22 @@ tickets.post('/:id/update', async (req, res) => {
 });
 
 app.use('/api/tickets', tickets);
+
+// Fortnightly Team Check-in form (AI & Automation > Team Check-in, public/checkin.html).
+// A signed-in, full-access team member submits the pulse-check form; we file it as an
+// ANONYMOUS `check_in` ticket on the same board — createCheckin() never records who the
+// JWT belongs to (req.user is intentionally ignored for attribution). requireAuth keeps
+// it internal-team-only (restricted partner accounts are 403'd by requireFullAccess).
+app.post('/api/checkin', requireAuth, requireFullAccess, async (req, res) => {
+  try {
+    const ticket = await createCheckin(req.body);
+    res.status(201).json({ ticket });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    console.error('[checkin:create]', err);
+    res.status(502).json({ error: 'Failed to log the check-in.', detail: err.message });
+  }
+});
 
 // Serve the plain HTML/CSS/JS pages from public/.
 const publicDir = path.join(__dirname, '..', 'public');
