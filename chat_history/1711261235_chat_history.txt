@@ -1,0 +1,45 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-17
+Session: Build the AI & Automation > Ticketing tab (team members file issues, feedback, build requests)
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Asked to build the Ticketing tab (public/ticketing.html, previously a "Coming soon"
+placeholder under AI & Automation) so MAG team members can file tickets: report
+issues, give general feedback/suggestions, give feedback about a specific build,
+request a new build, etc.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Explored the placeholder page, the sibling builds_monitoring.html, app.js helpers
+(fetchJSON/postJSON/currentUser/esc, renderAiAutomationSidebar), server/index.js
+routing, auth.js (requireAuth/requireFullAccess), users.js (ADMIN_EMAILS), the pg
+provider and an existing migration for conventions. Confirmed the Supabase project
+(MAGTestProject, aivitcomiywiysrfwqxt) and that table names were free.
+
+Built:
+- Migration supabase/migrations/20261117120000_create_dashboard_tickets.sql, applied
+  live: public.dashboard_tickets (ticket_type issue/feedback/build_feedback/
+  build_request/other; priority low..urgent; status open/in_progress/resolved/closed;
+  submitter from JWT; assignee/admin_notes; updated_at trigger; RLS on, no policies).
+  Seeded 3 example tickets. Verified list + trigger SQL.
+- server/metrics/tickets.js (getTickets/createTicket/updateTicket, validation with
+  err.status=400) and a tickets router in server/index.js at /api/tickets
+  (requireAuth + requireFullAccess): GET / (uncached), POST / (any team member),
+  POST /:id/update (admin only).
+- Rebuilt public/ticketing.html: KPI tiles, type chips, status filter, search, table,
+  New-ticket modal, detail modal with admin-only triage controls. No app.js bump (v=20).
+- node --check passed on both server files; fixed a CSS line-clamp lint.
+- Saved a memory note (ticketing-tab-feature.md) + MEMORY.md index line.
+
+Noted a manual Cloud Run redeploy is required; flagged the default decision that only
+admins (julienne@, admin@) can triage.
+
+--------------------------------------------------------------------------------
+USER:
+Ran /dcp (save chat, update as_built.txt, CLAUDE.md, .gitignore; no git).
+
+================================================================================
+END OF EXPORT
+================================================================================

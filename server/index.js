@@ -37,6 +37,7 @@ import { getWebsiteSearch } from './metrics/marketing-website-search.js';
 import { getDbAutomations } from './metrics/db-automations.js';
 import { getClaudeRoutines } from './metrics/claude-routines.js';
 import { getN8nAutomations } from './metrics/n8n-automations.js';
+import { getTickets, createTicket, updateTicket } from './metrics/tickets.js';
 import { ga4AgentRouter } from './ga4Agent.js';
 import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
@@ -647,6 +648,54 @@ app.get('/api/n8n-automations', requireAuth, requireFullAccess, async (req, res)
     res.status(502).json({ error: 'Failed to load n8n automations data.', detail: err.message });
   }
 });
+
+// Ticketing / feedback board (AI & Automation > Ticketing). Internal team tool,
+// so requireFullAccess (restricted partner accounts are blocked). Any full-access
+// team member can list + file a ticket; only admins may triage (status/priority/
+// assignee/notes). Reads/writes public.dashboard_tickets live over pg — the GET is
+// an uncached SELECT so a freshly filed ticket shows immediately.
+const tickets = express.Router();
+tickets.use(requireAuth);
+tickets.use(requireFullAccess);
+
+tickets.get('/', async (_req, res) => {
+  try {
+    res.json(await getTickets());
+  } catch (err) {
+    console.error('[tickets:list]', err);
+    res.status(502).json({ error: 'Failed to load tickets.', detail: err.message });
+  }
+});
+
+tickets.post('/', async (req, res) => {
+  try {
+    const ticket = await createTicket(req.user, req.body);
+    res.status(201).json({ ticket });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    console.error('[tickets:create]', err);
+    res.status(502).json({ error: 'Failed to file the ticket.', detail: err.message });
+  }
+});
+
+tickets.post('/:id/update', async (req, res) => {
+  if (!req.user || req.user.role !== 'admin') {
+    return res.status(403).json({ error: 'Only admins can triage tickets.' });
+  }
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(id)) return res.status(400).json({ error: 'Invalid ticket id.' });
+  try {
+    const ticket = await updateTicket(id, req.body);
+    if (!ticket) return res.status(404).json({ error: 'Ticket not found.' });
+    res.json({ ticket });
+  } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
+    console.error('[tickets:update]', err);
+    res.status(502).json({ error: 'Failed to update the ticket.', detail: err.message });
+  }
+});
+
+app.use('/api/tickets', tickets);
 
 // Serve the plain HTML/CSS/JS pages from public/.
 const publicDir = path.join(__dirname, '..', 'public');

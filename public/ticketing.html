@@ -5,6 +5,173 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Ticketing — MAG Metrics</title>
   <link rel="stylesheet" href="app.css" />
+  <style>
+    .content { max-width: 1480px; }
+
+    /* Page header */
+    .header-box { margin-bottom: 18px; }
+    .header-title-row {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px; margin-bottom: 6px;
+    }
+    .header-title-row h1 {
+      margin: 0; font-size: 22px; font-weight: 700;
+      display: flex; align-items: center; gap: 10px;
+    }
+    .header-desc { color: var(--text-muted); font-size: 13.5px; margin: 0; max-width: 760px; }
+
+    .btn-primary {
+      background: var(--accent); border: 1px solid var(--accent); color: #fff;
+      padding: 9px 16px; border-radius: 9px; font-size: 13.5px; font-weight: 700;
+      cursor: pointer; transition: filter .15s ease; white-space: nowrap;
+    }
+    .btn-primary:hover { filter: brightness(1.07); }
+
+    /* KPI tiles */
+    .kpi-row {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 14px; margin-bottom: 22px;
+    }
+    .kpi-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      padding: 15px 18px; box-shadow: var(--shadow);
+      display: flex; flex-direction: column; gap: 4px;
+    }
+    .kpi-card .kpi-label {
+      font-size: 11.5px; font-weight: 600; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: .5px;
+    }
+    .kpi-card .kpi-val { font-size: 26px; font-weight: 700; color: var(--text); }
+    .kpi-card .kpi-sub { font-size: 12px; color: var(--text-muted); }
+
+    /* Filter / search toolbar */
+    .filter-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      flex-wrap: wrap; gap: 12px; margin-bottom: 14px;
+    }
+    .filter-tabs { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .filter-btn {
+      background: var(--surface); border: 1px solid var(--border); color: var(--text-muted);
+      padding: 6px 12px; border-radius: 8px; font-size: 13px; font-weight: 600;
+      cursor: pointer; transition: all .15s ease;
+    }
+    .filter-btn:hover { border-color: var(--accent); color: var(--text); }
+    .filter-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .filter-right { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+    .status-select, .search-input {
+      padding: 7px 12px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface); color: var(--text); font-size: 13px;
+    }
+    .search-box { position: relative; min-width: 230px; }
+    .search-box .search-input { width: 100%; padding-left: 32px; }
+    .search-icon {
+      position: absolute; left: 10px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); font-size: 13px; pointer-events: none;
+    }
+
+    /* Table */
+    .table-card {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 12px;
+      box-shadow: var(--shadow); overflow: hidden;
+    }
+    .table-container { width: 100%; overflow-x: auto; }
+    table.tix-table { width: 100%; border-collapse: collapse; text-align: left; font-size: 13px; }
+    table.tix-table th {
+      background: var(--surface-2); color: var(--text-muted); font-size: 11.5px; font-weight: 700;
+      text-transform: uppercase; letter-spacing: .5px; padding: 11px 16px;
+      border-bottom: 1px solid var(--border); white-space: nowrap;
+    }
+    table.tix-table td {
+      padding: 13px 16px; border-bottom: 1px solid var(--border); vertical-align: top;
+    }
+    table.tix-table tr.tix-row { cursor: pointer; }
+    table.tix-table tr.tix-row:hover td { background: color-mix(in srgb, var(--accent) 3.5%, transparent); }
+
+    .tix-title { font-weight: 700; color: var(--text); font-size: 13.5px; }
+    .tix-desc {
+      color: var(--text-muted); font-size: 12px; margin-top: 3px; line-height: 1.45;
+      max-width: 420px; display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+    }
+    .tix-build { font-size: 12px; color: var(--text-muted); max-width: 180px; }
+    .tix-meta-name { font-weight: 600; color: var(--text); font-size: 12.5px; }
+    .tix-meta-sub { color: var(--text-muted); font-size: 11.5px; }
+    .time-cell { white-space: nowrap; font-size: 12px; color: var(--text-muted); }
+
+    /* Type + priority badges */
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; font-weight: 700;
+      padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+    }
+    .badge .swatch { width: 8px; height: 8px; border-radius: 50%; }
+    .badge.t-issue          { background: color-mix(in srgb, var(--neg) 13%, transparent); color: var(--neg); }
+    .badge.t-feedback       { background: color-mix(in srgb, #3b6ef0 15%, transparent); color: #2b55c8; }
+    .badge.t-build_feedback { background: color-mix(in srgb, #7c5cff 16%, transparent); color: #6a46ff; }
+    .badge.t-build_request  { background: color-mix(in srgb, var(--pos) 14%, transparent); color: var(--pos); }
+    .badge.t-other          { background: var(--surface-2); color: var(--text-muted); border: 1px solid var(--border); }
+    html[data-theme='dark'] .badge.t-feedback { color: #7ea0ff; }
+    html[data-theme='dark'] .badge.t-build_feedback { color: #a98cff; }
+
+    .prio { font-size: 11.5px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; }
+    .prio .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .prio.low    { color: var(--text-muted); }
+    .prio.medium { color: #2b55c8; }
+    .prio.high   { color: #b9791d; }
+    .prio.urgent { color: var(--neg); }
+    html[data-theme='dark'] .prio.medium { color: #7ea0ff; }
+    html[data-theme='dark'] .prio.high { color: #f0a63b; }
+
+    /* Modal */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(10,15,25,.6);
+      backdrop-filter: blur(2px); z-index: 100; align-items: center; justify-content: center; padding: 20px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-window {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 14px;
+      max-width: 640px; width: 100%; max-height: 88vh; display: flex; flex-direction: column;
+      box-shadow: 0 16px 40px rgba(0,0,0,.3); overflow: hidden;
+    }
+    .modal-header {
+      padding: 16px 20px; border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .modal-header h3 { margin: 0; font-size: 16px; font-weight: 700; }
+    .modal-body { padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 14px; }
+    .modal-footer {
+      padding: 14px 20px; border-top: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: flex-end; gap: 10px; flex-wrap: wrap;
+    }
+
+    /* Form */
+    .field { display: flex; flex-direction: column; gap: 5px; }
+    .field label { font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .field .req { color: var(--neg); }
+    .field input, .field select, .field textarea {
+      padding: 9px 11px; border: 1px solid var(--border); border-radius: 8px;
+      background: var(--surface); color: var(--text); font-size: 13.5px; font-family: inherit; width: 100%;
+    }
+    .field textarea { resize: vertical; min-height: 92px; line-height: 1.5; }
+    .field input:focus, .field select:focus, .field textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .field-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 560px) { .field-row { grid-template-columns: 1fr; } }
+    .form-err { color: var(--neg); font-size: 12.5px; min-height: 16px; }
+
+    /* Detail modal rows */
+    .dt-row { font-size: 13px; line-height: 1.5; }
+    .dt-row strong { color: var(--text); }
+    .dt-desc {
+      background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px;
+      padding: 11px 13px; font-size: 13px; line-height: 1.55; white-space: pre-wrap; color: var(--text);
+    }
+    .dt-admin {
+      border-top: 1px dashed var(--border); padding-top: 14px; margin-top: 2px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    .dt-admin h4 { margin: 0; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; color: var(--text-muted); }
+
+    .empty-wrap { padding: 46px 16px; text-align: center; color: var(--text-muted); }
+    .empty-wrap h3 { margin: 0 0 6px; color: var(--text); }
+  </style>
   <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
 </head>
 <body>
@@ -26,24 +193,438 @@
 
   <div class="ai-automation-layout">
     <aside class="subnav" id="aiAutomationNav"></aside>
-  <main class="content">
-    <div class="toolbar">
-      <strong>Ticketing</strong>
-    </div>
+    <main class="content">
+      <!-- Header -->
+      <div class="header-box">
+        <div class="header-title-row">
+          <h1>🎫 Ticketing</h1>
+          <button class="btn-primary" id="newTicketBtn">+ New ticket</button>
+        </div>
+        <p class="header-desc">
+          File a ticket to report an issue, share general feedback or a suggestion, give feedback about a
+          specific build, or request a brand-new build. The team triages from here.
+        </p>
+      </div>
 
-    <div class="card">
-      <div class="empty-state" style="padding:40px 16px; text-align:center; color:var(--text-muted)">
-        <h3 style="margin:0 0 6px">Ticketing</h3>
-        <p class="muted" style="margin:0">Coming soon.</p>
+      <!-- KPI tiles -->
+      <div class="kpi-row" id="kpiRow">
+        <div class="kpi-card">
+          <span class="kpi-label">Open</span>
+          <span class="kpi-val" id="kpiOpen">—</span>
+          <span class="kpi-sub" id="kpiUrgent">Awaiting triage</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">In Progress</span>
+          <span class="kpi-val" id="kpiProgress">—</span>
+          <span class="kpi-sub">Being worked on</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Resolved</span>
+          <span class="kpi-val" id="kpiResolved" style="color:var(--pos)">—</span>
+          <span class="kpi-sub">Done &amp; closed</span>
+        </div>
+        <div class="kpi-card">
+          <span class="kpi-label">Total Tickets</span>
+          <span class="kpi-val" id="kpiTotal">—</span>
+          <span class="kpi-sub">All time</span>
+        </div>
+      </div>
+
+      <!-- Filters -->
+      <div class="filter-bar">
+        <div class="filter-tabs" id="typeFilters">
+          <button class="filter-btn active" data-type="all" onclick="setTypeFilter('all', this)">All</button>
+          <button class="filter-btn" data-type="issue" onclick="setTypeFilter('issue', this)">Issues</button>
+          <button class="filter-btn" data-type="feedback" onclick="setTypeFilter('feedback', this)">Feedback</button>
+          <button class="filter-btn" data-type="build_feedback" onclick="setTypeFilter('build_feedback', this)">Build feedback</button>
+          <button class="filter-btn" data-type="build_request" onclick="setTypeFilter('build_request', this)">Build requests</button>
+        </div>
+        <div class="filter-right">
+          <select class="status-select" id="statusFilter" onchange="onStatusFilter(this.value)">
+            <option value="active">Open &amp; in progress</option>
+            <option value="all">All statuses</option>
+            <option value="open">Open</option>
+            <option value="in_progress">In progress</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
+          </select>
+          <div class="search-box">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="searchInput" class="search-input" placeholder="Search tickets…" oninput="onSearch(this.value)" />
+          </div>
+        </div>
+      </div>
+
+      <!-- Table -->
+      <div class="table-card">
+        <div class="table-container">
+          <table class="tix-table">
+            <thead>
+              <tr>
+                <th style="min-width:130px">Type</th>
+                <th style="min-width:300px">Ticket</th>
+                <th style="min-width:150px">Build</th>
+                <th style="min-width:95px">Priority</th>
+                <th style="min-width:110px">Status</th>
+                <th style="min-width:150px">Submitted by</th>
+                <th style="min-width:110px">Filed</th>
+              </tr>
+            </thead>
+            <tbody id="tixTbody">
+              <tr><td colspan="7" style="text-align:center; padding:36px; color:var(--text-muted)">Loading tickets…</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- New ticket modal -->
+  <div class="modal-backdrop" id="newModal" onclick="closeNew(event)">
+    <div class="modal-window" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3>File a new ticket</h3>
+        <button class="icon-btn" onclick="closeNew()">✕</button>
+      </div>
+      <form id="ticketForm" onsubmit="submitTicket(event)">
+        <div class="modal-body">
+          <div class="field">
+            <label for="fType">What's this about? <span class="req">*</span></label>
+            <select id="fType" required>
+              <option value="issue">🐞 Report an issue / bug</option>
+              <option value="feedback">💬 General feedback or suggestion</option>
+              <option value="build_feedback">🛠️ Feedback about a specific build</option>
+              <option value="build_request">✨ Request a new build</option>
+              <option value="other">📎 Other</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="fTitle">Title <span class="req">*</span></label>
+            <input type="text" id="fTitle" maxlength="200" placeholder="A short summary (e.g. “Add CSV export to Conferences”)" required />
+          </div>
+          <div class="field-row">
+            <div class="field">
+              <label for="fBuild">Related build / page</label>
+              <select id="fBuild">
+                <option value="">General — not a specific build</option>
+                <optgroup label="Home"><option>Home</option></optgroup>
+                <optgroup label="Sales">
+                  <option>Sales · Overview</option>
+                  <option>Sales · Conferences</option>
+                  <option>Sales · Education Outreach</option>
+                </optgroup>
+                <optgroup label="Marketing">
+                  <option>Marketing · Overview</option>
+                  <option>Marketing · Leads &amp; Bookings</option>
+                  <option>Marketing · Spend &amp; ROI</option>
+                  <option>Marketing · Content &amp; Social</option>
+                  <option>Marketing · Outreach Campaign</option>
+                  <option>Marketing · Website &amp; Search</option>
+                  <option>Marketing · Nurture &amp; Events</option>
+                  <option>Marketing · Monthly Log</option>
+                  <option>Marketing · ROI</option>
+                  <option>Marketing · ROAS</option>
+                  <option>Marketing · Ad Platforms</option>
+                  <option>Marketing · GA4 &amp; Ads Leads</option>
+                </optgroup>
+                <optgroup label="Operations">
+                  <option>Operations · Overview</option>
+                  <option>Operations · Buyer Analysis</option>
+                  <option>Operations · Invoices</option>
+                </optgroup>
+                <optgroup label="AI &amp; Automation">
+                  <option>AI &amp; Automation · DB Automations</option>
+                  <option>AI &amp; Automation · Claude Code Routines</option>
+                  <option>AI &amp; Automation · n8n Automations</option>
+                  <option>AI &amp; Automation · Ticketing</option>
+                </optgroup>
+                <optgroup label="Other">
+                  <option>Login / Auth</option>
+                  <option>Other / not listed</option>
+                </optgroup>
+              </select>
+            </div>
+            <div class="field">
+              <label for="fPriority">Priority</label>
+              <select id="fPriority">
+                <option value="low">Low</option>
+                <option value="medium" selected>Medium</option>
+                <option value="high">High</option>
+                <option value="urgent">Urgent</option>
+              </select>
+            </div>
+          </div>
+          <div class="field">
+            <label for="fDesc">Details</label>
+            <textarea id="fDesc" maxlength="8000" placeholder="What happened, what you'd like, steps to reproduce, screenshots to share, etc."></textarea>
+          </div>
+          <div class="form-err" id="formErr"></div>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="icon-btn" onclick="closeNew()">Cancel</button>
+          <button type="submit" class="btn-primary" id="submitBtn">Submit ticket</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Detail modal -->
+  <div class="modal-backdrop" id="detailModal" onclick="closeDetail(event)">
+    <div class="modal-window" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="dtTitle">Ticket</h3>
+        <button class="icon-btn" onclick="closeDetail()">✕</button>
+      </div>
+      <div class="modal-body" id="dtBody"></div>
+      <div class="modal-footer" id="dtFooter" style="display:none">
+        <span class="form-err" id="dtErr" style="margin-right:auto"></span>
+        <button type="button" class="btn-primary" id="dtSaveBtn" onclick="saveTriage()">Save changes</button>
       </div>
     </div>
-  </main>
   </div>
 
   <script src="app.js?v=20"></script>
   <script>
     initPage('ai-automation');
     renderAiAutomationSidebar('ticketing');
+
+    var ME = currentUser() || {};
+    var IS_ADMIN = ME.role === 'admin';
+
+    var ALL = [];
+    var activeType = 'all';
+    var statusFilter = 'active';
+    var searchQuery = '';
+    var detailId = null;
+
+    var TYPE_LABELS = {
+      issue: 'Issue', feedback: 'Feedback', build_feedback: 'Build feedback',
+      build_request: 'Build request', other: 'Other'
+    };
+    var STATUS_LABELS = { open: 'Open', in_progress: 'In progress', resolved: 'Resolved', closed: 'Closed' };
+    var PRIO_LABELS = { low: 'Low', medium: 'Medium', high: 'High', urgent: 'Urgent' };
+
+    function timeAgo(iso) {
+      if (!iso) return '—';
+      var d = new Date(iso), now = new Date();
+      var s = Math.floor((now - d) / 1000);
+      if (s < 60) return 'Just now';
+      var m = Math.floor(s / 60); if (m < 60) return m + 'm ago';
+      var h = Math.floor(m / 60); if (h < 24) return h + 'h ago';
+      var dd = Math.floor(h / 24);
+      if (dd === 1) return 'Yesterday';
+      if (dd < 30) return dd + 'd ago';
+      return d.toLocaleDateString('en-AU', { month: 'short', day: 'numeric' });
+    }
+    function fullDate(iso) {
+      if (!iso) return '';
+      return new Date(iso).toLocaleString('en-AU', {
+        year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    function typeBadge(t) {
+      return '<span class="badge t-' + t + '">' + esc(TYPE_LABELS[t] || t) + '</span>';
+    }
+    function prioTag(p) {
+      var color = { low: 'var(--text-muted)', medium: '#3b6ef0', high: '#f0a63b', urgent: 'var(--neg)' }[p] || 'var(--text-muted)';
+      return '<span class="prio ' + p + '"><span class="dot" style="background:' + color + '"></span>' + esc(PRIO_LABELS[p] || p) + '</span>';
+    }
+    function statusPill(s) {
+      var cls = 'pill';
+      if (s === 'resolved') cls += ' pos';
+      else if (s === 'open') cls += ' partial';
+      else if (s === 'in_progress') cls += '';
+      // closed -> plain
+      var style = '';
+      if (s === 'in_progress') style = ' style="background:color-mix(in srgb,#3b6ef0 14%,transparent);color:#2b55c8;border-color:transparent"';
+      else if (s === 'closed') style = ' style="color:var(--text-muted)"';
+      return '<span class="' + cls + '"' + style + '>' + esc(STATUS_LABELS[s] || s) + '</span>';
+    }
+
+    function load() {
+      fetchJSON('/api/tickets').then(function (res) {
+        ALL = res.tickets || [];
+        var sm = res.summary || {};
+        document.getElementById('kpiOpen').textContent = sm.open || 0;
+        document.getElementById('kpiProgress').textContent = sm.in_progress || 0;
+        document.getElementById('kpiResolved').textContent = (sm.resolved || 0) + (sm.closed ? ' +' + sm.closed : '');
+        document.getElementById('kpiTotal').textContent = sm.total || 0;
+        var urg = document.getElementById('kpiUrgent');
+        if (sm.urgent_open > 0) { urg.textContent = '⚠ ' + sm.urgent_open + ' urgent'; urg.style.color = 'var(--neg)'; }
+        else { urg.textContent = 'Awaiting triage'; urg.style.color = ''; }
+        renderTable();
+      }).catch(function (err) {
+        document.getElementById('tixTbody').innerHTML =
+          '<tr><td colspan="7" style="text-align:center;padding:30px;color:var(--neg)">Failed to load tickets: ' + esc(err.message || 'error') + '</td></tr>';
+      });
+    }
+
+    function setTypeFilter(t, btn) {
+      activeType = t;
+      document.querySelectorAll('#typeFilters .filter-btn').forEach(function (b) { b.classList.remove('active'); });
+      if (btn) btn.classList.add('active');
+      renderTable();
+    }
+    function onStatusFilter(v) { statusFilter = v; renderTable(); }
+    function onSearch(v) { searchQuery = (v || '').toLowerCase().trim(); renderTable(); }
+
+    function renderTable() {
+      var tbody = document.getElementById('tixTbody');
+      var rows = ALL.filter(function (t) {
+        if (activeType !== 'all' && t.ticketType !== activeType) return false;
+        if (statusFilter === 'active' && !(t.status === 'open' || t.status === 'in_progress')) return false;
+        if (statusFilter !== 'all' && statusFilter !== 'active' && t.status !== statusFilter) return false;
+        if (searchQuery) {
+          var hay = (t.title + ' ' + t.description + ' ' + t.relatedBuild + ' ' +
+            t.submittedByName + ' ' + t.submittedByEmail + ' ' + (TYPE_LABELS[t.ticketType] || '')).toLowerCase();
+          if (hay.indexOf(searchQuery) === -1) return false;
+        }
+        return true;
+      });
+
+      if (!rows.length) {
+        tbody.innerHTML = '<tr><td colspan="7"><div class="empty-wrap"><h3>No tickets here</h3>' +
+          '<p class="muted" style="margin:0">' +
+          (ALL.length ? 'Nothing matches the current filter.' : 'Be the first to file one with “+ New ticket”.') +
+          '</p></div></td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = rows.map(function (t) {
+        return '<tr class="tix-row" onclick="openDetail(' + t.id + ')">' +
+          '<td>' + typeBadge(t.ticketType) + '</td>' +
+          '<td><div class="tix-title">' + esc(t.title) + '</div>' +
+            (t.description ? '<div class="tix-desc">' + esc(t.description) + '</div>' : '') + '</td>' +
+          '<td><div class="tix-build">' + (t.relatedBuild ? esc(t.relatedBuild) : '<span class="muted">—</span>') + '</div></td>' +
+          '<td>' + prioTag(t.priority) + '</td>' +
+          '<td>' + statusPill(t.status) + '</td>' +
+          '<td><div class="tix-meta-name">' + esc(t.submittedByName || t.submittedByEmail) + '</div>' +
+            (t.submittedByName ? '<div class="tix-meta-sub">' + esc(t.submittedByEmail) + '</div>' : '') + '</td>' +
+          '<td><div class="time-cell" title="' + esc(fullDate(t.createdAt)) + '">' + timeAgo(t.createdAt) + '</div></td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    /* ---- New ticket ---- */
+    function openNew() {
+      document.getElementById('ticketForm').reset();
+      document.getElementById('fPriority').value = 'medium';
+      document.getElementById('formErr').textContent = '';
+      document.getElementById('newModal').classList.add('open');
+      setTimeout(function () { document.getElementById('fTitle').focus(); }, 40);
+    }
+    function closeNew(e) {
+      if (!e || e.target.id === 'newModal' || e.target.tagName === 'BUTTON') {
+        document.getElementById('newModal').classList.remove('open');
+      }
+    }
+    function submitTicket(e) {
+      e.preventDefault();
+      var errEl = document.getElementById('formErr');
+      var btn = document.getElementById('submitBtn');
+      var payload = {
+        ticketType: document.getElementById('fType').value,
+        title: document.getElementById('fTitle').value.trim(),
+        relatedBuild: document.getElementById('fBuild').value,
+        priority: document.getElementById('fPriority').value,
+        description: document.getElementById('fDesc').value.trim()
+      };
+      if (!payload.title) { errEl.textContent = 'Please add a title.'; return; }
+      errEl.textContent = '';
+      btn.disabled = true; btn.textContent = 'Submitting…';
+      postJSON('/api/tickets', payload).then(function () {
+        btn.disabled = false; btn.textContent = 'Submit ticket';
+        document.getElementById('newModal').classList.remove('open');
+        load();
+      }).catch(function (err) {
+        btn.disabled = false; btn.textContent = 'Submit ticket';
+        errEl.textContent = err.message || 'Could not file the ticket.';
+      });
+    }
+
+    /* ---- Detail / triage ---- */
+    function openDetail(id) {
+      var t = ALL.find(function (x) { return x.id === id; });
+      if (!t) return;
+      detailId = id;
+      document.getElementById('dtTitle').textContent = '#' + t.id + ' · ' + t.title;
+      document.getElementById('dtErr').textContent = '';
+
+      var html = '' +
+        '<div class="dt-row">' + typeBadge(t.ticketType) + ' &nbsp; ' + prioTag(t.priority) + ' &nbsp; ' + statusPill(t.status) + '</div>' +
+        '<div class="dt-row"><strong>Build:</strong> ' + (t.relatedBuild ? esc(t.relatedBuild) : 'General — not a specific build') + '</div>' +
+        '<div class="dt-row"><strong>Filed by:</strong> ' + esc(t.submittedByName || t.submittedByEmail) +
+          ' &lt;' + esc(t.submittedByEmail) + '&gt; · ' + esc(fullDate(t.createdAt)) + '</div>' +
+        (t.updatedAt && t.updatedAt !== t.createdAt ? '<div class="dt-row"><strong>Last updated:</strong> ' + esc(fullDate(t.updatedAt)) + '</div>' : '') +
+        '<div class="dt-row"><strong>Details</strong></div>' +
+        '<div class="dt-desc">' + (t.description ? esc(t.description) : 'No further details provided.') + '</div>';
+
+      if (t.assignee) html += '<div class="dt-row"><strong>Assigned to:</strong> ' + esc(t.assignee) + '</div>';
+      if (t.adminNotes) html += '<div class="dt-row"><strong>Triage notes:</strong> ' + esc(t.adminNotes) + '</div>';
+
+      if (IS_ADMIN) {
+        html += '<div class="dt-admin">' +
+          '<h4>Triage (admin)</h4>' +
+          '<div class="field-row">' +
+            '<div class="field"><label for="dtStatus">Status</label>' + sel('dtStatus', STATUS_LABELS, t.status) + '</div>' +
+            '<div class="field"><label for="dtPriority">Priority</label>' + sel('dtPriority', PRIO_LABELS, t.priority) + '</div>' +
+          '</div>' +
+          '<div class="field"><label for="dtAssignee">Assignee</label>' +
+            '<input type="text" id="dtAssignee" maxlength="200" value="' + esc(t.assignee) + '" placeholder="Who owns this?" /></div>' +
+          '<div class="field"><label for="dtNotes">Internal triage notes</label>' +
+            '<textarea id="dtNotes" maxlength="8000" placeholder="Notes for the team…">' + esc(t.adminNotes) + '</textarea></div>' +
+        '</div>';
+      }
+
+      document.getElementById('dtBody').innerHTML = html;
+      document.getElementById('dtFooter').style.display = IS_ADMIN ? 'flex' : 'none';
+      document.getElementById('detailModal').classList.add('open');
+    }
+    function sel(id, labels, current) {
+      var opts = Object.keys(labels).map(function (k) {
+        return '<option value="' + k + '"' + (k === current ? ' selected' : '') + '>' + esc(labels[k]) + '</option>';
+      }).join('');
+      return '<select id="' + id + '">' + opts + '</select>';
+    }
+    function closeDetail(e) {
+      if (!e || e.target.id === 'detailModal' || e.target.tagName === 'BUTTON') {
+        document.getElementById('detailModal').classList.remove('open');
+        detailId = null;
+      }
+    }
+    function saveTriage() {
+      if (!detailId || !IS_ADMIN) return;
+      var errEl = document.getElementById('dtErr');
+      var btn = document.getElementById('dtSaveBtn');
+      var payload = {
+        status: document.getElementById('dtStatus').value,
+        priority: document.getElementById('dtPriority').value,
+        assignee: document.getElementById('dtAssignee').value.trim(),
+        adminNotes: document.getElementById('dtNotes').value.trim()
+      };
+      errEl.textContent = '';
+      btn.disabled = true; btn.textContent = 'Saving…';
+      postJSON('/api/tickets/' + detailId + '/update', payload).then(function () {
+        btn.disabled = false; btn.textContent = 'Save changes';
+        document.getElementById('detailModal').classList.remove('open');
+        detailId = null;
+        load();
+      }).catch(function (err) {
+        btn.disabled = false; btn.textContent = 'Save changes';
+        errEl.textContent = err.message || 'Could not save.';
+      });
+    }
+
+    document.getElementById('newTicketBtn').addEventListener('click', openNew);
+    document.addEventListener('keydown', function (e) {
+      if (e.key === 'Escape') {
+        document.getElementById('newModal').classList.remove('open');
+        document.getElementById('detailModal').classList.remove('open');
+      }
+    });
+
+    load();
   </script>
 </body>
 </html>
