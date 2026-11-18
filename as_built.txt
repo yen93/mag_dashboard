@@ -888,6 +888,16 @@ ENVIRONMENT VARIABLES / CREDENTIALS
   server/index.js (requireAuth + requireFullAccess): GET / (uncached), POST / (file), POST /:id/update
   (admin-only). Submitter identity comes from the JWT, never the body.
 
+- public/alternate_leads.html (Sales sub-tab "Alternate Leads", app.js?v=22; replaces Liv's old
+  "alternate_leads_found" Google Sheet) — To review/Send intro/Skipped/All toggle (default To review),
+  7 KPI cards, sortable table with an inline Decision dropdown (Send intro / skip) for reviewers only.
+- server/metrics/alternate-leads.js -> GET /api/sales/alternate-leads (uncached; adds per-user
+  canReview) + POST /api/sales/alternate-leads/:id/review {decision:'send'|'skip'|null}. Writes
+  alternate_leads.status = 'Send intro' | 'skip' (NULL on reset; also clears legacy sheet_remark),
+  only where is_processed IS NULL; reads status first, sheet_remark as legacy fallback. Reviewers =
+  ALT_LEADS_REVIEW_EMAILS in server/users.js (liv@ + julienne@); others get 403 / read-only pills.
+  Audit rows go to public.alternate_leads_review_log (migration 20261118120000, append-only).
+  Leads come from the separate Alternate Lead Finder project (weekly edge fn, email always NULL).
 - public/education_outreach.html (Sales sub-tab "Education Outreach", app.js?v=21) — self-rendering
   page: All/Schools/Associations toggle, 8 KPI cards (Responded/Bounced/Contacted clickable ->
   filter the leads table), AI insights panel, funnel bar + status doughnut, sortable leads table.

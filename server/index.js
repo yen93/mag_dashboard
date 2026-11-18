@@ -43,7 +43,8 @@ import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
 import { cached, clearCache } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
-import { canReviewJc } from './users.js';
+import { canReviewJc, canReviewAltLeads } from './users.js';
+import { getAlternateLeads, setAlternateLeadReview } from './metrics/alternate-leads.js';
 import { q } from './providers/supabase.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -153,6 +154,37 @@ sales.get('/education-insight', async (_req, res) => {
   } catch (err) {
     console.error('[sales:education-insight]', err);
     res.status(502).json({ error: 'Could not generate AI insights right now.', detail: err.message });
+  }
+});
+// Alternate Leads — Liv's review queue (replaces the old Google Sheet). GET is uncached (tiny
+// table, reviewers need fresh state) and tells the client whether THIS user may tag
+// (`canReview`: Liv + Julienne only; everyone else is view-only). POST is gated server-side.
+sales.get('/alternate-leads', async (req, res) => {
+  try {
+    const payload = await getAlternateLeads();
+    res.json({ ...payload, canReview: canReviewAltLeads(req.user && req.user.email) });
+  } catch (err) {
+    console.error('[sales:alternate-leads]', err);
+    res.status(502).json({ error: 'Failed to load alternate leads from data source.', detail: err.message });
+  }
+});
+sales.post('/alternate-leads/:id/review', async (req, res) => {
+  if (!canReviewAltLeads(req.user && req.user.email)) {
+    return res.status(403).json({ error: 'Only Liv and Julienne can review alternate leads.' });
+  }
+  const id = Number(req.params.id);
+  const decision = req.body && req.body.decision;   // 'send' | 'skip' | null (reset)
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid lead id.' });
+  if (decision != null && decision !== 'send' && decision !== 'skip') {
+    return res.status(400).json({ error: 'decision must be "send", "skip" or null.' });
+  }
+  try {
+    const out = await setAlternateLeadReview(id, decision || null, req.user.email);
+    if (!out) return res.status(404).json({ error: 'Lead not found or already processed.' });
+    res.json(out);
+  } catch (err) {
+    console.error('[sales:alternate-leads review]', err);
+    res.status(502).json({ error: 'Failed to save the review.', detail: err.message });
   }
 });
 app.use('/api/sales', sales);

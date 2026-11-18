@@ -31,6 +31,13 @@ const JC_REVIEW_EMAILS = [
   'james@myadventuregroup.com.au',
 ];
 
+// Alternate Leads review (Sales tab): only Liv + Julienne (an admin) may tag a lead
+// 'Send intro' / skip. Everyone else is view-only.
+const ALT_LEADS_REVIEW_EMAILS = [
+  'liv@myadventuregroup.com.au',
+  'julienne@myadventuregroup.com.au',
+];
+
 function normalize(email) {
   return String(email || '').trim().toLowerCase();
 }
@@ -88,6 +95,11 @@ export function userFromEmail(email) {
 export function canReviewJc(email) {
   const addr = normalize(email);
   return ADMIN_EMAILS.includes(addr) || JC_REVIEW_EMAILS.includes(addr);
+}
+
+/** True iff `email` may tag Alternate Leads (Liv + Julienne). */
+export function canReviewAltLeads(email) {
+  return ALT_LEADS_REVIEW_EMAILS.includes(normalize(email));
 }
 
 /** Public view of a user. */

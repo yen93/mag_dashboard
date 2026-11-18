@@ -1,0 +1,20 @@
+**leads_for_review:**
+select * from alternate_leads
+where is_processed is null
+and sheet_remark is null
+
+**old_review_sheet:**
+https://docs.google.com/spreadsheets/d/1svksxHmNBUx9Z20t2kbtHAT1fThcfdCmz5dEp936L7I/edit?gid=2007936122#gid=2007936122
+
+**alternate_leads_listing:**
+C:\Users\Cloverly\claude_code\Alternate Lead Finder
+
+## context:
+our sales specialist, liv, uses old_review_sheet to go thru all alternate leads we can reach out to. she reviews each one to see which ones we can 'Send intro' to. but it's in g sheets and we want to create a new tab in the dashboard for this process. see alternate_leads_listing to understand how leads are listed into this table.
+
+## main_task:
+1. add a new tab in sales called 'Alternate Leads'. this tab will serve as the replacement of old_review_sheet. so liv will now review alternate leads thru this tab moving forward.
+2. this should have a table to display all alternate leads for liv to review.
+3. you can also add kpi cards on top as needed if this will help us drive more sales.
+4. table to display leads_for_review
+5. there should be a dropdown where liv and julienne can either tag lead as 'send intro' or 'skip'. other members cant edit/view only.

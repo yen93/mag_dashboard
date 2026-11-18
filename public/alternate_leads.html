@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alternate Leads — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    .content { max-width: none; }
+    .al-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .al-toolbar .spacer { flex: 1; }
+    .ctl-label { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-right: 6px; }
+    .kpi-click { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
+    .kpi-click:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
+    .kpi-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+    .kpi .label { display: inline-flex; align-items: center; gap: 4px; }
+    .kpi { position: relative; }
+    .kpi:hover, .kpi:focus-within { z-index: 2; }
+    .al-select { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); cursor: pointer; min-width: 120px; }
+    .al-select:hover { border-color: var(--accent); }
+    .al-select:disabled { opacity: .6; cursor: wait; }
+    .al-pending-row { background: rgba(245, 166, 35, .08); }
+    .al-viewonly { font-size: 12px; color: var(--text-muted); }
+    .al-note { font-size: 12.5px; color: var(--text-muted); margin: 0 0 10px; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab active" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="builds_monitoring.html">AI &amp; Automation</a>
+  </nav>
+
+  <div class="sales-layout">
+    <aside class="subnav" id="salesNav"></aside>
+    <main class="content">
+      <div class="toolbar al-toolbar">
+        <strong>Alternate Leads</strong>
+        <span class="head-info" data-info="Other contacts found at organisations we're already working. Review each one and tag it 'Send intro' (we email them) or 'Skip'. Replaces the old alternate_leads_found Google Sheet." data-src="Supabase → alternate_leads"></span>
+        <div class="spacer"></div>
+        <span class="ctl-label">Show</span>
+        <div class="segmented" id="viewSeg">
+          <button type="button" class="active" data-view="pending">To review</button>
+          <button type="button" data-view="send">Send intro</button>
+          <button type="button" data-view="skip">Skipped</button>
+          <button type="button" data-view="all">All</button>
+        </div>
+        <span class="muted" id="alAsOf" style="font-size:13px"></span>
+      </div>
+
+      <div class="section-head">
+        <span class="step">1</span><h2>At a glance</h2>
+        <span class="sub">Click <strong>To review</strong>, <strong>Send intro</strong> or <strong>Skipped</strong> to filter the table</span>
+      </div>
+      <div class="kpi-grid" id="kpis"></div>
+
+      <div class="section-head">
+        <span class="step">2</span><h2>Leads</h2>
+        <span class="head-info" data-info="Every alternate lead. 'To review' = not yet tagged. Pick 'Send intro' or 'Skip' in the Decision column; Liv and Julienne can edit, everyone else is view-only. Search & sort any column." data-src="Supabase → alternate_leads (+ reviewer from alternate_leads_review_log)"></span>
+        <div class="spacer"></div>
+        <span class="muted" id="alCount" style="font-size:13px"></span>
+      </div>
+      <p class="al-note" id="alRoleNote"></p>
+      <div class="card col-12">
+        <div id="leadsRows"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js?v=22"></script>
+  <script>
+    var DATA = null;
+    var VIEW = 'pending';       // pending | send | skip | all
+    var TABLE_STATE = {};
+
+    function numfmt(n) { return (n == null) ? '—' : fmt(n, 'count'); }
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    function canReview() { return !!(DATA && DATA.canReview); }
+
+    function viewRows() {
+      var ls = (DATA && DATA.leads) || [];
+      return VIEW === 'all' ? ls : ls.filter(function (l) { return l.review === VIEW; });
+    }
+
+    function kpiCard(o) {
+      var cls = 'kpi' + (o.view ? ' kpi-click' : '') + (o.view && o.view === VIEW ? ' kpi-active' : '');
+      return '<div class="' + cls + '"' + (o.view ? ' data-view="' + o.view + '"' : '') + '>' +
+        '<div class="label">' + esc(o.label) + (o.info ? ' ' + infoTip(o.info, 'Supabase → alternate_leads') : '') + '</div>' +
+        '<div class="value">' + o.value + '</div>' +
+        (o.sub ? '<div class="kpi-sub">' + o.sub + '</div>' : '') + '</div>';
+    }
+
+    function computeCards() {
+      var ls = (DATA && DATA.leads) || [];
+      var c = { total: ls.length, pending: 0, send: 0, skip: 0, cold: 0, soc: 0 }, orgs = {}, oldest = null;
+      ls.forEach(function (l) {
+        if (l.review === 'send') c.send++; else if (l.review === 'skip') c.skip++;
+        else if (l.review === 'pending') {
+          c.pending++; if (l.org) orgs[l.org] = 1;
+          if (l.leadType === 'cold') c.cold++; else if (l.leadType === 'soc med') c.soc++;
+          if (l.foundAt && (!oldest || l.foundAt < oldest)) oldest = l.foundAt;
+        }
+      });
+      c.orgs = Object.keys(orgs).length; c.oldest = oldest;
+      var decided = c.send + c.skip;
+      c.sendRate = decided > 0 ? Math.round((c.send / decided) * 1000) / 10 : null;
+      return c;
+    }
+
+    function renderCards() {
+      var c = computeCards();
+      var cards = [
+        { label: 'To review', value: numfmt(c.pending), view: 'pending',
+          sub: c.pending ? (c.orgs + ' organisations' + (c.oldest ? ' · oldest ' + fmtDate(c.oldest) : '')) : 'All caught up 🎉',
+          info: 'Leads not yet tagged — waiting for Liv or Julienne to choose Send intro or Skip.' },
+        { label: 'Send intro', value: numfmt(c.send), view: 'send', sub: 'approved for outreach',
+          info: 'Leads Liv/Julienne approved for an intro email.' },
+        { label: 'Skipped', value: numfmt(c.skip), view: 'skip', sub: 'not pursued',
+          info: 'Leads tagged Skip — not pursued.' },
+        { label: 'Send-intro rate', value: c.sendRate == null ? '—' : c.sendRate + '%', sub: 'of reviewed leads',
+          info: 'Send intro ÷ (Send intro + Skipped). A low rate may mean the lead finder is surfacing the wrong contacts.' },
+        { label: 'Pending: cold', value: numfmt(c.cold), sub: 'awaiting review',
+          info: 'Unreviewed leads found through cold outreach threads.' },
+        { label: 'Pending: social media', value: numfmt(c.soc), sub: 'awaiting review',
+          info: 'Unreviewed leads found through social-media outreach threads.' },
+        { label: 'Total leads', value: numfmt(c.total), sub: 'all time',
+          info: 'Every alternate lead found, reviewed or not.' },
+      ];
+      document.getElementById('kpis').innerHTML = cards.map(kpiCard).join('');
+      document.querySelectorAll('#kpis .kpi-click').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var v = el.getAttribute('data-view');
+          setView(VIEW === v ? 'all' : v);
+        });
+      });
+    }
+
+    function setView(v) {
+      VIEW = v;
+      document.querySelectorAll('#viewSeg button').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-view') === v);
+      });
+      renderCards(); renderTable();
+    }
+
+    function reviewLabel(r) { return r === 'send' ? 'Send intro' : r === 'skip' ? 'Skip' : r === 'processed' ? 'Processed' : 'To review'; }
+    function reviewPill(r, row) {
+      var cls = r === 'send' ? 'pos' : r === 'skip' ? 'partial' : r === 'pending' ? 'neg' : '';
+      var who = row.reviewedBy ? ' title="' + esc('By ' + row.reviewedBy + (row.reviewedAt ? ' · ' + fmtDate(row.reviewedAt) : '')) + '"' : '';
+      return '<span class="pill ' + cls + '"' + who + '>' + esc(reviewLabel(r)) + '</span>';
+    }
+    function decisionCell(v, row) {
+      if (row.review === 'processed') return reviewPill('processed', row);
+      if (!canReview()) return reviewPill(row.review, row);
+      var sel = row.review === 'send' ? 'send' : row.review === 'skip' ? 'skip' : '';
+      return '<select class="al-select" data-id="' + row.id + '">' +
+        '<option value=""' + (sel === '' ? ' selected' : '') + '>— choose —</option>' +
+        '<option value="send"' + (sel === 'send' ? ' selected' : '') + '>Send intro</option>' +
+        '<option value="skip"' + (sel === 'skip' ? ' selected' : '') + '>Skip</option></select>';
+    }
+    function contactCell(v, row) {
+      var role = row.role ? '<div class="muted" style="font-size:12px">' + esc(row.role) + '</div>' : '';
+      return txt(row.name) + role;
+    }
+    function typePill(v) {
+      return v === 'cold' ? '<span class="pill partial">Cold</span>' : v === 'soc med' ? '<span class="pill pos">Social media</span>' : txt(v);
+    }
+
+    function renderTable() {
+      var rows = viewRows();
+      renderSortableTable('leadsRows', rows, [
+        { key: 'review', label: 'Decision', render: decisionCell, text: function (v, r) { return reviewLabel(r.review); } },
+        { key: 'org', label: 'Organisation', render: txt },
+        { key: 'name', label: 'Contact', render: contactCell, text: function (v, r) { return (r.name || '') + ' ' + (r.role || ''); } },
+        { key: 'email', label: 'Email', render: function (v) { return v ? '<a href="mailto:' + esc(v) + '">' + esc(v) + '</a>' : '—'; }, text: function (v) { return v || ''; } },
+        { key: 'leadType', label: 'Found via', render: typePill, text: function (v) { return v || ''; } },
+        { key: 'subject', label: 'Outreach subject', render: txt },
+        { key: 'speaker', label: 'Speaker', render: txt },
+        { key: 'foundAt', label: 'Date found', unit: 'date' },
+        { key: 'reviewedBy', label: 'Reviewed by', render: function (v) { return v ? esc(v.split('@')[0]) : '—'; }, text: function (v) { return v || ''; } },
+      ], {
+        searchPlaceholder: 'Search leads (organisation, contact, email, subject)…',
+        sortKey: 'foundAt', sortDir: 'desc',
+        pageSize: 25,
+        stateStore: TABLE_STATE,
+        rowClass: function (r) { return r.review === 'pending' ? 'al-pending-row' : ''; },
+        emptyText: VIEW === 'pending' ? 'Nothing to review — all caught up.' : 'No leads match this filter.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('alCount');
+          if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
+        },
+      });
+    }
+
+    function onDecision(sel) {
+      var id = Number(sel.getAttribute('data-id')), val = sel.value || null;
+      var row = DATA.leads.filter(function (l) { return l.id === id; })[0];
+      if (!row) return;
+      sel.disabled = true;
+      postJSON('/api/sales/alternate-leads/' + id + '/review', { decision: val }).then(function (out) {
+        row.review = out.review; row.remark = out.remark || '';
+        row.reviewedBy = out.reviewedBy; row.reviewedAt = out.reviewedAt;
+        renderCards(); renderTable();
+      }).catch(function (err) {
+        sel.disabled = false;
+        sel.value = row.review === 'send' || row.review === 'skip' ? row.review : '';
+        alert('Could not save: ' + err.message);
+      });
+    }
+
+    function loadData() {
+      fetchJSON('/api/sales/alternate-leads').then(function (data) {
+        DATA = data;
+        var note = document.getElementById('alRoleNote');
+        note.textContent = data.canReview
+          ? 'Choose Send intro or Skip in the Decision column — it saves instantly. Pick "— choose —" to undo.'
+          : 'View only — only Liv and Julienne can tag leads.';
+        document.getElementById('alAsOf').textContent = data.meta && data.meta.status === 'pending' ? 'Needs setup' : '';
+        if (data.meta && data.meta.status === 'pending') {
+          document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Needs setup</strong><span>' +
+            esc(data.meta.note || 'Data source not configured.') + '</span></div>';
+          return;
+        }
+        renderCards(); renderTable();
+      }).catch(function (err) {
+        document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Couldn’t load alternate leads</strong><span>' +
+          esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('sales');
+    renderSalesSidebar('alternate');
+    fillHeadInfo();
+    if (currentUser()) {
+      document.querySelectorAll('#viewSeg button').forEach(function (b) {
+        b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
+      });
+      document.getElementById('leadsRows').addEventListener('change', function (e) {
+        if (e.target && e.target.classList.contains('al-select')) onDecision(e.target);
+      });
+      loadData();
+    }
+  </script>
+</body>
+</html>

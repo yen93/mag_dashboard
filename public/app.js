@@ -439,6 +439,7 @@ function renderSalesSidebar(active) {
     ['overview',    'Overview',            'sales_overview.html'],
     ['conferences', 'Conferences',         'sales.html'],
     ['education',   'Education Outreach',  'education_outreach.html'],
+    ['alternate',   'Alternate Leads',     'alternate_leads.html'],
   ];
   el.innerHTML = items.map(function (it) {
     var key = it[0], label = it[1], href = it[2];

@@ -1,0 +1,50 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-18
+Session: Built the Sales > "Alternate Leads" tab (alternate_leads.html) that replaces
+Liv's old Google-Sheet review (alternate_leads_found). Liv/Julienne tag each lead
+'Send intro' or 'skip' from a dropdown; everyone else is view-only.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret was pasted into this chat. (The Alternate
+Lead Finder folder contains gitignored key files; none were read or reproduced.)
+
+--------------------------------------------------------------------------------
+USER:
+Pointed at prompts/181126_alternate_leads.txt: leads_for_review = select * from
+alternate_leads where is_processed is null and sheet_remark is null; old review
+sheet = Google Sheet "alternate_leads_found" tab. Tasks: add a Sales tab "Alternate
+Leads" replacing the sheet; table of leads for review; KPI cards as useful; dropdown
+where Liv and Julienne tag 'send intro' or 'skip', other members view-only.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected alternate_leads (31 columns; 143 rows, 69 for review, all cold, none with
+email; 74 already carry sheet_remark 'Send intro' (44) / '5A' (30)), the old sheet's
+alternate_leads_found headers, users.js, the Education Outreach page/route pattern,
+and renderSortableTable. Built:
+- migration 20261118120000_alternate_leads_review_log.sql (append-only audit log:
+  lead_id, decision, action set/reset, set_by, created_at; RLS on) — applied to Supabase.
+- server/users.js: ALT_LEADS_REVIEW_EMAILS (liv@ + julienne@) + canReviewAltLeads().
+  (Liv's address assumed from organization_users.)
+- server/metrics/alternate-leads.js: getAlternateLeads (leads + KPI cards, reviewer
+  via LATERAL join on the log) and setAlternateLeadReview.
+- server/index.js: GET /api/sales/alternate-leads (uncached, returns canReview per
+  user) and POST /api/sales/alternate-leads/:id/review (403 unless Liv/Julienne).
+- public/alternate_leads.html: To review/Send intro/Skipped/All toggle (default To
+  review), 7 KPI cards (3 clickable), sortable table with inline decision <select>
+  for reviewers and a read-only pill for others; app.js sidebar entry
+  ('alternate'); the 4 pages using renderSalesSidebar bumped to app.js?v=22.
+User then pointed at the Alternate Lead Finder folder; its CLAUDE.md showed the
+weekly DeepMine finder inserts leads with NULL email, no longer writes the sheet,
+and never writes sheet_remark (one-time copy). Asked about the downstream
+"Send intro" step; user said it is handled elsewhere. Answered a /q question
+(sheet_remark was being updated). User corrected: update `status`, not sheet_remark.
+Asked which status code for Send intro; user answered literal values 'Send intro'
+and 'skip'. Changed the module: write status = 'Send intro' | 'skip' (reset = NULL,
+also clears legacy sheet_remark); reads status first with sheet_remark as legacy
+fallback. Syntax checks passed; not browser-tested. Needs a manual Cloud Run redeploy.
+
+--------------------------------------------------------------------------------
+================================================================================
+END OF EXPORT
+================================================================================
