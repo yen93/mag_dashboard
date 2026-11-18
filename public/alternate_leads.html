@@ -22,6 +22,11 @@
     .al-select:hover { border-color: var(--accent); }
     .al-select:disabled { opacity: .6; cursor: wait; }
     .al-pending-row { background: rgba(245, 166, 35, .08); }
+    .al-send-row, .al-send-row td { background: rgba(23, 166, 115, .14) !important; }
+    .al-skip-row, .al-skip-row td { background: rgba(224, 62, 62, .13) !important; }
+    .al-select.is-send { border-color: #17a673; color: #17a673; font-weight: 600; }
+    .al-select.is-skip { border-color: #e03e3e; color: #e03e3e; font-weight: 600; }
+    .al-queue-note { font-size: 11px; color: var(--text-muted); margin-top: 4px; font-style: italic; }
     .al-viewonly { font-size: 12px; color: var(--text-muted); }
     .al-note { font-size: 12.5px; color: var(--text-muted); margin: 0 0 10px; }
   </style>
@@ -53,23 +58,23 @@
         <div class="spacer"></div>
         <span class="ctl-label">Show</span>
         <div class="segmented" id="viewSeg">
-          <button type="button" class="active" data-view="pending">To review</button>
+          <button type="button" class="active" data-view="queue">In queue</button>
+          <button type="button" data-view="pending">To review</button>
           <button type="button" data-view="send">Send intro</button>
           <button type="button" data-view="skip">Skipped</button>
-          <button type="button" data-view="all">All</button>
         </div>
         <span class="muted" id="alAsOf" style="font-size:13px"></span>
       </div>
 
       <div class="section-head">
         <span class="step">1</span><h2>At a glance</h2>
-        <span class="sub">Click <strong>To review</strong>, <strong>Send intro</strong> or <strong>Skipped</strong> to filter the table</span>
+        <span class="sub">The queue holds every lead not yet processed by the batch mailer. Click a card to filter.</span>
       </div>
       <div class="kpi-grid" id="kpis"></div>
 
       <div class="section-head">
         <span class="step">2</span><h2>Leads</h2>
-        <span class="head-info" data-info="Every alternate lead. 'To review' = not yet tagged. Pick 'Send intro' or 'Skip' in the Decision column; Liv and Julienne can edit, everyone else is view-only. Search & sort any column." data-src="Supabase → alternate_leads (+ reviewer from alternate_leads_review_log)"></span>
+        <span class="head-info" data-info="Every lead still in the queue (is_processed = null). A tagged lead stays here, marked 'pending batch mailer execution', until the mailer runs; once processed it drops off this tab. Liv and Julienne can tag, everyone else is view-only." data-src="Supabase → alternate_leads (+ reviewer from alternate_leads_review_log)"></span>
         <div class="spacer"></div>
         <span class="muted" id="alCount" style="font-size:13px"></span>
       </div>
@@ -83,16 +88,21 @@
   <script src="app.js?v=22"></script>
   <script>
     var DATA = null;
-    var VIEW = 'pending';       // pending | send | skip | all
+    var VIEW = 'queue';         // queue (all unprocessed) | pending (untagged) | send | skip
     var TABLE_STATE = {};
 
     function numfmt(n) { return (n == null) ? '—' : fmt(n, 'count'); }
     function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
     function canReview() { return !!(DATA && DATA.canReview); }
 
+    // Processed leads (the batch mailer has run) drop off the tab entirely. Everything
+    // else stays visible — tagged or not — while alternate_leads.is_processed is null.
+    function activeLeads() {
+      return ((DATA && DATA.leads) || []).filter(function (l) { return l.review !== 'processed'; });
+    }
     function viewRows() {
-      var ls = (DATA && DATA.leads) || [];
-      return VIEW === 'all' ? ls : ls.filter(function (l) { return l.review === VIEW; });
+      var ls = activeLeads();
+      return VIEW === 'queue' ? ls : ls.filter(function (l) { return l.review === VIEW; });
     }
 
     function kpiCard(o) {
@@ -104,7 +114,7 @@
     }
 
     function computeCards() {
-      var ls = (DATA && DATA.leads) || [];
+      var ls = activeLeads();   // counts reflect the queue (processed leads excluded)
       var c = { total: ls.length, pending: 0, send: 0, skip: 0, cold: 0, soc: 0 }, orgs = {}, oldest = null;
       ls.forEach(function (l) {
         if (l.review === 'send') c.send++; else if (l.review === 'skip') c.skip++;
@@ -136,14 +146,14 @@
           info: 'Unreviewed leads found through cold outreach threads.' },
         { label: 'Pending: social media', value: numfmt(c.soc), sub: 'awaiting review',
           info: 'Unreviewed leads found through social-media outreach threads.' },
-        { label: 'Total leads', value: numfmt(c.total), sub: 'all time',
-          info: 'Every alternate lead found, reviewed or not.' },
+        { label: 'In queue', value: numfmt(c.total), view: 'queue', sub: 'not yet processed',
+          info: 'Every lead still waiting for the batch mailer (is_processed = null) — untagged plus tagged-but-not-yet-sent. Processed leads leave the tab.' },
       ];
       document.getElementById('kpis').innerHTML = cards.map(kpiCard).join('');
       document.querySelectorAll('#kpis .kpi-click').forEach(function (el) {
         el.addEventListener('click', function () {
           var v = el.getAttribute('data-view');
-          setView(VIEW === v ? 'all' : v);
+          setView(VIEW === v ? 'queue' : v);
         });
       });
     }
@@ -158,18 +168,24 @@
 
     function reviewLabel(r) { return r === 'send' ? 'Send intro' : r === 'skip' ? 'Skip' : r === 'processed' ? 'Processed' : 'To review'; }
     function reviewPill(r, row) {
-      var cls = r === 'send' ? 'pos' : r === 'skip' ? 'partial' : r === 'pending' ? 'neg' : '';
+      var cls = r === 'send' ? 'pos' : r === 'skip' ? 'neg' : r === 'pending' ? 'partial' : '';
       var who = row.reviewedBy ? ' title="' + esc('By ' + row.reviewedBy + (row.reviewedAt ? ' · ' + fmtDate(row.reviewedAt) : '')) + '"' : '';
       return '<span class="pill ' + cls + '"' + who + '>' + esc(reviewLabel(r)) + '</span>';
     }
+    // A tagged lead sits in the queue until the batch mailer processes it — flag that wait.
+    function queueNote(row) {
+      return (row.review === 'send' || row.review === 'skip')
+        ? '<div class="al-queue-note">⏳ Pending batch mailer execution</div>' : '';
+    }
     function decisionCell(v, row) {
       if (row.review === 'processed') return reviewPill('processed', row);
-      if (!canReview()) return reviewPill(row.review, row);
+      if (!canReview()) return reviewPill(row.review, row) + queueNote(row);
       var sel = row.review === 'send' ? 'send' : row.review === 'skip' ? 'skip' : '';
-      return '<select class="al-select" data-id="' + row.id + '">' +
+      return '<select class="al-select' + (sel ? ' is-' + sel : '') + '" data-id="' + row.id + '">' +
         '<option value=""' + (sel === '' ? ' selected' : '') + '>— choose —</option>' +
         '<option value="send"' + (sel === 'send' ? ' selected' : '') + '>Send intro</option>' +
-        '<option value="skip"' + (sel === 'skip' ? ' selected' : '') + '>Skip</option></select>';
+        '<option value="skip"' + (sel === 'skip' ? ' selected' : '') + '>Skip</option></select>' +
+        queueNote(row);
     }
     function contactCell(v, row) {
       var role = row.role ? '<div class="muted" style="font-size:12px">' + esc(row.role) + '</div>' : '';
@@ -193,8 +209,9 @@
         sortKey: 'foundAt', sortDir: 'desc',
         pageSize: 25,
         stateStore: TABLE_STATE,
-        rowClass: function (r) { return r.review === 'pending' ? 'al-pending-row' : ''; },
-        emptyText: VIEW === 'pending' ? 'Nothing to review — all caught up.' : 'No leads match this filter.',
+        rowClass: function (r) { return r.review === 'pending' ? 'al-pending-row' : r.review === 'send' ? 'al-send-row' : r.review === 'skip' ? 'al-skip-row' : ''; },
+        emptyText: VIEW === 'queue' ? 'Queue is empty — nothing waiting for the batch mailer.'
+          : VIEW === 'pending' ? 'Nothing to review — all caught up.' : 'No leads match this filter.',
         onCount: function (shown, total) {
           var el = document.getElementById('alCount');
           if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
@@ -203,8 +220,10 @@
     }
 
     function onDecision(sel) {
-      var id = Number(sel.getAttribute('data-id')), val = sel.value || null;
-      var row = DATA.leads.filter(function (l) { return l.id === id; })[0];
+      // id comes back from Postgres as a bigint STRING, so compare as strings
+      // (and send the string in the URL — the server coerces it with Number()).
+      var id = sel.getAttribute('data-id'), val = sel.value || null;
+      var row = DATA.leads.filter(function (l) { return String(l.id) === id; })[0];
       if (!row) return;
       sel.disabled = true;
       postJSON('/api/sales/alternate-leads/' + id + '/review', { decision: val }).then(function (out) {

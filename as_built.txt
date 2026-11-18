@@ -898,6 +898,8 @@ ENVIRONMENT VARIABLES / CREDENTIALS
   ALT_LEADS_REVIEW_EMAILS in server/users.js (liv@ + julienne@); others get 403 / read-only pills.
   Audit rows go to public.alternate_leads_review_log (migration 20261118120000, append-only).
   Leads come from the separate Alternate Lead Finder project (weekly edge fn, email always NULL).
+  Table columns: Decision, Organisation, Contact (name+role), Found via, Date found, Reviewed by
+  (no Email/Speaker/Subject). Send intro rows are green, skip rows red, to-review amber.
 - public/education_outreach.html (Sales sub-tab "Education Outreach", app.js?v=21) — self-rendering
   page: All/Schools/Associations toggle, 8 KPI cards (Responded/Bounced/Contacted clickable ->
   filter the leads table), AI insights panel, funnel bar + status doughnut, sortable leads table.

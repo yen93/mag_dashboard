@@ -1,0 +1,68 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-18
+Session: Built the Sales > "Alternate Leads" tab (alternate_leads.html) replacing Liv's
+old Google-Sheet review; Liv/Julienne tag leads 'Send intro' / 'skip' into
+alternate_leads.status; fixed a bigint-id bug that stopped the dropdown saving.
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Pointed at prompts/181126_alternate_leads.txt: build a Sales tab "Alternate Leads"
+replacing the old sheet; table of leads_for_review (alternate_leads where
+is_processed is null and sheet_remark is null); KPI cards as useful; dropdown where
+Liv and Julienne tag 'send intro' or 'skip', other members view-only. Later added
+alternate_leads_listing = the "Alternate Lead Finder" project folder for context.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Inspected alternate_leads (143 rows, 69 for review, all cold, no emails), the old
+sheet, users.js, the Education Outreach page/route pattern. Built:
+- migration 20261118120000_alternate_leads_review_log.sql (append-only audit log;
+  applied to Supabase), server/users.js canReviewAltLeads (liv@ + julienne@),
+  server/metrics/alternate-leads.js, GET/POST /api/sales/alternate-leads routes in
+  server/index.js, public/alternate_leads.html, Sales sidebar entry in app.js, the 4
+  renderSalesSidebar pages bumped to app.js?v=22.
+Read the Alternate Lead Finder CLAUDE.md: leads inserted weekly by a DeepMine edge
+function, email always NULL, sheet no longer written, sheet_remark only a one-time
+copy. User said the downstream "send intro" step is handled elsewhere.
+
+--------------------------------------------------------------------------------
+USER:
+/q: which column gets updated when Liv tags? (answered sheet_remark.) User corrected:
+update `status`, not sheet_remark. Asked which value; user said literal 'Send intro'
+and 'skip'.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Switched the write to alternate_leads.status = 'Send intro' | 'skip' (NULL on reset,
+also clears legacy sheet_remark); read path uses status first, sheet_remark as legacy
+fallback. Provided /cm commit lines.
+
+--------------------------------------------------------------------------------
+USER:
+Remove Email, Speaker, Outreach subject columns; then: highlight Send intro rows
+green and skip rows red.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Removed the three columns (search placeholder updated). Added al-send-row (green) /
+al-skip-row (red) row classes, green/red dropdown + pills; pending pill changed to
+amber so red means skip only.
+
+--------------------------------------------------------------------------------
+USER:
+Tested after deploy (gcloud run deploy --source): tagged Tim Charpentier as send
+intro; nothing happened and nothing changed in the DB.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Verified DB: no log row, status null, no constraints/triggers; deploy files not
+ignored. Root cause found by reading the page: alternate_leads.id is a bigint, pg
+returns it as a STRING, but onDecision compared l.id === Number(data-id), which was
+always false, so it returned before any POST. Fixed by comparing String(l.id) to the
+data-id string. Frontend-only; needs a redeploy; syntax check passed, not
+browser-tested.
+
+================================================================================
+END OF EXPORT
+================================================================================
