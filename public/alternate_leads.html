@@ -97,8 +97,10 @@
 
     // Processed leads (the batch mailer has run) drop off the tab entirely. Everything
     // else stays visible — tagged or not — while alternate_leads.is_processed is null.
+    // Filter on `processed`, NOT review: a tagged lead reads review='send'/'skip' even
+    // after it's processed, so review alone would keep processed-and-tagged leads in.
     function activeLeads() {
-      return ((DATA && DATA.leads) || []).filter(function (l) { return l.review !== 'processed'; });
+      return ((DATA && DATA.leads) || []).filter(function (l) { return !l.processed; });
     }
     function viewRows() {
       var ls = activeLeads();

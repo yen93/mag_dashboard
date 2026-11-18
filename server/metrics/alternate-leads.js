@@ -46,7 +46,8 @@ function classify(r) {
     subject: r.subject || '',
     source: r.source_table || '',
     foundAt: r.found_at,
-    review,                                         // pending | send | skip | processed
+    review,                                         // pending | send | skip | processed (tag, for pills)
+    processed: !!r.is_processed,                    // the batch mailer has run — lead leaves the tab
     remark,
     reviewedBy: r.reviewed_by || null,
     reviewedAt: r.reviewed_at || null,
