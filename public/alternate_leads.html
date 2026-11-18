@@ -103,6 +103,9 @@
       return ((DATA && DATA.leads) || []).filter(function (l) { return !l.processed; });
     }
     function viewRows() {
+      // 'send' spans ALL send-tagged leads incl. processed (read-only); the rest are
+      // scoped to the queue (unprocessed).
+      if (VIEW === 'send') return ((DATA && DATA.leads) || []).filter(function (l) { return l.review === 'send'; });
       var ls = activeLeads();
       return VIEW === 'queue' ? ls : ls.filter(function (l) { return l.review === VIEW; });
     }
@@ -116,19 +119,23 @@
     }
 
     function computeCards() {
-      var ls = activeLeads();   // counts reflect the queue (processed leads excluded)
-      var c = { total: ls.length, pending: 0, send: 0, skip: 0, cold: 0, soc: 0 }, orgs = {}, oldest = null;
-      ls.forEach(function (l) {
-        if (l.review === 'send') c.send++; else if (l.review === 'skip') c.skip++;
+      var all = (DATA && DATA.leads) || [];
+      // sendAll / skipAll span every tagged lead incl. processed; pending + skip (shown
+      // on their cards) are the unprocessed queue only.
+      var c = { pending: 0, send: 0, skip: 0, sendAll: 0, skipAll: 0 }, orgs = {}, oldest = null;
+      all.forEach(function (l) {
+        if (l.review === 'send') { c.sendAll++; }
+        else if (l.review === 'skip') { c.skipAll++; }
+        if (l.processed) return;                    // queue counts exclude processed
+        if (l.review === 'skip') c.skip++;
         else if (l.review === 'pending') {
           c.pending++; if (l.org) orgs[l.org] = 1;
-          if (l.leadType === 'cold') c.cold++; else if (l.leadType === 'soc med') c.soc++;
           if (l.foundAt && (!oldest || l.foundAt < oldest)) oldest = l.foundAt;
         }
       });
       c.orgs = Object.keys(orgs).length; c.oldest = oldest;
-      var decided = c.send + c.skip;
-      c.sendRate = decided > 0 ? Math.round((c.send / decided) * 1000) / 10 : null;
+      var decided = c.sendAll + c.skipAll;
+      c.sendRate = decided > 0 ? Math.round((c.sendAll / decided) * 1000) / 10 : null;
       return c;
     }
 
@@ -138,18 +145,12 @@
         { label: 'To review', value: numfmt(c.pending), view: 'pending',
           sub: c.pending ? (c.orgs + ' organisations' + (c.oldest ? ' · oldest ' + fmtDate(c.oldest) : '')) : 'All caught up 🎉',
           info: 'Leads not yet tagged — waiting for Liv or Julienne to choose Send intro or Skip.' },
-        { label: 'Send intro', value: numfmt(c.send), view: 'send', sub: 'approved for outreach',
-          info: 'Leads Liv/Julienne approved for an intro email.' },
+        { label: 'Send intro', value: numfmt(c.sendAll), view: 'send', sub: 'approved for outreach (incl. sent)',
+          info: 'Every lead tagged Send intro — all time, including ones the batch mailer has already processed. Processed rows show here but can no longer be edited.' },
         { label: 'Skipped', value: numfmt(c.skip), view: 'skip', sub: 'not pursued',
-          info: 'Leads tagged Skip — not pursued.' },
+          info: 'Leads tagged Skip and still in the queue — not pursued.' },
         { label: 'Send-intro rate', value: c.sendRate == null ? '—' : c.sendRate + '%', sub: 'of reviewed leads',
-          info: 'Send intro ÷ (Send intro + Skipped). A low rate may mean the lead finder is surfacing the wrong contacts.' },
-        { label: 'Pending: cold', value: numfmt(c.cold), sub: 'awaiting review',
-          info: 'Unreviewed leads found through cold outreach threads.' },
-        { label: 'Pending: social media', value: numfmt(c.soc), sub: 'awaiting review',
-          info: 'Unreviewed leads found through social-media outreach threads.' },
-        { label: 'In queue', value: numfmt(c.total), view: 'queue', sub: 'not yet processed',
-          info: 'Every lead still waiting for the batch mailer (is_processed = null) — untagged plus tagged-but-not-yet-sent. Processed leads leave the tab.' },
+          info: 'All Send intro ÷ (all Send intro + all Skipped), across every reviewed lead. A low rate may mean the lead finder is surfacing the wrong contacts.' },
       ];
       document.getElementById('kpis').innerHTML = cards.map(kpiCard).join('');
       document.querySelectorAll('#kpis .kpi-click').forEach(function (el) {
@@ -180,7 +181,11 @@
         ? '<div class="al-queue-note">⏳ Pending batch mailer execution</div>' : '';
     }
     function decisionCell(v, row) {
-      if (row.review === 'processed') return reviewPill('processed', row);
+      // A processed lead (batch mailer has run) is read-only: show its tag pill + a done note.
+      if (row.processed) {
+        var done = '<div class="al-queue-note">✓ Processed by batch mailer</div>';
+        return reviewPill(row.review === 'processed' ? 'processed' : row.review, row) + done;
+      }
       if (!canReview()) return reviewPill(row.review, row) + queueNote(row);
       var sel = row.review === 'send' ? 'send' : row.review === 'skip' ? 'skip' : '';
       return '<select class="al-select' + (sel ? ' is-' + sel : '') + '" data-id="' + row.id + '">' +
@@ -205,7 +210,7 @@
         { key: 'name', label: 'Contact', render: contactCell, text: function (v, r) { return (r.name || '') + ' ' + (r.role || ''); } },
         { key: 'leadType', label: 'Found via', render: typePill, text: function (v) { return v || ''; } },
         { key: 'foundAt', label: 'Date found', unit: 'date' },
-        { key: 'reviewedBy', label: 'Reviewed by', render: function (v) { return v ? esc(v.split('@')[0]) : '—'; }, text: function (v) { return v || ''; } },
+        //{ key: 'reviewedBy', label: 'Reviewed by', render: function (v) { return v ? esc(v.split('@')[0]) : '—'; }, text: function (v) { return v || ''; } },
       ], {
         searchPlaceholder: 'Search leads (organisation, contact, role)…',
         sortKey: 'foundAt', sortDir: 'desc',
