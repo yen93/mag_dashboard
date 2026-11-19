@@ -47,6 +47,14 @@ const EDUC_LEADS_REVIEW_EMAILS = [
   'james@myadventuregroup.com.au',
 ];
 
+// Collaboration Leads review (Marketing > More tab): only Cloverly + Julienne + James may
+// tag a marketing/PR collaboration lead 'Send intro' / skip. Everyone else is view-only.
+const COLLAB_LEADS_REVIEW_EMAILS = [
+  'cloverly@myadventuregroup.com.au',
+  'julienne@myadventuregroup.com.au',
+  'james@myadventuregroup.com.au',
+];
+
 function normalize(email) {
   return String(email || '').trim().toLowerCase();
 }
@@ -111,9 +119,14 @@ export function canReviewAltLeads(email) {
   return ALT_LEADS_REVIEW_EMAILS.includes(normalize(email));
 }
 
-/** True iff `email` may tag Education Leads (Liv + Julienne). */
+/** True iff `email` may tag Education Leads (Liv + Julienne + James). */
 export function canReviewEducLeads(email) {
   return EDUC_LEADS_REVIEW_EMAILS.includes(normalize(email));
+}
+
+/** True iff `email` may tag Collaboration Leads (Cloverly + Julienne + James). */
+export function canReviewCollabLeads(email) {
+  return COLLAB_LEADS_REVIEW_EMAILS.includes(normalize(email));
 }
 
 /** Public view of a user. */

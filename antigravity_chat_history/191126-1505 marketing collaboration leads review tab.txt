@@ -1,0 +1,135 @@
+================================================================================
+UPDATE DOCUMENTATION: MARKETING COLLABORATION LEADS REVIEW TAB
+Timestamp: 19/11/26 15:05 (+08:00 / Asia/Manila)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. MARKETING > MORE: COLLABORATION LEADS REVIEW TAB
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Marketing & PR collaboration leads (podcasts, YouTube channels, media
+  companies, and social-media brands for James Castrission / My Adventure Group)
+  are discovered weekly by the separate `marketing_pr_leads_finder` project into
+  `public.collaboration_leads` with `outreach_status = 'new'`. The team needed a
+  new dashboard tab under Marketing > "More" mirroring `public/alternate_leads.html`
+  so Cloverly, Julienne, and James can review pending leads and tag each as
+  'Send intro' or 'Skip', while all other team members have view-only access.
+
+* Technical Changes:
+  - Created `public/collaboration_leads.html`:
+    - Marketing "More" tool page (`initPage('marketing')`,
+      `renderMarketingSidebar('collab-leads')`, `fillHeadInfo()`), full-width
+      edge-to-edge layout (`.content, #marketingNav { max-width: none; }`).
+    - Toolbar segmented view filter (`#viewSeg` with `role="toolbar"` and
+      `aria-pressed`): `In queue` (all unprocessed leads), `To review`
+      (`outreach_status = 'new'`), `Send intro` (approved + contacted/replied/
+      collaborated as read-only), and `Skipped`.
+    - 5 KPI cards on top (clickable `<button>` filters for queue views):
+      1) To review (with verified-email count & oldest pending date)
+      2) Send intro (approved + contacted+ breakdown)
+      3) Skipped
+      4) Verified emails (% of queue verified directly on RSS feed / website)
+      5) Send-intro rate (`Send intro / (Send intro + Skipped)`)
+    - Sortable, searchable, column-filterable table (`renderSortableTable`) with
+      columns: Decision (inline `<select>` for reviewers, read-only status pills
+      for others), Brand (+ safe website/source link), Type pill, Contact
+      (POC name + role), Email (`mailto:` + verified source badge or "No email
+      yet"), Platforms (clickable pills, filtering placeholder YouTube URLs),
+      Region, Niche & Audience notes, and Date found.
+    - Accessibility & theming: single `infoTip` per widget, keyboard-scrollable
+      table region (`tabindex="0" role="region"`), polite `role="status"` live
+      region for save feedback, CSS token colors for light & dark themes.
+  - Updated `public/app.js`:
+    - Added `['collab-leads', 'Collaboration Leads', 'collaboration_leads.html']`
+      to the `more` array in `renderMarketingSidebar()`.
+  - Cache-busting across all 15 Marketing pages calling `renderMarketingSidebar`:
+    - Bumped `app.js?v=20` -> `app.js?v=24` in:
+      `public/ac_contact_sources.html`, `public/ad_platforms.html`,
+      `public/content_social.html`, `public/email_partners.html`,
+      `public/ga4_agent.html`, `public/historical_paid_leads.html`,
+      `public/leads_bookings.html`, `public/marketing.html`,
+      `public/monthly_log.html`, `public/new_paid_leads_tracking.html`,
+      `public/nurture_events.html`, `public/roas.html`, `public/roi.html`,
+      `public/spend_roi.html`, and `public/website_search.html`.
+
+2. BACKEND API, PERMISSIONS & STATUS MAPPING
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Unlike `alternate_leads` and `auto_found_educ_leads` (which use `bigint` IDs
+  and free-text `status`), `public.collaboration_leads` uses a `uuid` primary
+  key and enforces a CHECK constraint on `outreach_status`:
+  `('new', 'reviewing', 'approved', 'contacted', 'replied', 'collaborated',
+  'rejected', 'do_not_contact')`.
+
+* Technical Changes:
+  - Updated `server/users.js`:
+    - Added `COLLAB_LEADS_REVIEW_EMAILS`:
+      `cloverly@myadventuregroup.com.au`, `julienne@myadventuregroup.com.au`,
+      `james@myadventuregroup.com.au` (confirmed via `public.organization_users`).
+    - Exported `canReviewCollabLeads(email)`.
+  - Created `server/metrics/collaboration-leads.js`:
+    - `getCollaborationLeads()`: queries `public.collaboration_leads` ordered by
+      `COALESCE(discovered_at, created_at) DESC, brand_name ASC`, left-joining
+      the latest `action = 'set'` entry from `public.collaboration_leads_review_log`.
+      Includes a `42P01` (undefined_table) fallback so the page works cleanly
+      even before the optional audit-log migration is manually applied.
+    - `setCollaborationLeadReview(id, decision, by)`: maps UI decisions to the
+      existing `outreach_status` CHECK constraint values without altering
+      `collaboration_leads`:
+        * `'send'` -> `'approved'` (logs `'Send intro'`, `action='set'`)
+        * `'skip'` -> `'rejected'` (logs `'skip'`, `action='set'`)
+        * `null`   -> `'new'`      (logs `null`, `action='reset'`)
+      Restricts updates to editable statuses (`new`, `reviewing`, `approved`,
+      `rejected`, `do_not_contact`) so leads already in `contacted`, `replied`,
+      or `collaborated` cannot be overwritten.
+  - Updated `server/index.js`:
+    - Added `GET /api/marketing/collaboration-leads` (uncached, returns
+      `canReview` per user; automatically blocked for `restricted` partner
+      accounts by the existing `marketing` router middleware).
+    - Added `POST /api/marketing/collaboration-leads/:id/review` with UUID
+      regex validation, `canReviewCollabLeads` 403 gate, and decision validation.
+
+3. DATABASE MIGRATION (LOCAL FILE — MANUAL APPLY REQUIRED)
+--------------------------------------------------------------------------------
+* Migration Created:
+  - `supabase/migrations/20261119150000_collaboration_leads_review_log.sql`
+    - Creates append-only `public.collaboration_leads_review_log`:
+      `id bigserial primary key`, `lead_id uuid not null references
+      public.collaboration_leads(id) on delete cascade`, `decision text`,
+      `action text not null default 'set' check (action in ('set','reset'))`,
+      `set_by text not null`, `created_at timestamptz not null default now()`.
+    - Index: `collaboration_leads_review_log_lead_idx (lead_id, created_at desc)`.
+    - RLS enabled (service-role / direct `pg` only).
+    - Not applied automatically (per workspace read-only DB safety rules);
+      user to review and execute manually in Supabase SQL Editor.
+
+4. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Syntax & Unit Checks:
+  - `node --check` passed on `server/index.js`, `server/users.js`, and
+    `server/metrics/collaboration-leads.js`.
+  - Parsed `public/app.js` and inline `<script>` blocks in
+    `public/collaboration_leads.html` via `node:vm` with zero errors.
+  - Verified `canReviewCollabLeads()` returns `true` only for Cloverly,
+    Julienne, and James (case/whitespace-insensitive) and `false` for Liv,
+    Chenee, admin, and empty/null values.
+* Local HTTP Endpoint Probe:
+  - `GET /collaboration_leads.html` -> 200 (serves page with `collab-leads` key).
+  - `GET /api/marketing/collaboration-leads`:
+    * Unauthenticated -> 401
+    * Restricted partner user -> 403
+    * Cloverly -> 200 (`canReview: true`)
+    * Liv -> 200 (`canReview: false`)
+  - `POST /api/marketing/collaboration-leads/:id/review`:
+    * Non-reviewer (Liv) -> 403
+    * Invalid UUID (James) -> 400
+    * Invalid decision (Julienne) -> 400
+* Live Supabase Read-Only Query Check:
+  - Confirmed `SELECT` against `public.collaboration_leads` succeeded (HTTP 201
+    from Management API), returning 29 current leads (`outreach_status = 'new'`;
+    9 with verified emails, 20 POC-only; 15 media_company, 11 podcast,
+    3 social_media_brand).
+* Manual Deployment Pending:
+  - Apply `20261119150000_collaboration_leads_review_log.sql` in Supabase.
+  - Redeploy dashboard service to Google Cloud Run.
+================================================================================

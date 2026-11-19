@@ -1,0 +1,29 @@
+**leads_for_review:**
+select * from collaboration_leads
+where outreach_status = new 
+
+**lead_finder:**
+C:\Users\Cloverly\claude_code\marketing_pr_leads_finder
+
+**ref_tab:**
+alternate_leads.html
+
+**rev_list:**
+cloverly
+julienne
+james
+
+## main_task:
+- create new tab in Marketing under "More" dropdown. display table where leads_for_review is content
+- mirror how ref_tab was built. cos rows returned by leads_for_review are pending approval.
+- add kpi cards on top as needed 
+- there should be a dropdown where rev_list can either tag lead as 'send intro' or 'skip'. other members cant edit/view only.
+
+
+
+
+add a new tab in sales called 'Alternate Leads'. this tab will serve as the replacement of old_review_sheet. so liv will now review alternate leads thru this tab moving forward.
+2. this should have a table to display all alternate leads for liv to review.
+3. you can also add kpi cards on top as needed if this will help us drive more sales.
+4. table to display leads_for_review
+5. there should be a dropdown where liv and julienne can either tag lead as 'send intro' or 'skip'. other members cant edit/view only.

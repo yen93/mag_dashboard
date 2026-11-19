@@ -43,9 +43,10 @@ import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
 import { cached, clearCache } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
-import { canReviewJc, canReviewAltLeads, canReviewEducLeads } from './users.js';
+import { canReviewJc, canReviewAltLeads, canReviewEducLeads, canReviewCollabLeads } from './users.js';
 import { getAlternateLeads, setAlternateLeadReview } from './metrics/alternate-leads.js';
 import { getEducationLeads, setEducationLeadReview } from './metrics/education-leads.js';
+import { getCollaborationLeads, setCollaborationLeadReview } from './metrics/collaboration-leads.js';
 import { q } from './providers/supabase.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -655,6 +656,39 @@ marketing.get('/insight', async (req, res) => {
   } catch (err) {
     console.error('[marketing:insight]', err);
     res.status(err.status || 502).json({ error: 'Failed to generate insight.', detail: err.message });
+  }
+});
+// Collaboration Leads — Marketing & PR collaboration review queue (Marketing > More tab).
+// Populated weekly into public.collaboration_leads by find-collaborators. GET is uncached
+// (reviewers need fresh state) and tells the client whether THIS user may tag (`canReview`:
+// Cloverly + Julienne + James only; everyone else is view-only). POST is gated server-side.
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+marketing.get('/collaboration-leads', async (req, res) => {
+  try {
+    const payload = await getCollaborationLeads();
+    res.json({ ...payload, canReview: canReviewCollabLeads(req.user && req.user.email) });
+  } catch (err) {
+    console.error('[marketing:collaboration-leads]', err);
+    res.status(502).json({ error: 'Failed to load collaboration leads from data source.', detail: err.message });
+  }
+});
+marketing.post('/collaboration-leads/:id/review', async (req, res) => {
+  if (!canReviewCollabLeads(req.user && req.user.email)) {
+    return res.status(403).json({ error: 'Only Cloverly, Julienne and James can review collaboration leads.' });
+  }
+  const id = String(req.params.id || '').trim();
+  const decision = req.body && req.body.decision;   // 'send' | 'skip' | null (reset)
+  if (!UUID_RE.test(id)) return res.status(400).json({ error: 'Invalid lead id.' });
+  if (decision != null && decision !== 'send' && decision !== 'skip') {
+    return res.status(400).json({ error: 'decision must be "send", "skip" or null.' });
+  }
+  try {
+    const out = await setCollaborationLeadReview(id, decision || null, req.user.email);
+    if (!out) return res.status(404).json({ error: 'Lead not found or already in outreach.' });
+    res.json(out);
+  } catch (err) {
+    console.error('[marketing:collaboration-leads review]', err);
+    res.status(502).json({ error: 'Failed to save the review.', detail: err.message });
   }
 });
 app.use('/api/marketing', marketing);

@@ -1,0 +1,436 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Collaboration Leads — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    .content, #marketingNav { max-width: none; }
+    .al-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .al-toolbar .spacer { flex: 1; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-right: 4px; }
+    .kpi-click {
+      appearance: none; text-align: left; font: inherit; color: inherit; width: 100%;
+      cursor: pointer; transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+    }
+    @media (hover: hover) {
+      .kpi-click:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
+    }
+    .kpi-click:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .kpi-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+    .kpi .label { display: inline-flex; align-items: center; gap: 4px; }
+    .kpi .value { font-variant-numeric: tabular-nums; }
+    .kpi { position: relative; }
+    .kpi:hover, .kpi:focus-within { z-index: 40; }
+
+    .al-select {
+      font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); cursor: pointer; min-width: 124px;
+    }
+    .al-select:hover { border-color: var(--accent); }
+    .al-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .al-select:disabled { opacity: .6; cursor: wait; }
+    .al-pending-row { background: rgba(245, 166, 35, .08); }
+    .al-send-row, .al-send-row td { background: rgba(23, 166, 115, .14) !important; }
+    .al-skip-row, .al-skip-row td { background: rgba(224, 62, 62, .13) !important; }
+    .al-select.is-send { border-color: var(--pos); color: var(--pos); font-weight: 600; }
+    .al-select.is-skip { border-color: var(--neg); color: var(--neg); font-weight: 600; }
+    .al-queue-note { font-size: 11px; color: var(--text-muted); margin-top: 4px; font-style: italic; }
+    .al-note { font-size: 12.5px; color: var(--text-muted); margin: 0 0 10px; }
+
+    .cl-link { font-size: 12px; color: var(--accent); text-decoration: none; word-break: break-word; }
+    .cl-link:hover { text-decoration: underline; }
+    .cl-brand { font-weight: 600; }
+    .cl-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
+    .cl-email-wrap { display: flex; flex-direction: column; gap: 3px; }
+    .cl-email { font-size: 12.5px; color: var(--text); text-decoration: none; word-break: break-all; }
+    .cl-email:hover { color: var(--accent); text-decoration: underline; }
+    .cl-badge-ver {
+      display: inline-flex; align-items: center; gap: 3px; width: fit-content;
+      font-size: 10.5px; font-weight: 700; padding: 1px 6px; border-radius: 999px;
+      background: color-mix(in srgb, var(--pos) 16%, transparent); color: var(--pos);
+    }
+    .cl-platforms { display: flex; flex-wrap: wrap; gap: 4px; max-width: 210px; }
+    .cl-plat {
+      display: inline-block; font-size: 11px; font-weight: 600; padding: 2px 7px; border-radius: 999px;
+      background: var(--surface-2); border: 1px solid var(--border); color: var(--text-muted);
+      text-decoration: none; white-space: nowrap;
+    }
+    a.cl-plat:hover { border-color: var(--accent); color: var(--accent); }
+    .cl-notes { max-width: 260px; font-size: 12px; color: var(--text-muted); line-height: 1.35; margin-top: 2px; }
+    .cl-table-region { overflow: auto; }
+    .cl-table-region:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab active" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="builds_monitoring.html">AI &amp; Automation</a>
+  </nav>
+
+  <div class="marketing-layout">
+    <aside class="subnav" id="marketingNav"></aside>
+    <main class="content">
+      <div class="toolbar al-toolbar">
+        <strong>Collaboration Leads</strong>
+        <span class="head-info" data-info="Potential podcast, YouTube, media, and social-media collaborators discovered weekly for James Castrission / My Adventure Group. Review each lead and tag it 'Send intro' (approved for outreach) or 'Skip'." data-src="Supabase → collaboration_leads"></span>
+        <div class="spacer"></div>
+        <span class="ctl-label" id="viewLabel">Show</span>
+        <div class="segmented" id="viewSeg" role="toolbar" aria-labelledby="viewLabel">
+          <button type="button" class="active" aria-pressed="true" data-view="queue">In queue</button>
+          <button type="button" aria-pressed="false" data-view="pending">To review</button>
+          <button type="button" aria-pressed="false" data-view="send">Send intro</button>
+          <button type="button" aria-pressed="false" data-view="skip">Skipped</button>
+        </div>
+        <span class="muted" id="clAsOf" style="font-size:13px"></span>
+      </div>
+
+      <div class="section-head">
+        <span class="step">1</span><h2>At a glance</h2>
+        <span class="sub">Weekly discovered collaboration leads pending approval. Click a card to filter.</span>
+      </div>
+      <div class="kpi-grid" id="kpis"></div>
+
+      <div class="section-head">
+        <span class="step">2</span><h2>Leads</h2>
+        <span class="head-info" data-info="Collaboration leads from public.collaboration_leads. New leads (outreach_status = 'new') are pending review. Tagging 'Send intro' sets outreach_status = 'approved'; 'Skip' sets 'rejected'. Once a lead moves to contacted/replied/collaborated it becomes read-only. Cloverly, Julienne and James can tag; everyone else is view-only." data-src="Supabase → collaboration_leads (+ reviewer from collaboration_leads_review_log)"></span>
+        <div class="spacer"></div>
+        <span class="muted" id="clCount" style="font-size:13px"></span>
+      </div>
+      <p class="al-note" id="clRoleNote"></p>
+      <p class="sr-only" role="status" aria-live="polite" id="clStatus"></p>
+      <div class="card col-12">
+        <div class="cl-table-region" tabindex="0" role="region" aria-label="Collaboration leads table">
+          <div id="leadsRows"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js?v=24"></script>
+  <script>
+    var DATA = null;
+    var VIEW = 'queue';         // queue (all unprocessed) | pending (outreach_status='new') | send | skip
+    var TABLE_STATE = {};
+
+    var TYPE_LABELS = {
+      podcast: 'Podcast',
+      youtube_channel: 'YouTube',
+      media_company: 'Media Co.',
+      social_media_brand: 'Social Brand',
+      influencer_network: 'Influencer Network',
+      event_host: 'Event Host',
+      other: 'Other',
+    };
+    var PLAT_LABELS = {
+      podcast: 'Podcast',
+      youtube: 'YouTube',
+      instagram: 'IG',
+      linkedin: 'LinkedIn',
+      facebook: 'FB',
+      tiktok: 'TikTok',
+      x: 'X',
+    };
+    var EMAIL_SRC_LABELS = {
+      rss_feed: 'RSS feed',
+      website_scrape: 'Website',
+      openai_web_search: 'Web search',
+      manual: 'Manual',
+    };
+
+    function numfmt(n) { return (n == null) ? '—' : fmt(n, 'count'); }
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    function canReview() { return !!(DATA && DATA.canReview); }
+    function safeUrl(u) {
+      var s = String(u || '').trim();
+      return /^https?:\/\//i.test(s) ? s : '';
+    }
+    function hostOf(u) {
+      try { return new URL(u).hostname.replace(/^www\./, ''); } catch (e) { return 'website'; }
+    }
+    function announce(msg) {
+      var el = document.getElementById('clStatus');
+      if (el) el.textContent = msg;
+    }
+
+    // Leads that have already progressed to active outreach (contacted / replied /
+    // collaborated) leave the active review queue and stay visible under "Send intro"
+    // as read-only rows — matching Alternate Leads.
+    function activeLeads() {
+      return ((DATA && DATA.leads) || []).filter(function (l) { return !l.processed; });
+    }
+    function viewRows() {
+      if (VIEW === 'send') return ((DATA && DATA.leads) || []).filter(function (l) { return l.review === 'send'; });
+      var ls = activeLeads();
+      return VIEW === 'queue' ? ls : ls.filter(function (l) { return l.review === VIEW; });
+    }
+
+    function kpiCard(o) {
+      var clickable = !!o.view;
+      var cls = 'kpi' + (clickable ? ' kpi-click' : '') + (clickable && o.view === VIEW ? ' kpi-active' : '');
+      var tag = clickable ? 'button' : 'div';
+      var attrs = clickable
+        ? ' type="button" data-view="' + o.view + '" aria-pressed="' + (o.view === VIEW ? 'true' : 'false') + '"'
+        : '';
+      return '<' + tag + ' class="' + cls + '"' + attrs + '>' +
+        '<div class="label">' + esc(o.label) + (o.info ? ' ' + infoTip(o.info, 'Supabase → collaboration_leads') : '') + '</div>' +
+        '<div class="value">' + o.value + '</div>' +
+        (o.sub ? '<div class="kpi-sub">' + o.sub + '</div>' : '') +
+        '</' + tag + '>';
+    }
+
+    function computeCards() {
+      var all = (DATA && DATA.leads) || [];
+      var c = {
+        pending: 0, pendingEmail: 0,
+        sendAll: 0, sendApproved: 0, sendOutreached: 0,
+        skip: 0, skipAll: 0,
+        queueTotal: 0, queueVerifiedEmail: 0,
+        oldest: null,
+      };
+      all.forEach(function (l) {
+        if (l.review === 'send') {
+          c.sendAll++;
+          if (l.processed) c.sendOutreached++;
+          else c.sendApproved++;
+        } else if (l.review === 'skip') {
+          c.skipAll++;
+        }
+        if (l.processed) return;
+        c.queueTotal++;
+        if (l.emailVerified) c.queueVerifiedEmail++;
+        if (l.review === 'skip') c.skip++;
+        else if (l.review === 'pending') {
+          c.pending++;
+          if (l.emailVerified) c.pendingEmail++;
+          if (l.discoveredAt && (!c.oldest || l.discoveredAt < c.oldest)) c.oldest = l.discoveredAt;
+        }
+      });
+      var decided = c.sendAll + c.skipAll;
+      c.sendRate = decided > 0 ? Math.round((c.sendAll / decided) * 1000) / 10 : null;
+      c.emailPct = c.queueTotal > 0 ? Math.round((c.queueVerifiedEmail / c.queueTotal) * 100) : null;
+      return c;
+    }
+
+    function renderCards() {
+      var c = computeCards();
+      var sendSub = c.sendOutreached
+        ? (c.sendApproved + ' approved · ' + c.sendOutreached + ' contacted+')
+        : 'approved for outreach';
+      var cards = [
+        { label: 'To review', value: numfmt(c.pending), view: 'pending',
+          sub: c.pending
+            ? (c.pendingEmail + ' with verified email' + (c.oldest ? ' · oldest ' + fmtDate(c.oldest) : ''))
+            : 'All caught up 🎉',
+          info: 'Leads with outreach_status = new — waiting for Cloverly, Julienne or James to choose Send intro or Skip.' },
+        { label: 'Send intro', value: numfmt(c.sendAll), view: 'send', sub: sendSub,
+          info: 'Every lead tagged Send intro (outreach_status = approved), including leads that have moved into contacted, replied, or collaborated.' },
+        { label: 'Skipped', value: numfmt(c.skip), view: 'skip', sub: 'not pursued',
+          info: 'Leads tagged Skip (outreach_status = rejected / do_not_contact) — not pursued.' },
+        { label: 'Verified emails', value: numfmt(c.queueVerifiedEmail),
+          sub: c.emailPct == null ? 'no leads in queue' : (c.emailPct + '% of queue · RSS / website'),
+          info: 'Queue leads whose outreach email was verified directly from an official podcast RSS feed or brand website. Leads without an email still list the POC for manual lookup.' },
+        { label: 'Send-intro rate', value: c.sendRate == null ? '—' : c.sendRate + '%', sub: 'of reviewed leads',
+          info: 'All Send intro ÷ (all Send intro + all Skipped), across every reviewed lead. Helps gauge whether the weekly finder is surfacing strong collaboration fits.' },
+      ];
+      document.getElementById('kpis').innerHTML = cards.map(kpiCard).join('');
+      document.querySelectorAll('#kpis .kpi-click').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+          // Don't toggle filter when clicking the ⓘ tooltip inside the card.
+          if (e.target && e.target.closest && e.target.closest('.src-info')) return;
+          var v = el.getAttribute('data-view');
+          setView(VIEW === v ? 'queue' : v);
+        });
+      });
+    }
+
+    function setView(v) {
+      VIEW = v;
+      document.querySelectorAll('#viewSeg button').forEach(function (b) {
+        var active = b.getAttribute('data-view') === v;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      renderCards(); renderTable();
+    }
+
+    function reviewLabel(r, row) {
+      if (row && row.processed) {
+        var st = row.outreachStatus || 'contacted';
+        return st.charAt(0).toUpperCase() + st.slice(1);
+      }
+      return r === 'send' ? 'Send intro' : r === 'skip' ? 'Skip' : 'To review';
+    }
+    function reviewPill(r, row) {
+      var cls = r === 'send' ? 'pos' : r === 'skip' ? 'neg' : 'partial';
+      var who = row && row.reviewedBy
+        ? ' title="' + esc('By ' + row.reviewedBy + (row.reviewedAt ? ' · ' + fmtDate(row.reviewedAt) : '')) + '"'
+        : '';
+      return '<span class="pill ' + cls + '"' + who + '>' + esc(reviewLabel(r, row)) + '</span>';
+    }
+    function statusNote(row) {
+      if (row.processed) return '<div class="al-queue-note">✓ Outreach in progress (' + esc(row.outreachStatus) + ')</div>';
+      if (row.review === 'send') return '<div class="al-queue-note">✓ Approved — ready for outreach</div>';
+      if (row.review === 'skip') return '<div class="al-queue-note">Marked skip</div>';
+      return '';
+    }
+    function decisionCell(v, row) {
+      if (row.processed) return reviewPill(row.review, row) + statusNote(row);
+      if (!canReview()) return reviewPill(row.review, row) + statusNote(row);
+      var sel = row.review === 'send' ? 'send' : row.review === 'skip' ? 'skip' : '';
+      return '<select class="al-select' + (sel ? ' is-' + sel : '') + '" data-id="' + esc(row.id) + '" aria-label="' + esc('Decision for ' + (row.brandName || 'lead')) + '">' +
+        '<option value=""' + (sel === '' ? ' selected' : '') + '>— choose —</option>' +
+        '<option value="send"' + (sel === 'send' ? ' selected' : '') + '>Send intro</option>' +
+        '<option value="skip"' + (sel === 'skip' ? ' selected' : '') + '>Skip</option></select>' +
+        statusNote(row);
+    }
+
+    function brandCell(v, row) {
+      var url = safeUrl(row.websiteUrl) || safeUrl(row.sourceUrl);
+      var link = url
+        ? '<div><a class="cl-link" href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(hostOf(url)) + ' ↗</a></div>'
+        : '';
+      return '<div class="cl-brand">' + txt(row.brandName) + '</div>' + link;
+    }
+    function typePill(v) {
+      var label = TYPE_LABELS[v] || v || '—';
+      var cls = v === 'podcast' ? 'pos' : v === 'media_company' || v === 'youtube_channel' ? 'partial' : '';
+      return '<span class="pill ' + cls + '">' + esc(label) + '</span>';
+    }
+    function contactCell(v, row) {
+      var role = row.pocRole ? '<div class="cl-sub">' + esc(row.pocRole) + '</div>' : '';
+      return txt(row.pocName) + role;
+    }
+    function emailCell(v, row) {
+      if (!row.email) return '<span class="muted">No email yet</span>';
+      var src = EMAIL_SRC_LABELS[row.emailSource] || row.emailSource || '';
+      var badge = row.emailVerified
+        ? '<span class="cl-badge-ver" title="' + esc('Verified directly on ' + (src || 'source')) + '">✓ Verified' + (src ? ' · ' + esc(src) : '') + '</span>'
+        : (src ? '<span class="cl-sub">' + esc(src) + '</span>' : '');
+      return '<div class="cl-email-wrap"><a class="cl-email" href="mailto:' + esc(row.email) + '">' + esc(row.email) + '</a>' + badge + '</div>';
+    }
+    function platformsCell(v, row) {
+      var list = Array.isArray(row.platforms) ? row.platforms : [];
+      if (!list.length) return '—';
+      var urls = row.platformUrls || {};
+      return '<div class="cl-platforms">' + list.map(function (p) {
+        var key = String(p || '').toLowerCase();
+        var label = PLAT_LABELS[key] || p;
+        var u = safeUrl(urls[key]);
+        // Skip known placeholder channel URLs if any sneak in.
+        if (u && /UC1234567890/i.test(u)) u = '';
+        return u
+          ? '<a class="cl-plat" href="' + esc(u) + '" target="_blank" rel="noopener">' + esc(label) + '</a>'
+          : '<span class="cl-plat">' + esc(label) + '</span>';
+      }).join('') + '</div>';
+    }
+    function nicheCell(v, row) {
+      var clean = (row.niche || '').replace(/_/g, ' ');
+      var notes = row.audienceNotes ? '<div class="cl-notes">' + esc(row.audienceNotes) + '</div>' : '';
+      return (clean ? esc(clean) : '—') + notes;
+    }
+
+    function renderTable() {
+      var rows = viewRows();
+      renderSortableTable('leadsRows', rows, [
+        { key: 'review', label: 'Decision', render: decisionCell, text: function (v, r) { return reviewLabel(r.review, r); } },
+        { key: 'brandName', label: 'Brand', render: brandCell, text: function (v, r) { return (r.brandName || '') + ' ' + (r.websiteUrl || ''); } },
+        { key: 'brandType', label: 'Type', render: typePill, text: function (v) { return TYPE_LABELS[v] || v || ''; } },
+        { key: 'pocName', label: 'Contact', render: contactCell, text: function (v, r) { return (r.pocName || '') + ' ' + (r.pocRole || ''); } },
+        { key: 'email', label: 'Email', render: emailCell, text: function (v, r) { return r.email ? (r.email + (r.emailVerified ? ' verified' : '')) : 'No email'; } },
+        { key: 'platforms', label: 'Platforms', render: platformsCell, text: function (v, r) { return (r.platforms || []).map(function (p) { return PLAT_LABELS[p] || p; }).join(', '); } },
+        { key: 'region', label: 'Region', render: txt },
+        { key: 'niche', label: 'Niche & Audience', render: nicheCell, text: function (v, r) { return ((r.niche || '').replace(/_/g, ' ')) + ' ' + (r.audienceNotes || ''); } },
+        { key: 'discoveredAt', label: 'Date found', unit: 'date' },
+      ], {
+        searchPlaceholder: 'Search leads (brand, contact, role, email, niche, region)…',
+        sortKey: 'discoveredAt', sortDir: 'desc',
+        pageSize: 25,
+        stateStore: TABLE_STATE,
+        rowClass: function (r) {
+          return r.review === 'pending' ? 'al-pending-row'
+            : r.review === 'send' ? 'al-send-row'
+            : r.review === 'skip' ? 'al-skip-row' : '';
+        },
+        emptyText: VIEW === 'queue' ? 'Queue is empty — no collaboration leads waiting for review.'
+          : VIEW === 'pending' ? 'Nothing to review — all caught up.' : 'No leads match this filter.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('clCount');
+          if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
+        },
+      });
+    }
+
+    function onDecision(sel) {
+      var id = sel.getAttribute('data-id'), val = sel.value || null;
+      var row = DATA.leads.filter(function (l) { return String(l.id) === id; })[0];
+      if (!row) return;
+      sel.disabled = true;
+      postJSON('/api/marketing/collaboration-leads/' + encodeURIComponent(id) + '/review', { decision: val }).then(function (out) {
+        row.review = out.review;
+        row.outreachStatus = out.outreachStatus;
+        row.reviewedBy = out.reviewedBy;
+        row.reviewedAt = out.reviewedAt;
+        announce('Saved ' + (row.brandName || 'lead') + ': ' + reviewLabel(row.review, row));
+        renderCards(); renderTable();
+      }).catch(function (err) {
+        sel.disabled = false;
+        sel.value = row.review === 'send' || row.review === 'skip' ? row.review : '';
+        announce('Could not save review: ' + err.message);
+        alert('Could not save: ' + err.message);
+      });
+    }
+
+    function loadData() {
+      fetchJSON('/api/marketing/collaboration-leads').then(function (data) {
+        DATA = data;
+        var note = document.getElementById('clRoleNote');
+        note.textContent = data.canReview
+          ? 'Choose Send intro or Skip in the Decision column — it saves instantly. Pick "— choose —" to undo.'
+          : 'View only — only Cloverly, Julienne and James can tag leads.';
+        document.getElementById('clAsOf').textContent = data.meta && data.meta.status === 'pending' ? 'Needs setup' : '';
+        if (data.meta && data.meta.status === 'pending') {
+          document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Needs setup</strong><span>' +
+            esc(data.meta.note || 'Data source not configured.') + '</span></div>';
+          return;
+        }
+        renderCards(); renderTable();
+      }).catch(function (err) {
+        document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Couldn’t load collaboration leads</strong><span>' +
+          esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('marketing');
+    renderMarketingSidebar('collab-leads');
+    fillHeadInfo();
+    if (currentUser()) {
+      document.querySelectorAll('#viewSeg button').forEach(function (b) {
+        b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
+      });
+      document.getElementById('leadsRows').addEventListener('change', function (e) {
+        if (e.target && e.target.classList.contains('al-select')) onDecision(e.target);
+      });
+      loadData();
+    }
+  </script>
+</body>
+</html>

@@ -350,13 +350,14 @@ function renderMarketingSidebar(active) {
   ];
   // "More" dropdown — the existing live Marketing tools.
   var more = [
-    ['roi',         'ROI',                   'roi.html'],
-    ['roas',        'ROAS',                  'roas.html'],
-    ['adplatforms', 'Ad Platforms',          'ad_platforms.html'],
-    ['leads',       'Lead Tracker',          'ac_contact_sources.html'],
-    ['calendly',    'Calendly-AC Sync',      'new_paid_leads_tracking.html'],
-    ['ga4-agent',   'GA4 Agent',             'ga4_agent.html'],
-    ['historical',  'Historical Paid Leads', 'historical_paid_leads.html'],
+    ['roi',          'ROI',                   'roi.html'],
+    ['roas',         'ROAS',                  'roas.html'],
+    ['adplatforms',  'Ad Platforms',          'ad_platforms.html'],
+    ['leads',        'Lead Tracker',          'ac_contact_sources.html'],
+    ['calendly',     'Calendly-AC Sync',      'new_paid_leads_tracking.html'],
+    ['ga4-agent',    'GA4 Agent',             'ga4_agent.html'],
+    ['historical',   'Historical Paid Leads', 'historical_paid_leads.html'],
+    ['collab-leads', 'Collaboration Leads',   'collaboration_leads.html'],
   ];
   var moreActive = more.some(function (it) { return it[0] === active; });
   var mainHtml = main.map(function (it) {
