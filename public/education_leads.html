@@ -55,7 +55,7 @@
     <main class="content">
       <div class="toolbar al-toolbar">
         <strong>Education Leads</strong>
-        <span class="head-info" data-info="Elite K-12 schools and education associations the discovery finder scrapes automatically (org-level only — no contact enriched yet). Review each one and tag it 'Send intro' or 'Skip'. Replaces the 'Liv's Remark' column in the ai_scraped_educ_leads Google Sheet." data-src="Supabase → auto_found_educ_leads"></span>
+        <span class="head-info" data-info="Elite K-12 schools and education associations the discovery finder scrapes automatically, shown once a point of contact has been found. Review each one and tag it 'Send intro' or 'Skip'. Replaces the 'Liv's Remark' column in the ai_scraped_educ_leads Google Sheet." data-src="Supabase → auto_found_educ_leads"></span>
         <div class="spacer"></div>
         <span class="ctl-label">Show</span>
         <div class="segmented" id="viewSeg">
@@ -69,13 +69,13 @@
 
       <div class="section-head">
         <span class="step">1</span><h2>At a glance</h2>
-        <span class="sub">Every scraped education org, oldest unreviewed first. Click a card to filter.</span>
+        <span class="sub">Every scraped org with a contact found, oldest unreviewed first. Click a card to filter.</span>
       </div>
       <div class="kpi-grid" id="kpis"></div>
 
       <div class="section-head">
         <span class="step">2</span><h2>Leads</h2>
-        <span class="head-info" data-info="Every organisation in auto_found_educ_leads. Tag each 'Send intro' or 'Skip' — the decision is saved to the lead's status. Liv and Julienne can tag; everyone else is view-only." data-src="Supabase → auto_found_educ_leads (+ reviewer from auto_found_educ_leads_review_log)"></span>
+        <span class="head-info" data-info="Scraped orgs in auto_found_educ_leads that have a point of contact (name/role) found. Tag each 'Send intro' or 'Skip' — the decision is saved to the lead's status. Liv, Julienne and James can tag; everyone else is view-only." data-src="Supabase → auto_found_educ_leads (+ reviewer from auto_found_educ_leads_review_log)"></span>
         <div class="spacer"></div>
         <span class="muted" id="elCount" style="font-size:13px"></span>
       </div>
@@ -191,12 +191,14 @@
       renderSortableTable('leadsRows', rows, [
         { key: 'review', label: 'Decision', render: decisionCell, text: function (v, r) { return reviewLabel(r.review); } },
         { key: 'org', label: 'Organisation', render: orgCell, text: function (v, r) { return (r.org || '') + ' ' + (r.domain || ''); } },
+        { key: 'pocName', label: 'Contact', render: txt },
+        { key: 'pocRole', label: 'Role', render: txt },
         { key: 'kind', label: 'Type', render: kindPill, text: function (v) { return v || ''; } },
         { key: 'region', label: 'Region', render: regionCell, text: function (v, r) { return (r.region || '') + ' ' + (r.country || ''); } },
         { key: 'category', label: 'Category', render: txt },
         { key: 'foundAt', label: 'Date found', unit: 'date' },
       ], {
-        searchPlaceholder: 'Search leads (organisation, region, category)…',
+        searchPlaceholder: 'Search leads (organisation, contact, role, region, category)…',
         sortKey: 'foundAt', sortDir: 'desc',
         pageSize: 25,
         stateStore: TABLE_STATE,
@@ -233,7 +235,7 @@
         var note = document.getElementById('elRoleNote');
         note.textContent = data.canReview
           ? 'Choose Send intro or Skip in the Decision column — it saves instantly. Pick "— choose —" to undo.'
-          : 'View only — only Liv and Julienne can tag leads.';
+          : 'View only — only Liv, Julienne and James can tag leads.';
         document.getElementById('elAsOf').textContent = data.meta && data.meta.status === 'pending' ? 'Needs setup' : '';
         if (data.meta && data.meta.status === 'pending') {
           document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Needs setup</strong><span>' +

@@ -14,10 +14,16 @@ const SRC = 'Supabase → auto_found_educ_leads';
 export const REMARK_SEND = 'Send intro';
 export const REMARK_SKIP = 'skip';
 
+// Only surface leads that have been enriched with a point of contact (poc_*). An org
+// with no POC yet isn't ready to review, so it's excluded entirely.
+const POC_PRESENT =
+  `coalesce(nullif(btrim(l.poc_firstname),''), nullif(btrim(l.poc_lastname),''), nullif(btrim(l.poc_role),'')) is not null`;
+
 const SQL = `
   SELECT
     l.id, l.org_name, l.school_or_association, l.country, l.region, l.website,
     l.domain, l.category, l.sector, l.status,
+    l.poc_firstname, l.poc_lastname, l.poc_role,
     COALESCE(l.created_at, l.updated_at) AS found_at,
     rv.set_by AS reviewed_by, rv.created_at AS reviewed_at
   FROM public.auto_found_educ_leads l
@@ -25,6 +31,7 @@ const SQL = `
     SELECT set_by, created_at FROM public.auto_found_educ_leads_review_log g
     WHERE g.lead_id = l.id AND g.action = 'set' ORDER BY g.created_at DESC LIMIT 1
   ) rv ON TRUE
+  WHERE ${POC_PRESENT}
   ORDER BY COALESCE(l.created_at, l.updated_at) DESC, l.id DESC`;
 
 function classify(r) {
@@ -33,6 +40,7 @@ function classify(r) {
   if (st.toLowerCase() === REMARK_SEND.toLowerCase()) review = 'send';
   else if (st && st.toLowerCase() !== 'new') review = 'skip';   // any non-'new', non-'Send intro' value = skipped
   else review = 'pending';
+  const pocName = [r.poc_firstname, r.poc_lastname].map((s) => (s || '').trim()).filter(Boolean).join(' ');
   return {
     id: r.id,
     org: r.org_name || '',
@@ -43,6 +51,8 @@ function classify(r) {
     domain: r.domain || '',
     category: r.category || '',
     sector: r.sector || '',
+    pocName,
+    pocRole: (r.poc_role || '').trim(),
     foundAt: r.found_at,
     review,                                           // pending | send | skip (tag, for pills)
     reviewedBy: r.reviewed_by || null,

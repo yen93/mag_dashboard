@@ -171,7 +171,7 @@ sales.get('/alternate-leads', async (req, res) => {
 });
 sales.post('/alternate-leads/:id/review', async (req, res) => {
   if (!canReviewAltLeads(req.user && req.user.email)) {
-    return res.status(403).json({ error: 'Only Liv and Julienne can review alternate leads.' });
+    return res.status(403).json({ error: 'Only Liv, Julienne and James can review alternate leads.' });
   }
   const id = Number(req.params.id);
   const decision = req.body && req.body.decision;   // 'send' | 'skip' | null (reset)
@@ -203,7 +203,7 @@ sales.get('/education-leads', async (req, res) => {
 });
 sales.post('/education-leads/:id/review', async (req, res) => {
   if (!canReviewEducLeads(req.user && req.user.email)) {
-    return res.status(403).json({ error: 'Only Liv and Julienne can review education leads.' });
+    return res.status(403).json({ error: 'Only Liv, Julienne and James can review education leads.' });
   }
   const id = Number(req.params.id);
   const decision = req.body && req.body.decision;   // 'send' | 'skip' | null (reset)

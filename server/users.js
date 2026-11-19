@@ -31,18 +31,20 @@ const JC_REVIEW_EMAILS = [
   'james@myadventuregroup.com.au',
 ];
 
-// Alternate Leads review (Sales tab): only Liv + Julienne (an admin) may tag a lead
-// 'Send intro' / skip. Everyone else is view-only.
+// Alternate Leads review (Sales tab): only Liv + Julienne (an admin) + James may tag a
+// lead 'Send intro' / skip. Everyone else is view-only.
 const ALT_LEADS_REVIEW_EMAILS = [
   'liv@myadventuregroup.com.au',
   'julienne@myadventuregroup.com.au',
+  'james@myadventuregroup.com.au',
 ];
 
-// Education Leads review (Sales tab): only Liv + Julienne may tag a scraped education
+// Education Leads review (Sales tab): only Liv + Julienne + James may tag a scraped education
 // org 'Send intro' / skip. Everyone else is view-only. (Same reviewers as Alternate Leads.)
 const EDUC_LEADS_REVIEW_EMAILS = [
   'liv@myadventuregroup.com.au',
   'julienne@myadventuregroup.com.au',
+  'james@myadventuregroup.com.au',
 ];
 
 function normalize(email) {

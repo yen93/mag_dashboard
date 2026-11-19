@@ -74,7 +74,7 @@
 
       <div class="section-head">
         <span class="step">2</span><h2>Leads</h2>
-        <span class="head-info" data-info="Every lead still in the queue (is_processed = null). A tagged lead stays here, marked 'pending batch mailer execution', until the mailer runs; once processed it drops off this tab. Liv and Julienne can tag, everyone else is view-only." data-src="Supabase → alternate_leads (+ reviewer from alternate_leads_review_log)"></span>
+        <span class="head-info" data-info="Every lead still in the queue (is_processed = null). A tagged lead stays here, marked 'pending batch mailer execution', until the mailer runs; once processed it drops off this tab. Liv, Julienne and James can tag, everyone else is view-only." data-src="Supabase → alternate_leads (+ reviewer from alternate_leads_review_log)"></span>
         <div class="spacer"></div>
         <span class="muted" id="alCount" style="font-size:13px"></span>
       </div>
@@ -250,7 +250,7 @@
         var note = document.getElementById('alRoleNote');
         note.textContent = data.canReview
           ? 'Choose Send intro or Skip in the Decision column — it saves instantly. Pick "— choose —" to undo.'
-          : 'View only — only Liv and Julienne can tag leads.';
+          : 'View only — only Liv, Julienne and James can tag leads.';
         document.getElementById('alAsOf').textContent = data.meta && data.meta.status === 'pending' ? 'Needs setup' : '';
         if (data.meta && data.meta.status === 'pending') {
           document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Needs setup</strong><span>' +
