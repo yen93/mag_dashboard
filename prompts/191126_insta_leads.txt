@@ -1,0 +1,25 @@
+**leads_for_review:**
+select * from insta_stories
+where org is not null
+and (
+  sheet_remark is null
+  and outreach_status is null
+)
+
+**lead_finder:**
+"C:\Users\Cloverly\Antigravity\antigravity_insta_stories_drive_uploader\SYSTEM_ARCHITECTURE.md"
+
+**ref_tab:**
+alternate_leads.html
+
+**rev_list:**
+liv
+julienne
+james
+
+## main_task:
+- create new tab in sales. display table where leads_for_review is content
+- mirror how ref_tab was built. cos rows returned by leads_for_review are pending approval.
+- add kpi cards on top as needed 
+- there should be a dropdown where rev_list can either tag lead as 'send intro' or 'skip'. other members cant edit/view only.
+- see lead_finder for context of the whole system

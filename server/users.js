@@ -55,6 +55,14 @@ const COLLAB_LEADS_REVIEW_EMAILS = [
   'james@myadventuregroup.com.au',
 ];
 
+// Instagram Leads review (Sales tab): only Liv + Julienne + James may tag an extracted
+// Instagram Story lead 'Send intro' / skip. Everyone else is view-only.
+const INSTA_LEADS_REVIEW_EMAILS = [
+  'liv@myadventuregroup.com.au',
+  'julienne@myadventuregroup.com.au',
+  'james@myadventuregroup.com.au',
+];
+
 function normalize(email) {
   return String(email || '').trim().toLowerCase();
 }
@@ -127,6 +135,11 @@ export function canReviewEducLeads(email) {
 /** True iff `email` may tag Collaboration Leads (Cloverly + Julienne + James). */
 export function canReviewCollabLeads(email) {
   return COLLAB_LEADS_REVIEW_EMAILS.includes(normalize(email));
+}
+
+/** True iff `email` may tag Instagram Leads (Liv + Julienne + James). */
+export function canReviewInstaLeads(email) {
+  return INSTA_LEADS_REVIEW_EMAILS.includes(normalize(email));
 }
 
 /** Public view of a user. */

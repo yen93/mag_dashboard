@@ -1,0 +1,496 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Instagram Leads — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    .content { max-width: none; }
+    .al-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .al-toolbar .spacer { flex: 1; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; margin-right: 4px; }
+    .kpi-click {
+      appearance: none; text-align: left; font: inherit; color: inherit; width: 100%;
+      cursor: pointer; transition: transform .14s ease, box-shadow .14s ease, border-color .14s ease;
+    }
+    @media (hover: hover) {
+      .kpi-click:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
+    }
+    .kpi-click:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .kpi-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+    .kpi .label { display: inline-flex; align-items: center; gap: 4px; }
+    .kpi .value { font-variant-numeric: tabular-nums; }
+    .kpi { position: relative; }
+    .kpi:hover, .kpi:focus-within { z-index: 40; }
+
+    .al-select {
+      font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); cursor: pointer; min-width: 124px;
+    }
+    .al-select:hover { border-color: var(--accent); }
+    .al-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .al-select:disabled { opacity: .6; cursor: wait; }
+    .al-pending-row { background: rgba(245, 166, 35, .08); }
+    .al-send-row, .al-send-row td { background: rgba(23, 166, 115, .14) !important; }
+    .al-skip-row, .al-skip-row td { background: rgba(224, 62, 62, .13) !important; }
+    .al-select.is-send { border-color: var(--pos); color: var(--pos); font-weight: 600; }
+    .al-select.is-skip { border-color: var(--neg); color: var(--neg); font-weight: 600; }
+    .al-queue-note { font-size: 11px; color: var(--text-muted); margin-top: 4px; font-style: italic; }
+    .al-note { font-size: 12.5px; color: var(--text-muted); margin: 0 0 10px; }
+
+    .il-org { font-weight: 600; }
+    .il-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
+    .il-link { font-size: 12px; color: var(--accent); text-decoration: none; word-break: break-word; }
+    .il-link:hover { text-decoration: underline; }
+    .il-email { font-size: 12px; color: var(--text); text-decoration: none; word-break: break-all; display: inline-block; margin-top: 2px; }
+    .il-email:hover { color: var(--accent); text-decoration: underline; }
+    .il-desc { max-width: 290px; font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
+    .il-story-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; white-space: nowrap; }
+    .il-preview-btn {
+      font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer;
+    }
+    .il-preview-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .il-preview-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+    .il-table-region { overflow: auto; }
+    .il-table-region:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 8px; }
+    .sr-only {
+      position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+      overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0;
+    }
+
+    /* Native <dialog> story screenshot preview */
+    dialog.il-dialog {
+      padding: 0; border: 1px solid var(--border); border-radius: 14px;
+      background: var(--surface); color: var(--text);
+      width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 32px);
+      box-shadow: 0 24px 64px rgba(0, 0, 0, .35);
+    }
+    dialog.il-dialog::backdrop { background: rgba(15, 23, 42, .62); backdrop-filter: blur(2px); }
+    .il-dialog-head {
+      display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+      padding: 16px 18px 12px; border-bottom: 1px solid var(--border);
+    }
+    .il-dialog-head h3 { margin: 0; font-size: 16px; }
+    .il-dialog-sub { font-size: 12.5px; color: var(--text-muted); margin-top: 3px; }
+    .il-dialog-close {
+      font: inherit; font-size: 14px; font-weight: 600; padding: 4px 10px; border-radius: 8px;
+      border: 1px solid var(--border); background: var(--surface-2); color: var(--text); cursor: pointer;
+    }
+    .il-dialog-close:hover { border-color: var(--accent); color: var(--accent); }
+    .il-dialog-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .il-dialog-body { padding: 14px 18px 18px; display: flex; flex-direction: column; gap: 12px; }
+    .il-dialog-desc { font-size: 13px; color: var(--text); line-height: 1.45; margin: 0; }
+    .il-dialog-frame {
+      width: 100%; height: min(520px, 60vh); border: 1px solid var(--border); border-radius: 10px;
+      background: var(--surface-2);
+    }
+    .il-dialog-foot { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab active" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="builds_monitoring.html">AI &amp; Automation</a>
+  </nav>
+
+  <div class="sales-layout">
+    <aside class="subnav" id="salesNav"></aside>
+    <main class="content">
+      <div class="toolbar al-toolbar">
+        <strong>Instagram Leads</strong>
+        <span class="head-info" data-info="Event and organisation leads extracted daily from speaker Instagram Stories via Google Drive archival and OpenAI Vision (gpt-4o). Review each pending lead and tag it 'Send intro' or 'Skip'. Replaces manual Remark tagging in the ai_scraped_insta_stories Google Sheet." data-src="Supabase → insta_stories"></span>
+        <div class="spacer"></div>
+        <span class="ctl-label" id="viewLabel">Show</span>
+        <div class="segmented" id="viewSeg" role="toolbar" aria-labelledby="viewLabel">
+          <button type="button" class="active" aria-pressed="true" data-view="queue">In queue</button>
+          <button type="button" aria-pressed="false" data-view="pending">To review</button>
+          <button type="button" aria-pressed="false" data-view="send">Send intro</button>
+          <button type="button" aria-pressed="false" data-view="skip">Skipped</button>
+        </div>
+        <span class="muted" id="ilAsOf" style="font-size:13px"></span>
+      </div>
+
+      <div class="section-head">
+        <span class="step">1</span><h2>At a glance</h2>
+        <span class="sub">The queue holds AI-extracted story leads pending approval (org found, not yet triaged in sheet or outreach). Click a card to filter.</span>
+      </div>
+      <div class="kpi-grid" id="kpis"></div>
+
+      <div class="section-head">
+        <span class="step">2</span><h2>Leads</h2>
+        <span class="head-info" data-info="Stories from public.insta_stories where org IS NOT NULL. Pending rows have sheet_remark IS NULL and outreach_status IS NULL. Tagging 'Send intro' or 'Skip' saves to outreach_status; historical Google Sheet remarks ('Send intro' / '5A') remain visible read-only under their respective filters. Liv, Julienne and James can tag; everyone else is view-only." data-src="Supabase → insta_stories (+ reviewer from insta_stories_review_log)"></span>
+        <div class="spacer"></div>
+        <span class="muted" id="ilCount" style="font-size:13px"></span>
+      </div>
+      <p class="al-note" id="ilRoleNote"></p>
+      <p class="sr-only" role="status" aria-live="polite" id="ilStatus"></p>
+      <div class="card col-12">
+        <div class="il-table-region" tabindex="0" role="region" aria-label="Instagram leads table">
+          <div id="leadsRows"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <dialog class="il-dialog" id="storyDialog" aria-labelledby="storyDialogTitle">
+    <div class="il-dialog-head">
+      <div>
+        <h3 id="storyDialogTitle">Story preview</h3>
+        <div class="il-dialog-sub" id="storyDialogMeta"></div>
+      </div>
+      <button type="button" class="il-dialog-close" id="storyDialogClose">Close</button>
+    </div>
+    <div class="il-dialog-body">
+      <p class="il-dialog-desc" id="storyDialogDesc"></p>
+      <iframe class="il-dialog-frame" id="storyDialogFrame" title="Archived Instagram story screenshot preview" loading="lazy"></iframe>
+      <div class="il-dialog-foot">
+        <span class="muted" style="font-size:12px">Archived in Google Drive by sync-insta-stories</span>
+        <a class="il-link" id="storyDialogOpen" href="#" target="_blank" rel="noopener">Open original in Google Drive ↗</a>
+      </div>
+    </div>
+  </dialog>
+
+  <script src="app.js?v=25"></script>
+  <script>
+    var DATA = null;
+    var VIEW = 'queue';         // queue (pending + newly tagged) | pending (leads_for_review) | send | skip
+    var TABLE_STATE = {};
+
+    function numfmt(n) { return (n == null) ? '—' : fmt(n, 'count'); }
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    function canReview() { return !!(DATA && DATA.canReview); }
+    function safeUrl(u) {
+      var s = String(u || '').trim();
+      return /^https?:\/\//i.test(s) ? s : '';
+    }
+    function driveFileId(url) {
+      var s = String(url || '');
+      var m = s.match(/\/file\/d\/([a-zA-Z0-9_-]+)/) || s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+      return m ? m[1] : '';
+    }
+    function announce(msg) {
+      var el = document.getElementById('ilStatus');
+      if (el) el.textContent = msg;
+    }
+
+    // Active review queue = leads not yet triaged on the old Google Sheet and not yet
+    // moved into downstream outreach. Newly tagged Send intro / Skip leads remain in
+    // the queue (highlighted green/red) so reviewers can see or undo their decision.
+    function queueLeads() {
+      return ((DATA && DATA.leads) || []).filter(function (l) { return l.inQueue; });
+    }
+    function viewRows() {
+      var all = (DATA && DATA.leads) || [];
+      if (VIEW === 'send') return all.filter(function (l) { return l.review === 'send'; });
+      if (VIEW === 'skip') return all.filter(function (l) { return l.review === 'skip'; });
+      var q = queueLeads();
+      return VIEW === 'queue' ? q : q.filter(function (l) { return l.review === 'pending'; });
+    }
+
+    function kpiCard(o) {
+      var clickable = !!o.view;
+      var cls = 'kpi' + (clickable ? ' kpi-click' : '') + (clickable && o.view === VIEW ? ' kpi-active' : '');
+      var tag = clickable ? 'button' : 'div';
+      var attrs = clickable
+        ? ' type="button" data-view="' + o.view + '" aria-pressed="' + (o.view === VIEW ? 'true' : 'false') + '"'
+        : '';
+      return '<' + tag + ' class="' + cls + '"' + attrs + '>' +
+        '<div class="label">' + esc(o.label) + (o.info ? ' ' + infoTip(o.info, 'Supabase → insta_stories') : '') + '</div>' +
+        '<div class="value">' + o.value + '</div>' +
+        (o.sub ? '<div class="kpi-sub">' + o.sub + '</div>' : '') +
+        '</' + tag + '>';
+    }
+
+    function computeCards() {
+      var all = (DATA && DATA.leads) || [];
+      var c = {
+        pending: 0,
+        sendAll: 0, sendQueue: 0, sendSheet: 0, sendProcessed: 0,
+        skipAll: 0, skipQueue: 0, skipSheet: 0,
+        queueTotal: 0, queueWithContact: 0, queueEnriched: 0,
+        oldest: null,
+      };
+      var orgs = {}, speakers = {};
+      all.forEach(function (l) {
+        if (l.review === 'send') {
+          c.sendAll++;
+          if (l.processed) c.sendProcessed++;
+          else if (l.fromSheet) c.sendSheet++;
+          else c.sendQueue++;
+        } else if (l.review === 'skip') {
+          c.skipAll++;
+          if (l.fromSheet) c.skipSheet++;
+          else c.skipQueue++;
+        }
+        if (!l.inQueue) return;
+        c.queueTotal++;
+        if (l.poc || l.pocEmail) c.queueWithContact++;
+        if (l.enriched) c.queueEnriched++;
+        if (l.review === 'pending') {
+          c.pending++;
+          if (l.org) orgs[l.org.toLowerCase()] = 1;
+          if (l.speaker) speakers[l.speaker.toLowerCase()] = 1;
+          if (l.createdAt && (!c.oldest || l.createdAt < c.oldest)) c.oldest = l.createdAt;
+        }
+      });
+      c.orgs = Object.keys(orgs).length;
+      c.speakers = Object.keys(speakers).length;
+      var decided = c.sendAll + c.skipAll;
+      c.decided = decided;
+      c.sendRate = decided > 0 ? Math.round((c.sendAll / decided) * 1000) / 10 : null;
+      c.contactPct = c.queueTotal > 0 ? Math.round((c.queueWithContact / c.queueTotal) * 100) : null;
+      return c;
+    }
+
+    function renderCards() {
+      var c = computeCards();
+      var sendParts = [];
+      if (c.sendQueue) sendParts.push(c.sendQueue + ' in queue');
+      if (c.sendProcessed) sendParts.push(c.sendProcessed + ' outreached');
+      if (c.sendSheet) sendParts.push(c.sendSheet + ' from sheet');
+      var sendSub = sendParts.length ? sendParts.join(' · ') : 'approved for outreach';
+
+      var skipParts = [];
+      if (c.skipQueue) skipParts.push(c.skipQueue + ' in queue');
+      if (c.skipSheet) skipParts.push(c.skipSheet + ' from sheet');
+      var skipSub = skipParts.length ? skipParts.join(' · ') : 'not pursued';
+
+      var cards = [
+        { label: 'To review', value: numfmt(c.pending), view: 'pending',
+          sub: c.pending
+            ? (c.orgs + ' organisations · ' + c.speakers + ' speakers' + (c.oldest ? ' · oldest ' + fmtDate(c.oldest) : ''))
+            : 'All caught up 🎉',
+          info: 'Leads with an organisation extracted and neither sheet_remark nor outreach_status set — waiting for Liv, Julienne or James to choose Send intro or Skip.' },
+        { label: 'Send intro', value: numfmt(c.sendAll), view: 'send', sub: sendSub,
+          info: 'Every Instagram Story lead tagged Send intro — including newly approved leads in the queue, historical leads from the Google Sheet, and leads already in outreach.' },
+        { label: 'Skipped', value: numfmt(c.skipAll), view: 'skip', sub: skipSub,
+          info: 'Every Instagram Story lead tagged Skip — including leads skipped in this queue and legacy 5A rows from the Google Sheet.' },
+        { label: 'With contact', value: numfmt(c.queueWithContact),
+          sub: c.contactPct == null ? 'no leads in queue' : (c.contactPct + '% of queue · ' + numfmt(c.queueEnriched) + ' enriched'),
+          info: 'Queue leads that already have a POC name or email extracted/enriched, alongside how many queue rows have finished enrichment.' },
+        { label: 'Send-intro rate', value: c.sendRate == null ? '—' : c.sendRate + '%',
+          sub: c.decided ? (numfmt(c.sendAll) + ' of ' + numfmt(c.decided) + ' reviewed') : 'of reviewed leads',
+          info: 'All Send intro ÷ (all Send intro + all Skipped), across every reviewed story lead. Helps gauge signal quality from the story vision extractor.' },
+      ];
+      document.getElementById('kpis').innerHTML = cards.map(kpiCard).join('');
+      document.querySelectorAll('#kpis .kpi-click').forEach(function (el) {
+        el.addEventListener('click', function (e) {
+          if (e.target && e.target.closest && e.target.closest('.src-info')) return;
+          var v = el.getAttribute('data-view');
+          setView(VIEW === v ? 'queue' : v);
+        });
+      });
+    }
+
+    function setView(v) {
+      VIEW = v;
+      document.querySelectorAll('#viewSeg button').forEach(function (b) {
+        var active = b.getAttribute('data-view') === v;
+        b.classList.toggle('active', active);
+        b.setAttribute('aria-pressed', active ? 'true' : 'false');
+      });
+      renderCards(); renderTable();
+    }
+
+    function reviewLabel(r, row) {
+      if (row && row.processed) {
+        var st = row.outreachStatus || 'processed';
+        return st.charAt(0).toUpperCase() + st.slice(1);
+      }
+      return r === 'send' ? 'Send intro' : r === 'skip' ? 'Skip' : 'To review';
+    }
+    function reviewPill(r, row) {
+      var cls = r === 'send' ? 'pos' : r === 'skip' ? 'neg' : 'partial';
+      var who = row && row.reviewedBy
+        ? ' title="' + esc('By ' + row.reviewedBy + (row.reviewedAt ? ' · ' + fmtDate(row.reviewedAt) : '')) + '"'
+        : '';
+      return '<span class="pill ' + cls + '"' + who + '>' + esc(reviewLabel(r, row)) + '</span>';
+    }
+    function statusNote(row) {
+      if (row.processed) return '<div class="al-queue-note">✓ Outreach: ' + esc(row.outreachStatus) + '</div>';
+      if (row.fromSheet) {
+        var rem = row.sheetRemark ? ' (' + esc(row.sheetRemark) + ')' : '';
+        return '<div class="al-queue-note">✓ Triaged in sheet' + rem + '</div>';
+      }
+      if (row.review === 'send') return '<div class="al-queue-note">⏳ Pending outreach execution</div>';
+      if (row.review === 'skip') return '<div class="al-queue-note">Marked skip</div>';
+      return '';
+    }
+    function decisionCell(v, row) {
+      if (row.processed || row.fromSheet) return reviewPill(row.review, row) + statusNote(row);
+      if (!canReview()) return reviewPill(row.review, row) + statusNote(row);
+      var sel = row.review === 'send' ? 'send' : row.review === 'skip' ? 'skip' : '';
+      return '<select class="al-select' + (sel ? ' is-' + sel : '') + '" data-id="' + esc(row.id) + '" aria-label="' + esc('Decision for ' + (row.org || 'lead')) + '">' +
+        '<option value=""' + (sel === '' ? ' selected' : '') + '>— choose —</option>' +
+        '<option value="send"' + (sel === 'send' ? ' selected' : '') + '>Send intro</option>' +
+        '<option value="skip"' + (sel === 'skip' ? ' selected' : '') + '>Skip</option></select>' +
+        statusNote(row);
+    }
+
+    function orgCell(v, row) {
+      var ev = row.eventName ? '<div class="il-sub">' + esc(row.eventName) + '</div>' : '';
+      return '<div class="il-org">' + txt(row.org) + '</div>' + ev;
+    }
+    function speakerCell(v, row) {
+      var handle = row.instaHandle
+        ? '<div><a class="il-link" href="https://www.instagram.com/' + encodeURIComponent(row.instaHandle) + '/" target="_blank" rel="noopener">@' + esc(row.instaHandle) + ' ↗</a></div>'
+        : '';
+      return txt(row.speaker) + handle;
+    }
+    function contactCell(v, row) {
+      if (!row.poc && !row.pocEmail && !row.pocPosition) {
+        return row.enriched ? '<span class="muted">No POC found</span>' : '<span class="muted">Not enriched yet</span>';
+      }
+      var name = row.poc ? '<div>' + esc(row.poc) + '</div>' : '';
+      var pos = row.pocPosition ? '<div class="il-sub">' + esc(row.pocPosition) + '</div>' : '';
+      var mail = row.pocEmail
+        ? '<div><a class="il-email" href="mailto:' + esc(row.pocEmail) + '">' + esc(row.pocEmail) + '</a></div>'
+        : '';
+      return name + pos + mail;
+    }
+    function descCell(v, row) {
+      return row.description ? '<div class="il-desc">' + esc(row.description) + '</div>' : '—';
+    }
+    function storyCell(v, row) {
+      var url = safeUrl(row.savedImgLink);
+      if (!url) return '—';
+      var fid = driveFileId(url);
+      var btn = fid
+        ? '<button type="button" class="il-preview-btn" data-preview-id="' + esc(row.id) + '">Preview</button>'
+        : '';
+      var link = '<a class="il-link" href="' + esc(url) + '" target="_blank" rel="noopener">Drive ↗</a>';
+      return '<div class="il-story-actions">' + btn + link + '</div>';
+    }
+
+    function renderTable() {
+      var rows = viewRows();
+      renderSortableTable('leadsRows', rows, [
+        { key: 'review', label: 'Decision', render: decisionCell, text: function (v, r) { return reviewLabel(r.review, r); } },
+        { key: 'org', label: 'Organisation & Event', render: orgCell, text: function (v, r) { return (r.org || '') + ' ' + (r.eventName || ''); } },
+        { key: 'speaker', label: 'Speaker', render: speakerCell, text: function (v, r) { return (r.speaker || '') + (r.instaHandle ? ' @' + r.instaHandle : ''); } },
+        { key: 'poc', label: 'Contact', render: contactCell, text: function (v, r) { return [r.poc, r.pocPosition, r.pocEmail].filter(Boolean).join(' '); } },
+        { key: 'description', label: 'Story summary', render: descCell, text: function (v, r) { return r.description || ''; } },
+        { key: 'savedImgLink', label: 'Story', render: storyCell, text: function (v, r) { return r.savedImgLink ? 'Archived' : ''; } },
+        { key: 'createdAt', label: 'Date found', unit: 'date' },
+      ], {
+        searchPlaceholder: 'Search leads (organisation, event, speaker, handle, contact, summary)…',
+        sortKey: 'createdAt', sortDir: 'desc',
+        pageSize: 25,
+        stateStore: TABLE_STATE,
+        rowClass: function (r) {
+          return r.review === 'pending' ? 'al-pending-row'
+            : r.review === 'send' ? 'al-send-row'
+            : r.review === 'skip' ? 'al-skip-row' : '';
+        },
+        emptyText: VIEW === 'queue' ? 'Queue is empty — no Instagram Story leads waiting for review.'
+          : VIEW === 'pending' ? 'Nothing to review — all caught up.' : 'No leads match this filter.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('ilCount');
+          if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
+        },
+      });
+    }
+
+    function openStoryPreview(id) {
+      var row = ((DATA && DATA.leads) || []).filter(function (l) { return String(l.id) === String(id); })[0];
+      if (!row) return;
+      var url = safeUrl(row.savedImgLink);
+      var fid = driveFileId(url);
+      if (!fid) { if (url) window.open(url, '_blank', 'noopener'); return; }
+      var dlg = document.getElementById('storyDialog');
+      document.getElementById('storyDialogTitle').textContent = row.org + (row.eventName ? ' — ' + row.eventName : '');
+      var meta = [row.speaker, row.instaHandle ? '@' + row.instaHandle : '', fmtDate(row.createdAt)].filter(Boolean).join(' · ');
+      document.getElementById('storyDialogMeta').textContent = meta;
+      document.getElementById('storyDialogDesc').textContent = row.description || 'No AI summary available.';
+      document.getElementById('storyDialogFrame').src = 'https://drive.google.com/file/d/' + encodeURIComponent(fid) + '/preview';
+      document.getElementById('storyDialogOpen').href = url;
+      dlg.showModal();
+    }
+
+    function closeStoryPreview() {
+      var dlg = document.getElementById('storyDialog');
+      document.getElementById('storyDialogFrame').src = 'about:blank';
+      if (dlg.open) dlg.close();
+    }
+
+    function onDecision(sel) {
+      // id comes back from Postgres as a bigint STRING, so compare as strings.
+      var id = sel.getAttribute('data-id'), val = sel.value || null;
+      var row = DATA.leads.filter(function (l) { return String(l.id) === id; })[0];
+      if (!row) return;
+      sel.disabled = true;
+      postJSON('/api/sales/insta-leads/' + encodeURIComponent(id) + '/review', { decision: val }).then(function (out) {
+        row.review = out.review;
+        row.outreachStatus = out.outreachStatus || '';
+        row.reviewedBy = out.reviewedBy;
+        row.reviewedAt = out.reviewedAt;
+        announce('Saved ' + (row.org || 'lead') + ': ' + reviewLabel(row.review, row));
+        renderCards(); renderTable();
+      }).catch(function (err) {
+        sel.disabled = false;
+        sel.value = row.review === 'send' || row.review === 'skip' ? row.review : '';
+        announce('Could not save review: ' + err.message);
+        alert('Could not save: ' + err.message);
+      });
+    }
+
+    function loadData() {
+      fetchJSON('/api/sales/insta-leads').then(function (data) {
+        DATA = data;
+        var note = document.getElementById('ilRoleNote');
+        note.textContent = data.canReview
+          ? 'Choose Send intro or Skip in the Decision column — it saves instantly. Pick "— choose —" to undo.'
+          : 'View only — only Liv, Julienne and James can tag leads.';
+        document.getElementById('ilAsOf').textContent = data.meta && data.meta.status === 'pending' ? 'Needs setup' : '';
+        if (data.meta && data.meta.status === 'pending') {
+          document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Needs setup</strong><span>' +
+            esc(data.meta.note || 'Data source not configured.') + '</span></div>';
+          return;
+        }
+        renderCards(); renderTable();
+      }).catch(function (err) {
+        document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Couldn’t load Instagram leads</strong><span>' +
+          esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('sales');
+    renderSalesSidebar('insta-leads');
+    fillHeadInfo();
+    if (currentUser()) {
+      document.querySelectorAll('#viewSeg button').forEach(function (b) {
+        b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
+      });
+      var leadsHost = document.getElementById('leadsRows');
+      leadsHost.addEventListener('change', function (e) {
+        if (e.target && e.target.classList.contains('al-select')) onDecision(e.target);
+      });
+      leadsHost.addEventListener('click', function (e) {
+        var btn = e.target && e.target.closest && e.target.closest('.il-preview-btn');
+        if (btn) openStoryPreview(btn.getAttribute('data-preview-id'));
+      });
+      var dlg = document.getElementById('storyDialog');
+      document.getElementById('storyDialogClose').addEventListener('click', closeStoryPreview);
+      dlg.addEventListener('close', function () { document.getElementById('storyDialogFrame').src = 'about:blank'; });
+      dlg.addEventListener('click', function (e) { if (e.target === dlg) closeStoryPreview(); });
+      loadData();
+    }
+  </script>
+</body>
+</html>

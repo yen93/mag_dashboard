@@ -1,0 +1,125 @@
+================================================================================
+UPDATE DOCUMENTATION: INSTAGRAM LEADS SALES REVIEW TAB
+Timestamp: 19/11/26 16:02 (UTC+8 / PH Time)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. INSTAGRAM LEADS REVIEW QUEUE (SALES TAB)
+--------------------------------------------------------------------------------
+* Problem / Context:
+  - Needed a new tab under Sales to review AI-extracted speaker Instagram Story
+    leads from `public.insta_stories` (where `org IS NOT NULL` and both
+    `sheet_remark IS NULL` and `outreach_status IS NULL`), mirroring
+    `public/alternate_leads.html`.
+  - Replaces manual `Remark` triage in the `ai_scraped_insta_stories` Google
+    Sheet tab while preserving legacy sheet decisions (`'Send intro'` and `'5A'`).
+  - Only Liv, Julienne, and James (`rev_list`) should be able to tag leads as
+    `'Send intro'` or `'Skip'` (or reset to pending); all other users are
+    strictly view-only.
+
+* Technical Changes:
+  - Created `public/insta_leads.html`:
+    - Sales left sidebar layout (`renderSalesSidebar('insta-leads')`, `app.js?v=25`).
+    - Toolbar with `Show` segmented filter (`In queue` default | `To review` |
+      `Send intro` | `Skipped`). `In queue` displays all pending
+      `leads_for_review` rows plus rows newly tagged on the dashboard (kept
+      highlighted green/red with status notes until downstream outreach runs).
+    - 5 top KPI cards:
+      1) To review (clickable filter -> `pending`; shows org/speaker counts +
+         oldest pending date)
+      2) Send intro (clickable filter -> `send`; all-time incl. queue,
+         outreached, and legacy sheet)
+      3) Skipped (clickable filter -> `skip`; all-time incl. queue and legacy
+         `'5A'` sheet rows)
+      4) With contact (queue leads with POC name/email + enriched count)
+      5) Send-intro rate (all-time `Send intro / (Send intro + Skipped)`)
+    - Sortable/searchable table (`renderSortableTable`) with columns:
+      Decision, Organisation & Event, Speaker (`@insta_handle` IG link),
+      Contact (POC name, role, `mailto:` email), Story summary (AI vision
+      description), Story (native `<dialog>` Google Drive preview + `Drive`
+      external link), and Date found.
+    - Accessibility & UX polish: native `<button>` KPI filter cards with
+      `aria-pressed`, keyboard-scrollable table region (`tabindex="0"`,
+      `role="region"`), per-row `aria-label` on decision `<select>` dropdowns,
+      `aria-live="polite"` status announcer, and native `<dialog>` modal with
+      Escape/backdrop dismiss and iframe cleanup on close.
+  - Modified `public/app.js`:
+    - Added `['insta-leads', 'Instagram Leads', 'insta_leads.html']` to
+      `renderSalesSidebar(active)`.
+  - Bumped cache-busting query string (`app.js?v=23` -> `app.js?v=25`) across
+    all Sales pages so returning browsers load the updated sidebar:
+    - `public/sales_overview.html`
+    - `public/sales.html`
+    - `public/education_outreach.html`
+    - `public/education_leads.html`
+    - `public/alternate_leads.html`
+
+2. BACKEND API, PERMISSIONS & AUDIT LOG MIGRATION
+--------------------------------------------------------------------------------
+* Technical Changes:
+  - Modified `server/users.js`:
+    - Added `INSTA_LEADS_REVIEW_EMAILS` (`liv@myadventuregroup.com.au`,
+      `julienne@myadventuregroup.com.au`, `james@myadventuregroup.com.au`).
+    - Exported `canReviewInstaLeads(email)`.
+  - Created `server/metrics/insta-leads.js`:
+    - `getInstaLeads()`: reads `public.insta_stories WHERE org IS NOT NULL`
+      ordered by `created_at DESC, id DESC`, LEFT JOINing the latest `'set'`
+      entry from `public.insta_stories_review_log`. Includes graceful fallback
+      when `42P01` (audit log table not yet created) occurs.
+    - Classifies rows into:
+      - `pending` (`inQueue = true`): `sheet_remark IS NULL AND outreach_status IS NULL`
+        (exact match to `leads_for_review`).
+      - `send` / `skip` (`inQueue = true`): dashboard-tagged
+        `outreach_status IN ('Send intro', 'skip')`.
+      - `fromSheet` (`inQueue = false`, read-only): legacy Google Sheet
+        backfilled rows (`sheet_remark` `'Send intro'` or `'5A'`).
+      - `processed` (`inQueue = false`, read-only): rows whose
+        `outreach_status` moved beyond review tags (e.g. `'sent'`, `'contacted'`).
+    - `setInstaLeadReview(id, decision, by)`: updates
+      `public.insta_stories.outreach_status` (`'Send intro'`, `'skip'`, or
+      `NULL` to undo) guarded by `org IS NOT NULL AND sheet_remark IS NULL AND
+      (outreach_status IS NULL OR lower(btrim(outreach_status)) IN ('send intro', 'skip'))`,
+      then appends an audit row to `public.insta_stories_review_log` (ignoring
+      `42P01` until the migration is applied).
+  - Modified `server/index.js`:
+    - Added `GET /api/sales/insta-leads` (uncached, returns `canReview`).
+    - Added `POST /api/sales/insta-leads/:id/review` (gated by
+      `canReviewInstaLeads`, validates integer `id` and decision `'send' | 'skip' | null`).
+  - Created local SQL migration (not applied directly to DB):
+    - `supabase/migrations/20261119160000_insta_stories_review_log.sql`
+      defining `public.insta_stories_review_log` (`id`, `lead_id bigint` FK to
+      `public.insta_stories(id)`, `decision`, `action`, `set_by`, `created_at`)
+      with index `(lead_id, created_at desc)` and RLS enabled.
+
+3. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* No new Edge Functions or cron schedules created in this session.
+* Existing upstream pipeline referenced for context (unchanged):
+  - `sync-insta-stories` (`20 22 * * 0-4` UTC / 6:20 AM PH Mon-Fri)
+  - `analyze-insta-stories` (`30 22 * * 0-4` UTC / 6:30 AM PH Mon-Fri)
+
+4. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Syntax checks:
+  - Passed JS syntax validation (`node:vm`) for `public/app.js` and both inline
+    `<script>` blocks in `public/insta_leads.html`.
+* Permission & HTTP route verification (local Express test server, no DB writes):
+  - `canReviewInstaLeads()` passed for `liv@`, `julienne@`, `james@` (incl.
+    uppercase normalization) and returned `false` for `cloverly@`, `admin@`,
+    other emails, and empty/null values.
+  - `GET /insta_leads.html` -> HTTP 200 (verified sidebar hook + `app.js?v=25`).
+  - `GET /api/sales/insta-leads` -> 401 unauthenticated; 403 for `restricted`
+    role; 200 with accurate `canReview` boolean for reviewers vs viewers.
+  - `POST /api/sales/insta-leads/:id/review` -> 403 for non-reviewers; 400 for
+    invalid ID (`abc`) or invalid decision (`"maybe"`).
+* Live Supabase read-only SQL verification (`public.insta_stories`):
+  - Total rows with `org IS NOT NULL`: 441
+  - Active queue / pending (`leads_for_review`): 186 (across 123 distinct orgs,
+    17 speakers; 26 with POC or email)
+  - Legacy Google Sheet `sheet_remark = 'Send intro'`: 24
+  - Legacy Google Sheet `sheet_remark = '5A'` (skipped): 231
+* Remaining manual steps:
+  - Apply `supabase/migrations/20261119160000_insta_stories_review_log.sql` in
+    Supabase to enable reviewer audit logging.
+  - Redeploy dashboard to Google Cloud Run.
+================================================================================

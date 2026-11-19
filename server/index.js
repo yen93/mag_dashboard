@@ -43,10 +43,11 @@ import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
 import { cached, clearCache } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
-import { canReviewJc, canReviewAltLeads, canReviewEducLeads, canReviewCollabLeads } from './users.js';
+import { canReviewJc, canReviewAltLeads, canReviewEducLeads, canReviewCollabLeads, canReviewInstaLeads } from './users.js';
 import { getAlternateLeads, setAlternateLeadReview } from './metrics/alternate-leads.js';
 import { getEducationLeads, setEducationLeadReview } from './metrics/education-leads.js';
 import { getCollaborationLeads, setCollaborationLeadReview } from './metrics/collaboration-leads.js';
+import { getInstaLeads, setInstaLeadReview } from './metrics/insta-leads.js';
 import { q } from './providers/supabase.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -218,6 +219,39 @@ sales.post('/education-leads/:id/review', async (req, res) => {
     res.json(out);
   } catch (err) {
     console.error('[sales:education-leads review]', err);
+    res.status(502).json({ error: 'Failed to save the review.', detail: err.message });
+  }
+});
+// Instagram Leads — Sales review queue for AI-extracted speaker Instagram Story leads
+// in public.insta_stories (where org IS NOT NULL; pending = sheet_remark IS NULL AND
+// outreach_status IS NULL). GET is uncached (reviewers need fresh state) and tells the
+// client whether THIS user may tag (`canReview`: Liv + Julienne + James only). POST is
+// gated server-side.
+sales.get('/insta-leads', async (req, res) => {
+  try {
+    const payload = await getInstaLeads();
+    res.json({ ...payload, canReview: canReviewInstaLeads(req.user && req.user.email) });
+  } catch (err) {
+    console.error('[sales:insta-leads]', err);
+    res.status(502).json({ error: 'Failed to load Instagram leads from data source.', detail: err.message });
+  }
+});
+sales.post('/insta-leads/:id/review', async (req, res) => {
+  if (!canReviewInstaLeads(req.user && req.user.email)) {
+    return res.status(403).json({ error: 'Only Liv, Julienne and James can review Instagram leads.' });
+  }
+  const id = Number(req.params.id);
+  const decision = req.body && req.body.decision;   // 'send' | 'skip' | null (reset)
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid lead id.' });
+  if (decision != null && decision !== 'send' && decision !== 'skip') {
+    return res.status(400).json({ error: 'decision must be "send", "skip" or null.' });
+  }
+  try {
+    const out = await setInstaLeadReview(id, decision || null, req.user.email);
+    if (!out) return res.status(404).json({ error: 'Lead not found or already processed.' });
+    res.json(out);
+  } catch (err) {
+    console.error('[sales:insta-leads review]', err);
     res.status(502).json({ error: 'Failed to save the review.', detail: err.message });
   }
 });

@@ -442,6 +442,7 @@ function renderSalesSidebar(active) {
     ['education',   'Education Outreach',  'education_outreach.html'],
     ['educ-leads',  'Education Leads',     'education_leads.html'],
     ['alternate',   'Alternate Leads',     'alternate_leads.html'],
+    ['insta-leads', 'Instagram Leads',     'insta_leads.html'],
   ];
   el.innerHTML = items.map(function (it) {
     var key = it[0], label = it[1], href = it[2];
