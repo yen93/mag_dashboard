@@ -1,0 +1,9 @@
+**educ_sheet:**
+https://docs.google.com/spreadsheets/d/1svksxHmNBUx9Z20t2kbtHAT1fThcfdCmz5dEp936L7I/edit?gid=1810240517#gid=1810240517
+
+**context:**
+currently, liv reviews scraped leads in educ_sheet. new process will be done in the sales dashboard just like alternate_leads.html
+
+## main task:
+- create a new tab in sales dashboard for the educ leads scraped for review.
+- mirror what we did in alternate_leads.html

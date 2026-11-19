@@ -38,6 +38,13 @@ const ALT_LEADS_REVIEW_EMAILS = [
   'julienne@myadventuregroup.com.au',
 ];
 
+// Education Leads review (Sales tab): only Liv + Julienne may tag a scraped education
+// org 'Send intro' / skip. Everyone else is view-only. (Same reviewers as Alternate Leads.)
+const EDUC_LEADS_REVIEW_EMAILS = [
+  'liv@myadventuregroup.com.au',
+  'julienne@myadventuregroup.com.au',
+];
+
 function normalize(email) {
   return String(email || '').trim().toLowerCase();
 }
@@ -100,6 +107,11 @@ export function canReviewJc(email) {
 /** True iff `email` may tag Alternate Leads (Liv + Julienne). */
 export function canReviewAltLeads(email) {
   return ALT_LEADS_REVIEW_EMAILS.includes(normalize(email));
+}
+
+/** True iff `email` may tag Education Leads (Liv + Julienne). */
+export function canReviewEducLeads(email) {
+  return EDUC_LEADS_REVIEW_EMAILS.includes(normalize(email));
 }
 
 /** Public view of a user. */

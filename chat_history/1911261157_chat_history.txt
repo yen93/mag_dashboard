@@ -1,0 +1,41 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-19
+Session: Build a new "Education Leads" review tab in the Sales dashboard, mirroring alternate_leads.html
+================================================================================
+
+--------------------------------------------------------------------------------
+USER:
+Pointed at prompts/191126_educ_leads_tab.txt: Liv currently reviews scraped education
+leads in the educ_sheet Google Sheet; the new process should happen in the Sales dashboard
+just like alternate_leads.html. Task: create a new Sales tab for the scraped educ leads,
+mirroring alternate_leads.html. Mid-turn, the user also pointed to the lead-finder project
+at C:\Users\Cloverly\claude_code\education_sector_automations\education_sector_lead_finder.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read alternate_leads.html, server/metrics/alternate-leads.js, the sales routes in
+server/index.js, renderSalesSidebar in app.js and the reviewer gate in server/users.js.
+Inspected the Google Sheet: the target tab (gid 1810240517) is ai_scraped_educ_leads, 49 data
+rows, column G "Liv's Remark" empty. Found the Supabase mirror public.auto_found_educ_leads
+(49 rows, all status='new') and read the lead-finder project's CLAUDE.md. Confirmed the
+finder's daily run dedups against existing org_name_norm, so it never re-upserts reviewed rows.
+
+Asked the user which decision labels to use (org-level leads, no contact yet); the user chose
+"Send intro / Skip" (exact mirror).
+
+Built:
+- Migration 20261119120000_auto_found_educ_leads_review_log.sql (append-only audit log) — applied to Supabase.
+- server/metrics/education-leads.js (getEducationLeads / setEducationLeadReview; writes
+  auto_found_educ_leads.status = 'Send intro' | 'skip' | 'new' on reset).
+- server/index.js: GET /api/sales/education-leads (uncached, returns canReview) and
+  POST /api/sales/education-leads/:id/review.
+- server/users.js: canReviewEducLeads (Liv + Julienne).
+- public/education_leads.html (KPI cards, view toggle, sortable table, instant-save dropdown).
+- app.js: "Education Leads" sidebar link (key educ-leads); 5 sales-sidebar pages bumped to app.js?v=23.
+Validated with node --check and a live SELECT of the 49 rows; confirmed the sales router
+inherits requireAuth + requireFullAccess. Saved a project memory entry. Reminded that a manual
+Cloud Run redeploy is needed (not performed).
+
+================================================================================
+END OF EXPORT
+================================================================================

@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Education Leads — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <style>
+    .content { max-width: none; }
+    .al-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 4px; }
+    .al-toolbar .spacer { flex: 1; }
+    .ctl-label { font-size: 12px; color: var(--text-muted); font-weight: 600; margin-right: 6px; }
+    .kpi-click { cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease; }
+    .kpi-click:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 10px 24px rgba(0,0,0,.12); }
+    .kpi-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent) inset; }
+    .kpi-sub { font-size: 12px; color: var(--text-muted); margin-top: 4px; line-height: 1.4; }
+    .kpi .label { display: inline-flex; align-items: center; gap: 4px; }
+    .kpi { position: relative; }
+    .kpi:hover, .kpi:focus-within { z-index: 2; }
+    .al-select { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 8px; border: 1px solid var(--border);
+      background: var(--surface); color: var(--text); cursor: pointer; min-width: 120px; }
+    .al-select:hover { border-color: var(--accent); }
+    .al-select:disabled { opacity: .6; cursor: wait; }
+    .al-pending-row { background: rgba(245, 166, 35, .08); }
+    .al-send-row, .al-send-row td { background: rgba(23, 166, 115, .14) !important; }
+    .al-skip-row, .al-skip-row td { background: rgba(224, 62, 62, .13) !important; }
+    .al-select.is-send { border-color: #17a673; color: #17a673; font-weight: 600; }
+    .al-select.is-skip { border-color: #e03e3e; color: #e03e3e; font-weight: 600; }
+    .al-viewonly { font-size: 12px; color: var(--text-muted); }
+    .al-note { font-size: 12.5px; color: var(--text-muted); margin: 0 0 10px; }
+    .al-link { font-size: 12px; color: var(--accent); text-decoration: none; }
+    .al-link:hover { text-decoration: underline; }
+  </style>
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab active" href="sales_overview.html">Sales</a>
+    <a class="tab" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="builds_monitoring.html">AI &amp; Automation</a>
+  </nav>
+
+  <div class="sales-layout">
+    <aside class="subnav" id="salesNav"></aside>
+    <main class="content">
+      <div class="toolbar al-toolbar">
+        <strong>Education Leads</strong>
+        <span class="head-info" data-info="Elite K-12 schools and education associations the discovery finder scrapes automatically (org-level only — no contact enriched yet). Review each one and tag it 'Send intro' or 'Skip'. Replaces the 'Liv's Remark' column in the ai_scraped_educ_leads Google Sheet." data-src="Supabase → auto_found_educ_leads"></span>
+        <div class="spacer"></div>
+        <span class="ctl-label">Show</span>
+        <div class="segmented" id="viewSeg">
+          <button type="button" class="active" data-view="all">All</button>
+          <button type="button" data-view="pending">To review</button>
+          <button type="button" data-view="send">Send intro</button>
+          <button type="button" data-view="skip">Skipped</button>
+        </div>
+        <span class="muted" id="elAsOf" style="font-size:13px"></span>
+      </div>
+
+      <div class="section-head">
+        <span class="step">1</span><h2>At a glance</h2>
+        <span class="sub">Every scraped education org, oldest unreviewed first. Click a card to filter.</span>
+      </div>
+      <div class="kpi-grid" id="kpis"></div>
+
+      <div class="section-head">
+        <span class="step">2</span><h2>Leads</h2>
+        <span class="head-info" data-info="Every organisation in auto_found_educ_leads. Tag each 'Send intro' or 'Skip' — the decision is saved to the lead's status. Liv and Julienne can tag; everyone else is view-only." data-src="Supabase → auto_found_educ_leads (+ reviewer from auto_found_educ_leads_review_log)"></span>
+        <div class="spacer"></div>
+        <span class="muted" id="elCount" style="font-size:13px"></span>
+      </div>
+      <p class="al-note" id="elRoleNote"></p>
+      <div class="card col-12">
+        <div id="leadsRows"></div>
+      </div>
+    </main>
+  </div>
+
+  <script src="app.js?v=23"></script>
+  <script>
+    var DATA = null;
+    var VIEW = 'all';           // all | pending (untagged) | send | skip
+    var TABLE_STATE = {};
+
+    function numfmt(n) { return (n == null) ? '—' : fmt(n, 'count'); }
+    function txt(v) { return (v === null || v === undefined || v === '') ? '—' : esc(String(v)); }
+    function canReview() { return !!(DATA && DATA.canReview); }
+
+    function allLeads() { return (DATA && DATA.leads) || []; }
+    function viewRows() {
+      var ls = allLeads();
+      return VIEW === 'all' ? ls : ls.filter(function (l) { return l.review === VIEW; });
+    }
+
+    function kpiCard(o) {
+      var cls = 'kpi' + (o.view ? ' kpi-click' : '') + (o.view && o.view === VIEW ? ' kpi-active' : '');
+      return '<div class="' + cls + '"' + (o.view ? ' data-view="' + o.view + '"' : '') + '>' +
+        '<div class="label">' + esc(o.label) + (o.info ? ' ' + infoTip(o.info, 'Supabase → auto_found_educ_leads') : '') + '</div>' +
+        '<div class="value">' + o.value + '</div>' +
+        (o.sub ? '<div class="kpi-sub">' + o.sub + '</div>' : '') + '</div>';
+    }
+
+    function computeCards() {
+      var all = allLeads();
+      var c = { pending: 0, send: 0, skip: 0 }, regions = {}, oldest = null;
+      all.forEach(function (l) {
+        if (l.review === 'send') c.send++;
+        else if (l.review === 'skip') c.skip++;
+        else {
+          c.pending++; if (l.region) regions[l.region] = 1;
+          if (l.foundAt && (!oldest || l.foundAt < oldest)) oldest = l.foundAt;
+        }
+      });
+      c.regions = Object.keys(regions).length; c.oldest = oldest;
+      var decided = c.send + c.skip;
+      c.sendRate = decided > 0 ? Math.round((c.send / decided) * 1000) / 10 : null;
+      return c;
+    }
+
+    function renderCards() {
+      var c = computeCards();
+      var cards = [
+        { label: 'To review', value: numfmt(c.pending), view: 'pending',
+          sub: c.pending ? (c.regions + ' regions' + (c.oldest ? ' · oldest ' + fmtDate(c.oldest) : '')) : 'All caught up 🎉',
+          info: 'Leads not yet tagged — waiting for Liv or Julienne to choose Send intro or Skip.' },
+        { label: 'Send intro', value: numfmt(c.send), view: 'send', sub: 'approved for outreach',
+          info: 'Organisations tagged Send intro — approved to pursue.' },
+        { label: 'Skipped', value: numfmt(c.skip), view: 'skip', sub: 'not pursued',
+          info: 'Organisations tagged Skip — not a fit.' },
+        { label: 'Send-intro rate', value: c.sendRate == null ? '—' : c.sendRate + '%', sub: 'of reviewed leads',
+          info: 'Send intro ÷ (Send intro + Skipped), across every reviewed org. A low rate may mean the finder is surfacing the wrong organisations.' },
+      ];
+      document.getElementById('kpis').innerHTML = cards.map(kpiCard).join('');
+      document.querySelectorAll('#kpis .kpi-click').forEach(function (el) {
+        el.addEventListener('click', function () {
+          var v = el.getAttribute('data-view');
+          setView(VIEW === v ? 'all' : v);
+        });
+      });
+    }
+
+    function setView(v) {
+      VIEW = v;
+      document.querySelectorAll('#viewSeg button').forEach(function (b) {
+        b.classList.toggle('active', b.getAttribute('data-view') === v);
+      });
+      renderCards(); renderTable();
+    }
+
+    function reviewLabel(r) { return r === 'send' ? 'Send intro' : r === 'skip' ? 'Skip' : 'To review'; }
+    function reviewPill(r, row) {
+      var cls = r === 'send' ? 'pos' : r === 'skip' ? 'neg' : 'partial';
+      var who = row.reviewedBy ? ' title="' + esc('By ' + row.reviewedBy + (row.reviewedAt ? ' · ' + fmtDate(row.reviewedAt) : '')) + '"' : '';
+      return '<span class="pill ' + cls + '"' + who + '>' + esc(reviewLabel(r)) + '</span>';
+    }
+    function decisionCell(v, row) {
+      if (!canReview()) return reviewPill(row.review, row);
+      var sel = row.review === 'send' ? 'send' : row.review === 'skip' ? 'skip' : '';
+      return '<select class="al-select' + (sel ? ' is-' + sel : '') + '" data-id="' + row.id + '">' +
+        '<option value=""' + (sel === '' ? ' selected' : '') + '>— choose —</option>' +
+        '<option value="send"' + (sel === 'send' ? ' selected' : '') + '>Send intro</option>' +
+        '<option value="skip"' + (sel === 'skip' ? ' selected' : '') + '>Skip</option></select>';
+    }
+    function orgCell(v, row) {
+      var site = row.website
+        ? '<div><a class="al-link" href="' + esc(row.website) + '" target="_blank" rel="noopener">' + esc(row.domain || 'website') + ' ↗</a></div>'
+        : '';
+      return txt(row.org) + site;
+    }
+    function kindPill(v) {
+      return v === 'school' ? '<span class="pill partial">School</span>'
+        : v === 'association' ? '<span class="pill pos">Association</span>' : txt(v);
+    }
+    function regionCell(v, row) {
+      var ctry = row.country ? '<div class="muted" style="font-size:12px">' + esc(row.country) + '</div>' : '';
+      return txt(row.region) + ctry;
+    }
+
+    function renderTable() {
+      var rows = viewRows();
+      renderSortableTable('leadsRows', rows, [
+        { key: 'review', label: 'Decision', render: decisionCell, text: function (v, r) { return reviewLabel(r.review); } },
+        { key: 'org', label: 'Organisation', render: orgCell, text: function (v, r) { return (r.org || '') + ' ' + (r.domain || ''); } },
+        { key: 'kind', label: 'Type', render: kindPill, text: function (v) { return v || ''; } },
+        { key: 'region', label: 'Region', render: regionCell, text: function (v, r) { return (r.region || '') + ' ' + (r.country || ''); } },
+        { key: 'category', label: 'Category', render: txt },
+        { key: 'foundAt', label: 'Date found', unit: 'date' },
+      ], {
+        searchPlaceholder: 'Search leads (organisation, region, category)…',
+        sortKey: 'foundAt', sortDir: 'desc',
+        pageSize: 25,
+        stateStore: TABLE_STATE,
+        rowClass: function (r) { return r.review === 'send' ? 'al-send-row' : r.review === 'skip' ? 'al-skip-row' : 'al-pending-row'; },
+        emptyText: VIEW === 'pending' ? 'Nothing to review — all caught up.' : 'No leads match this filter.',
+        onCount: function (shown, total) {
+          var el = document.getElementById('elCount');
+          if (el) el.textContent = shown === total ? (total + ' leads') : (shown + ' of ' + total + ' leads');
+        },
+      });
+    }
+
+    function onDecision(sel) {
+      // id comes back from Postgres as a bigint STRING, so compare as strings
+      // (and send the string in the URL — the server coerces it with Number()).
+      var id = sel.getAttribute('data-id'), val = sel.value || null;
+      var row = DATA.leads.filter(function (l) { return String(l.id) === id; })[0];
+      if (!row) return;
+      sel.disabled = true;
+      postJSON('/api/sales/education-leads/' + id + '/review', { decision: val }).then(function (out) {
+        row.review = out.review;
+        row.reviewedBy = out.reviewedBy; row.reviewedAt = out.reviewedAt;
+        renderCards(); renderTable();
+      }).catch(function (err) {
+        sel.disabled = false;
+        sel.value = row.review === 'send' || row.review === 'skip' ? row.review : '';
+        alert('Could not save: ' + err.message);
+      });
+    }
+
+    function loadData() {
+      fetchJSON('/api/sales/education-leads').then(function (data) {
+        DATA = data;
+        var note = document.getElementById('elRoleNote');
+        note.textContent = data.canReview
+          ? 'Choose Send intro or Skip in the Decision column — it saves instantly. Pick "— choose —" to undo.'
+          : 'View only — only Liv and Julienne can tag leads.';
+        document.getElementById('elAsOf').textContent = data.meta && data.meta.status === 'pending' ? 'Needs setup' : '';
+        if (data.meta && data.meta.status === 'pending') {
+          document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Needs setup</strong><span>' +
+            esc(data.meta.note || 'Data source not configured.') + '</span></div>';
+          return;
+        }
+        renderCards(); renderTable();
+      }).catch(function (err) {
+        document.getElementById('kpis').innerHTML = '<div class="needs-setup" style="grid-column:1/-1"><strong>Couldn’t load education leads</strong><span>' +
+          esc(err.message) + '</span></div>';
+      });
+    }
+
+    initPage('sales');
+    renderSalesSidebar('educ-leads');
+    fillHeadInfo();
+    if (currentUser()) {
+      document.querySelectorAll('#viewSeg button').forEach(function (b) {
+        b.addEventListener('click', function () { setView(b.getAttribute('data-view')); });
+      });
+      document.getElementById('leadsRows').addEventListener('change', function (e) {
+        if (e.target && e.target.classList.contains('al-select')) onDecision(e.target);
+      });
+      loadData();
+    }
+  </script>
+</body>
+</html>

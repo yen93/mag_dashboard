@@ -43,8 +43,9 @@ import { roasAssistantRouter } from './roasAssistant.js';
 import { roiAssistantRouter } from './roiAssistant.js';
 import { cached, clearCache } from './lib/cache.js';
 import { normalizeRange } from './lib/range.js';
-import { canReviewJc, canReviewAltLeads } from './users.js';
+import { canReviewJc, canReviewAltLeads, canReviewEducLeads } from './users.js';
 import { getAlternateLeads, setAlternateLeadReview } from './metrics/alternate-leads.js';
+import { getEducationLeads, setEducationLeadReview } from './metrics/education-leads.js';
 import { q } from './providers/supabase.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -184,6 +185,38 @@ sales.post('/alternate-leads/:id/review', async (req, res) => {
     res.json(out);
   } catch (err) {
     console.error('[sales:alternate-leads review]', err);
+    res.status(502).json({ error: 'Failed to save the review.', detail: err.message });
+  }
+});
+// Education Leads — Liv's review queue for the org-level education prospects the discovery
+// finder scrapes into public.auto_found_educ_leads (replaces the old "Liv's Remark" sheet
+// column). GET is uncached (reviewers need fresh state) and tells the client whether THIS
+// user may tag (`canReview`: Liv + Julienne only). POST is gated server-side.
+sales.get('/education-leads', async (req, res) => {
+  try {
+    const payload = await getEducationLeads();
+    res.json({ ...payload, canReview: canReviewEducLeads(req.user && req.user.email) });
+  } catch (err) {
+    console.error('[sales:education-leads]', err);
+    res.status(502).json({ error: 'Failed to load education leads from data source.', detail: err.message });
+  }
+});
+sales.post('/education-leads/:id/review', async (req, res) => {
+  if (!canReviewEducLeads(req.user && req.user.email)) {
+    return res.status(403).json({ error: 'Only Liv and Julienne can review education leads.' });
+  }
+  const id = Number(req.params.id);
+  const decision = req.body && req.body.decision;   // 'send' | 'skip' | null (reset)
+  if (!Number.isInteger(id) || id <= 0) return res.status(400).json({ error: 'Invalid lead id.' });
+  if (decision != null && decision !== 'send' && decision !== 'skip') {
+    return res.status(400).json({ error: 'decision must be "send", "skip" or null.' });
+  }
+  try {
+    const out = await setEducationLeadReview(id, decision || null, req.user.email);
+    if (!out) return res.status(404).json({ error: 'Lead not found.' });
+    res.json(out);
+  } catch (err) {
+    console.error('[sales:education-leads review]', err);
     res.status(502).json({ error: 'Failed to save the review.', detail: err.message });
   }
 });
