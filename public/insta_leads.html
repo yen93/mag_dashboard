@@ -44,8 +44,6 @@
     .il-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; line-height: 1.35; }
     .il-link { font-size: 12px; color: var(--accent); text-decoration: none; word-break: break-word; }
     .il-link:hover { text-decoration: underline; }
-    .il-email { font-size: 12px; color: var(--text); text-decoration: none; word-break: break-all; display: inline-block; margin-top: 2px; }
-    .il-email:hover { color: var(--accent); text-decoration: underline; }
     .il-desc { max-width: 290px; font-size: 12.5px; color: var(--text-muted); line-height: 1.4; }
     .il-story-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; white-space: nowrap; }
     .il-preview-btn {
@@ -195,12 +193,29 @@
     function queueLeads() {
       return ((DATA && DATA.leads) || []).filter(function (l) { return l.inQueue; });
     }
+    // "To review" mirrors tbl_query: SELECT DISTINCT org, speaker, description,
+    // saved_img_link, created_at … WHERE org IS NOT NULL AND sheet_remark IS NULL
+    // AND outreach_status IS NULL. Dedupe on that exact tuple so repeat story rows
+    // collapse to one (the first/newest, since rows arrive created_at DESC).
+    function dedupePending(rows) {
+      var seen = Object.create(null), out = [];
+      rows.forEach(function (l) {
+        var key = [l.org, l.speaker, l.description, l.savedImgLink, l.createdAt]
+          .map(function (v) { return String(v == null ? '' : v).trim().toLowerCase(); })
+          .join('\u0001');
+        if (seen[key]) return;
+        seen[key] = 1;
+        out.push(l);
+      });
+      return out;
+    }
     function viewRows() {
       var all = (DATA && DATA.leads) || [];
       if (VIEW === 'send') return all.filter(function (l) { return l.review === 'send'; });
       if (VIEW === 'skip') return all.filter(function (l) { return l.review === 'skip'; });
       var q = queueLeads();
-      return VIEW === 'queue' ? q : q.filter(function (l) { return l.review === 'pending'; });
+      if (VIEW === 'queue') return q;
+      return dedupePending(q.filter(function (l) { return l.review === 'pending'; }));
     }
 
     function kpiCard(o) {
@@ -353,17 +368,6 @@
         : '';
       return txt(row.speaker) + handle;
     }
-    function contactCell(v, row) {
-      if (!row.poc && !row.pocEmail && !row.pocPosition) {
-        return row.enriched ? '<span class="muted">No POC found</span>' : '<span class="muted">Not enriched yet</span>';
-      }
-      var name = row.poc ? '<div>' + esc(row.poc) + '</div>' : '';
-      var pos = row.pocPosition ? '<div class="il-sub">' + esc(row.pocPosition) + '</div>' : '';
-      var mail = row.pocEmail
-        ? '<div><a class="il-email" href="mailto:' + esc(row.pocEmail) + '">' + esc(row.pocEmail) + '</a></div>'
-        : '';
-      return name + pos + mail;
-    }
     function descCell(v, row) {
       return row.description ? '<div class="il-desc">' + esc(row.description) + '</div>' : '—';
     }
@@ -384,12 +388,11 @@
         { key: 'review', label: 'Decision', render: decisionCell, text: function (v, r) { return reviewLabel(r.review, r); } },
         { key: 'org', label: 'Organisation & Event', render: orgCell, text: function (v, r) { return (r.org || '') + ' ' + (r.eventName || ''); } },
         { key: 'speaker', label: 'Speaker', render: speakerCell, text: function (v, r) { return (r.speaker || '') + (r.instaHandle ? ' @' + r.instaHandle : ''); } },
-        { key: 'poc', label: 'Contact', render: contactCell, text: function (v, r) { return [r.poc, r.pocPosition, r.pocEmail].filter(Boolean).join(' '); } },
         { key: 'description', label: 'Story summary', render: descCell, text: function (v, r) { return r.description || ''; } },
         { key: 'savedImgLink', label: 'Story', render: storyCell, text: function (v, r) { return r.savedImgLink ? 'Archived' : ''; } },
         { key: 'createdAt', label: 'Date found', unit: 'date' },
       ], {
-        searchPlaceholder: 'Search leads (organisation, event, speaker, handle, contact, summary)…',
+        searchPlaceholder: 'Search leads (organisation, event, speaker, handle, summary)…',
         sortKey: 'createdAt', sortDir: 'desc',
         pageSize: 25,
         stateStore: TABLE_STATE,
