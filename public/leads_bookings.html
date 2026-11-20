@@ -126,7 +126,7 @@
       <!-- Enquiries by source (stacked bar, per month) -->
       <div class="card">
         <div class="card-head" style="display:block;margin-bottom:10px">
-          <h3>Enquiries by source <span class="head-info" data-info="Enquiries per month, stacked by lead source, for the selected financial year. FY27 onwards paid is split into Google Ads / Bing Ads and sourced (with Organic) from the GA4 & Ads Leads tracker, excluding non-keynote funnel pages; earlier years show one Paid Ads bucket from the ROAS view." data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); FY from cdate."></span></h3>
+          <h3>Enquiries by source <span class="head-info" data-info="Enquiries each month, stacked by where the lead came from, for the selected period. Paid leads are shown by platform (Google Ads, Bing Ads) where that detail is available, otherwise grouped as Paid Ads." data-src="ActiveCampaign deals and GA4 / Ads leads"></span></h3>
         </div>
         <div class="chart-box"><canvas id="sourceCanvas"></canvas></div>
       </div>
@@ -135,7 +135,7 @@
       <div class="lb-lower">
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>By source <span class="head-info" data-info="Enquiries, bookings and booking rate per lead source for the selected FY, with a total row. FY27 onwards paid is split into Google Ads / Bing Ads and sourced (with Organic) from the GA4 & Ads Leads tracker, excluding non-keynote funnel pages; earlier years show one Paid Ads bucket from the ROAS view. Total reconciles with the Overview 'Keynote enquiries/bookings' cards." data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); booking = won deal."></span></h3>
+            <h3>By source <span class="head-info" data-info="Enquiries, bookings and booking rate for each lead source, with a total row, for the selected period. The total matches the Keynote enquiries and bookings cards on the Overview." data-src="ActiveCampaign deals and GA4 / Ads leads (a booking is a won deal)"></span></h3>
           </div>
           <div class="lb-table-wrap">
             <table class="lb-table">
@@ -170,7 +170,7 @@
       <!-- All leads (one row per individual lead/deal from the four sources) -->
       <div class="card" id="all-leads" style="margin-top:16px">
         <div class="card-head" style="display:block;margin-bottom:10px">
-          <h3>All leads <span class="head-info" data-info="Every individual lead/deal behind the counts above — one row per deal, for the selected FY (or custom range). Columns: date, source, organisation, deal, status and value (AUD). FY27 onwards paid leads show as Google Ads / Bing Ads (from the GA4 & Ads Leads tracker, excl. non-keynote funnel pages); earlier years as Paid Ads from the ROAS view." data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); booking = won deal; FY from cdate."></span></h3>
+          <h3>All leads <span class="head-info" data-info="Every individual lead behind the counts above — one row per deal — for the selected period. Shows the date, source, organisation, deal, status and value." data-src="ActiveCampaign deals and GA4 / Ads leads"></span></h3>
           <div class="muted" style="font-size:12px;margin-top:4px" id="leadsCount"></div>
         </div>
         <div id="leadsRows"></div>
@@ -458,20 +458,18 @@
     function renderCards() {
       paintCard({
         state: BOOKINGS, valueEl: 'bookValue', deltaEl: 'bookDelta', labelEl: 'bookLabel', title: 'Events Booked',
-        source: 'GET /api/marketing/leads-by-source — the SAME rows as the By source + All leads tables, won deals summed across all sources; FY from cdate.',
+        source: 'ActiveCampaign deals and GA4 / Ads leads',
         loadedInfo: function (fName, r) {
-          return 'Won deals/leads created in ' + fName + ' across three sources — Paid ' + r.ads +
-            ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect +
-            '. Same figure as marketing.html "Keynote bookings"; equals the by-source table total.';
+          return 'Bookings — won deals and leads created in the selected period, across all sources. ' +
+            'Matches the Keynote bookings card on the Overview and the total in the By source table.';
         },
       });
       paintCard({
         state: ENQ, valueEl: 'enqValue', deltaEl: 'enqDelta', labelEl: 'enqLabel', title: 'Enquiries',
-        source: 'GET /api/marketing/leads-by-source — the SAME rows as the By source + All leads tables, all deals summed across all sources; FY from cdate.',
+        source: 'ActiveCampaign deals and GA4 / Ads leads',
         loadedInfo: function (fName, r) {
-          return 'Deals/leads created in ' + fName + ' across three sources — Paid ' + r.ads +
-            ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect +
-            '. Same figure as marketing.html "Keynote enquiries"; equals the by-source table total.';
+          return 'All enquiries — deals and leads created in the selected period, across all sources. ' +
+            'Matches the Keynote enquiries card on the Overview and the total in the By source table.';
         },
       });
     }

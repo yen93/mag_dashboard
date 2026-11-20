@@ -245,8 +245,8 @@
       <div class="card ml-card">
         <div class="card-head block-head">
           <h3 id="summaryHeading">Yearly summary <span class="head-info"
-            data-info="FY and calendar-year totals for each marketing measure. Per-measure definitions are on each row's ⓘ."
-            data-src="GET /api/marketing/overview (Keynote enquiries / bookings) + GET /api/marketing/roi (Marketing revenue / spend / ROI); Cadence delivered pending."></span></h3>
+            data-info="Financial-year and calendar-year totals for each marketing measure. Each row's ⓘ explains what that measure is."
+            data-src="ActiveCampaign, GA4 / Ads leads and Xero"></span></h3>
         </div>
         <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="summaryHeading">
           <table class="ml-table" style="min-width:680px">
@@ -277,8 +277,8 @@
       <div class="card ml-card" id="summaryDealsSection" style="display:none;margin-top:16px">
         <div class="card-head block-head">
           <h3 id="dealsHeading">Deals behind the summary <span class="head-info"
-            data-info="Every individual lead/deal behind the Yearly summary's Keynote enquiries and bookings — one row per deal across the four sources (Google/Bing/Paid Ads, Organic, Tailor, Bureau), with its FY, date, organisation, deal, status and value (AUD). Booking = won deal. Filtered to the selected FY (or custom date range); sort, search and filter per column."
-            data-src="GET /api/marketing/leads-by-source — pre-FY27 Paid Ads from roas_counted_deals; FY27+ Google Ads / Bing Ads + Organic from ga4_ac_contact_source (cpc / organic rows, excl. non-keynote funnel pages + free-gift opt-ins); Tailor/Bureau from ac_indirect_deals (excl. paid); FY from cdate."></span></h3>
+            data-info="Every individual lead behind the Yearly summary's enquiries and bookings — one row per deal, for the selected period. Shows the source, date, organisation, deal, status and value. A booking is a won deal. Sort, search and filter by column."
+            data-src="ActiveCampaign deals and GA4 / Ads leads"></span></h3>
           <div class="muted" style="font-size:12px;margin-top:4px" id="dealsCount"></div>
         </div>
         <!-- Financial-year filter — scoped to THIS table (the toggle doesn't affect the
@@ -303,8 +303,8 @@
         <div class="card ml-card">
           <div class="card-head block-head">
             <h3 id="statusHeading">Update status <span class="head-info"
-              data-info="Whether each month's log was filled in by its due date (the 8th of the following month). Not tracked live yet."
-              data-src="pending — no data source wired yet."></span></h3>
+              data-info="Whether each month's log was filled in by its due date. Not tracked yet."
+              data-src="Not tracked yet"></span></h3>
           </div>
           <div class="ml-table-wrap" tabindex="0" role="region" aria-labelledby="statusHeading">
             <table class="ml-table">
@@ -324,8 +324,8 @@
         <div class="card ml-card">
           <div class="card-head block-head">
             <h3 id="notesHeading">October notes <span class="head-info"
-              data-info="Free-text notes captured for the month from the tracker's Notes rows. Not tracked live yet."
-              data-src="pending — no data source wired yet."></span></h3>
+              data-info="Free-text notes captured for the month. Not tracked yet."
+              data-src="Not tracked yet"></span></h3>
           </div>
           <div class="ml-notes-list" id="notesList"></div>
         </div>
@@ -413,22 +413,22 @@
       rows.push(mkRow('Keynote enquiries', 'count',
         enqFy(2025), enqFy(2026), enqFy(2027),
         cySum(OVS.enqMon, 2025, 'total'), cySum(OVS.enqMon, 2026, 'total'),
-        'Deals/leads created per period across three sources (paid = roas_counted_deals, organic = ga4 medium=organic, indirect = ac_indirect_deals excl. paid). Same source as the Overview "Keynote enquiries" card. GET /api/marketing/overview.',
+        'Deals and leads created in the period across paid ads, organic search and bureau/partner sources. Same source as the Overview "Keynote enquiries" card.',
         rEnq));
       rows.push(mkRow('Keynote bookings', 'count',
         bookFy(2025), bookFy(2026), bookFy(2027),
         cySum(OVS.bookMon, 2025, 'total'), cySum(OVS.bookMon, 2026, 'total'),
-        'WON deals/leads created per period across the same three sources. Same source as the Overview "Keynote bookings" card. GET /api/marketing/overview.',
+        'Won deals and leads created in the period across the same sources. Same source as the Overview "Keynote bookings" card.',
         rBook));
       rows.push(mkRow('Marketing revenue', 'currency',
         revFy(2025), revFy(2026), revFy(2027),
         cySum(ROIS.byMon, 2025, 'marketingRevenue'), cySum(ROIS.byMon, 2026, 'marketingRevenue'),
-        'Marketing-attributed won revenue (ROAS-paid + organic + bureau/tailor + Exec X, deduped). Same source as the Overview "Marketing revenue" card. GET /api/marketing/roi.',
+        'Won revenue from marketing-sourced deals. Same source as the Overview "Marketing revenue" card.',
         rRev));
       rows.push(mkRow('Marketing spend', 'currency',
         spendFy(2025), spendFy(2026), spendFy(2027),
         cySum(ROIS.byMon, 2025, 'spend'), cySum(ROIS.byMon, 2026, 'spend'),
-        'Xero marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST. Same source as the Overview "Marketing spend" card. GET /api/marketing/roi.',
+        'Marketing spend — advertising, website, software, printing and team costs. Same source as the Overview "Marketing spend" card.',
         rSpend));
       var roi25 = roiFrom(revFy(2025), spendFy(2025));
       var roi26 = roiFrom(revFy(2026), spendFy(2026));
@@ -436,7 +436,7 @@
       var roiCy25 = roiFrom(cySum(ROIS.byMon, 2025, 'marketingRevenue'), cySum(ROIS.byMon, 2025, 'spend'));
       var roiCy26 = roiFrom(cySum(ROIS.byMon, 2026, 'marketingRevenue'), cySum(ROIS.byMon, 2026, 'spend'));
       rows.push(mkRow('Marketing ROI', 'roi', roi25, roi26, roi27, roiCy25, roiCy26,
-        'Net return = (marketing revenue ÷ marketing spend − 1) × 100. Same definition as the Spend & ROI tab\'s "Marketing ROI" card.',
+        'Net return on marketing spend: how much revenue is earned for each dollar spent. Same as the Spend & ROI tab "Marketing ROI" card.',
         CUSTOM ? roiFrom(rRev, rSpend) : null));
       rows.push({ measure: 'Cadence delivered', pending: true });
       return rows;

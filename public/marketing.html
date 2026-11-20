@@ -174,16 +174,16 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Revenue vs spend by month <span class="head-info"
-              data-info="By month for the selected financial year: marketing spend (green bars) and marketing revenue (blue line) share the left axis; whole-business company revenue (gray dashed) sits on the right axis for context."
-              data-src="GET /api/marketing/roi (byMonth) — Xero P&L revenue + marketing_channel_monthly spend"></span></h3>
+              data-info="Marketing spend and marketing revenue by month for the selected period. Company-wide revenue is shown as well, for context."
+              data-src="Xero (revenue and marketing spend)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="spendRevCanvas"></canvas></div>
         </div>
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Enquiries vs bookings <span class="head-info"
-              data-info="Keynote enquiries (all created deals) vs bookings (won deals) by month for the selected financial year, across the paid + organic + indirect sources."
-              data-src="GET /api/marketing/leads-by-source (same source as the Leads & Bookings tables) — paid: roas_counted_deals all FYs + ga4 cpc rows FY27+ (excl. non-keynote pages / free-gift opt-ins) + ac_google_ads_yes_deals; + ga4 organic + ac_indirect_deals (excl. paid)"></span></h3>
+              data-info="Enquiries (all deals created) and bookings (won deals) by month for the selected period."
+              data-src="ActiveCampaign deals and GA4 / Ads leads"></span></h3>
           </div>
           <div class="chart-box"><canvas id="enqBookCanvas"></canvas></div>
         </div>
@@ -192,21 +192,21 @@
       <div class="mkt-bottom">
         <div class="card">
           <div class="label-sm">Cadence delivered <span class="head-info"
-            data-info="Planned marketing cadence / sends actually delivered in the period. Not tracked in any data source yet."
-            data-src="Not tracked yet — no database source"></span></div>
+            data-info="Planned marketing posts versus how many were actually published. Not tracked yet."
+            data-src="Not tracked yet"></span></div>
           <div class="big"><span class="chip warn">pending</span></div>
         </div>
         <div class="card">
           <div class="label-sm">Cost per enquiry <span class="head-info"
-            data-info="Marketing spend ÷ keynote enquiries for the selected financial year. The line below, when shown, is the change vs the prior FY (lower is better)."
-            data-src="GET /api/marketing/roi (spend) ÷ GET /api/marketing/leads-by-source (enquiries)"></span></div>
+            data-info="Marketing spend divided by the number of enquiries for the selected period. The line below, when shown, is the change versus the previous year (lower is better)."
+            data-src="Marketing spend and enquiries"></span></div>
           <div class="big" id="cpeValue">…</div>
           <div id="cpeSub"></div>
         </div>
         <div class="card" style="grid-column: span 2">
           <div class="label-sm">Live AI Insight <span class="head-info"
-            data-info="A one- to two-sentence AI insight generated from the live Overview + ROI figures for the selected financial year."
-            data-src="GET /api/marketing/insight — OpenAI over the live Overview + ROI data"></span></div>
+            data-info="A short summary of the marketing figures for the selected period, written automatically."
+            data-src="Written automatically from this page's figures"></span></div>
           <div class="notes" id="aiInsight">Generating insight…</div>
         </div>
       </div>
@@ -359,16 +359,13 @@
       return liveCard({
         state: ENQ, title: 'Keynote enquiries',
         href: 'leads_bookings.html#all-leads',
-        unloadedInfo: 'Total deals/leads created across three sources — paid ads, ' +
-          'organic search and indirect/bureau. Created = deal date (Australian FY, Jul–Jun).',
+        unloadedInfo: 'All enquiries — deals and leads created in the selected period — ' +
+          'across paid ads, organic search and bureau/partner sources. ' +
+          'Matches the total on the Leads & Bookings page.',
         loadedInfo: function (fyName, r) {
-          return 'Deals/leads created in ' + fyName + ' across three sources — Paid ' + r.ads +
-            ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect + '. ' +
-            'Paid = roas_counted_deals before FY27, ga4_ac_contact_source cpc rows FY27+ · ' +
-            'Organic = ga4_ac_contact_source (medium=organic) · ' +
-            'Indirect = ac_indirect_deals (Deal Source? = Indirect, excl. paid). ' +
-            'FY27+ drops ga4 rows on non-keynote pages / free-gift opt-ins. ' +
-            'Equals the Leads & Bookings by-source total. Created = deal date, AU FY.';
+          return 'All enquiries — deals and leads created in the selected period — ' +
+            'across paid ads, organic search and bureau/partner sources. ' +
+            'Matches the total on the Leads & Bookings page.';
         },
       });
     }
@@ -376,14 +373,13 @@
       return liveCard({
         state: BOOKINGS, title: 'Keynote bookings',
         href: 'leads_bookings.html#all-leads',
-        unloadedInfo: 'WON deals/leads created across three sources — paid ads, organic ' +
-          'search and indirect/bureau. Created = deal date (Australian FY, Jul–Jun).',
+        unloadedInfo: 'Bookings — won deals and leads created in the selected period — ' +
+          'across paid ads, organic search and bureau/partner sources. ' +
+          'Matches the total on the Leads & Bookings page.',
         loadedInfo: function (fyName, r) {
-          return 'Won deals/leads created in ' + fyName + ' across three sources — Paid ' + r.ads +
-            ', Organic ' + (r.organic || 0) + ', Indirect ' + r.indirect + '. ' +
-            'Paid = roas_counted_deals before FY27 (won), ga4 cpc rows FY27+ (deal_status=won) · ' +
-            'Organic = ga4 organic (deal_status=won) · ' +
-            'Indirect = ac_indirect_deals (status Won, excl. paid). Created = deal date, AU FY.';
+          return 'Bookings — won deals and leads created in the selected period — ' +
+            'across paid ads, organic search and bureau/partner sources. ' +
+            'Matches the total on the Leads & Bookings page.';
         },
       });
     }
@@ -393,9 +389,8 @@
       var key = selFyKey();
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
-      var info = 'Keynote bookings ÷ keynote enquiries for the selected FY — the ' +
-        'share of created deals that are won. Both counts across the paid + organic ' +
-        '+ indirect sources.';
+      var info = 'The share of enquiries that turned into bookings ' +
+        '(bookings divided by enquiries) for the selected period.';
       function rateOf(k) {
         var e = rowFor(ENQ, k), b = rowFor(BOOKINGS, k);
         var enq = e ? e.total : 0, book = b ? b.total : 0;
@@ -405,10 +400,6 @@
       if (loaded) {
         var cur = rateOf(key);
         val = cur.pct === null ? '—' : (Math.round(cur.pct) + '%');
-        info = 'Keynote bookings ÷ keynote enquiries in ' + fyName + ' — ' + cur.book +
-          ' won ÷ ' + cur.enq + ' created' +
-          (cur.pct === null ? ' (no enquiries)' : ' = ' + cur.pct.toFixed(1) + '%') +
-          '. Both counts across the paid + organic + indirect sources.';
         if (!CUSTOM && key !== 'all' && cur.pct !== null) {
           var prevKey = 'fy' + String(fyEndOf(key) - 1).slice(-2);
           var prev = rateOf(prevKey);
@@ -430,18 +421,14 @@
       var key = selFyKey();
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
-      var info = 'Won revenue from marketing-sourced deals (ROAS-paid + organic search + ' +
-        'bureau/tailor + Exec X), deduped by deal. Live from /api/marketing/roi.';
+      var info = 'Won revenue from marketing-sourced deals in the selected period — ' +
+        'across paid ads, organic search, bureau/tailor and Executive X. ' +
+        'Matches the Spend & ROI page.';
       if (MROI.loaded) {
         var r = mroiRow(key);
         var mRev = (r && r.marketingRevenue != null) ? r.marketingRevenue : null;
         val = (mRev == null) ? '—' : fmt(mRev, 'currency');
         if (r) {
-          var mp = r.marketingRevenueParts || {};
-          info = 'Won revenue from marketing-sourced deals in ' + fyName + ', deduped by deal — ' +
-            'ROAS-paid ' + fmt(mp.roas || 0, 'currency') + ' · Organic ' + fmt(mp.organic || 0, 'currency') +
-            ' · Bureau/Tailor ' + fmt(mp.bureauTailor || 0, 'currency') + ' · Exec X ' + fmt(mp.execX || 0, 'currency') +
-            '.' + (MROI.revSource ? ' Source: ' + MROI.revSource : '');
           if (!CUSTOM && key !== 'all' && mRev != null) {
             var prev = MROI.byFy[fyEndOf(key) - 1];
             if (prev && prev.marketingRevenue != null) deltaHtml = currencyDelta(mRev - prev.marketingRevenue, fyEndOf(key) - 1);
@@ -456,15 +443,12 @@
       var key = selFyKey();
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
-      var info = 'Marketing spend — Xero marketing accounts only (Advertising, Website, ' +
-        'Software, Printing, WrkPod), ex-GST. Live from /api/marketing/roi.';
+      var info = 'Marketing spend for the selected period — advertising, website, ' +
+        'software, printing and team costs. Matches the Spend & ROI page.';
       if (MROI.loaded) {
         var r = mroiRow(key);
         var spend = (r && r.hasSpend) ? r.totalSpend : null;
         val = (spend == null) ? '—' : fmt(spend, 'currency');
-        if (r && !r.hasSpend) info = 'No marketing spend recorded for ' + fyName + '.';
-        else info = 'Xero marketing accounts only (Advertising, Website, Software, Printing, ' +
-          'WrkPod), ex-GST, in ' + fyName + '.';
         if (!CUSTOM && key !== 'all' && spend != null) {
           var prev = MROI.byFy[fyEndOf(key) - 1];
           if (prev && prev.hasSpend) deltaHtml = currencyDelta(spend - prev.totalSpend, fyEndOf(key) - 1);
@@ -479,8 +463,8 @@
       var key = selFyKey();
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
-      var info = 'Net return on marketing spend = (marketing revenue ÷ marketing spend − 1) × 100. ' +
-        'Both inputs live from /api/marketing/roi — same figures as the Marketing revenue and spend cards.';
+      var info = 'Net return on marketing spend: how much marketing revenue is earned ' +
+        'for each dollar spent, shown as a percentage above or below breaking even.';
       function netRoiOf(k) {
         var r = mroiRow(k);
         var rev = (r && r.marketingRevenue != null) ? r.marketingRevenue : null;
@@ -491,10 +475,6 @@
         var cur = netRoiOf(key);
         val = cur == null ? '—' : (cur > 0 ? '+' : '') + cur + '%';
         if (cur != null) {
-          var r = mroiRow(key);
-          info = 'Marketing revenue ' + fmt(r.marketingRevenue, 'currency') + ' ÷ marketing spend ' +
-            fmt(r.totalSpend, 'currency') + ' − 1 in ' + fyName + ' = ' + (cur > 0 ? '+' : '') + cur +
-            '% net return on marketing spend.';
           if (!CUSTOM && key !== 'all') {
             var prev = netRoiOf('fy' + String(fyEndOf(key) - 1).slice(-2));
             if (prev != null) {

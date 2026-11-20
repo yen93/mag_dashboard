@@ -740,31 +740,31 @@
     // kind:'pending' shows the pending chip. No fabricated sample numbers.
     var TOP_CARDS = [
       { label: 'Website sessions', kind: 'live', key: 'sessions',
-        desc: 'Total website visits (sessions) for the selected financial year, synced weekly from the GA4 Data API (GA4 tracking began April 2023 / FY23).',
-        source: 'public.ga4_website_traffic_snapshots (GA4 Data API)' },
+        desc: 'The total number of website visits (sessions) for the selected period.',
+        source: 'GA4 website analytics' },
       { label: 'Organic enquiries (incl. unmatched)', kind: 'live', key: 'organicAll',
-        desc: 'Every organic-search website form conversion — matched to a saved AC contact OR anonymous. Current FY only (GA4 medium is captured recently).',
-        source: 'public.ga4_ac_event_matches (organic form events)' },
+        desc: 'Website form submissions that came from organic search, whether or not they matched a saved contact. Current period only.',
+        source: 'GA4 website analytics' },
       { label: 'Enquiries (in ActiveCampaign)', kind: 'live', key: 'total',
-        desc: 'GA4 & Ads leads that became an existing saved ActiveCampaign contact (one matched contact = one enquiry), for the selected FY.',
-        source: 'public.ga4_ac_contact_source ∩ activecampaign_contacts' },
+        desc: 'Website and Ads leads that matched an existing saved contact in ActiveCampaign (one matched contact counts as one enquiry), for the selected period.',
+        source: 'Website / Ads leads matched to ActiveCampaign' },
       { label: 'Organic enquiries', kind: 'live', key: 'organic',
-        desc: 'Enquiries whose GA4 medium is organic AND that matched a saved AC contact. Current FY only.',
-        source: 'public.ga4_ac_contact_source (medium = organic)' },
+        desc: 'Enquiries that came from organic search and matched a saved contact. Current period only.',
+        source: 'Website / Ads leads matched to ActiveCampaign' },
       { label: 'Paid-search enquiries', kind: 'live', key: 'cpc',
-        desc: 'Enquiries whose GA4 medium is cpc (Google / Bing paid search) AND that matched a saved AC contact. Current FY only.',
-        source: 'public.ga4_ac_contact_source (medium = cpc)' }
+        desc: 'Enquiries that came from paid search (Google or Bing) and matched a saved contact. Current period only.',
+        source: 'Website / Ads leads matched to ActiveCampaign' }
     ];
     var BOTTOM_CARDS = [
       { label: 'Visits from AI tools', kind: 'live', key: 'aiVisits',
-        desc: 'Sessions referred from AI assistants (ChatGPT, Gemini, Perplexity, Claude, Copilot, etc.) for the selected financial year, synced weekly from the GA4 Data API.',
-        source: 'public.ga4_website_traffic_snapshots (GA4 Data API)' },
+        desc: 'Website visits referred from AI assistants (such as ChatGPT, Gemini, Perplexity, Claude and Copilot) for the selected period.',
+        source: 'GA4 website analytics' },
       { label: 'New Google reviews', kind: 'reviews', key: 'reviews',
-        desc: 'New Google Business reviews created in the selected financial year (by review_create_time), with average star rating.',
-        source: 'public.google_reviews (review_create_time, star_rating)' },
+        desc: 'New Google Business reviews left in the selected period, with the average star rating.',
+        source: 'Google Business reviews' },
       { label: 'Phone enquiries', kind: 'c2c', key: 'phone',
-        desc: 'Phone-number clicks on the website (GA4 "click_to_call" event) for the selected financial year — a visitor tapping a tel: link to call. Synced weekly from the GA4 Data API. GA4 began recording it in April 2023 (FY23).',
-        source: 'public.ga4_click_to_call_monthly (GA4 click_to_call event, property 363754280)' }
+        desc: 'Phone-number clicks on the website — a visitor tapping a phone link to call — for the selected period.',
+        source: 'GA4 website analytics' }
     ];
 
     var WS = null;        // live payload once fetched (null = loading, false = failed)
@@ -1031,8 +1031,8 @@
       var infoEl = document.getElementById('wsGraphInfo');
       if (infoEl && !infoEl.querySelector('.src-info')) {
         infoEl.innerHTML = infoTip(
-          'Weekly GA4 Data API snapshot of Website sessions and AI-tool referral visits per Australian financial year. Selecting a financial year spotlights that FY on the chart and updates the summary strip and AI tool sources breakdown.',
-          'public.ga4_website_traffic_snapshots (GA4 property 363754280 · ga4-website-traffic-sync)'
+          'Website visits and visits from AI tools by period. Selecting a period highlights it on the chart and updates the summary strip and the breakdown of AI tools.',
+          'GA4 website analytics'
         );
       }
 
@@ -1306,8 +1306,8 @@
       var infoEl = document.getElementById('wsTableInfo');
       if (infoEl && !infoEl.querySelector('.src-info')) {
         infoEl.innerHTML = infoTip(
-          'Per-FY snapshot rows stored in public.ga4_website_traffic_snapshots (weekly upsert-only GA4 Data API sync). Click any row to switch the active financial year.',
-          'public.ga4_website_traffic_snapshots (PK: fy_end, snapshot_date)'
+          'Website visits and visits from AI tools, one row per period. Click any row to switch the selected period.',
+          'GA4 website analytics'
         );
       }
 
@@ -1429,8 +1429,8 @@
       var infoEl = document.getElementById('wsC2cGraphInfo');
       if (infoEl && !infoEl.querySelector('.src-info')) {
         infoEl.innerHTML = infoTip(
-          'Monthly website phone-number clicks (GA4 "click_to_call" event — a visitor tapping a tel: link), split by acquisition channel. "Monthly trend" stacks the selected FY’s months by channel; "By channel" ranks channels for the selected FY. Synced weekly from the GA4 Data API.',
-          'public.ga4_click_to_call_monthly (GA4 property 363754280 · ga4-click-to-call-sync)'
+          'Website phone-number clicks each month — a visitor tapping a phone link to call — split by where the visit came from. "Monthly trend" stacks the selected period by channel; "By channel" ranks the channels.',
+          'GA4 website analytics'
         );
       }
 
@@ -1568,8 +1568,8 @@
       var infoEl = document.getElementById('wsC2cTableInfo');
       if (infoEl && !infoEl.querySelector('.src-info')) {
         infoEl.innerHTML = infoTip(
-          'GA4 click_to_call (phone-number click) events for the selected financial year, broken down by acquisition channel, with each channel’s share of that FY’s phone clicks.',
-          'public.ga4_click_to_call_monthly (GA4 click_to_call event, aggregated per FY)'
+          'Website phone-number clicks for the selected period, broken down by where the visit came from, with each channel’s share of the total.',
+          'GA4 website analytics'
         );
       }
 

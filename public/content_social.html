@@ -272,13 +272,13 @@
       </div>
 
       <!-- Followers per platform (live, FY-aware) -->
-      <h3 class="cs-block-title" id="followersHeading">Followers by platform <span class="head-info" data-info="Current follower count per social platform, for the selected financial year (that FY's latest weekly snapshot)." data-src="GET /api/marketing/platforms — public.social_platform_stats, scraped weekly via Apify (public profile stats)."></span></h3>
+      <h3 class="cs-block-title" id="followersHeading">Followers by platform <span class="head-info" data-info="The current number of followers on each social platform, for the selected period." data-src="Social profiles, refreshed weekly"></span></h3>
       <div class="cs-kpi-grid" id="followerCards"></div>
 
       <!-- Platforms table -->
       <div class="card cs-platforms-card">
         <div class="card-head block-head">
-          <h3 id="platformsHeading">Platforms <span class="head-info" data-info="Each platform's latest snapshot for the selected FY: posts published, average engagement per recent post, and engagement rate. Public stats only — impressions/reach are private analytics and are not scraped." data-src="GET /api/marketing/platforms — public.social_platform_stats, scraped weekly via Apify."></span></h3>
+          <h3 id="platformsHeading">Platforms <span class="head-info" data-info="Each platform's latest figures for the selected period: posts published, average engagement per recent post, and engagement rate. Only public figures are available — impressions and reach are private and can't be collected." data-src="Social profiles, refreshed weekly"></span></h3>
           <div class="chart-cap" id="platformsCap"></div>
         </div>
         <div class="cs-table-wrap" tabindex="0" role="region" aria-labelledby="platformsHeading">
@@ -300,7 +300,7 @@
       <div class="cs-lower">
         <div class="card cs-chart-card">
           <div class="card-head block-head">
-            <h3>Engagement by platform <span class="head-info" data-info="Total engagement (likes + comments + shares) on each platform's recent posts, for the selected FY. social_platform_stats carries no impressions (private analytics), so engagement is the closest scrapable reach signal." data-src="GET /api/marketing/platforms — public.social_platform_stats, Apify weekly."></span></h3>
+            <h3>Engagement by platform <span class="head-info" data-info="Total engagement (likes, comments and shares) on each platform's recent posts, for the selected period. Impressions and reach aren't available, so engagement is shown as the closest measure of reach." data-src="Social profiles, refreshed weekly"></span></h3>
             <div class="chart-cap" id="impressionsCap"></div>
           </div>
           <div class="cs-chart-box">
@@ -310,19 +310,19 @@
 
         <div class="cs-stack">
           <div class="card cs-side-card">
-            <div class="label-sm">Newsletter subscribers <span class="head-info" data-info="Subscriber count of James's LinkedIn newsletter, 'Cas' Tips for High Performers'." data-src="GET /api/marketing/content-metrics — public.content_social_metrics (LinkedIn cookie sync or manual)."></span></div>
+            <div class="label-sm">Newsletter subscribers <span class="head-info" data-info="The number of subscribers to James's LinkedIn newsletter, 'Cas' Tips for High Performers'." data-src="LinkedIn"></span></div>
             <div class="big" id="newsletterVal">…</div>
             <div class="sub" id="newsletterSub"></div>
           </div>
 
           <div class="card cs-side-card">
-            <div class="label-sm">Article views <span class="head-info" data-info="Views of MAG articles (LinkedIn / blog) published in the period." data-src="Not tracked yet (pending) — needs an article-level log."></span></div>
+            <div class="label-sm">Article views <span class="head-info" data-info="Views of MAG articles (LinkedIn and blog) published in the period. Not tracked yet." data-src="Not tracked yet"></span></div>
             <div class="big" id="articleVal"></div>
             <div class="sub" id="articleSub"></div>
           </div>
 
           <div class="card cs-side-card">
-            <div class="label-sm">By format and pillar <span class="head-info" data-info="Breakdown of posts by content format and content pillar." data-src="Not tracked yet (pending) — needs a post-level log."></span></div>
+            <div class="label-sm">By format and pillar <span class="head-info" data-info="Posts broken down by content format and content theme. Not tracked yet." data-src="Not tracked yet"></span></div>
             <div><span class="cs-phase-badge" id="formatBadge">pending</span></div>
           </div>
         </div>
@@ -530,10 +530,10 @@
     // (design-guide standard) instead of fabricated sample numbers. Labels stay so the
     // reader knows what each tile will track; each carries ONE ⓘ (what it will track + source).
     var KPI_INFO = {
-      'Cadence slots delivered':       ['Planned content slots actually published vs the monthly cadence plan.', 'Not tracked yet (pending) — needs a post-level content log.'],
-      'Delivered on time':             ['Published content slots that went out on their scheduled date.', 'Not tracked yet (pending) — needs a post-level content log.'],
-      'Extra timely posts':            ['Timely posts published outside the planned cadence.', 'Not tracked yet (pending) — needs a post-level content log.'],
-      'Pillar mix · Offer & Booking':  ['Share of posts in the Offer & Booking content pillar (10% cap).', 'Not tracked yet (pending) — needs a post-level content log.']
+      'Cadence slots delivered':       ['How many planned posts were actually published, versus the monthly plan. Not tracked yet.', 'Not tracked yet'],
+      'Delivered on time':             ['Published posts that went out on their scheduled date. Not tracked yet.', 'Not tracked yet'],
+      'Extra timely posts':            ['Timely posts published on top of the planned schedule. Not tracked yet.', 'Not tracked yet'],
+      'Pillar mix · Offer & Booking':  ['The share of posts in the Offer & Booking content theme. Not tracked yet.', 'Not tracked yet']
     };
     function renderKpiRow() {
       var d = currentData();

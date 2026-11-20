@@ -170,8 +170,8 @@
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Spend by type <span class="head-info"
-              data-info="Marketing spend for the selected FY broken down by spend type (Wages, Digital Ads, Agency, Software, Tools, Printed Collaterals), summed over the FY's calendar months."
-              data-src="GET /api/marketing/channel-summary (type series) ← public.marketing_channel_monthly, live from Xero"></span></h3>
+              data-info="Marketing spend for the selected period, broken down by type of spend (wages, digital ads, agency, software, tools, printed materials)."
+              data-src="Live from Xero (marketing accounts)"></span></h3>
           </div>
           <div class="chart-box" id="spendBox" style="height:320px"><canvas id="spendCanvas"></canvas></div>
         </div>
@@ -179,8 +179,8 @@
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Channel results <span class="head-info"
-              data-info="Per-channel spend, enquiries, bookings, revenue and ROAS by financial year. Paid Ads (Google + Bing, excluding agency fees) is fully tracked; Offsite (Executive X) shows bookings + revenue, spend from the Xero 'MAG program delivery expenses' account (code 376) — a shared all-programs account, so it overcounts Exec X and its ROAS reads low — and enquiries = companies listed per season in the Exec X ROI sheet (by session FY); Bureau and Tailor show enquiries, bookings and won revenue (Spend, Cost / enquiry and ROAS total are N/A); Marketing EDM is 0 across all columns (pending tracking process)."
-              data-src="GET /api/marketing/channel-results — Paid Ads via the ROAS metric (Google + Bing spend); Executive X bookings+revenue via public.exec_x_revenue, spend via the Xero 'MAG program delivery expenses' account (code 376) in xero_pnl_accounts_fy, enquiries = companies listed per season in the Exec X ROI sheet (static); Bureau/Tailor via the leads-by-source metric (ac_indirect_deals)"></span></h3>
+              data-info="Spend, enquiries, bookings, revenue and return on ad spend for each marketing channel, for the selected period. Some channels only have part of this data; where a figure isn't tracked yet it shows as pending. The Offsite (Executive X) spend uses a shared delivery-cost account, so its return reads lower than the true figure."
+              data-src="Xero spend, ActiveCampaign deals and the Executive X report"></span></h3>
           </div>
           <div class="sr-table-wrap">
             <table class="sr-table">
@@ -346,39 +346,39 @@
       var html = '';
       // 1 — Marketing revenue (highlighted first card)
       html += kpiCard('Marketing revenue',
-        'Marketing-attributed won revenue for the selected FY — ROAS-paid + organic + bureau/tailor + Exec X (deduped). Same figure as the ROI tab’s "Marketing revenue".',
-        'GET /api/marketing/roi (row.marketingRevenue)',
+        'Won revenue from marketing-sourced deals for the selected period. Same figure as the ROI tab’s "Marketing revenue".',
+        'Marketing-sourced deals and the Executive X report',
         fmtCur(mRev),
         deltaHtml(mRev, pMRev, 'up-good', prevFyEnd));
       // 2 — Marketing spend
       html += kpiCard('Marketing spend',
-        'Total marketing spend for the selected FY — Xero marketing accounts only (Advertising, Website, Software, Printing, WrkPod), ex-GST. Same figure as the ROI tab.',
-        'GET /api/marketing/roi (row.totalSpend) ← public.marketing_channel_monthly, live from Xero',
+        'Total marketing spend for the selected period — advertising, website, software, printing and team costs. Same figure as the ROI tab.',
+        'Live from Xero (marketing accounts)',
         fmtCur(spend),
         deltaHtml(spend, pSpend, 'neutral', prevFyEnd));
       // 3 — Net return (marketing revenue − marketing spend)
       html += kpiCard('Net return',
-        'Marketing-attributed won revenue minus marketing spend. Revenue = ROAS-paid + organic + bureau/tailor + Exec X (deduped), same as the ROI tab.',
-        'GET /api/marketing/roi (marketingRevenue − totalSpend)',
+        'Marketing revenue minus marketing spend for the selected period.',
+        'Marketing revenue minus marketing spend',
         fmtCur(netReturn),
         deltaHtml(netReturn, pNetReturn, 'up-good', prevFyEnd));
       // 4 — Marketing ROI (net ROI %)
       html += kpiCard('Marketing ROI',
-        'Net return on marketing spend = (marketing revenue ÷ marketing spend − 1). Same definition as the ROI tab’s "Net ROI".',
-        'GET /api/marketing/roi (marketingRevenue ÷ totalSpend − 1)',
+        'Net return on marketing spend: how much revenue is earned for each dollar spent. Same as the ROI tab’s "Net ROI".',
+        'Marketing revenue and spend',
         (marketingRoi != null ? (marketingRoi > 0 ? '+' : '') + marketingRoi + '%' : '<span class="muted">—</span>'),
         ros != null ? '<div class="sub">Return on spend ' + ros.toFixed(2) + '×</div>' : '');
       // 5 — Marketing CAC
       html += kpiCard('Marketing CAC',
-        'Cost to acquire a client = marketing spend ÷ clients won (all AC deals won this FY). Same as the ROI tab’s "Cost per client".',
-        'GET /api/marketing/roi (totalSpend ÷ dealsWon)',
+        'Cost to win a client — marketing spend divided by the number of clients won in the period. Same as the ROI tab’s "Cost per client".',
+        'Marketing spend and clients won',
         fmtCur(cac),
         (dealsWon ? '<div class="sub">Marketing spend ÷ ' + dealsWon + ' clients won</div>'
                   : (spend != null ? '<div class="sub">No clients won this FY</div>' : '')));
       // 6 — Cost per enquiry
       html += kpiCard('Cost per enquiry',
-        'Marketing spend ÷ enquiries (deals/leads created this FY across paid + organic + indirect — same count as the Overview).',
-        'GET /api/marketing/roi (totalSpend) ÷ GET /api/marketing/overview (enquiries.total)',
+        'Marketing spend divided by the number of enquiries in the period (same enquiry count as the Overview).',
+        'Marketing spend and enquiries',
         fmtCur(costPerEnq),
         deltaHtml(costPerEnq, pCostPerEnq, 'down-good', prevFyEnd));
 

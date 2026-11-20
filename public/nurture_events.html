@@ -249,8 +249,8 @@
       <div class="card ne-events-card">
         <div class="card-head block-head">
           <h3 id="eventsHeading">Executive X <span class="head-info"
-            data-info="One row per Executive X session: internal cost, attendees, cost per attendee, bookings, revenue, and return (revenue ÷ cost). Filtered by the session's own date."
-            data-src="Executive X ROI Report (Google Sheet) — static, re-seeded when the sheet changes; FY by session date (Spring Sep–Nov, Autumn Mar)."></span></h3>
+            data-info="One row per Executive X session: internal cost, attendees, cost per attendee, bookings, revenue and return (revenue divided by cost). Filtered by each session's own date."
+            data-src="Executive X ROI report"></span></h3>
         </div>
         <div class="ne-table-wrap" tabindex="0" role="region" aria-labelledby="eventsHeading">
           <table class="ne-table">
@@ -327,14 +327,14 @@
     // One ⓘ info tool per KPI card (DESIGN_GUIDE §6) — what it is + where it comes from.
     // Indexed to match the four cards below.
     var NE_INFO = [
-      { desc: 'Past keynote clients now in the nurture base: won keynote deals (Keynotes / Workshops / Immersive LIV) for the selected period.',
-        source: 'GET /api/marketing/nurture-events — WON pipeline-3 deals in activecampaign_deals; FY by deal cdate.' },
-      { desc: 'Post-conference offsite enquiries from past clients: all offsite deals (any status) for the selected period.',
-        source: 'GET /api/marketing/nurture-events — ALL pipeline-17 (Trojan Horse: Post-Conf) deals in post_conference_deals; FY by deal cdate.' },
-      { desc: 'Offsites actually booked by past clients: won post-conference offsite deals for the selected period.',
-        source: 'GET /api/marketing/nurture-events — WON pipeline-17 deals in post_conference_deals; FY by deal cdate.' },
-      { desc: 'Share of past keynote clients who booked an offsite = offsites booked ÷ keynote clients in nurture.',
-        source: 'Computed client-side from the two cards above.' }
+      { desc: 'Past keynote clients now being nurtured — won keynote, workshop and immersive deals for the selected period.',
+        source: 'ActiveCampaign deals' },
+      { desc: 'Offsite enquiries from past clients — all post-conference offsite deals, any status, for the selected period.',
+        source: 'ActiveCampaign deals' },
+      { desc: 'Offsites actually booked by past clients — won post-conference offsite deals for the selected period.',
+        source: 'ActiveCampaign deals' },
+      { desc: 'The share of past keynote clients who booked an offsite (offsites booked divided by clients being nurtured).',
+        source: 'Calculated from the two cards above' }
     ];
 
     // Drill-down keys for the four cards (card 4 = derived ratio → not clickable).

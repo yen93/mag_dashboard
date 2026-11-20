@@ -229,7 +229,7 @@
       <!-- Partner outreach table card -->
       <div class="card ep-outreach-card">
         <div class="card-head block-head">
-          <h3 id="outreachHeading">Partner outreach<span class="head-info" data-info="Indirect (bureau / tailor) partner deals for the selected financial year — contacts, enquiries, bookings and won revenue, with the prior FY's revenue alongside." data-src="GET /api/marketing/email-partners — public.ac_indirect_deals (is_tailor split) via public.email_partner_metrics; partner contacts from the ActiveCampaign SPEAKERS BUREAUS list"></span></h3>
+          <h3 id="outreachHeading">Partner outreach<span class="head-info" data-info="Bureau and tailor partner deals for the selected period — contacts, enquiries, bookings and won revenue, with the previous year's revenue alongside." data-src="ActiveCampaign (partner deals and contacts)"></span></h3>
         </div>
         <div class="ep-table-wrap" tabindex="0" role="region" aria-labelledby="outreachHeading">
           <table class="ep-table">
@@ -253,7 +253,7 @@
         <div class="card-head block-head">
           <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
             <div>
-              <h3 id="indirectDealsHeading">Indirect Deals<span class="head-info" data-info="Every individual indirect deal (Speaker bureaus and The Tailor) from ActiveCampaign — one row per deal. Filtered by the selected financial year and optional custom date range; sort, search, and filter per column." data-src="GET /api/marketing/indirect-deals — public.ac_indirect_deals; booking = won deal (status = 1); value = value_aud; FY from cdate."></span></h3>
+              <h3 id="indirectDealsHeading">Indirect Deals<span class="head-info" data-info="Every individual bureau and tailor deal from ActiveCampaign — one row per deal — for the selected period. Sort, search and filter by column." data-src="ActiveCampaign (a booking is a won deal)"></span></h3>
               <div class="muted" style="font-size:12px;margin-top:4px" id="indirectDealsCount"></div>
             </div>
             <div class="mkt-controls" style="margin:0">
@@ -332,9 +332,7 @@
     function prevRow() { var k = selFyKey(); return k === 'all' ? null  : (EP.byFy[fyEndOf(k) - 1] || null); }
 
     // Shared provenance string for every email KPI (goes in the ⓘ only).
-    var EP_SRC = 'GET /api/marketing/email-partners — public.email_partner_metrics ' +
-      '(latest weekly snapshot per FY; email KPIs from ActiveCampaign ' +
-      'run_campaign_performance_report, filled by the email-partners-sync routine).';
+    var EP_SRC = 'ActiveCampaign (email campaigns and partner deals)';
 
     function kpiCard(label, value, subHtml, subCls, info) {
       return '<div class="ep-kpi">' +
@@ -364,13 +362,13 @@
 
       grid.innerHTML = [
         kpiCard('Subscribed contacts', num(r.subscribers.activeContacts), '&nbsp;', '',
-          infoTip('Contacts currently subscribed / active in ActiveCampaign as of the latest snapshot for the selected FY.', EP_SRC)),
+          infoTip('The number of contacts currently subscribed and active in ActiveCampaign, for the selected period.', EP_SRC)),
         kpiCard('EDM sends', num(e.campaignsSent), num(e.totalSends) + ' emails sent', 'pos',
-          infoTip('Email campaigns sent this FY (headline) and total emails delivered (below). Open rate ' + pct(e.openRate) + ', click-to-open ' + pct(e.clickToOpenRate) + ' — opens are inflated by Apple Mail Privacy.', EP_SRC)),
+          infoTip('Email campaigns sent in the selected period, with the total number of emails delivered shown below. Open rates are unreliable because Apple Mail privacy inflates them.', EP_SRC)),
         kpiCard('Click rate', pct(e.clickRate), clkSub, clkCls,
-          infoTip('Unique click rate across campaigns this FY; the sub-line is the change vs the prior FY in percentage points.', EP_SRC)),
+          infoTip('The share of people who clicked a link in the emails, for the selected period. The line below is the change versus the previous year, in percentage points.', EP_SRC)),
         kpiCard('Unsubscribes', num(e.totalUnsubscribes), pct(e.unsubscribeRate) + ' of sends', 'warn',
-          infoTip('Unsubscribes this FY (headline) and as a percentage of emails sent (below).', EP_SRC))
+          infoTip('The number of people who unsubscribed in the selected period, with the percentage of emails sent shown below.', EP_SRC))
       ].join('');
     }
 
