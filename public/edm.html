@@ -87,26 +87,25 @@
     /* Chart + side tables row */
     .edm-row2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: stretch; }
     @media (max-width: 900px) { .edm-row2 { grid-template-columns: 1fr; } }
-    .edm-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-    @media (max-width: 900px) { .edm-mini { grid-template-columns: 1fr 1fr; } }
-    @media (max-width: 560px) { .edm-mini { grid-template-columns: 1fr; } }
 
     .edm-chart-card { padding: 20px 22px 16px; display: flex; flex-direction: column; }
     .edm-chart-box { position: relative; flex: 1; min-height: 260px; }
     .edm-chart-box.tall { min-height: 320px; }
 
-    .edm-mini-card { padding: 18px 20px; }
-    .edm-mini-card h3 { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; }
-
-    table.edm-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-    table.edm-table th, table.edm-table td {
-      padding: 9px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border);
-    }
-    table.edm-table th:first-child, table.edm-table td:first-child { text-align: left; padding-left: 2px; white-space: normal; }
-    table.edm-table th:last-child, table.edm-table td:last-child { padding-right: 2px; }
-    table.edm-table thead th { font-size: 11.5px; font-weight: 600; color: var(--text-muted); padding-bottom: 9px; }
-    table.edm-table tbody td { font-variant-numeric: tabular-nums; color: var(--text); }
-    .edm-rank { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+    /* List health — per-list active/total bars */
+    .lh-headline { font-size: 14px; font-weight: 600; color: var(--text); margin-top: 2px; }
+    .lh-legend { font-size: 12px; color: var(--text-muted); margin-top: 8px; display: flex; align-items: center; }
+    .lh-legend .lh-key { display: inline-block; width: 11px; height: 11px; border-radius: 3px; margin-right: 5px; }
+    .lh-legend .lh-key:not(:first-child) { margin-left: 14px; }
+    .lh-key.active { background: var(--mkt-accent); }
+    .lh-key.rest { background: var(--surface-2); border: 1px solid var(--border); }
+    .lh-bars { margin-top: 6px; }
+    .lh-row { margin-top: 14px; }
+    .lh-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; margin-bottom: 5px; }
+    .lh-name { font-size: 13.5px; font-weight: 600; color: var(--text); }
+    .lh-fig { font-size: 12.5px; color: var(--text-muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .lh-bar { position: relative; height: 12px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
+    .lh-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--mkt-accent); transition: width .3s ease; }
 
     /* Campaigns table card */
     .edm-campaigns-card { padding: 22px 24px; margin-top: 16px; }
@@ -156,31 +155,26 @@
           <!-- 3 KPI cards -->
           <div class="edm-kpi-grid" style="--cols:3" id="contactKpis"></div>
 
-          <!-- Growth chart + top lists / top tags -->
+          <!-- List health (left) + contact segmentation (right) -->
           <div class="edm-row2">
             <div class="card edm-chart-card">
               <div class="card-head block-head">
-                <h3 id="growthHeading">New contacts by month <span class="head-info" data-info="How many contacts were added to ActiveCampaign each month over the last 12 months. Computed live from the contact mirror by the date each contact was created." data-src="ActiveCampaign contact mirror (live)"></span></h3>
-                <div class="chart-cap" id="growthCap"></div>
+                <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
+                  <h3 id="lhHeading">List health <span class="head-info" data-info="The largest ActiveCampaign lists and how much of each is still active (subscribed) versus the full list size. The headline is account-wide active contacts as a share of all contacts." data-src="ActiveCampaign lists, refreshed weekly"></span></h3>
+                  <span class="chart-cap" id="lhCap"></span>
+                </div>
+                <div class="lh-headline" id="lhHeadline">Loading…</div>
+                <div class="lh-legend"><span class="lh-key active"></span>Active<span class="lh-key rest"></span>Non-active</div>
               </div>
-              <div class="edm-chart-box"><canvas id="growthCanvas"></canvas></div>
+              <div class="lh-bars" id="lhBars"></div>
             </div>
 
-            <div class="edm-mini">
-              <div class="card edm-mini-card">
-                <h3 id="listsHeading">Top 5 contact lists <span class="head-info" data-info="The five ActiveCampaign lists with the most active (subscribed) contacts." data-src="ActiveCampaign lists, refreshed weekly"></span></h3>
-                <table class="edm-table">
-                  <thead><tr><th>List</th><th>Active</th></tr></thead>
-                  <tbody id="listsBody"></tbody>
-                </table>
+            <div class="card edm-chart-card">
+              <div class="card-head block-head">
+                <h3 id="segHeading">Contact segmentation <span class="head-info" data-info="How many contacts fall into each engagement band, from ActiveCampaign's engagement tags: Engaged = opened something in the last 90 days; Quiet = no open for 90–180 days (the re-engagement audience); Dormant = no open for 180+ days (reduced cadence)." data-src="ActiveCampaign engagement tags, refreshed weekly"></span></h3>
+                <div class="chart-cap" id="segCap"></div>
               </div>
-              <div class="card edm-mini-card">
-                <h3 id="tagsHeading">Top 5 tags <span class="head-info" data-info="The five contact tags applied to the most contacts in ActiveCampaign." data-src="ActiveCampaign tags, refreshed weekly"></span></h3>
-                <table class="edm-table">
-                  <thead><tr><th>Tag</th><th>Contacts</th></tr></thead>
-                  <tbody id="tagsBody"></tbody>
-                </table>
-              </div>
+              <div class="edm-chart-box"><canvas id="segCanvas"></canvas></div>
             </div>
           </div>
         </div>
@@ -278,64 +272,69 @@
       ].join('');
     }
 
-    function miniRow(rank, name, val) {
-      return '<tr>' +
-        '<td><span class="edm-rank">' + rank + '.</span> ' + esc(name) + '</td>' +
-        '<td>' + num(val) + '</td>' +
-      '</tr>';
-    }
-    function renderTopLists() {
-      var rows = (EDM && EDM.contact && EDM.contact.topLists) || [];
-      var body = document.getElementById('listsBody');
-      body.innerHTML = rows.length
-        ? rows.map(function (l, i) { return miniRow(i + 1, l.name, l.activeSubscribers); }).join('')
-        : '<tr><td colspan="2" class="muted">No data.</td></tr>';
-    }
-    function renderTopTags() {
-      var rows = (EDM && EDM.contact && EDM.contact.topTags) || [];
-      var body = document.getElementById('tagsBody');
-      body.innerHTML = rows.length
-        ? rows.map(function (t, i) { return miniRow(i + 1, t.tag, t.subscriberCount); }).join('')
-        : '<tr><td colspan="2" class="muted">No data.</td></tr>';
+    function pctOfInt(a, t) { return (a == null || !t) ? 0 : Math.round((a / t) * 100); }
+
+    // List health — the largest lists as active/total horizontal bars + the account headline.
+    function renderListHealth() {
+      var c = (EDM && EDM.contact) || {};
+      var lists = c.lists || [];
+      var head = document.getElementById('lhHeadline');
+      var cap = document.getElementById('lhCap');
+      var bars = document.getElementById('lhBars');
+      if (cap) cap.textContent = 'Real figures from ActiveCampaign';
+      if (head) {
+        head.innerHTML = (c.active == null)
+          ? '—'
+          : '<strong>' + num(c.active) + '</strong> active of ' + num(c.total) + ' contacts (' + pctOfInt(c.active, c.total) + '%)';
+      }
+      if (!bars) return;
+      if (!lists.length) { bars.innerHTML = '<div class="muted" style="padding:8px 2px">No data.</div>'; return; }
+      bars.innerHTML = lists.map(function (l) {
+        var p = pctOfInt(l.active, l.total);
+        return '<div class="lh-row">' +
+          '<div class="lh-top"><span class="lh-name">' + esc(l.name) + '</span>' +
+          '<span class="lh-fig">' + num(l.active) + ' of ' + num(l.total) + ' active (' + p + '%)</span></div>' +
+          '<div class="lh-bar"><div class="lh-fill" style="width:' + p + '%"></div></div>' +
+        '</div>';
+      }).join('');
     }
 
-    // 'YYYY-MM' -> "Mon 'YY"
-    function monthShort(ym) {
-      var p = String(ym || '').split('-');
-      if (p.length < 2) return ym || '';
-      var d = new Date(Number(p[0]), Number(p[1]) - 1, 1);
-      return d.toLocaleDateString('en-AU', { month: 'short' }) + " '" + String(p[0]).slice(-2);
-    }
-
-    var _growthChart = null;
-    function renderGrowthChart() {
-      var el = document.getElementById('growthCanvas');
+    // Contact segmentation — counts of the AC engagement tags (Engaged / Quiet / Dormant).
+    var _segChart = null;
+    var SEG_COLORS = { active: '#16a34a', quiet: '#d9883a', dormant: '#8a94a6' };
+    function renderSegChart() {
+      var el = document.getElementById('segCanvas');
       if (!el) return;
-      var rows = (EDM && EDM.contact && EDM.contact.byMonth) || [];
-      var cap = document.getElementById('growthCap');
+      var seg = (EDM && EDM.contact && EDM.contact.segmentation) || [];
+      var cap = document.getElementById('segCap');
       var tc = themeColors();
-      if (_growthChart) { _growthChart.destroy(); _growthChart = null; }
-      if (!rows.length) { if (cap) cap.textContent = 'No data'; return; }
-      if (cap) cap.textContent = 'Last 12 months · ' + rows.reduce(function (a, r) { return a + (r.added || 0); }, 0).toLocaleString('en-AU') + ' added';
-      _growthChart = new Chart(el.getContext('2d'), {
+      if (_segChart) { _segChart.destroy(); _segChart = null; }
+      if (!seg.length) { if (cap) cap.textContent = 'No data'; return; }
+      if (cap) cap.textContent = 'By engagement tag · ' + seg.reduce(function (a, s) { return a + (s.count || 0); }, 0).toLocaleString('en-AU') + ' tagged';
+      _segChart = new Chart(el.getContext('2d'), {
         type: 'bar',
         data: {
-          labels: rows.map(function (r) { return monthShort(r.ym); }),
+          labels: seg.map(function (s) { return s.label; }),
           datasets: [{
-            label: 'New contacts',
-            data: rows.map(function (r) { return r.added; }),
-            backgroundColor: tc.accent, borderRadius: 4, maxBarThickness: 48
+            label: 'Contacts',
+            data: seg.map(function (s) { return s.count; }),
+            backgroundColor: seg.map(function (s) { return SEG_COLORS[s.key] || tc.accent; }),
+            borderRadius: 4, maxBarThickness: 90
           }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
           scales: {
-            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 }, maxRotation: 0, autoSkip: false } },
+            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 12 } } },
             y: { beginAtZero: true, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 }, grid: { color: tc.grid } }
           },
           plugins: {
             legend: { display: false },
-            tooltip: { callbacks: { label: function (ctx) { return (ctx.parsed.y || 0).toLocaleString('en-AU') + ' new contacts'; } } }
+            tooltip: { callbacks: {
+              title: function (items) { return (seg[items[0].dataIndex] || {}).label || items[0].label; },
+              label: function (ctx) { return (ctx.parsed.y || 0).toLocaleString('en-AU') + ' contacts'; },
+              afterLabel: function (ctx) { return (seg[ctx.dataIndex] || {}).desc || ''; }
+            } }
           }
         }
       });
@@ -430,9 +429,8 @@
 
     function renderAll() {
       renderContactKpis();
-      renderGrowthChart();
-      renderTopLists();
-      renderTopTags();
+      renderListHealth();
+      renderSegChart();
       renderCampaignKpis();
       renderCampBar();
       renderCampTable();
@@ -448,7 +446,7 @@
         btn.setAttribute('aria-expanded', open ? 'false' : 'true');
         body.hidden = open;
         // charts need a reflow after being un-hidden
-        if (!open) { renderGrowthChart(); renderCampBar(); }
+        if (!open) { renderSegChart(); renderCampBar(); }
       });
     }
 
@@ -470,7 +468,7 @@
     wireCollapse('toggleContact', 'contactBody');
     wireCollapse('toggleCampaigns', 'campaignsBody');
     load();
-    window.onThemeChange = function () { renderGrowthChart(); renderCampBar(); };
+    window.onThemeChange = function () { renderSegChart(); renderCampBar(); };
   </script>
 </body>
 </html>

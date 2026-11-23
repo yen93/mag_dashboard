@@ -3,19 +3,16 @@
 Populates `public.edm_report_metrics`, the snapshot cache behind the Marketing
 **EDM** page (`/api/marketing/edm` → `server/metrics/edm-report.js`). Same model
 as `email-partners-sync`: a scheduled job writes a Supabase cache; the dashboard
-only ever `SELECT`s the latest row. (The page's "new contacts by month" bar is
-computed live by the server from `activecampaign_contacts` — this routine does
-**not** write it.)
+only ever `SELECT`s the latest row.
 
 - **Where it runs:** a Claude Code scheduled routine (cloud agent) with the
   **ActiveCampaign MCP** + **Supabase MCP** — *not* a Supabase edge function (the
   contact/campaign figures come from the AC MCP, which only Claude can call).
-- **Schedule:** weekly, **Monday 06:00 Asia/Manila** (`0 6 * * 1`) — same cadence
-  as the other weekly syncs.
+- **Schedule:** weekly, **Monday 06:00 Asia/Manila** (`0 22 * * 0` UTC).
 - **Supabase project:** `aivitcomiywiysrfwqxt` (MAGTestProject). Writes via the
   Supabase MCP `execute_sql` (service role).
-- **APPEND-ONLY:** each run **INSERTs ONE row**. Never UPDATE, never DELETE, never
-  TRUNCATE — the server reads the most recent `captured_at`.
+- **APPEND-ONLY:** each run **INSERTs ONE row**. Never UPDATE, DELETE or TRUNCATE —
+  the server reads the most recent `captured_at`.
 
 ## What feeds each piece (ActiveCampaign MCP)
 | Field(s) | Source |
@@ -23,14 +20,26 @@ computed live by the server from `activecampaign_contacts` — this routine does
 | `total_contacts` | `list_contacts { limit:1, status:-1 }` → `meta.total` (ANY status) |
 | `active_contacts` | `list_contacts { limit:1, status:1 }` → `meta.total` (ACTIVE) |
 | `nonactive_contacts` | `total_contacts − active_contacts` |
-| `top_lists` | `list_lists { orders:{active_subscribers:"DESC"}, limit:5 }` → `[{name, active_subscribers}]` |
-| `top_tags` | `list_tags { limit:100 }` + `{ limit:100, offset:100 }`, keep `tag` + `subscriber_count`, sort by `subscriber_count` DESC, take top 5 → `[{tag, subscriber_count}]` |
-| `camp_*` summary | `run_campaign_performance_report` → `summaryData` (see below) |
+| `top_lists` (List health) | `list_lists { limit:30 }`, sort by **`non_deleted_subscribers` (total) DESC**, take top 5 → `[{name, active, total}]` where `active`=`active_subscribers`, `total`=`non_deleted_subscribers` |
+| `segmentation` | `list_tags { limit:100 }` + `{ limit:100, offset:100 }`; pick the three engagement tags by exact name (below) and read each `subscriber_count` → `[{key,label,count,tag,desc}]` |
+| `camp_*` summary | `run_campaign_performance_report` → `summaryData` (see Step 1) |
 | `campaigns` | same report → `data[]`, one object per campaign (see shape) |
 
-> **Contact statuses:** ANY=-1, UNCONFIRMED=0, ACTIVE=1, UNSUBSCRIBED=2, BOUNCED=3.
 > `list_contacts` is capped at **one call per turn** by the MCP — run the two
-> status counts across two turns.
+> status counts across two turns. Statuses: ANY=-1, UNCONFIRMED=0, ACTIVE=1,
+> UNSUBSCRIBED=2, BOUNCED=3. **`top_tags` is unused** (leave it `'[]'`).
+
+### Engagement segmentation tags (fixed)
+Build `segmentation` as exactly these three, in order, reading each tag's
+`subscriber_count` (0 is valid):
+```
+{ "key":"active",  "label":"Engaged", "tag":"[MARKETING] engagement: active",
+  "desc":"Opened something in the last 90 days" }
+{ "key":"quiet",   "label":"Quiet",   "tag":"[MARKETING] engagement: quiet 90d",
+  "desc":"No open 90-180 days (re-engagement flow audience)" }
+{ "key":"dormant", "label":"Dormant", "tag":"[MARKETING] engagement: dormant 180d",
+  "desc":"No open 180+ days (reduced cadence)" }
+```
 
 ## Step 1 — campaign report (ActiveCampaign MCP)
 ONE call, **all-time** (no date params — `summaryData` then covers every sent
@@ -55,28 +64,24 @@ From `summaryData`: `number_of_campaigns`→`camp_count`, `total_sends`,
 `total_unsubscribes`.
 
 Map each `data[]` row to this campaign object (keep these keys exactly — the page
-reads them):
-```
-{ id, name, type, lastSent,            // lastSent = last_sent_date truncated to YYYY-MM-DD
-  sends, uOpens, openRate, uClicks, clickRate, cto,
-  bounces, bounceRate, unsubs, unsubRate }
-```
-(`uOpens`=unique_total_opens, `uClicks`=unique_subscriber_clicks,
-`cto`=click_to_open_rate; the rest map by name.)
+reads them): `{ id, name, type, lastSent, sends, uOpens, openRate, uClicks,
+clickRate, cto, bounces, bounceRate, unsubs, unsubRate }` (`lastSent` =
+`last_sent_date` truncated to `YYYY-MM-DD`; `uOpens`=unique_total_opens,
+`uClicks`=unique_subscriber_clicks, `cto`=click_to_open_rate; the rest map by name).
 
 ## Step 2 — insert the snapshot (Supabase MCP `execute_sql`)
-ONE statement. Pass the `top_lists` / `top_tags` / `campaigns` arrays as JSON
-literals cast to `jsonb`. **No `ON CONFLICT`, never UPDATE/DELETE.**
+ONE statement. Pass `top_lists` / `segmentation` / `campaigns` as JSON literals
+cast to `jsonb`. **No `ON CONFLICT`, never UPDATE/DELETE.**
 
 ```sql
 insert into public.edm_report_metrics (
-  run_id, total_contacts, active_contacts, nonactive_contacts, top_lists, top_tags,
+  run_id, total_contacts, active_contacts, nonactive_contacts, top_lists, segmentation,
   camp_count, camp_total_sends, camp_open_rate, camp_click_rate, camp_click_to_open_rate,
   camp_bounce_rate, camp_unsubscribe_rate, camp_total_unique_opens, camp_total_unique_clicks,
   camp_total_bounces, camp_total_unsubscribes, campaigns, note
 ) values (
   gen_random_uuid(), <TOTAL>, <ACTIVE>, <NONACTIVE>,
-  '<TOP_LISTS_JSON>'::jsonb, '<TOP_TAGS_JSON>'::jsonb,
+  '<TOP_LISTS_JSON>'::jsonb, '<SEGMENTATION_JSON>'::jsonb,
   <CAMP_COUNT>, <TOTAL_SENDS>, <OPEN_RATE>, <CLICK_RATE>, <CTO_RATE>,
   <BOUNCE_RATE>, <UNSUB_RATE>, <UNIQUE_OPENS>, <UNIQUE_CLICKS>,
   <TOTAL_BOUNCES>, <TOTAL_UNSUBS>, '<CAMPAIGNS_JSON>'::jsonb, 'weekly edm-sync'
@@ -86,10 +91,10 @@ insert into public.edm_report_metrics (
 ## Verify
 ```sql
 select total_contacts, active_contacts, nonactive_contacts,
-       jsonb_array_length(top_lists)  as n_lists,
-       jsonb_array_length(top_tags)   as n_tags,
+       jsonb_array_length(top_lists)    as n_lists,
+       jsonb_array_length(segmentation) as n_seg,
        camp_count, camp_total_sends, camp_open_rate,
-       jsonb_array_length(campaigns)  as n_campaigns, captured_at
+       jsonb_array_length(campaigns)    as n_campaigns, captured_at
 from public.edm_report_metrics
 order by captured_at desc limit 1;
 ```
@@ -98,14 +103,12 @@ order by captured_at desc limit 1;
 - **AC MCP aggregates:** `run_campaign_performance_report` IS the sanctioned
   aggregate tool — its `summaryData` is account-level. Do **not** sum
   `list_campaigns` rows by hand (the MCP rejects that).
-- **Top tags need two pages** (`limit:100` then `offset:100`); the account has
-  ~192 tags. Each tag record carries `subscriber_count` — sort on it client-side
-  (the MCP can't order tags by count).
-- **Top lists** sort server-side (`orders.active_subscribers=DESC`) — one call.
-- **Open rate is inflated** by Apple Mail privacy — it's stored as reported but the
-  page notes the caveat; clicks are the reliable signal.
-- The page's **new-contacts-by-month** chart is live from
-  `activecampaign_contacts` (daily-synced mirror) — not written here.
+- **List health** needs each list's **total** (`non_deleted_subscribers`), which
+  `list_lists` can't sort by — fetch all (~23) and sort client-side by total DESC.
+- **Segmentation tags may read 0** (quiet/dormant) when the AC engagement
+  automation hasn't tagged anyone in that band — that's a real value, keep it.
+- **Open rate is inflated** by Apple Mail privacy — stored as reported; the page
+  notes the caveat, clicks are the reliable signal.
 - Frontend/server for this page ship with the dashboard — a *data* refresh here
   needs **no redeploy** (the server only SELECTs the cache).
 ```

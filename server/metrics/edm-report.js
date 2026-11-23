@@ -1,24 +1,22 @@
 // Marketing — EDM (ActiveCampaign Contact Performance + All Campaigns Performance).
 //
-// Backs public/edm.html (/api/marketing/edm). Two data sources:
-//  1. public.edm_report_metrics — a weekly snapshot cache (latest row) filled by the
-//     Claude Code routine `edm-sync` (routines/edm-sync.md), which pulls the contact
-//     KPIs, top lists, top tags and the account-level campaign summary + per-campaign
-//     rows from the ActiveCampaign MCP. The server only SELECTs the latest row.
-//  2. public.activecampaign_contacts (the daily-synced AC contact mirror) — the
-//     "new contacts by month" growth bar is computed live here (grouped by cdate), so
-//     it's always current without waiting for the weekly snapshot.
+// Backs public/edm.html (/api/marketing/edm). Plain SELECT of the latest row of
+// public.edm_report_metrics — a weekly snapshot cache filled by the Claude Code
+// routine `edm-sync` (routines/edm-sync.md), which pulls the contact KPIs, list
+// health (per-list active/total), the engagement segmentation and the account-level
+// campaign summary + per-campaign rows from the ActiveCampaign MCP. The server only
+// SELECTs the latest row — no source calls at request time.
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 
 const SRC =
-  'Live: ActiveCampaign. Contact totals, top lists/tags and the campaign report come from a ' +
-  'weekly Supabase snapshot (edm_report_metrics, via the AC MCP); the "new contacts by month" ' +
-  'chart is computed live from the activecampaign_contacts mirror.';
+  'Live: ActiveCampaign, via a weekly Supabase snapshot (edm_report_metrics, filled by ' +
+  'the edm-sync routine using the AC MCP). Contact totals, list health, engagement ' +
+  'segmentation and the campaign report are all from ActiveCampaign.';
 
 // Latest snapshot row (most recent captured_at wins).
 const LATEST_SQL = `
-  SELECT total_contacts, active_contacts, nonactive_contacts, top_lists, top_tags,
+  SELECT total_contacts, active_contacts, nonactive_contacts, top_lists, segmentation,
          camp_count, camp_total_sends, camp_open_rate, camp_click_rate, camp_click_to_open_rate,
          camp_bounce_rate, camp_unsubscribe_rate, camp_total_unique_opens, camp_total_unique_clicks,
          camp_total_bounces, camp_total_unsubscribes, campaigns, captured_at
@@ -26,17 +24,9 @@ const LATEST_SQL = `
   ORDER BY captured_at DESC
   LIMIT 1`;
 
-// New contacts added per month over the last 12 months (current base, by cdate).
-const BY_MONTH_SQL = `
-  SELECT to_char(date_trunc('month', cdate), 'YYYY-MM') AS ym, count(*)::int AS added
-  FROM public.activecampaign_contacts
-  WHERE cdate >= (date_trunc('month', now()) - interval '11 months')
-  GROUP BY 1
-  ORDER BY 1`;
-
 function pending(note) {
   return {
-    contact: { total: null, active: null, nonactive: null, byMonth: [], topLists: [], topTags: [] },
+    contact: { total: null, active: null, nonactive: null, lists: [], segmentation: [] },
     campaigns: { summary: null, rows: [] },
     capturedAt: null,
     meta: { status: 'pending', source: SRC, note },
@@ -46,34 +36,30 @@ function pending(note) {
 export async function getEdmReport() {
   if (!supabaseConfigured()) return pending('Supabase not configured.');
 
-  const [rows, byMonth] = await Promise.all([
-    q(LATEST_SQL),
-    q(BY_MONTH_SQL).catch(() => []),
-  ]);
-
-  const n = (v) => (v == null ? null : Number(v));
-  const months = (byMonth || []).map((r) => ({ ym: r.ym, added: n(r.added) }));
-
-  if (!rows.length) {
-    const p = pending('No snapshot yet — run the edm-sync routine.');
-    p.contact.byMonth = months; // growth chart is live, show it even before the first snapshot
-    return p;
-  }
+  const rows = await q(LATEST_SQL);
+  if (!rows.length) return pending('No snapshot yet — run the edm-sync routine.');
 
   const r = rows[0];
+  const n = (v) => (v == null ? null : Number(v));
+
   return {
     contact: {
       total: n(r.total_contacts),
       active: n(r.active_contacts),
       nonactive: n(r.nonactive_contacts),
-      byMonth: months,
-      topLists: (r.top_lists || []).map((l) => ({
+      // List health — top lists by total size, each as active / total (non_deleted).
+      lists: (r.top_lists || []).map((l) => ({
         name: l.name,
-        activeSubscribers: n(l.active_subscribers),
+        active: n(l.active != null ? l.active : l.active_subscribers),
+        total: n(l.total != null ? l.total : l.total_subscribers),
       })),
-      topTags: (r.top_tags || []).map((t) => ({
-        tag: t.tag,
-        subscriberCount: n(t.subscriber_count),
+      // Engagement segmentation — counts of the AC engagement tags.
+      segmentation: (r.segmentation || []).map((s) => ({
+        key: s.key,
+        label: s.label,
+        count: n(s.count),
+        tag: s.tag,
+        desc: s.desc,
       })),
     },
     campaigns: {

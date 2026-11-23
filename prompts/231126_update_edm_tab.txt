@@ -1,0 +1,20 @@
+**to_remove:**
+1. "New contacts by month" graph
+2. "Top 5 contact lists" table
+3. "Top 5 tags" table
+
+**yel_mockup:**
+"C:\Users\Cloverly\Downloads\yel_mockup.webp"
+
+**clover_bar_graph:**
+"C:\Users\Cloverly\Downloads\clover_bar_graph.webp"
+
+**clover_bar_graph_notes:**
+contact segmentation will show number of the following (these are AC tags):
+[MARKETING] engagement: active  — opened something in the last 90 days
+[MARKETING] engagement: quiet 90d  — no open 90–180 days (re-engagement flow audience)
+[MARKETING] engagement: dormant 180d  — no open 180+ days (reduced cadence)
+
+## main task:
+- replace to_remove widgets with "List Health" graph shown in yel_mockup
+- on the same horizontal section/on the right side of the new "List Health" graph, add the clover_bar_graph (see clover_bar_graph_notes)
