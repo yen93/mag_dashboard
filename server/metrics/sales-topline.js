@@ -177,6 +177,54 @@ export async function getSalesTopline() {
   const confWonValSeries = confMonthRows.map((r) => ({ month: r.month, value: r.won_value }));
   const haveConfLive = confMonthRows.length > 0;
 
+  // --- Direct vs Indirect (conference pipeline, "group"='3') ---
+  // Direct = NOT in ac_indirect_deals; Indirect = in ac_indirect_deals (AC "Deal Source?").
+  // Income (won deals only) = summed Xero engagement fee where the deal title is invoiced
+  //   (invoice_tracking), else the AC contracted value (ac_value_aud, cents→AUD), nulls→0.
+  // Leads (# of deals) = ALL deals in the pipeline regardless of status.
+  // Bucketed by deal created month so the page's date-range filter can slice it client-side.
+  let diRows = [];
+  try {
+    diRows = await q(`
+      WITH inv AS (
+        SELECT ac_deal_title, sum(engagement_fee) AS eng
+        FROM public.invoice_tracking
+        WHERE engagement_fee IS NOT NULL
+        GROUP BY ac_deal_title
+      )
+      SELECT
+        to_char(d.cdate, 'YYYY-MM')                                          AS month,
+        CASE WHEN i.deal_id IS NOT NULL THEN 'indirect' ELSE 'direct' END    AS di,
+        count(*)::int                                                        AS leads_all,
+        coalesce(sum(
+          coalesce(iv.eng, public.ac_value_aud(d.value, d.currency), 0)
+        ) FILTER (WHERE d.status = 1), 0)::float8                            AS income_won
+      FROM public.activecampaign_deals d
+      LEFT JOIN public.ac_indirect_deals i ON i.deal_id = d.id
+      LEFT JOIN inv iv ON iv.ac_deal_title = d.title
+      WHERE d."group" = '3' AND d.cdate IS NOT NULL
+      GROUP BY 1, 2
+      ORDER BY 1, 2
+    `);
+  } catch (err) {
+    console.error('[sales-topline] direct/indirect split query error:', err.message);
+  }
+
+  const diMonths = Array.from(new Set(diRows.map((r) => r.month))).sort();
+  const diPick = (m, di) => diRows.find((r) => r.month === m && r.di === di);
+  const diShareData = diMonths.map((m) => ({
+    month: m,
+    direct: (diPick(m, 'direct') || {}).income_won || 0,
+    indirect: (diPick(m, 'indirect') || {}).income_won || 0,
+  }));
+  const diLeadsData = diMonths.map((m) => ({
+    month: m,
+    direct: (diPick(m, 'direct') || {}).leads_all || 0,
+    indirect: (diPick(m, 'indirect') || {}).leads_all || 0,
+  }));
+  const haveDi = diRows.length > 0;
+  const SRC_DI_INCOME = 'ActiveCampaign + Xero (invoice_tracking)';
+
   const conference = {
     kpis: {
       dealsWon: haveConfLive
@@ -213,8 +261,12 @@ export async function getSalesTopline() {
     demosTrend: demoSeries.length
       ? section(fill12(demoSeries), { source: SRC_AC, status: 'live', note: 'Demos booked per month (LIV deals with a "Demo date?").' })
       : section([], { source: SRC_AC, status: 'pending', note: 'No demo data in cache yet.' }),
-    directIndirectShare: section([], { source: SRC_AC_TODO, status: 'pending', note: 'Direct vs Indirect share of income needs the AC "Deal Source?" field + invoice match — not mirrored yet.' }),
-    directIndirectLeads: section([], { source: SRC_AC_TODO, status: 'pending', note: 'Direct vs Indirect lead counts need the AC "Deal Source?" field, not mirrored yet.' }),
+    directIndirectShare: haveDi
+      ? section(diShareData, { source: SRC_DI_INCOME, status: 'live', note: 'Won conference deal income — Xero engagement fee where invoiced, else AC deal value — split Direct vs Indirect (ac_indirect_deals = "Deal Source?").' })
+      : section([], { source: SRC_AC_TODO, status: 'pending', note: 'No conference deals found.' }),
+    directIndirectLeads: haveDi
+      ? section(diLeadsData, { source: SRC_AC, status: 'live', note: 'All conference deals (leads) split Direct vs Indirect (ac_indirect_deals = "Deal Source?").' })
+      : section([], { source: SRC_AC_TODO, status: 'pending', note: 'No conference deals found.' }),
   };
 
   return {

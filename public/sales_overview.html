@@ -264,6 +264,8 @@
           winRateTrend: filterSection(raw.conference.winRateTrend, r),
           wonRevenueTrend: filterSection(raw.conference.wonRevenueTrend, r),
           demosTrend: filterSection(raw.conference.demosTrend, r),
+          directIndirectShare: filterSection(raw.conference.directIndirectShare, r),
+          directIndirectLeads: filterSection(raw.conference.directIndirectLeads, r),
         }),
       });
 
@@ -799,11 +801,41 @@
       barSection('demo-box', 'demoCanvas', 'demoChips', c.demosTrend,
         function (d) { return monthLabel(d.month); }, function (d) { return d.value; }, { colors: '#f0a63b' });
 
-      // 6. Direct vs Indirect share/leads (untouched)
-      setChips('diShareChips', c.directIndirectShare.meta);
-      renderPendingBody('diShare-body', c.directIndirectShare.meta);
-      setChips('diLeadsChips', c.directIndirectLeads.meta);
-      renderPendingBody('diLeads-body', c.directIndirectLeads.meta);
+      // 6. Direct vs Indirect — share of income (won) + # of leads (all deals)
+      renderDiPie('diShare-body', 'diShareCanvas', 'diShareChips', c.directIndirectShare,
+        'No won conference deals with income in this range.');
+      renderDiPie('diLeads-body', 'diLeadsCanvas', 'diLeadsChips', c.directIndirectLeads,
+        'No conference deals in this range.');
+    }
+
+    // Sum a Direct/Indirect monthly series ([{month,direct,indirect}]) over the
+    // (already date-range-filtered) section into a two-slice Direct vs Indirect pie.
+    function renderDiPie(bodyId, canvasId, chipsId, sec, emptyText) {
+      setChips(chipsId, sec && sec.meta);
+      var body = document.getElementById(bodyId);
+      if (!body) return;
+      if (!sec || (sec.meta && sec.meta.status === 'pending')) {
+        renderPendingBody(bodyId, (sec && sec.meta) || {});
+        return;
+      }
+      var dir = 0, ind = 0;
+      (sec.data || []).forEach(function (d) {
+        dir += Number(d.direct) || 0;
+        ind += Number(d.indirect) || 0;
+      });
+      if (dir <= 0 && ind <= 0) {
+        if (_charts[canvasId]) { _charts[canvasId].destroy(); delete _charts[canvasId]; }
+        body.innerHTML = '<div class="muted" style="padding:40px;text-align:center">' + esc(emptyText) + '</div>';
+        return;
+      }
+      if (!document.getElementById(canvasId)) {
+        if (_charts[canvasId]) { _charts[canvasId].destroy(); delete _charts[canvasId]; }
+        body.innerHTML = '<div class="chart-box"><canvas id="' + canvasId + '"></canvas></div>';
+      }
+      pieChart(canvasId, [
+        { label: 'Direct', value: dir },
+        { label: 'Indirect', value: ind },
+      ]);
     }
 
     function loadAcDeals() {

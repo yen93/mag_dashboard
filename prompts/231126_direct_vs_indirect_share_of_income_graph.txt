@@ -1,0 +1,25 @@
+**direct_conf:**
+select * from activecampaign_deals
+where id not in (
+    select deal_id from ac_indirect_deals
+) and group = 3
+
+**indirect_conf:**
+select * from ac_indirect_deals
+where pipeline_id = 3
+
+**xero_values:**
+select 
+  engagement_fee,
+  other_fees,
+  gst,
+  invoice_json
+from invoice_tracking a
+left join activecampaign_deals b
+on a.ac_deal_title = b.title
+where b.id = [INSERT DEAL ID]
+
+## main task: update diShareChips graph in sales_overview.html
+1. use direct_conf and indirect_conf to distinguish the keynote deals.
+2. make sure the values are from zero. xero_values invoice_tracking.engagement_fee is primary value and activecampaign_deals.value is the fallback.
+3. the queries are just for reference, you can modify them based on how we can implement this best.
