@@ -337,27 +337,27 @@ function renderMarketingHead(live) {
 function renderMarketingSidebar(active) {
   var el = document.getElementById('marketingNav');
   if (!el) return;
-  // Primary sub-tabs (shown inline). The new sections are placeholders for now.
+  // Primary sub-tabs (shown inline).
   var main = [
     ['overview',       'Overview',          'marketing.html'],
-    ['leads-bookings', 'Leads & Bookings',  'leads_bookings.html'],
-    ['spend-roi',      'Spend & ROI',       'spend_roi.html'],
+    ['website-search', 'Website & Search',  'website_search.html'],
     ['content-social', 'Content & Social',  'content_social.html'],
     ['email-partners', 'Outreach Campaign', 'email_partners.html'],
-    ['website-search', 'Website & Search',  'website_search.html'],
-    ['nurture-events', 'Nurture & Events',  'nurture_events.html'],
-    ['monthly-log',    'Monthly Log',       'monthly_log.html'],
+    ['roas',           'ROAS',              'roas.html'],
+    ['roi',            'ROI',               'roi.html'],
   ];
-  // "More" dropdown — the existing live Marketing tools.
+  // "More" dropdown — the remaining Marketing tools.
   var more = [
-    ['roi',          'ROI',                   'roi.html'],
-    ['roas',         'ROAS',                  'roas.html'],
-    ['adplatforms',  'Ad Platforms',          'ad_platforms.html'],
-    ['leads',        'Lead Tracker',          'ac_contact_sources.html'],
-    ['calendly',     'Calendly-AC Sync',      'new_paid_leads_tracking.html'],
-    ['ga4-agent',    'GA4 Agent',             'ga4_agent.html'],
-    ['historical',   'Historical Paid Leads', 'historical_paid_leads.html'],
-    ['collab-leads', 'Collaboration Leads',   'collaboration_leads.html'],
+    ['leads-bookings', 'Leads & Bookings',      'leads_bookings.html'],
+    ['spend-roi',      'Spend & ROI',           'spend_roi.html'],
+    ['nurture-events', 'Nurture & Events',      'nurture_events.html'],
+    ['monthly-log',    'Monthly Log',           'monthly_log.html'],
+    ['adplatforms',    'Ad Platforms',          'ad_platforms.html'],
+    ['leads',          'Lead Tracker',          'ac_contact_sources.html'],
+    ['calendly',       'Calendly-AC Sync',      'new_paid_leads_tracking.html'],
+    ['ga4-agent',      'GA4 Agent',             'ga4_agent.html'],
+    ['historical',     'Historical Paid Leads', 'historical_paid_leads.html'],
+    ['collab-leads',   'Collaboration Leads',   'collaboration_leads.html'],
   ];
   var moreActive = more.some(function (it) { return it[0] === active; });
   var mainHtml = main.map(function (it) {
