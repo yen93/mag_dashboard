@@ -340,11 +340,11 @@ function renderMarketingSidebar(active) {
   // Primary sub-tabs (shown inline).
   var main = [
     ['overview',       'Overview',          'marketing.html'],
-    ['website-search', 'Website & Search',  'website_search.html'],
-    ['content-social', 'Content & Social',  'content_social.html'],
-    ['email-partners', 'Outreach Campaign', 'email_partners.html'],
-    ['roas',           'ROAS',              'roas.html'],
     ['roi',            'ROI',               'roi.html'],
+    ['roas',           'ROAS',              'roas.html'],
+    ['email-partners', 'Outreach Campaign', 'email_partners.html'],
+    ['website-search', 'Website & Search',  'website_search.html'],
+    ['content-social', 'Social Platforms',  'content_social.html'],
   ];
   // "More" dropdown — the remaining Marketing tools.
   var more = [
