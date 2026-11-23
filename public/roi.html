@@ -157,6 +157,8 @@
     /* Info icons that tuck a description away (reuse the global .src-info/.src-tip look). */
     .head-info { display: inline-flex; align-items: center; margin-left: 6px; }
     .kpi .label .src-info { margin-left: 5px; }
+    /* Label for the shared Custom date range control injected beside the FY toggle. */
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
     /* The toolbar heading sits under the sticky bar, so flip its tooltip to open
        BELOW the icon (and left-align it) — opening upward gets clipped by the bar. */
     #roiNoteInfo .src-tip { top: calc(100% + 8px); bottom: auto; left: 0;
@@ -237,6 +239,7 @@
   <script>
     var ROI = null;    // full API payload
     var SEL = null;    // selected fy_end (number) or 'all'
+    var CUSTOM = false;          // true while a custom date range is active (overrides #fyBar)
     var PIPE_WON_ONLY = false;   // pipeline chart: show only the Won count per month
 
     // Each widget on this tab shows ONE small ⓘ info icon (hover/focus to reveal) that
@@ -325,16 +328,53 @@
       }
     }
 
+    // ---- Custom date range (beside the FY toggle) ----
+    // When a range is active it OVERRIDES the #fyBar FY toggle: the KPI cards + the three
+    // monthly charts aggregate the already-loaded monthly series within the range
+    // (month-level); the FY-only "ROI by financial year" table is greyed. No refetch —
+    // /api/marketing/roi already returns the per-month series, so this is all client-side.
+    function monthInRange(ym) {            // ym = 'YYYY-MM'
+      var r = getDateRange();
+      var fm = r.from ? r.from.slice(0, 7) : '', tm = r.to ? r.to.slice(0, 7) : '';
+      return (!fm || ym >= fm) && (!tm || ym <= tm);
+    }
+    function channelMonthYM(label) {       // 'Mon-YYYY' -> 'YYYY-MM' (for the Channel Summary labels)
+      var p = String(label).split('-'), m = MON_IDX[p[0]];
+      return m ? (p[1] + '-' + (m < 10 ? '0' + m : '' + m)) : '';
+    }
+
+    // Synthesize a per-range row from the monthly + pipeline series (month-level). The
+    // marketingRevenueParts breakdown isn't available per month, so it's omitted in range mode.
+    function rangeRow() {
+      var ms = (ROI.byMonth.data || []).filter(function (m) { return monthInRange(m.month); });
+      var pm = ((ROI.pipelineMonths && ROI.pipelineMonths.data) || []).filter(function (m) { return monthInRange(m.month); });
+      var sum = function (arr, f) { return arr.reduce(function (a, m) { var v = f(m); return a + (typeof v === 'number' && isFinite(v) ? v : 0); }, 0); };
+      return {
+        fyEnd: null, fy: 'Range',
+        revenue: sum(ms, function (m) { return m.revenue; }),
+        hasRevenue: ms.some(function (m) { return typeof m.revenue === 'number' && isFinite(m.revenue); }),
+        totalSpend: sum(ms, function (m) { return m.spend; }),
+        hasSpend: ms.some(function (m) { return typeof m.spend === 'number' && isFinite(m.spend); }),
+        marketingRevenue: sum(ms, function (m) { return m.marketingRevenue; }),
+        marketingRevenueParts: null,
+        dealsWon: sum(pm, function (m) { return m.won; }),
+        dealsOpen: sum(pm, function (m) { return m.open; }),
+        dealsLost: sum(pm, function (m) { return m.lost; }),
+      };
+    }
+
     // The row to show for the current selection ('all' -> the summed total row).
     function currentRow() {
       if (!ROI) return null;
+      if (CUSTOM) return rangeRow();
       if (SEL === 'all') return ROI.total;
       return (ROI.rows.data || []).find(function (r) { return r.fyEnd === SEL; }) || ROI.total;
     }
 
-    // Monthly series for the current selection (filtered to the FY, or all months).
+    // Monthly series for the current selection (custom range, a single FY, or all months).
     function currentMonths() {
       var all = (ROI.byMonth.data || []);
+      if (CUSTOM) return all.filter(function (m) { return monthInRange(m.month); });
       if (SEL === 'all') return all.slice();
       return all.filter(function (m) { return m.fyEnd === SEL; });
     }
@@ -376,15 +416,16 @@
       // Exec X), deduped by deal_id. This is the headline card AND the revenue input for the
       // ratio cards below (Return on spend / Net ROI / Avg revenue per client) — the whole-business
       // "Total company revenue" card is display-only and no longer feeds any ratio here.
-      var mp = row.marketingRevenueParts || { roas: 0, organic: 0, bureauTailor: 0, execX: 0 };
+      var mp = row.marketingRevenueParts;   // per-bucket breakdown (per-FY only; null for a custom range)
       var mRev = (row.marketingRevenue != null) ? row.marketingRevenue : null;
       var mrMeta = { source: (ROI && ROI.marketingRevenueSource) || '', status: 'live' };
-      var mrSub = (mRev != null)
-        ? 'Won revenue from marketing-sourced deals, deduped. ROAS-paid ' + fmt(mp.roas, 'currency') +
-          ' · Organic search ' + fmt(mp.organic, 'currency') +
-          ' · Bureau/Tailor ' + fmt(mp.bureauTailor, 'currency') +
-          ' · Exec X ' + fmt(mp.execX, 'currency')
-        : null;
+      var mrSub = (mRev == null) ? null
+        : mp
+          ? 'Won revenue from marketing-sourced deals, deduped. ROAS-paid ' + fmt(mp.roas, 'currency') +
+            ' · Organic search ' + fmt(mp.organic, 'currency') +
+            ' · Bureau/Tailor ' + fmt(mp.bureauTailor, 'currency') +
+            ' · Exec X ' + fmt(mp.execX, 'currency')
+          : 'Won revenue from marketing-sourced deals, deduped (selected range).';
       // Return on MARKETING spend = marketing revenue ÷ marketing spend (was whole-business revenue).
       var roi = (mRev != null && spend) ? mRev / spend : null;
       var spendSub = !row.hasSpend ? 'No marketing spend recorded for this FY' :
@@ -441,7 +482,16 @@
 
       // ROI by FY table — the full per-FY list plus an "All years" total row, each row
       // clickable to filter the whole page to that FY (mirrors the ROAS "ROAS by FY" table).
+      // Reported by financial year, so a custom range can't slice it — grey it out instead.
       setChips('fyTableChips', meta);
+      var fyNote = document.getElementById('roiFyNote');
+      if (CUSTOM) {
+        document.getElementById('roiFyTable').innerHTML =
+          '<div class="range-na">Not available for custom ranges — this table is reported by financial year. Clear the date range to view it.</div>';
+        if (fyNote) fyNote.textContent = '';
+        return;
+      }
+      if (fyNote) fyNote.textContent = 'Click a row to filter the page to that FY.';
       var fyRows = (ROI.rows.data || []).concat(ROI.total ? [ROI.total] : []);
       renderTable('roiFyTable', fyRows, [
         { key: 'fy', label: 'FY',
@@ -575,9 +625,11 @@
     var _pipeChart = null;
     function renderPipeline() {
       var all = (ROI.pipelineMonths && ROI.pipelineMonths.data) || [];
-      var rows = (SEL != null && SEL !== 'all')
-        ? all.filter(function (m) { return m.fyEnd === SEL; })
-        : all.slice();
+      var rows = CUSTOM
+        ? all.filter(function (m) { return monthInRange(m.month); })
+        : (SEL != null && SEL !== 'all')
+          ? all.filter(function (m) { return m.fyEnd === SEL; })
+          : all.slice();
 
       var datasets = PIPE_WON_ONLY
         ? [{ label: 'Won', data: rows.map(function (r) { return r.won; }), backgroundColor: '#17a673', borderRadius: 3, maxBarThickness: 40, stack: 'deals' }]
@@ -671,7 +723,9 @@
       // the kept months, and series that are all-zero within the FY are dropped so the
       // legend stays clean.
       var idxs = allMonths.map(function (_, i) { return i; });
-      if (SEL != null && SEL !== 'all') {
+      if (CUSTOM) {
+        idxs = idxs.filter(function (i) { return monthInRange(channelMonthYM(allMonths[i])); });
+      } else if (SEL != null && SEL !== 'all') {
         idxs = idxs.filter(function (i) { return channelMonthFyEnd(allMonths[i]) === SEL; });
       }
       var months = idxs.map(function (i) { return channelSpanLabel(allMonths[i]); });
@@ -808,8 +862,26 @@
         .catch(function (err) { console.error(err); });
     }
 
+    // Dim the FY toggle while a custom range is active (the shared setFySegDisabled targets
+    // #fySeg, which this page doesn't have — its toggle is #fyBar — so dim it here).
+    function setFyBarDisabled(disabled) {
+      var el = document.getElementById('fyBar');
+      if (!el) return;
+      el.classList.toggle('seg-disabled', !!disabled);
+      el.setAttribute('aria-disabled', String(!!disabled));
+    }
+    // A custom range overrides the FY toggle; clearing it restores FY mode. Pure client-side —
+    // the KPI cards + the three monthly charts re-aggregate the already-loaded series.
+    function applyRange() {
+      CUSTOM = dateRangeActive();
+      setFyBarDisabled(CUSTOM);
+      if (ROI) render();
+    }
+
     initPage('marketing');               // login / top bar / theme only (no auto-fetch)
     renderMarketingSidebar('roi');
+    renderDateRange({ after: 'fyBar' }); // inject the Custom date range control beside the FY toggle
+    wireDateRange({ onChange: applyRange });
     fillHeadInfo();                      // tuck the static chart descriptions behind ⓘ icons
     document.querySelectorAll('#pipeWonSeg button').forEach(function (b) {
       b.addEventListener('click', function () { setPipeWon(b.getAttribute('data-won') === 'won'); });
