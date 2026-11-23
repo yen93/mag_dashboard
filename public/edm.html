@@ -43,6 +43,12 @@
     .chart-cap { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
 
     .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active { background: linear-gradient(135deg, var(--mkt-accent), var(--mkt-accent-2)); color: #fff; box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent); }
+    .range-na { color: var(--text-muted); font-size: 13px; padding: 10px 2px; }
 
     /* Collapsible section headers */
     .edm-section { margin: 22px 0 8px; }
@@ -139,10 +145,19 @@
     <nav class="subtabs" id="marketingNav"></nav>
 
     <main class="content">
-      <!-- Freshness bar -->
+      <!-- Controls: FY toggle + shared custom date range -->
       <div class="card" style="margin-bottom:16px">
         <div class="mkt-controls">
-          <span class="ctl-label" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700">ActiveCampaign EDM</span>
+          <span class="ctl-label">Financial year</span>
+          <div class="segmented" id="fySeg">
+            <button data-fy="all">All years</button>
+            <button data-fy="fy22">FY22</button>
+            <button data-fy="fy23">FY23</button>
+            <button data-fy="fy24">FY24</button>
+            <button data-fy="fy25">FY25</button>
+            <button data-fy="fy26">FY26</button>
+            <button class="active" data-fy="fy27">FY27</button>
+          </div>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" id="freshNote" style="font-size:13px">Loading…</span>
         </div>
@@ -209,6 +224,7 @@
         <div class="edm-sec-body" id="campaignsBody">
           <!-- top cards -->
           <div class="edm-kpi-grid" style="--cols:6" id="campaignKpis"></div>
+          <div class="chart-cap" id="campPeriodCap" style="margin:-8px 2px 12px"></div>
 
           <!-- bar chart: top 10 campaigns by emails sent -->
           <div class="card edm-chart-card">
@@ -235,13 +251,69 @@
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=27"></script>
   <script>
-    /* EDM — LIVE. Contact KPIs / top lists / top tags / campaign report come from the
-       weekly snapshot (public.edm_report_metrics, filled by the edm-sync routine via the
-       ActiveCampaign MCP). "New contacts by month" is computed live from the
-       activecampaign_contacts mirror. Served by /api/marketing/edm. */
+    /* EDM — LIVE. Contact KPIs / list health / engagement segmentation / campaign report
+       come from the weekly snapshot (public.edm_report_metrics, filled by the edm-sync
+       routine via the ActiveCampaign MCP). Served by /api/marketing/edm.
+       The FY toggle + custom date range filter the Campaigns section by each campaign's
+       last-send date (KPIs recomputed from the filtered rows). The Contact section is a
+       current snapshot, so it greys out for a past FY or a custom date range. */
 
     var EDM = null;
     var CAMP_TABLE_STATE = {};
+    var CUR_FY = 'fy27';   // the financial year containing "today" (Jul 2026 – Jun 2027)
+
+    function selFyKey() { var b = document.querySelector('#fySeg button.active'); return b ? b.getAttribute('data-fy') : 'fy27'; }
+    function fyEndOf(k) { return k === 'all' ? null : 2000 + parseInt(k.slice(2), 10); }
+    function fyWindow(k) { var e = fyEndOf(k); return e ? { from: (e - 1) + '-07-01', to: e + '-06-30' } : null; }
+
+    // A campaign is "in" the active period by its last-send date (YYYY-MM-DD).
+    function campInPeriod(row) {
+      var k = selFyKey();
+      if (!dateRangeActive() && k === 'all') return true;   // all-time: everything
+      var d = row && row.lastSent;
+      if (!d) return false;
+      if (dateRangeActive()) {
+        var r = getDateRange();
+        if (r.from && d < r.from) return false;
+        if (r.to && d > r.to) return false;
+        return true;
+      }
+      var w = fyWindow(k);
+      return d >= w.from && d <= w.to;
+    }
+    function filteredCampaigns() {
+      var rows = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+      return rows.filter(campInPeriod);
+    }
+    // Account-level summary recomputed from a set of campaign rows (send-weighted rates,
+    // matching how ActiveCampaign derives its summary totals).
+    function campSummaryOf(rows) {
+      var t = { sends: 0, uOpens: 0, uClicks: 0, bounces: 0, unsubs: 0 };
+      rows.forEach(function (c) {
+        t.sends += c.sends || 0; t.uOpens += c.uOpens || 0; t.uClicks += c.uClicks || 0;
+        t.bounces += c.bounces || 0; t.unsubs += c.unsubs || 0;
+      });
+      var r = function (nu, de) { return de ? Math.round((nu / de) * 10000) / 100 : null; };
+      return {
+        count: rows.length, totalSends: t.sends, totalUniqueOpens: t.uOpens, totalUniqueClicks: t.uClicks,
+        totalBounces: t.bounces, totalUnsubscribes: t.unsubs,
+        openRate: r(t.uOpens, t.sends), clickRate: r(t.uClicks, t.sends),
+        clickToOpenRate: r(t.uClicks, t.uOpens), bounceRate: r(t.bounces, t.sends), unsubscribeRate: r(t.unsubs, t.sends)
+      };
+    }
+    function periodLabel() {
+      if (dateRangeActive()) { var r = getDateRange(); return (r.from || '…') + ' → ' + (r.to || '…'); }
+      var k = selFyKey();
+      return k === 'all' ? 'All years' : k.toUpperCase();
+    }
+    // The contact snapshot is "as of now" — only meaningful for the current FY or All years,
+    // and never for a custom date range.
+    function contactLive() { return !dateRangeActive() && (selFyKey() === 'all' || selFyKey() === CUR_FY); }
+    function contactNaMsg() {
+      return dateRangeActive()
+        ? 'Not available for a custom date range — contact figures are a current ActiveCampaign snapshot. Clear the range to view them.'
+        : 'Not available for a past financial year — contact figures are a current ActiveCampaign snapshot. Switch to the current FY or All years.';
+    }
 
     function num(n)  { return (n == null || isNaN(n)) ? '—' : fmt(Number(n), 'count'); }
     function rate(n) { return (n == null || isNaN(n)) ? '—' : (Math.round(Number(n) * 100) / 100) + '%'; }
@@ -259,8 +331,10 @@
     }
 
     function renderContactKpis() {
+      var host = document.getElementById('contactKpis');
+      if (!contactLive()) { host.innerHTML = '<div class="range-na" style="grid-column:1/-1">' + esc(contactNaMsg()) + '</div>'; return; }
       var c = (EDM && EDM.contact) || {};
-      document.getElementById('contactKpis').innerHTML = [
+      host.innerHTML = [
         kpiCard('Total Contacts', num(c.total), 'Everyone in ActiveCampaign',
           infoTip('Every contact in the ActiveCampaign account, whatever their subscription status.', 'ActiveCampaign, refreshed weekly')),
         kpiCard('Active Contacts', num(c.active), pctOf(c.active, c.total),
@@ -271,20 +345,22 @@
     }
 
     function renderCampaignKpis() {
-      var s = (EDM && EDM.campaigns && EDM.campaigns.summary) || {};
+      var s = campSummaryOf(filteredCampaigns());
+      var pc = document.getElementById('campPeriodCap');
+      if (pc) pc.textContent = periodLabel() + ' · by campaign last-send date · ' + num(s.count) + ' campaign' + (s.count === 1 ? '' : 's');
       document.getElementById('campaignKpis').innerHTML = [
-        kpiCard('Campaigns sent', num(s.count), 'in the report',
-          infoTip('The number of sent email campaigns ActiveCampaign is reporting on.', 'ActiveCampaign all-campaigns performance report')),
+        kpiCard('Campaigns sent', num(s.count), periodLabel(),
+          infoTip('Sent email campaigns whose last send falls in the selected period (FY toggle or custom date range).', 'ActiveCampaign all-campaigns performance report')),
         kpiCard('Emails sent', num(s.totalSends), 'total delivered',
-          infoTip('The total number of individual emails delivered across every campaign.', 'ActiveCampaign all-campaigns performance report')),
+          infoTip('The total number of individual emails delivered across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report')),
         kpiCard('Open rate', rate(s.openRate), num(s.totalUniqueOpens) + ' unique opens',
-          infoTip('Share of delivered emails that were opened, account-wide. Apple Mail privacy can inflate opens, so treat this as a soft signal.', 'ActiveCampaign all-campaigns performance report')),
+          infoTip('Share of delivered emails that were opened, across the campaigns in the selected period. Apple Mail privacy can inflate opens, so treat this as a soft signal.', 'ActiveCampaign all-campaigns performance report')),
         kpiCard('Click rate', rate(s.clickRate), num(s.totalUniqueClicks) + ' unique clicks',
-          infoTip('Share of delivered emails where a link was clicked, account-wide. The most reliable engagement signal.', 'ActiveCampaign all-campaigns performance report')),
+          infoTip('Share of delivered emails where a link was clicked, across the campaigns in the selected period. The most reliable engagement signal.', 'ActiveCampaign all-campaigns performance report')),
         kpiCard('Bounce rate', rate(s.bounceRate), num(s.totalBounces) + ' bounces',
-          infoTip('Share of emails that could not be delivered, account-wide.', 'ActiveCampaign all-campaigns performance report')),
+          infoTip('Share of emails that could not be delivered, across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report')),
         kpiCard('Unsubscribe rate', rate(s.unsubscribeRate), num(s.totalUnsubscribes) + ' unsubscribes',
-          infoTip('Share of delivered emails that led to an unsubscribe, account-wide.', 'ActiveCampaign all-campaigns performance report'))
+          infoTip('Share of delivered emails that led to an unsubscribe, across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report'))
       ].join('');
     }
 
@@ -297,6 +373,12 @@
       var head = document.getElementById('lhHeadline');
       var cap = document.getElementById('lhCap');
       var bars = document.getElementById('lhBars');
+      if (!contactLive()) {
+        if (cap) cap.textContent = '';
+        if (head) head.textContent = '—';
+        if (bars) bars.innerHTML = '<div class="range-na">' + esc(contactNaMsg()) + '</div>';
+        return;
+      }
       if (cap) cap.textContent = 'Real figures from ActiveCampaign';
       if (head) {
         head.innerHTML = (c.active == null)
@@ -380,6 +462,7 @@
       var cap = document.getElementById('segCap');
       if (_segTotalChart) { _segTotalChart.destroy(); _segTotalChart = null; }
       if (_segActiveChart) { _segActiveChart.destroy(); _segActiveChart = null; }
+      if (!contactLive()) { if (cap) cap.textContent = contactNaMsg(); return; }
       if (!seg.length) { if (cap) cap.textContent = 'No data'; return; }
       var tagged = seg.reduce(function (a, s) { return a + (s.count || 0); }, 0);
       if (cap) cap.textContent = 'ActiveCampaign engagement tags · ' + tagged.toLocaleString('en-AU') + ' tagged';
@@ -397,13 +480,13 @@
     function renderCampBar() {
       var el = document.getElementById('campBarCanvas');
       if (!el) return;
-      var all = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+      var all = filteredCampaigns();
       var cap = document.getElementById('campBarCap');
       var tc = themeColors();
       if (_campBarChart) { _campBarChart.destroy(); _campBarChart = null; }
       var top = all.slice().sort(function (a, b) { return (b.sends || 0) - (a.sends || 0); }).slice(0, 10);
-      if (!top.length) { if (cap) cap.textContent = 'No data'; return; }
-      if (cap) cap.textContent = 'Top ' + top.length + ' of ' + all.length + ' campaigns';
+      if (!top.length) { if (cap) cap.textContent = 'No campaigns in this period'; return; }
+      if (cap) cap.textContent = 'Top ' + top.length + ' of ' + all.length + ' campaigns · ' + periodLabel();
       _campBarChart = new Chart(el.getContext('2d'), {
         type: 'bar',
         data: {
@@ -436,7 +519,7 @@
     function campType(t) { return CAMP_TYPE[t] || (t ? esc(t) : '—'); }
 
     function renderCampTable() {
-      var rows = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+      var rows = filteredCampaigns();
       var cnt = document.getElementById('campTableCount');
       var cols = [
         { key: 'name', label: 'Campaign', render: function (v) { return esc(v || '—'); } },
@@ -499,6 +582,30 @@
       });
     }
 
+    function wireSeg(id, onChange) {
+      var seg = document.getElementById(id);
+      if (!seg) return;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          if (seg.classList.contains('seg-disabled')) return;   // disabled while a custom range is active
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (onChange) onChange();
+        });
+      });
+    }
+
+    // Re-render everything the FY toggle / date-range controls affect.
+    function applyControls() {
+      setFySegDisabled(dateRangeActive());
+      renderContactKpis();
+      renderListHealth();
+      renderSegmentation();
+      renderCampaignKpis();
+      renderCampBar();
+      renderCampTable();
+    }
+
     function load() {
       fetchJSON('/api/marketing/edm').then(function (d) {
         EDM = d || {};
@@ -513,9 +620,12 @@
     initPage('marketing');
     renderMarketingHead(true);            // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('edm');
+    renderDateRange();                    // inject the shared custom date-range control after #fySeg
     fillHeadInfo();                       // static section/chart/table ⓘ info tools (DESIGN_GUIDE §6)
     wireCollapse('toggleContact', 'contactBody');
     wireCollapse('toggleCampaigns', 'campaignsBody');
+    wireSeg('fySeg', applyControls);      // FY toggle re-renders campaigns + contact gating
+    wireDateRange({ onChange: applyControls });   // custom range overrides the FY toggle
     load();
     window.onThemeChange = function () { renderSegmentation(); renderCampBar(); };
   </script>
