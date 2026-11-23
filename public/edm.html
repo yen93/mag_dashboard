@@ -226,15 +226,6 @@
           <div class="edm-kpi-grid" style="--cols:6" id="campaignKpis"></div>
           <div class="chart-cap" id="campPeriodCap" style="margin:-8px 2px 12px"></div>
 
-          <!-- bar chart: top 10 campaigns by emails sent -->
-          <div class="card edm-chart-card">
-            <div class="card-head block-head">
-              <h3 id="campBarHeading">Top campaigns by emails sent <span class="head-info" data-info="The ten campaigns that delivered the most emails. Shows send volume, not engagement — a high bar is a big send, not necessarily a well-performing one." data-src="ActiveCampaign all-campaigns performance report"></span></h3>
-              <div class="chart-cap" id="campBarCap"></div>
-            </div>
-            <div class="edm-chart-box tall"><canvas id="campBarCanvas"></canvas></div>
-          </div>
-
           <!-- campaigns table (mirror AC columns, no preview) -->
           <div class="card edm-campaigns-card">
             <div class="card-head block-head">
@@ -472,49 +463,6 @@
         segItems(seg, c.active, 'Not tagged', 'Active contacts without an engagement tag yet'));
     }
 
-    var _campBarChart = null;
-    function shortName(s) {
-      s = String(s || '');
-      return s.length > 42 ? s.slice(0, 41) + '…' : s;
-    }
-    function renderCampBar() {
-      var el = document.getElementById('campBarCanvas');
-      if (!el) return;
-      var all = filteredCampaigns();
-      var cap = document.getElementById('campBarCap');
-      var tc = themeColors();
-      if (_campBarChart) { _campBarChart.destroy(); _campBarChart = null; }
-      var top = all.slice().sort(function (a, b) { return (b.sends || 0) - (a.sends || 0); }).slice(0, 10);
-      if (!top.length) { if (cap) cap.textContent = 'No campaigns in this period'; return; }
-      if (cap) cap.textContent = 'Top ' + top.length + ' of ' + all.length + ' campaigns · ' + periodLabel();
-      _campBarChart = new Chart(el.getContext('2d'), {
-        type: 'bar',
-        data: {
-          labels: top.map(function (c) { return shortName(c.name); }),
-          datasets: [{
-            label: 'Emails sent',
-            data: top.map(function (c) { return c.sends; }),
-            backgroundColor: tc.accent, borderRadius: 4, maxBarThickness: 26
-          }]
-        },
-        options: {
-          indexAxis: 'y',
-          responsive: true, maintainAspectRatio: false,
-          scales: {
-            x: { beginAtZero: true, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 }, grid: { color: tc.grid } },
-            y: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 }, autoSkip: false } }
-          },
-          plugins: {
-            legend: { display: false },
-            tooltip: { callbacks: {
-              title: function (items) { return (top[items[0].dataIndex] || {}).name || items[0].label; },
-              label: function (ctx) { return (ctx.parsed.x || 0).toLocaleString('en-AU') + ' emails sent'; }
-            } }
-          }
-        }
-      });
-    }
-
     var CAMP_TYPE = { single: 'One-off', single_automated: 'Automated', recurring: 'Recurring', responder: 'Autoresponder', reminder: 'Reminder', special: 'Special', text: 'SMS/Text', activerss: 'RSS', split: 'Split test' };
     function campType(t) { return CAMP_TYPE[t] || (t ? esc(t) : '—'); }
 
@@ -564,7 +512,6 @@
       renderListHealth();
       renderSegmentation();
       renderCampaignKpis();
-      renderCampBar();
       renderCampTable();
       setFreshNote();
     }
@@ -578,7 +525,7 @@
         btn.setAttribute('aria-expanded', open ? 'false' : 'true');
         body.hidden = open;
         // charts need a reflow after being un-hidden
-        if (!open) { renderSegmentation(); renderCampBar(); }
+        if (!open) { renderSegmentation(); }
       });
     }
 
@@ -602,7 +549,6 @@
       renderListHealth();
       renderSegmentation();
       renderCampaignKpis();
-      renderCampBar();
       renderCampTable();
     }
 
@@ -627,7 +573,7 @@
     wireSeg('fySeg', applyControls);      // FY toggle re-renders campaigns + contact gating
     wireDateRange({ onChange: applyControls });   // custom range overrides the FY toggle
     load();
-    window.onThemeChange = function () { renderSegmentation(); renderCampBar(); };
+    window.onThemeChange = function () { renderSegmentation(); };
   </script>
 </body>
 </html>
