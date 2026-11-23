@@ -142,7 +142,7 @@ body {
   display: flex; flex-flow: row wrap; align-items: center; gap: 2px;
   width: 100%; max-width: 1200px; flex: none; align-self: auto;
   min-height: 0; position: static; overflow: visible;
-  margin: 0 auto 18px; padding: 0 24px;
+  margin: 0 0 18px; padding: 0 24px;
   background: transparent; border: none; border-bottom: 1px solid var(--border);
 }
 #marketingNav .subtab {
