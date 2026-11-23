@@ -811,11 +811,19 @@
     // Sum a Direct/Indirect monthly series ([{month,direct,indirect}]) over the
     // (already date-range-filtered) section into a two-slice Direct vs Indirect pie.
     function renderDiPie(bodyId, canvasId, chipsId, sec, emptyText) {
-      setChips(chipsId, sec && sec.meta);
+      var meta = sec && sec.meta;
+      var chipsEl = document.getElementById(chipsId);
+      // Live: a single detailed ⓘ (plain-language description + source) per DESIGN_GUIDE §6.
+      // Pending: fall back to the status chip.
+      if (chipsEl) {
+        chipsEl.innerHTML = (meta && meta.status !== 'pending' && typeof infoTip === 'function')
+          ? infoTip(meta.note, meta.source)
+          : metaChips(meta);
+      }
       var body = document.getElementById(bodyId);
       if (!body) return;
-      if (!sec || (sec.meta && sec.meta.status === 'pending')) {
-        renderPendingBody(bodyId, (sec && sec.meta) || {});
+      if (!sec || (meta && meta.status === 'pending')) {
+        renderPendingBody(bodyId, meta || {});
         return;
       }
       var dir = 0, ind = 0;

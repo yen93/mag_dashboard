@@ -300,7 +300,7 @@ either arg may be empty). Use it for **every** widget:
 - **Static card/chart/table heading** → put a placeholder next to the title and let
   `fillHeadInfo()` fill it once at init:
   `<div class="card-head"><h3>Revenue vs spend</h3><span class="head-info"
-  data-info="What it is…" data-src="public.xero_expenses_monthly"></span></div>`
+  data-info="What it is…" data-src="Monthly P&L (Xero)"></span></div>`
   (`.head-info` is the inline wrapper; `fillHeadInfo()` reads `data-info` + `data-src`).
 - **JS-built KPI card / dynamic widget** → call `infoTip(desc, source)` inline and drop
   the returned span next to the card's `.label` (one icon per card).
@@ -313,6 +313,18 @@ either arg may be empty). Use it for **every** widget:
 **Don't** use native-`title` ⓘ (`.kpi-info`) for new work — it was the cheap first pass;
 migrate those to `infoTip` so the hover card is consistent and legible. **Don't** leave a
 widget with no info tool, and **don't** duplicate the description as visible body text.
+
+**Writing the copy — business language, never internals ⭐:** the ⓘ text is read by
+non-technical staff, so write it from a **business perspective** and explain what the number
+*means* and how to use it — not how it's computed. **Never name a database table, column,
+view, pipeline id, field id, SQL, status code or edge function** in `desc` **or** `source`
+(e.g. not `ac_indirect_deals`, `"group"='3'`, `status=1`, `invoice_tracking`). Describe the
+real-world thing instead: "deals that reach us through speaker bureaus or agencies", "won
+revenue", "the agreed deal value". For the **Source** line, name the *system or document* in
+plain terms — "Sales deals (ActiveCampaign)", "Billed fees (Xero)", "Monthly P&L (Xero)" —
+not the table it lands in. Prefer a couple of plain sentences that say what it shows + how to
+read it over a terse label. Reference: the two "Direct vs Indirect" cards on
+`sales_overview.html` (share of income / # of leads).
 
 **Scope:** this is NOT just for new pages — **every card, every table and every chart/graph on
 every tab must carry one, with no exceptions** (marketing / leads_bookings / spend_roi /

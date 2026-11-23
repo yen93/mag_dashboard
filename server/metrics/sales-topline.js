@@ -223,7 +223,8 @@ export async function getSalesTopline() {
     indirect: (diPick(m, 'indirect') || {}).leads_all || 0,
   }));
   const haveDi = diRows.length > 0;
-  const SRC_DI_INCOME = 'ActiveCampaign + Xero (invoice_tracking)';
+  const SRC_DI_INCOME = 'Sales deals (ActiveCampaign) + billed fees (Xero)';
+  const SRC_DI_LEADS = 'Sales deals (ActiveCampaign)';
 
   const conference = {
     kpis: {
@@ -262,10 +263,18 @@ export async function getSalesTopline() {
       ? section(fill12(demoSeries), { source: SRC_AC, status: 'live', note: 'Demos booked per month (LIV deals with a "Demo date?").' })
       : section([], { source: SRC_AC, status: 'pending', note: 'No demo data in cache yet.' }),
     directIndirectShare: haveDi
-      ? section(diShareData, { source: SRC_DI_INCOME, status: 'live', note: 'Won conference deal income — Xero engagement fee where invoiced, else AC deal value — split Direct vs Indirect (ac_indirect_deals = "Deal Source?").' })
+      ? section(diShareData, {
+          source: SRC_DI_INCOME,
+          status: 'live',
+          note: 'How our won conference revenue splits between business we win directly and business that reaches us through speaker bureaus, PCOs or agencies (indirect). Each deal counts its actual invoiced engagement fee once it has been billed, and its agreed deal value before that. Only deals we have won are included. Use it to see how much of the money we bring in is self-generated versus partner-driven.',
+        })
       : section([], { source: SRC_AC_TODO, status: 'pending', note: 'No conference deals found.' }),
     directIndirectLeads: haveDi
-      ? section(diLeadsData, { source: SRC_AC, status: 'live', note: 'All conference deals (leads) split Direct vs Indirect (ac_indirect_deals = "Deal Source?").' })
+      ? section(diLeadsData, {
+          source: SRC_DI_LEADS,
+          status: 'live',
+          note: 'How our conference enquiries split between leads that come to us directly and leads that reach us through speaker bureaus, PCOs or agencies (indirect). This counts every enquiry that entered the pipeline — the ones we won, the ones still in play, and the ones we lost — so it shows where our enquiry volume comes from, not just the deals we closed. Use it alongside the income split to see whether direct or partner channels bring the most enquiries.',
+        })
       : section([], { source: SRC_AC_TODO, status: 'pending', note: 'No conference deals found.' }),
   };
 
