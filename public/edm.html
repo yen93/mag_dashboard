@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EDM — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    /* ============================================================
+       EDM — ActiveCampaign Contact Performance + All Campaigns
+       Performance. LIVE via /api/marketing/edm (weekly snapshot
+       cache edm_report_metrics + live new-contacts-by-month from
+       the activecampaign_contacts mirror). Follows DESIGN_GUIDE.md
+       and the other Marketing data pages.
+       ============================================================ */
+    :root {
+      --mkt-accent: var(--accent);
+      --mkt-accent-2: #6a4bf5;
+      --mkt-accent-soft: #eef2fe;
+      --mkt-shadow:      0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --mkt-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+    }
+    html[data-theme='dark'] {
+      --mkt-accent-2: #9b7dff;
+      --mkt-accent-soft: #1b2440;
+      --mkt-shadow:      0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --mkt-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+    }
+
+    /* Full-width layout matching the other Marketing pages */
+    .content { max-width: none; }
+    #marketingNav { max-width: none; }
+    .mkt-head { max-width: none; }
+
+    .card {
+      border-radius: 16px;
+      box-shadow: var(--mkt-shadow);
+      transition: box-shadow .25s ease, transform .25s ease, border-color .25s ease;
+    }
+    .card-head.block-head { display: block; margin-bottom: 14px; }
+    .card-head h3 { margin: 0; font-size: 16px; font-weight: 700; letter-spacing: -.01em; color: var(--text); }
+    .chart-cap { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
+
+    .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+
+    /* Collapsible section headers */
+    .edm-section { margin: 22px 0 8px; }
+    .edm-sec-head {
+      display: flex; align-items: center; gap: 12px;
+      margin: 0 2px 14px;
+    }
+    .edm-sec-toggle {
+      display: inline-flex; align-items: center; gap: 9px;
+      background: none; border: 0; cursor: pointer;
+      font: inherit; color: var(--text); padding: 2px 0;
+    }
+    .edm-sec-toggle h2 {
+      margin: 0; font-size: 18px; font-weight: 700; letter-spacing: -.02em;
+    }
+    .edm-chev {
+      display: inline-block; width: 22px; height: 22px; line-height: 22px; text-align: center;
+      border-radius: 7px; background: var(--surface-2); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 12px; transition: transform .18s ease;
+    }
+    .edm-sec-toggle[aria-expanded="false"] .edm-chev { transform: rotate(-90deg); }
+    .edm-sec-sub { font-size: 13px; color: var(--text-muted); }
+    .edm-sec-body[hidden] { display: none; }
+
+    /* KPI cards */
+    .edm-kpi-grid {
+      display: grid; gap: 16px; margin: 0 0 16px;
+      grid-template-columns: repeat(var(--cols, 3), minmax(0, 1fr));
+    }
+    @media (max-width: 960px) { .edm-kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+    @media (max-width: 520px) { .edm-kpi-grid { grid-template-columns: 1fr; } }
+    .edm-kpi {
+      background: var(--surface); border: 1px solid var(--border); border-radius: 16px;
+      padding: 20px 22px 18px; box-shadow: var(--mkt-shadow);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .edm-kpi:hover { transform: translateY(-2px); box-shadow: var(--mkt-shadow-lift); }
+    .edm-kpi .label { font-size: 13px; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 6px; }
+    .edm-kpi .value { font-size: 30px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 8px 0 6px; color: var(--text); }
+    .edm-kpi .sub { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+
+    /* Chart + side tables row */
+    .edm-row2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: stretch; }
+    @media (max-width: 900px) { .edm-row2 { grid-template-columns: 1fr; } }
+    .edm-mini { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    @media (max-width: 900px) { .edm-mini { grid-template-columns: 1fr 1fr; } }
+    @media (max-width: 560px) { .edm-mini { grid-template-columns: 1fr; } }
+
+    .edm-chart-card { padding: 20px 22px 16px; display: flex; flex-direction: column; }
+    .edm-chart-box { position: relative; flex: 1; min-height: 260px; }
+    .edm-chart-box.tall { min-height: 320px; }
+
+    .edm-mini-card { padding: 18px 20px; }
+    .edm-mini-card h3 { margin: 0 0 10px; font-size: 14px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; }
+
+    table.edm-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    table.edm-table th, table.edm-table td {
+      padding: 9px 8px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border);
+    }
+    table.edm-table th:first-child, table.edm-table td:first-child { text-align: left; padding-left: 2px; white-space: normal; }
+    table.edm-table th:last-child, table.edm-table td:last-child { padding-right: 2px; }
+    table.edm-table thead th { font-size: 11.5px; font-weight: 600; color: var(--text-muted); padding-bottom: 9px; }
+    table.edm-table tbody td { font-variant-numeric: tabular-nums; color: var(--text); }
+    .edm-rank { color: var(--text-muted); font-variant-numeric: tabular-nums; }
+
+    /* Campaigns table card */
+    .edm-campaigns-card { padding: 22px 24px; margin-top: 16px; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab active" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="builds_monitoring.html">AI &amp; Automation</a>
+  </nav>
+
+  <div class="marketing-layout">
+    <nav class="subtabs" id="marketingNav"></nav>
+
+    <main class="content">
+      <!-- Freshness bar -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="mkt-controls">
+          <span class="ctl-label" style="font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.08em;font-weight:700">ActiveCampaign EDM</span>
+          <div class="spacer" style="flex:1"></div>
+          <span class="muted" id="freshNote" style="font-size:13px">Loading…</span>
+        </div>
+      </div>
+
+      <!-- ============ Section 1: Contact Performance ============ -->
+      <section class="edm-section">
+        <div class="edm-sec-head">
+          <button class="edm-sec-toggle" id="toggleContact" aria-expanded="true" aria-controls="contactBody">
+            <span class="edm-chev">▾</span>
+            <h2>Contact Performance</h2>
+          </button>
+          <span class="head-info" data-info="The health of the ActiveCampaign contact database — how many contacts there are, how many are active (subscribed), and how the list has grown over time." data-src="ActiveCampaign (contacts, lists and tags)"></span>
+          <span class="edm-sec-sub">Click the title to show or hide this section</span>
+        </div>
+        <div class="edm-sec-body" id="contactBody">
+          <!-- 3 KPI cards -->
+          <div class="edm-kpi-grid" style="--cols:3" id="contactKpis"></div>
+
+          <!-- Growth chart + top lists / top tags -->
+          <div class="edm-row2">
+            <div class="card edm-chart-card">
+              <div class="card-head block-head">
+                <h3 id="growthHeading">New contacts by month <span class="head-info" data-info="How many contacts were added to ActiveCampaign each month over the last 12 months. Computed live from the contact mirror by the date each contact was created." data-src="ActiveCampaign contact mirror (live)"></span></h3>
+                <div class="chart-cap" id="growthCap"></div>
+              </div>
+              <div class="edm-chart-box"><canvas id="growthCanvas"></canvas></div>
+            </div>
+
+            <div class="edm-mini">
+              <div class="card edm-mini-card">
+                <h3 id="listsHeading">Top 5 contact lists <span class="head-info" data-info="The five ActiveCampaign lists with the most active (subscribed) contacts." data-src="ActiveCampaign lists, refreshed weekly"></span></h3>
+                <table class="edm-table">
+                  <thead><tr><th>List</th><th>Active</th></tr></thead>
+                  <tbody id="listsBody"></tbody>
+                </table>
+              </div>
+              <div class="card edm-mini-card">
+                <h3 id="tagsHeading">Top 5 tags <span class="head-info" data-info="The five contact tags applied to the most contacts in ActiveCampaign." data-src="ActiveCampaign tags, refreshed weekly"></span></h3>
+                <table class="edm-table">
+                  <thead><tr><th>Tag</th><th>Contacts</th></tr></thead>
+                  <tbody id="tagsBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============ Section 2: Campaigns Performance ============ -->
+      <section class="edm-section">
+        <div class="edm-sec-head">
+          <button class="edm-sec-toggle" id="toggleCampaigns" aria-expanded="true" aria-controls="campaignsBody">
+            <span class="edm-chev">▾</span>
+            <h2>Campaigns Performance</h2>
+          </button>
+          <span class="head-info" data-info="How every sent email campaign has performed across the account — total emails delivered and the account-wide open, click, bounce and unsubscribe rates, with the per-campaign breakdown below." data-src="ActiveCampaign all-campaigns performance report"></span>
+          <span class="edm-sec-sub">Click the title to show or hide this section</span>
+        </div>
+        <div class="edm-sec-body" id="campaignsBody">
+          <!-- top cards -->
+          <div class="edm-kpi-grid" style="--cols:6" id="campaignKpis"></div>
+
+          <!-- bar chart: top 10 campaigns by emails sent -->
+          <div class="card edm-chart-card">
+            <div class="card-head block-head">
+              <h3 id="campBarHeading">Top campaigns by emails sent <span class="head-info" data-info="The ten campaigns that delivered the most emails. Shows send volume, not engagement — a high bar is a big send, not necessarily a well-performing one." data-src="ActiveCampaign all-campaigns performance report"></span></h3>
+              <div class="chart-cap" id="campBarCap"></div>
+            </div>
+            <div class="edm-chart-box tall"><canvas id="campBarCanvas"></canvas></div>
+          </div>
+
+          <!-- campaigns table (mirror AC columns, no preview) -->
+          <div class="card edm-campaigns-card">
+            <div class="card-head block-head">
+              <h3 id="campTableHeading">All campaigns <span class="head-info" data-info="Every sent email campaign with its ActiveCampaign report columns: send volume, opens and clicks (counts and rates), click-to-open, bounces and unsubscribes. Sort, search and filter by any column." data-src="ActiveCampaign all-campaigns performance report"></span></h3>
+              <div class="muted" style="font-size:12px;margin-top:4px" id="campTableCount"></div>
+            </div>
+            <div id="campTableRows"></div>
+          </div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js?v=27"></script>
+  <script>
+    /* EDM — LIVE. Contact KPIs / top lists / top tags / campaign report come from the
+       weekly snapshot (public.edm_report_metrics, filled by the edm-sync routine via the
+       ActiveCampaign MCP). "New contacts by month" is computed live from the
+       activecampaign_contacts mirror. Served by /api/marketing/edm. */
+
+    var EDM = null;
+    var CAMP_TABLE_STATE = {};
+
+    function num(n)  { return (n == null || isNaN(n)) ? '—' : fmt(Number(n), 'count'); }
+    function rate(n) { return (n == null || isNaN(n)) ? '—' : (Math.round(Number(n) * 100) / 100) + '%'; }
+    function pctOf(part, whole) {
+      if (part == null || !whole) return '';
+      return Math.round((part / whole) * 1000) / 10 + '% of total';
+    }
+
+    function kpiCard(label, value, sub, info) {
+      return '<div class="edm-kpi">' +
+        '<div class="label">' + esc(label) + (info || '') + '</div>' +
+        '<div class="value">' + value + '</div>' +
+        '<div class="sub">' + (sub || '&nbsp;') + '</div>' +
+      '</div>';
+    }
+
+    function renderContactKpis() {
+      var c = (EDM && EDM.contact) || {};
+      document.getElementById('contactKpis').innerHTML = [
+        kpiCard('Total Contacts', num(c.total), 'Everyone in ActiveCampaign',
+          infoTip('Every contact in the ActiveCampaign account, whatever their subscription status.', 'ActiveCampaign, refreshed weekly')),
+        kpiCard('Active Contacts', num(c.active), pctOf(c.active, c.total),
+          infoTip('Contacts who are subscribed and can be emailed (ActiveCampaign status "Active").', 'ActiveCampaign, refreshed weekly')),
+        kpiCard('Non-Active Contacts', num(c.nonactive), pctOf(c.nonactive, c.total),
+          infoTip('Contacts who are not currently mailable — unconfirmed, unsubscribed or bounced. (Total minus Active.)', 'ActiveCampaign, refreshed weekly'))
+      ].join('');
+    }
+
+    function renderCampaignKpis() {
+      var s = (EDM && EDM.campaigns && EDM.campaigns.summary) || {};
+      document.getElementById('campaignKpis').innerHTML = [
+        kpiCard('Campaigns sent', num(s.count), 'in the report',
+          infoTip('The number of sent email campaigns ActiveCampaign is reporting on.', 'ActiveCampaign all-campaigns performance report')),
+        kpiCard('Emails sent', num(s.totalSends), 'total delivered',
+          infoTip('The total number of individual emails delivered across every campaign.', 'ActiveCampaign all-campaigns performance report')),
+        kpiCard('Open rate', rate(s.openRate), num(s.totalUniqueOpens) + ' unique opens',
+          infoTip('Share of delivered emails that were opened, account-wide. Apple Mail privacy can inflate opens, so treat this as a soft signal.', 'ActiveCampaign all-campaigns performance report')),
+        kpiCard('Click rate', rate(s.clickRate), num(s.totalUniqueClicks) + ' unique clicks',
+          infoTip('Share of delivered emails where a link was clicked, account-wide. The most reliable engagement signal.', 'ActiveCampaign all-campaigns performance report')),
+        kpiCard('Bounce rate', rate(s.bounceRate), num(s.totalBounces) + ' bounces',
+          infoTip('Share of emails that could not be delivered, account-wide.', 'ActiveCampaign all-campaigns performance report')),
+        kpiCard('Unsubscribe rate', rate(s.unsubscribeRate), num(s.totalUnsubscribes) + ' unsubscribes',
+          infoTip('Share of delivered emails that led to an unsubscribe, account-wide.', 'ActiveCampaign all-campaigns performance report'))
+      ].join('');
+    }
+
+    function miniRow(rank, name, val) {
+      return '<tr>' +
+        '<td><span class="edm-rank">' + rank + '.</span> ' + esc(name) + '</td>' +
+        '<td>' + num(val) + '</td>' +
+      '</tr>';
+    }
+    function renderTopLists() {
+      var rows = (EDM && EDM.contact && EDM.contact.topLists) || [];
+      var body = document.getElementById('listsBody');
+      body.innerHTML = rows.length
+        ? rows.map(function (l, i) { return miniRow(i + 1, l.name, l.activeSubscribers); }).join('')
+        : '<tr><td colspan="2" class="muted">No data.</td></tr>';
+    }
+    function renderTopTags() {
+      var rows = (EDM && EDM.contact && EDM.contact.topTags) || [];
+      var body = document.getElementById('tagsBody');
+      body.innerHTML = rows.length
+        ? rows.map(function (t, i) { return miniRow(i + 1, t.tag, t.subscriberCount); }).join('')
+        : '<tr><td colspan="2" class="muted">No data.</td></tr>';
+    }
+
+    // 'YYYY-MM' -> "Mon 'YY"
+    function monthShort(ym) {
+      var p = String(ym || '').split('-');
+      if (p.length < 2) return ym || '';
+      var d = new Date(Number(p[0]), Number(p[1]) - 1, 1);
+      return d.toLocaleDateString('en-AU', { month: 'short' }) + " '" + String(p[0]).slice(-2);
+    }
+
+    var _growthChart = null;
+    function renderGrowthChart() {
+      var el = document.getElementById('growthCanvas');
+      if (!el) return;
+      var rows = (EDM && EDM.contact && EDM.contact.byMonth) || [];
+      var cap = document.getElementById('growthCap');
+      var tc = themeColors();
+      if (_growthChart) { _growthChart.destroy(); _growthChart = null; }
+      if (!rows.length) { if (cap) cap.textContent = 'No data'; return; }
+      if (cap) cap.textContent = 'Last 12 months · ' + rows.reduce(function (a, r) { return a + (r.added || 0); }, 0).toLocaleString('en-AU') + ' added';
+      _growthChart = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: rows.map(function (r) { return monthShort(r.ym); }),
+          datasets: [{
+            label: 'New contacts',
+            data: rows.map(function (r) { return r.added; }),
+            backgroundColor: tc.accent, borderRadius: 4, maxBarThickness: 48
+          }]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 }, maxRotation: 0, autoSkip: false } },
+            y: { beginAtZero: true, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 }, grid: { color: tc.grid } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function (ctx) { return (ctx.parsed.y || 0).toLocaleString('en-AU') + ' new contacts'; } } }
+          }
+        }
+      });
+    }
+
+    var _campBarChart = null;
+    function shortName(s) {
+      s = String(s || '');
+      return s.length > 42 ? s.slice(0, 41) + '…' : s;
+    }
+    function renderCampBar() {
+      var el = document.getElementById('campBarCanvas');
+      if (!el) return;
+      var all = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+      var cap = document.getElementById('campBarCap');
+      var tc = themeColors();
+      if (_campBarChart) { _campBarChart.destroy(); _campBarChart = null; }
+      var top = all.slice().sort(function (a, b) { return (b.sends || 0) - (a.sends || 0); }).slice(0, 10);
+      if (!top.length) { if (cap) cap.textContent = 'No data'; return; }
+      if (cap) cap.textContent = 'Top ' + top.length + ' of ' + all.length + ' campaigns';
+      _campBarChart = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: top.map(function (c) { return shortName(c.name); }),
+          datasets: [{
+            label: 'Emails sent',
+            data: top.map(function (c) { return c.sends; }),
+            backgroundColor: tc.accent, borderRadius: 4, maxBarThickness: 26
+          }]
+        },
+        options: {
+          indexAxis: 'y',
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { beginAtZero: true, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 }, grid: { color: tc.grid } },
+            y: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 }, autoSkip: false } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: {
+              title: function (items) { return (top[items[0].dataIndex] || {}).name || items[0].label; },
+              label: function (ctx) { return (ctx.parsed.x || 0).toLocaleString('en-AU') + ' emails sent'; }
+            } }
+          }
+        }
+      });
+    }
+
+    var CAMP_TYPE = { single: 'One-off', single_automated: 'Automated', recurring: 'Recurring', responder: 'Autoresponder', reminder: 'Reminder', special: 'Special', text: 'SMS/Text', activerss: 'RSS', split: 'Split test' };
+    function campType(t) { return CAMP_TYPE[t] || (t ? esc(t) : '—'); }
+
+    function renderCampTable() {
+      var rows = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+      var cnt = document.getElementById('campTableCount');
+      var cols = [
+        { key: 'name', label: 'Campaign', render: function (v) { return esc(v || '—'); } },
+        { key: 'type', label: 'Type', unit: 'text', render: function (v) { return campType(v); }, text: function (v) { return CAMP_TYPE[v] || v || ''; } },
+        { key: 'lastSent', label: 'Last sent', unit: 'date' },
+        { key: 'sends', label: 'Sends', unit: 'count' },
+        { key: 'uOpens', label: 'Opens', unit: 'count' },
+        { key: 'openRate', label: 'Open rate', unit: 'percent' },
+        { key: 'uClicks', label: 'Clicks', unit: 'count' },
+        { key: 'clickRate', label: 'Click rate', unit: 'percent' },
+        { key: 'cto', label: 'Click-to-open', unit: 'percent' },
+        { key: 'bounces', label: 'Bounces', unit: 'count' },
+        { key: 'bounceRate', label: 'Bounce rate', unit: 'percent' },
+        { key: 'unsubs', label: 'Unsubs', unit: 'count' },
+        { key: 'unsubRate', label: 'Unsub rate', unit: 'percent' }
+      ];
+      renderSortableTable('campTableRows', rows, cols, {
+        stateStore: CAMP_TABLE_STATE,
+        searchPlaceholder: 'Search campaigns…',
+        sortKey: 'sends', sortDir: 'desc',
+        emptyText: 'No campaigns match the selected filters.',
+        pageSize: 25,
+        onCount: function (shown, total) {
+          if (cnt) cnt.textContent = (shown === total ? total : shown + ' of ' + total) + ' campaign' + (total === 1 ? '' : 's');
+        }
+      });
+    }
+
+    function setFreshNote() {
+      var el = document.getElementById('freshNote');
+      if (!el) return;
+      if (EDM && EDM.capturedAt) {
+        var dt = new Date(EDM.capturedAt);
+        el.textContent = 'Weekly snapshot · ' + dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+      } else {
+        el.textContent = 'Live from ActiveCampaign';
+      }
+    }
+
+    function renderAll() {
+      renderContactKpis();
+      renderGrowthChart();
+      renderTopLists();
+      renderTopTags();
+      renderCampaignKpis();
+      renderCampBar();
+      renderCampTable();
+      setFreshNote();
+    }
+
+    function wireCollapse(btnId, bodyId) {
+      var btn = document.getElementById(btnId);
+      var body = document.getElementById(bodyId);
+      if (!btn || !body) return;
+      btn.addEventListener('click', function () {
+        var open = btn.getAttribute('aria-expanded') !== 'false';
+        btn.setAttribute('aria-expanded', open ? 'false' : 'true');
+        body.hidden = open;
+        // charts need a reflow after being un-hidden
+        if (!open) { renderGrowthChart(); renderCampBar(); }
+      });
+    }
+
+    function load() {
+      fetchJSON('/api/marketing/edm').then(function (d) {
+        EDM = d || {};
+        renderAll();
+      }).catch(function (err) {
+        console.error('edm', err);
+        document.getElementById('contactKpis').innerHTML = '<div class="muted" style="padding:8px 2px">Failed to load EDM report.</div>';
+        document.getElementById('freshNote').textContent = '';
+      });
+    }
+
+    initPage('marketing');
+    renderMarketingHead(true);            // live page — shared Marketing head, no "sample data" badge
+    renderMarketingSidebar('edm');
+    fillHeadInfo();                       // static section/chart/table ⓘ info tools (DESIGN_GUIDE §6)
+    wireCollapse('toggleContact', 'contactBody');
+    wireCollapse('toggleCampaigns', 'campaignsBody');
+    load();
+    window.onThemeChange = function () { renderGrowthChart(); renderCampBar(); };
+  </script>
+</body>
+</html>

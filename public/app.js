@@ -345,6 +345,7 @@ function renderMarketingSidebar(active) {
     ['email-partners', 'Outreach Campaign', 'email_partners.html'],
     ['website-search', 'Website & Search',  'website_search.html'],
     ['content-social', 'Social Platforms',  'content_social.html'],
+    ['edm',            'EDM',               'edm.html'],
   ];
   // "More" dropdown — the remaining Marketing tools.
   var more = [

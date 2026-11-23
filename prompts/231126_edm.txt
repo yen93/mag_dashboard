@@ -1,0 +1,21 @@
+**edm_contact:**
+https://myadventuregroup.activehosted.com/app/reports/contact-performance
+
+**edm_campaigns:**
+https://myadventuregroup.activehosted.com/app/reports/all-campaigns-performance
+
+**contact_performance:**
+- display all 3 kpi cards in edm_contact
+- bar graph
+- top 5 contact lists
+- top 5 tags
+
+**campaigns_performance:**
+- all top cards in edm_campaigns
+- add bar graph
+- campaigns section (mirror ac columns). but no need to display preview
+
+## main task:
+- create a new "EDM" tab in marketing dashboard. it should be a displayed tab on the right side of content_social.html
+- there should be 2 sections that can be toggle hidden/shown: "Contact Performance" and "Campaigns Performance"
+- see contact_performance and campaigns_performance on how each section should be displayed

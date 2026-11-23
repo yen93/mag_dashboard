@@ -27,6 +27,7 @@ import { getMarketingNurtureEvents } from './metrics/marketing-nurture-events.js
 import { getEmailPartnerMetrics } from './metrics/email-partner-metrics.js';
 import { getIndirectDeals } from './metrics/indirect-deals.js';
 import { getMarketingPlatforms } from './metrics/marketing-platforms.js';
+import { getEdmReport } from './metrics/edm-report.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
 import { getMarketingChannelSummary } from './metrics/marketing-channel-summary.js';
@@ -649,6 +650,19 @@ marketing.get('/platforms', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:platforms]', err);
     res.status(502).json({ error: 'Failed to load platform stats from data source.', detail: err.message });
+  }
+});
+// EDM — the ActiveCampaign Contact Performance + All Campaigns Performance reports for
+// public/edm.html. Latest weekly snapshot (public.edm_report_metrics, filled by the
+// edm-sync routine via the AC MCP) + a live "new contacts by month" series from the
+// activecampaign_contacts mirror. See server/metrics/edm-report.js. Cached briefly.
+marketing.get('/edm', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:edm', getEdmReport, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:edm]', err);
+    res.status(502).json({ error: 'Failed to load EDM report from data source.', detail: err.message });
   }
 });
 // Content metrics — login-gated figures (LinkedIn newsletter subscribers, article views)
