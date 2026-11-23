@@ -107,6 +107,13 @@
     .lh-bar { position: relative; height: 12px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
     .lh-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--mkt-accent); transition: width .3s ease; }
 
+    /* Contact segmentation — two pies stacked in the right cell */
+    .seg-grid { display: flex; flex-direction: column; gap: 16px; flex: 1; }
+    .seg-pie { display: flex; flex-direction: column; }
+    .seg-pie-title { font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
+    .seg-pie-box { position: relative; height: 150px; }
+    @media (min-width: 1200px) { .seg-pie-box { height: 168px; } }
+
     /* Campaigns table card */
     .edm-campaigns-card { padding: 22px 24px; margin-top: 16px; }
   </style>
@@ -174,7 +181,16 @@
                 <h3 id="segHeading">Contact segmentation <span class="head-info" data-info="How many contacts fall into each engagement band, from ActiveCampaign's engagement tags: Engaged = opened something in the last 90 days; Quiet = no open for 90–180 days (the re-engagement audience); Dormant = no open for 180+ days (reduced cadence)." data-src="ActiveCampaign engagement tags, refreshed weekly"></span></h3>
                 <div class="chart-cap" id="segCap"></div>
               </div>
-              <div class="edm-chart-box"><canvas id="segCanvas"></canvas></div>
+              <div class="seg-grid">
+                <div class="seg-pie">
+                  <div class="seg-pie-title">% of Total Contacts by Segment</div>
+                  <div class="seg-pie-box"><canvas id="segTotalCanvas"></canvas></div>
+                </div>
+                <div class="seg-pie">
+                  <div class="seg-pie-title">% of Active Contacts by Segment</div>
+                  <div class="seg-pie-box"><canvas id="segActiveCanvas"></canvas></div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -299,45 +315,78 @@
       }).join('');
     }
 
-    // Contact segmentation — counts of the AC engagement tags (Engaged / Quiet / Dormant).
-    var _segChart = null;
+    // Contact segmentation — two pies from the live AC engagement tags
+    // (Engaged / Quiet / Dormant), plus an "Other" slice so each pie sums to its
+    // denominator: left = share of ALL contacts, right = share of ACTIVE contacts.
+    var _segTotalChart = null, _segActiveChart = null;
     var SEG_COLORS = { active: '#16a34a', quiet: '#d9883a', dormant: '#8a94a6' };
-    function renderSegChart() {
-      var el = document.getElementById('segCanvas');
-      if (!el) return;
-      var seg = (EDM && EDM.contact && EDM.contact.segmentation) || [];
-      var cap = document.getElementById('segCap');
+    var SEG_OTHER = '#3b6ef0';
+
+    function segItems(seg, denom, otherLabel, otherDesc) {
+      var sum = seg.reduce(function (a, s) { return a + (s.count || 0); }, 0);
+      var other = Math.max(0, (denom || 0) - sum);
+      var items = seg.map(function (s) {
+        return { label: s.label, value: s.count || 0, color: SEG_COLORS[s.key] || SEG_OTHER, desc: s.desc };
+      });
+      items.push({ label: otherLabel, value: other, color: SEG_OTHER, desc: otherDesc });
+      return items;
+    }
+
+    function makeSegPie(canvasId, items) {
+      var el = document.getElementById(canvasId);
+      if (!el) return null;
       var tc = themeColors();
-      if (_segChart) { _segChart.destroy(); _segChart = null; }
-      if (!seg.length) { if (cap) cap.textContent = 'No data'; return; }
-      if (cap) cap.textContent = 'By engagement tag · ' + seg.reduce(function (a, s) { return a + (s.count || 0); }, 0).toLocaleString('en-AU') + ' tagged';
-      _segChart = new Chart(el.getContext('2d'), {
-        type: 'bar',
+      var tot = items.reduce(function (a, i) { return a + (i.value || 0); }, 0);
+      var p = function (v) { return tot ? Math.round((v / tot) * 1000) / 10 : 0; };
+      return new Chart(el.getContext('2d'), {
+        type: 'pie',
         data: {
-          labels: seg.map(function (s) { return s.label; }),
+          labels: items.map(function (i) { return i.label; }),
           datasets: [{
-            label: 'Contacts',
-            data: seg.map(function (s) { return s.count; }),
-            backgroundColor: seg.map(function (s) { return SEG_COLORS[s.key] || tc.accent; }),
-            borderRadius: 4, maxBarThickness: 90
+            data: items.map(function (i) { return i.value; }),
+            backgroundColor: items.map(function (i) { return i.color; }),
+            borderColor: tc.surface || '#fff', borderWidth: 2
           }]
         },
         options: {
           responsive: true, maintainAspectRatio: false,
-          scales: {
-            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 12 } } },
-            y: { beginAtZero: true, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 }, grid: { color: tc.grid } }
-          },
           plugins: {
-            legend: { display: false },
+            legend: {
+              position: 'right',
+              labels: {
+                color: tc.text || tc.muted, font: { size: 11 }, padding: 8, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'circle',
+                generateLabels: function (chart) {
+                  var ds = chart.data.datasets[0];
+                  return chart.data.labels.map(function (lab, i) {
+                    var v = ds.data[i] || 0;
+                    return { text: lab + '  ' + p(v) + '%', fillStyle: ds.backgroundColor[i], strokeStyle: ds.backgroundColor[i], index: i };
+                  });
+                }
+              }
+            },
             tooltip: { callbacks: {
-              title: function (items) { return (seg[items[0].dataIndex] || {}).label || items[0].label; },
-              label: function (ctx) { return (ctx.parsed.y || 0).toLocaleString('en-AU') + ' contacts'; },
-              afterLabel: function (ctx) { return (seg[ctx.dataIndex] || {}).desc || ''; }
+              title: function (its) { return (items[its[0].dataIndex] || {}).label || its[0].label; },
+              label: function (ctx) { var v = ctx.parsed || 0; return v.toLocaleString('en-AU') + ' contacts (' + p(v) + '%)'; },
+              afterLabel: function (ctx) { return (items[ctx.dataIndex] || {}).desc || ''; }
             } }
           }
         }
       });
+    }
+
+    function renderSegmentation() {
+      var seg = (EDM && EDM.contact && EDM.contact.segmentation) || [];
+      var c = (EDM && EDM.contact) || {};
+      var cap = document.getElementById('segCap');
+      if (_segTotalChart) { _segTotalChart.destroy(); _segTotalChart = null; }
+      if (_segActiveChart) { _segActiveChart.destroy(); _segActiveChart = null; }
+      if (!seg.length) { if (cap) cap.textContent = 'No data'; return; }
+      var tagged = seg.reduce(function (a, s) { return a + (s.count || 0); }, 0);
+      if (cap) cap.textContent = 'ActiveCampaign engagement tags · ' + tagged.toLocaleString('en-AU') + ' tagged';
+      _segTotalChart = makeSegPie('segTotalCanvas',
+        segItems(seg, c.total, 'Not tagged', 'Contacts without an engagement tag yet'));
+      _segActiveChart = makeSegPie('segActiveCanvas',
+        segItems(seg, c.active, 'Not tagged', 'Active contacts without an engagement tag yet'));
     }
 
     var _campBarChart = null;
@@ -430,7 +479,7 @@
     function renderAll() {
       renderContactKpis();
       renderListHealth();
-      renderSegChart();
+      renderSegmentation();
       renderCampaignKpis();
       renderCampBar();
       renderCampTable();
@@ -446,7 +495,7 @@
         btn.setAttribute('aria-expanded', open ? 'false' : 'true');
         body.hidden = open;
         // charts need a reflow after being un-hidden
-        if (!open) { renderSegChart(); renderCampBar(); }
+        if (!open) { renderSegmentation(); renderCampBar(); }
       });
     }
 
@@ -468,7 +517,7 @@
     wireCollapse('toggleContact', 'contactBody');
     wireCollapse('toggleCampaigns', 'campaignsBody');
     load();
-    window.onThemeChange = function () { renderSegChart(); renderCampBar(); };
+    window.onThemeChange = function () { renderSegmentation(); renderCampBar(); };
   </script>
 </body>
 </html>
