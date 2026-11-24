@@ -1,0 +1,85 @@
+================================================================================
+UPDATE DOCUMENTATION: ROAS COMPARE TOGGLE MONTHLY WINDOWING
+Timestamp: 24/11/26 15:58 (UTC+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. ROAS BACKEND MONTHLY SERIES (SERVER/METRICS/ROAS.JS)
+--------------------------------------------------------------------------------
+* Problem / Context:
+  GET /api/operations/roas previously returned only FY-level rows (rows + total)
+  with no sub-FY monthly series, even though all four underlying Supabase tables
+  (public.roas_counted_deals, google_ads_xero_monthly, bing_ads_campaign_monthly,
+  simple_digital_fees_monthly) are already monthly or deal-dated (cdate).
+  Without monthly data, the ROAS tab's Compare toggle could not distinguish
+  "vs last year" from "vs previous period" for partial FYs (e.g. FY27).
+
+* Technical Changes:
+  - File modified: server/metrics/roas.js
+    (C:\Users\Cloverly\claude_code\dashboard\server\metrics\roas.js)
+  - Added SELECT_BY_MONTH SQL query (lines 113-165) aggregating monthly spend
+    (googleSpend, bingSpend, sdFee) and counted deals (won, lost, open,
+    wonRevenue, openValue) per calendar month ('YYYY-MM') with AU FY end year
+    (fyEnd).
+  - Updated getRoas() (lines 262-320) to execute SELECT and SELECT_BY_MONTH in
+    parallel via Promise.all(), derive totalCost per month, and include
+    byMonth: section(byMonth, ...) in the returned payload (including pending
+    and empty fallback shapes).
+  - Fully additive change; existing callers (server/roasAssistant.js,
+    server/metrics/marketing-channel-results.js) are unaffected.
+
+2. ROAS.HTML COMPARE TOGGLE ("VS LAST YEAR" / "VS PREVIOUS PERIOD")
+--------------------------------------------------------------------------------
+* Problem / Context:
+  In public/roas.html, clicking between "vs last year" (yoy) and
+  "vs previous period" (prev) on #cmpSeg updated CMP, but renderKpis() never
+  read CMP — always comparing against priorRow() (full prior FY) and always
+  showing "vs FYxx". Reference: public/marketing.html compare toggles.
+
+* Technical Changes:
+  - File modified: public/roas.html
+    (C:\Users\Cloverly\claude_code\dashboard\public\roas.html)
+  - Added monthly-window compare helpers mirroring public/marketing.html
+    (lines 476-542):
+    * selFyEnd(), windowMonths(series), shiftMonths(months, years),
+      precedingMonths(months), baseMonths(cur), cmpLabel(),
+      seriesWindowPair(series, valOf), ratioWindowPair(series, numOf, denOf).
+  - Updated deltaChip() (lines 550-564) to display "▬ no change" when d === 0
+    in percentage mode.
+  - Updated renderKpis() (lines 576-615) to compute deltas for all 6 KPI tiles
+    (ROAS, Cost, Won revenue from ads, Won, Lost, Open pipeline) from
+    ROAS_DATA.byMonth:
+    * "vs last year" (yoy): same months 1 year earlier, labeled "vs FY<prior>".
+    * "vs previous period" (prev): immediately preceding equal-length month
+      window, labeled "vs prev period".
+    * Respects the active Cost basis toggle (All-in vs Ads only) for ROAS and
+      Cost deltas.
+    * Omits chips for "All years" and earliest FY with no prior history.
+    * Falls back gracefully to priorRow() with basis-aware cmpLabel() if an
+      older cached API payload does not yet include byMonth.
+
+3. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* None — read-only Express metric query + client-side UI update only. No
+  database migrations, Edge Functions, or cron jobs created/modified.
+
+4. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Backend module check (Node ESM):
+  - server/metrics/roas.js imported cleanly; getRoas() pending shape verified
+    with both rows.data and byMonth.data arrays.
+* Inline script syntax check (Node vm.Script):
+  - All 3 inline <script> blocks in public/roas.html parsed with zero errors.
+* Automated comparison harness assertions (Node):
+  - Partial FY27 (Jul-Nov 2026):
+    * YoY:  ROAS ▲ +0.01× vs FY26 | Cost ▲ 10% vs FY26 (all 6 tiles vs FY26)
+    * Prev: ROAS ▼ −1.27× vs prev period | Cost ▲ 7.6% vs prev period
+  - Cost basis toggle (Ads only / google):
+    * Prev Cost delta updated to ▲ 8.4% vs prev period (distinct from All-in).
+  - Full past FY26: YoY -> 6 tiles "vs FY25"; Prev -> 6 tiles "vs prev period".
+  - Earliest FY22 (no prior history): 0 delta chips rendered (both modes).
+  - All years: 0 delta chips rendered.
+  - Missing byMonth fallback: 6 tiles switch cleanly between "vs FY26" and
+    "vs prev period".
+  - Result: ALL ROAS ASSERTIONS PASSED.
+================================================================================

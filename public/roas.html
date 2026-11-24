@@ -474,11 +474,68 @@
     }
 
     /* ---------- Compare toggle (#cmpSeg) ----------
-       ROAS is reported per financial year with no sub-FY series, so the prior FY IS
-       the "previous period" — "vs last year" and "vs previous period" both resolve to
-       the prior FY here. The toggle drives the per-tile delta chips (prior-FY change). */
+       Mirrors marketing.html: every KPI delta is computed from the loaded monthly
+       series (ROAS_DATA.byMonth) so "vs previous period" (the immediately preceding
+       window of equal length) is genuinely different from "vs last year" (the same
+       months one year earlier). Matters for partial FYs (e.g. current FY); for a
+       full past FY both resolve to the prior FY with distinct labels. */
     function selCmp() { var b = document.querySelector('#cmpSeg button.active'); return b ? b.getAttribute('data-cmp') : 'yoy'; }
-    // The prior-FY row for the current selection (null for "All" or when absent).
+    function selFyEnd() {
+      if (!SEL.fy || SEL.fy === 'All') return null;
+      var n = parseInt(String(SEL.fy).replace(/\D/g, ''), 10);
+      return isFinite(n) ? 2000 + n : null;
+    }
+    // Month keys ('YYYY-MM') of the selected FY from the monthly series. null = "All".
+    function windowMonths(series) {
+      var fe = selFyEnd();
+      if (fe == null) return null;
+      return (series || []).filter(function (m) { return m.fyEnd === fe; }).map(function (m) { return m.month; }).sort();
+    }
+    function shiftMonths(months, years) {  // shift every 'YYYY-MM' by `years`
+      return months.map(function (mm) { var p = mm.split('-'); return (Number(p[0]) + years) + '-' + p[1]; });
+    }
+    function precedingMonths(months) {     // the months.length months immediately before months[0]
+      if (!months.length) return [];
+      var p = months[0].split('-'), y = Number(p[0]), mo = Number(p[1]), out = [];
+      for (var i = 0; i < months.length; i++) {
+        mo--; if (mo < 1) { mo = 12; y--; }
+        out.unshift(y + '-' + (mo < 10 ? '0' + mo : '' + mo));
+      }
+      return out;
+    }
+    function baseMonths(cur) { return CMP === 'prev' ? precedingMonths(cur) : shiftMonths(cur, -1); }
+    function cmpLabel() {
+      if (CMP === 'prev') return 'vs prev period';
+      var fe = selFyEnd();
+      return fe != null ? 'vs FY' + String(fe - 1).slice(-2) : 'vs last yr';
+    }
+    // Current vs comparison-window sums over the monthly series. null when "All" is
+    // selected or no base months exist in the series (no comparable history).
+    function seriesWindowPair(series, valOf) {
+      var cur = windowMonths(series);
+      if (!cur || !cur.length) return null;
+      var base = baseMonths(cur);
+      var map = {}, present = {};
+      (series || []).forEach(function (m) { map[m.month] = valOf(m) || 0; present[m.month] = 1; });
+      if (!base.some(function (mm) { return present[mm]; })) return null;
+      var sum = function (ms) { return ms.reduce(function (a, mm) { return a + (map[mm] || 0); }, 0); };
+      return { cur: sum(cur), prev: sum(base) };
+    }
+    // Current vs comparison-window ratios (e.g. ROAS = wonRevenue / cost) over the SAME
+    // current and base month windows.
+    function ratioWindowPair(series, numOf, denOf) {
+      var cur = windowMonths(series);
+      if (!cur || !cur.length) return null;
+      var base = baseMonths(cur);
+      var nMap = {}, dMap = {}, present = {};
+      (series || []).forEach(function (m) { nMap[m.month] = numOf(m) || 0; dMap[m.month] = denOf(m) || 0; present[m.month] = 1; });
+      if (!base.some(function (mm) { return present[mm]; })) return null;
+      var sum = function (map, ms) { return ms.reduce(function (a, mm) { return a + (map[mm] || 0); }, 0); };
+      var cn = sum(nMap, cur), cd = sum(dMap, cur), bn = sum(nMap, base), bd = sum(dMap, base);
+      if (cd <= 0 || bd <= 0) return null;
+      return { cur: cn / cd, prev: bn / bd };
+    }
+    // Fallback prior-FY row if an older API payload lacks byMonth.
     function priorRow() {
       if (!ROAS_DATA || SEL.fy === 'All') return null;
       var cur = parseInt(String(SEL.fy).replace(/\D/g, ''), 10);
@@ -499,8 +556,10 @@
         return wrap((opts.invert ? da < 0 : da > 0) ? 1 : -1, (da > 0 ? '▲ +' : '▼ −') + esc(Math.abs(da).toFixed(2)) + esc(opts.suffix || ''));
       }
       if (prev === 0) { if (cur === 0) return ''; return wrap(opts.invert ? -1 : 1, '▲ new'); }
-      var d = cur - prev, pct = Math.round((d / prev) * 1000) / 10;
-      return wrap((opts.invert ? d < 0 : d >= 0) ? 1 : -1, (d >= 0 ? '▲ ' : '▼ ') + esc(Math.abs(pct)) + '%');
+      var d = cur - prev;
+      if (d === 0) return wrap(0, '▬ no change');
+      var pct = Math.round((d / prev) * 1000) / 10;
+      return wrap((opts.invert ? d < 0 : d > 0) ? 1 : -1, (d > 0 ? '▲ ' : '▼ ') + esc(Math.abs(pct)) + '%');
     }
 
     // ---------- KPI tiles ----------
@@ -520,14 +579,30 @@
       var cost = costOf(r), roas = roasOf(r);
       var pass = (roas || 0) >= target;
       var roiDollars = (r.wonRevenue || 0) - cost;
-      // Compare delta chips (prior FY, basis-aware for ROAS/cost). None for the "All" selection.
-      var p = priorRow(), lab = p ? 'vs ' + p.fy : '';
-      var dRoas = p ? deltaChip(roas, roasOf(p), lab, { abs: true, suffix: '×' }) : '';
-      var dCost = p ? deltaChip(cost, costOf(p), lab, { invert: true }) : '';
-      var dWonRev = p ? deltaChip(r.wonRevenue, p.wonRevenue, lab) : '';
-      var dWon = p ? deltaChip(r.won, p.won, lab) : '';
-      var dLost = p ? deltaChip(r.lost, p.lost, lab, { invert: true }) : '';
-      var dOpen = p ? deltaChip(r.openValue, p.openValue, lab) : '';
+      // Compare delta chips (monthly windowing matching marketing.html, basis-aware for
+      // ROAS/cost; falls back to prior-FY row if byMonth isn't present). None for "All".
+      var byMonth = (ROAS_DATA.byMonth && ROAS_DATA.byMonth.data) || [];
+      var lab = cmpLabel();
+      var dRoas = '', dCost = '', dWonRev = '', dWon = '', dLost = '', dOpen = '';
+      if (byMonth.length) {
+        var pair = function (p, opts) { return p ? deltaChip(p.cur, p.prev, lab, opts) : ''; };
+        dRoas   = pair(ratioWindowPair(byMonth, function (m) { return m.wonRevenue; }, costOf), { abs: true, suffix: '×' });
+        dCost   = pair(seriesWindowPair(byMonth, costOf), { invert: true });
+        dWonRev = pair(seriesWindowPair(byMonth, function (m) { return m.wonRevenue; }));
+        dWon    = pair(seriesWindowPair(byMonth, function (m) { return m.won; }));
+        dLost   = pair(seriesWindowPair(byMonth, function (m) { return m.lost; }), { invert: true });
+        dOpen   = pair(seriesWindowPair(byMonth, function (m) { return m.openValue; }));
+      } else {
+        var p = priorRow();
+        if (p) {
+          dRoas   = deltaChip(roas, roasOf(p), lab, { abs: true, suffix: '×' });
+          dCost   = deltaChip(cost, costOf(p), lab, { invert: true });
+          dWonRev = deltaChip(r.wonRevenue, p.wonRevenue, lab);
+          dWon    = deltaChip(r.won, p.won, lab);
+          dLost   = deltaChip(r.lost, p.lost, lab, { invert: true });
+          dOpen   = deltaChip(r.openValue, p.openValue, lab);
+        }
+      }
       var host = document.getElementById('roasKpis');
       host.innerHTML =
         kpi('ROAS', roasFmt(roas),

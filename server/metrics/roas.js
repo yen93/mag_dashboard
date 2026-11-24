@@ -110,6 +110,60 @@ const SELECT = `
   LEFT JOIN sd   s      ON s.fy_end = a.fy_end
   ORDER BY a.fy_end`;
 
+// Monthly ROAS series (spend by channel + counted deal counts/values per calendar month).
+// Used by the ROAS tab's Compare toggle ("vs last year" vs "vs previous period") so partial
+// FYs compare equal-length month windows rather than full prior FYs.
+const SELECT_BY_MONTH = `
+  WITH deals AS (
+    SELECT date_trunc('month', cdate)::date AS m,
+      count(*) FILTER (WHERE status = 'won')  AS won,
+      count(*) FILTER (WHERE status = 'lost') AS lost,
+      count(*) FILTER (WHERE status = 'open') AS open,
+      coalesce(sum(coalesce(xero_engagement_fee, value)) FILTER (WHERE status = 'won'), 0)::numeric AS won_rev,
+      coalesce(sum(value) FILTER (WHERE status = 'open'), 0)::numeric AS open_val
+    FROM public.roas_counted_deals
+    WHERE cdate IS NOT NULL
+    GROUP BY 1
+  ),
+  gads AS (
+    SELECT date_trunc('month', month)::date AS m, sum(cost)::numeric AS google_spend
+    FROM public.google_ads_xero_monthly
+    GROUP BY 1
+  ),
+  bing AS (
+    SELECT date_trunc('month', month)::date AS m, sum(cost)::numeric AS bing_spend
+    FROM public.bing_ads_campaign_monthly
+    GROUP BY 1
+  ),
+  sd AS (
+    SELECT date_trunc('month', month)::date AS m, sum(paid_search_fee)::numeric AS sd_fee
+    FROM public.simple_digital_fees_monthly
+    GROUP BY 1
+  ),
+  months AS (
+    SELECT m FROM gads WHERE google_spend > 0
+    UNION SELECT m FROM bing WHERE bing_spend > 0
+    UNION SELECT m FROM sd WHERE sd_fee > 0
+    UNION SELECT m FROM deals
+  )
+  SELECT
+    to_char(mo.m, 'YYYY-MM')                                                                 AS "month",
+    extract(year FROM mo.m)::int + CASE WHEN extract(month FROM mo.m) >= 7 THEN 1 ELSE 0 END AS "fyEnd",
+    coalesce(g.google_spend, 0)                                                              AS "googleSpend",
+    coalesce(b.bing_spend, 0)                                                                AS "bingSpend",
+    coalesce(s.sd_fee, 0)                                                                    AS "sdFee",
+    coalesce(d.won, 0)                                                                       AS "won",
+    coalesce(d.lost, 0)                                                                      AS "lost",
+    coalesce(d.open, 0)                                                                      AS "open",
+    coalesce(d.won_rev, 0)                                                                   AS "wonRevenue",
+    coalesce(d.open_val, 0)                                                                  AS "openValue"
+  FROM months mo
+  LEFT JOIN gads g  ON g.m = mo.m
+  LEFT JOIN bing b  ON b.m = mo.m
+  LEFT JOIN sd   s  ON s.m = mo.m
+  LEFT JOIN deals d ON d.m = mo.m
+  ORDER BY 1`;
+
 const num = (v) => (v === null || v === undefined ? null : Number(v));
 
 // Derive the per-row figures the page shows. Both cost bases are provided; the frontend
@@ -207,28 +261,52 @@ function totalRow(rows) {
 
 export async function getRoas() {
   if (!supabaseConfigured()) {
+    const pend = { source: SRC, status: 'pending', note: 'Supabase not configured (set SUPABASE_DB_URL).' };
     return {
       asOf: new Date().toISOString(),
       target: TARGET_ROAS,
       total: null,
-      rows: section([], { source: SRC, status: 'pending', note: 'Supabase not configured (set SUPABASE_DB_URL).' }),
+      rows: section([], pend),
+      byMonth: section([], pend),
     };
   }
 
-  const rows = (await q(SELECT)).map(shape);
+  const [fyRows, monthRows] = await Promise.all([q(SELECT), q(SELECT_BY_MONTH)]);
+  const rows = fyRows.map(shape);
 
   if (!rows.length) {
+    const pend = {
+      source: SRC,
+      status: 'pending',
+      note: 'No Google Ads spend found — populate public.google_ads_xero_monthly (run xero-ad-spend-sync).',
+    };
     return {
       asOf: new Date().toISOString(),
       target: TARGET_ROAS,
       total: null,
-      rows: section([], {
-        source: SRC,
-        status: 'pending',
-        note: 'No Google Ads spend found — populate public.google_ads_xero_monthly (run xero-ad-spend-sync).',
-      }),
+      rows: section([], pend),
+      byMonth: section([], pend),
     };
   }
+
+  const byMonth = monthRows.map((m) => {
+    const googleSpend = num(m.googleSpend) || 0;
+    const bingSpend = num(m.bingSpend) || 0;
+    const sdFee = num(m.sdFee) || 0;
+    return {
+      month: m.month,
+      fyEnd: num(m.fyEnd),
+      googleSpend,
+      bingSpend,
+      sdFee,
+      totalCost: googleSpend + bingSpend + sdFee,
+      won: num(m.won) || 0,
+      lost: num(m.lost) || 0,
+      open: num(m.open) || 0,
+      wonRevenue: num(m.wonRevenue) || 0,
+      openValue: num(m.openValue) || 0,
+    };
+  });
 
   const total = totalRow(rows);
   const anyBing = rows.some((r) => r.bingSpend > 0);
@@ -249,5 +327,6 @@ export async function getRoas() {
     target: TARGET_ROAS,
     total,
     rows: section(rows, { source: SRC, status: 'live', note }),
+    byMonth: section(byMonth, { source: SRC, status: 'live', note: null }),
   };
 }
