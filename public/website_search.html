@@ -60,32 +60,33 @@
       box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
     }
 
-    /* Top row: 5 KPI cards */
+    /* Top row: 6 KPI cards — slimmer so they all fit on one line at full width */
     .ws-top-grid {
       display: grid;
-      grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 16px;
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+      gap: 12px;
       margin: 16px 0;
     }
-    @media (max-width: 1080px) {
+    @media (max-width: 1240px) {
       .ws-top-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 680px) {
       .ws-top-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
-    @media (max-width: 480px) {
+    @media (max-width: 460px) {
       .ws-top-grid { grid-template-columns: 1fr; }
     }
 
-    /* Second row: 3 KPI cards */
-    .ws-bottom-grid {
+    /* Mid row: Sessions → enquiries tile (left) + Phone · Click-to-call (right) */
+    .ws-mid-grid {
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+      grid-template-columns: minmax(0, 0.95fr) minmax(0, 1.05fr);
       gap: 16px;
-      margin: 16px 0 0;
+      margin-top: 16px;
+      align-items: stretch;
     }
-    @media (max-width: 860px) {
-      .ws-bottom-grid { grid-template-columns: 1fr; }
+    @media (max-width: 900px) {
+      .ws-mid-grid { grid-template-columns: 1fr; }
     }
 
     /* Shared KPI tile styling matching the attached screenshot */
@@ -93,7 +94,7 @@
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: 16px;
-      padding: 20px 22px 18px;
+      padding: 15px 16px 14px;
       box-shadow: var(--mkt-shadow);
       display: flex;
       flex-direction: column;
@@ -109,19 +110,83 @@
        when the tile sits near the top of the scroll (DESIGN_GUIDE §4 / §6 gotcha). */
     .ws-kpi:hover, .ws-kpi:focus-within { position: relative; z-index: 40; }
     .ws-kpi .label {
-      font-size: 13px;
+      font-size: 12.5px;
       color: var(--text-muted);
       font-weight: 500;
+      display: flex;
+      align-items: center;
+      gap: 5px;
     }
     .ws-kpi .value {
-      font-size: 30px;
+      font-size: 25px;
       font-weight: 700;
       letter-spacing: -.02em;
       font-variant-numeric: tabular-nums;
-      margin: 10px 0 8px;
+      margin: 9px 0 6px;
       color: var(--text);
       line-height: 1.15;
     }
+    /* Compare delta chip (driven by the Compare toggle) */
+    .ws-kpi .ws-delta,
+    .ws-funnel-delta {
+      display: inline-flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 2px 5px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text-muted);
+    }
+    .ws-kpi .ws-delta.pos, .ws-funnel-delta.pos { color: var(--pos); }
+    .ws-kpi .ws-delta.neg, .ws-funnel-delta.neg { color: var(--neg, #e5484d); }
+    .ws-delta-cmp { color: var(--text-muted); font-weight: 500; }
+
+    /* ============================================================
+       Sessions → enquiries funnel tile (carries the Visitor → enquiry rate)
+       ============================================================ */
+    .ws-funnel-card { display: flex; flex-direction: column; }
+    .ws-funnel-card #wsFunnelBody { display: flex; flex-direction: column; flex: 1; }
+    .ws-funnel-rate {
+      font-size: 42px;
+      font-weight: 800;
+      letter-spacing: -.02em;
+      line-height: 1.02;
+      color: var(--text);
+      font-variant-numeric: tabular-nums;
+      margin: 2px 0 2px;
+    }
+    .ws-funnel-rate.kpi-good { color: var(--pos); }
+    .ws-funnel-rate-label { font-size: 13px; color: var(--text-muted); font-weight: 500; margin-bottom: 6px; }
+    .ws-funnel-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      margin-top: 22px;
+      flex: 1;
+      justify-content: center;
+    }
+    .ws-funnel-step-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      font-size: 13px;
+      margin-bottom: 7px;
+    }
+    .ws-funnel-step-name { font-weight: 600; color: var(--text); }
+    .ws-funnel-step-val { font-weight: 700; font-variant-numeric: tabular-nums; color: var(--text); }
+    .ws-funnel-bar-track {
+      height: 14px;
+      border-radius: 999px;
+      background: color-mix(in srgb, var(--border) 70%, transparent);
+      overflow: hidden;
+    }
+    .ws-funnel-bar-fill {
+      height: 100%;
+      border-radius: 999px;
+      background: linear-gradient(90deg, var(--mkt-accent), var(--mkt-accent-2));
+      transition: width .3s ease;
+    }
+    .ws-funnel-foot { font-size: 12.5px; color: var(--text-muted); margin-top: 18px; }
     .ws-kpi .badge-wrap {
       margin: 12px 0 10px;
     }
@@ -531,18 +596,76 @@
             <button data-fy="fy26">FY26</button>
             <button class="active" data-fy="fy27">FY27</button>
           </div>
+          <span class="ctl-label" style="margin-left:4px">Compare</span>
+          <div class="segmented" id="cmpSeg" aria-label="Comparison basis">
+            <button class="active" data-cmp="yoy">vs last year</button>
+            <button data-cmp="prev">vs previous period</button>
+          </div>
           <div class="spacer" style="flex:1"></div>
-          <span class="muted" id="fyNote" style="font-size:13px">Figures are per financial year · hover any ⓘ for what a tile shows and its source</span>
+          <span class="muted" id="fyNote" style="font-size:13px">Figures are per financial year · deltas compare to the chosen basis · hover any ⓘ for what a tile shows and its source</span>
         </div>
       </div>
 
-      <!-- Row 1: 5 KPI cards -->
+      <!-- Row 1: 6 KPI cards — all on one line at full width -->
       <div class="ws-top-grid" id="wsTopKpis"></div>
 
-      <!-- Row 2: 3 KPI cards -->
-      <div class="ws-bottom-grid" id="wsBottomKpis"></div>
+      <!-- Row 2: Sessions → enquiries tile (left) + Phone enquiries · Click-to-call (right) -->
+      <div class="ws-mid-grid">
+        <!-- Sessions → enquiries conversion tile (carries the Visitor → enquiry rate) -->
+        <section class="card ws-section-card ws-funnel-card" id="wsFunnelCard">
+          <div class="ws-card-head">
+            <h3 id="wsFunnelHeading">Sessions &rarr; enquiries</h3>
+            <span class="head-info" id="wsFunnelInfo"></span>
+          </div>
+          <div id="wsFunnelBody"></div>
+        </section>
 
-      <!-- Row 3: GA4 Website Traffic Snapshots — Graph + Table -->
+        <!-- Phone enquiries · Click-to-call — Graph (moved below the KPI cards, right side) -->
+        <section class="card ws-section-card" id="wsC2cGraphCard">
+          <div class="ws-card-head">
+            <h3 id="wsC2cGraphHeading">Phone enquiries &middot; Click-to-call</h3>
+            <span class="head-info" id="wsC2cGraphInfo"></span>
+            <div class="spacer" style="flex:1"></div>
+            <div class="segmented" id="wsC2cModeSeg" aria-label="Chart view">
+              <button class="active" data-mode="month">Monthly trend</button>
+              <button data-mode="channel">By channel</button>
+            </div>
+          </div>
+
+          <!-- Selected FY summary strip (updates with #fySeg) -->
+          <div class="ws-fy-strip" id="wsC2cStrip"></div>
+
+          <div class="ws-chart-box" style="height:300px">
+            <canvas id="wsC2cCanvas"></canvas>
+          </div>
+        </section>
+      </div>
+
+      <!-- Row 3: Click-to-call by channel (retained, full width) -->
+      <div class="ws-snapshots-grid">
+        <section class="card ws-section-card" id="wsC2cTableCard">
+          <div class="ws-card-head">
+            <h3 id="wsC2cTableHeading">Click-to-call by channel</h3>
+            <span class="head-info" id="wsC2cTableInfo"></span>
+            <div class="spacer" style="flex:1"></div>
+            <span class="muted" style="font-size:12px">Selected: <strong id="wsC2cTableFy"></strong></span>
+          </div>
+          <div class="ws-table-wrap" tabindex="0" role="region" aria-labelledby="wsC2cTableHeading">
+            <table class="ws-c2c-table">
+              <thead>
+                <tr>
+                  <th scope="col">Channel</th>
+                  <th scope="col">Phone clicks</th>
+                  <th scope="col">Share of FY</th>
+                </tr>
+              </thead>
+              <tbody id="wsC2cTableBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </div>
+
+      <!-- Row 4: GA4 Website Traffic & AI Tool Visits + GA4 Website Traffic Snapshots (retained) -->
       <div class="ws-snapshots-grid">
         <!-- Graph card -->
         <section class="card ws-section-card" id="wsTrafficGraphCard">
@@ -602,76 +725,34 @@
           </div>
         </section>
       </div>
-
-      <!-- Row 4: Phone enquiries · Click-to-call — Graph + Table (GA4 click_to_call events) -->
-      <div class="ws-snapshots-grid">
-        <!-- Graph card -->
-        <section class="card ws-section-card" id="wsC2cGraphCard">
-          <div class="ws-card-head">
-            <h3 id="wsC2cGraphHeading">Phone enquiries · Click-to-call</h3>
-            <span class="head-info" id="wsC2cGraphInfo"></span>
-            <div class="spacer" style="flex:1"></div>
-            <div class="segmented" id="wsC2cModeSeg" aria-label="Chart view">
-              <button class="active" data-mode="month">Monthly trend</button>
-              <button data-mode="channel">By channel</button>
-            </div>
-          </div>
-
-          <!-- Selected FY summary strip (updates with #fySeg) -->
-          <div class="ws-fy-strip" id="wsC2cStrip"></div>
-
-          <div class="ws-chart-box" style="height:300px">
-            <canvas id="wsC2cCanvas"></canvas>
-          </div>
-        </section>
-
-        <!-- Table card -->
-        <section class="card ws-section-card" id="wsC2cTableCard">
-          <div class="ws-card-head">
-            <h3 id="wsC2cTableHeading">Click-to-call by channel</h3>
-            <span class="head-info" id="wsC2cTableInfo"></span>
-            <div class="spacer" style="flex:1"></div>
-            <span class="muted" style="font-size:12px">Selected: <strong id="wsC2cTableFy"></strong></span>
-          </div>
-          <div class="ws-table-wrap" tabindex="0" role="region" aria-labelledby="wsC2cTableHeading">
-            <table class="ws-c2c-table">
-              <thead>
-                <tr>
-                  <th scope="col">Channel</th>
-                  <th scope="col">Phone clicks</th>
-                  <th scope="col">Share of FY</th>
-                </tr>
-              </thead>
-              <tbody id="wsC2cTableBody"></tbody>
-            </table>
-          </div>
-        </section>
-      </div>
     </main>
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=27"></script>
   <script>
-    /* Website & Search — LIVE (except Phone enquiries, which is pending).
-       LIVE from /api/marketing/website-search:
+    /* Website & Search — LIVE from /api/marketing/website-search.
+       SIX KPI cards (one row at full width): Website sessions · Enquiries ·
+       Paid-search enquiries · Visits from AI tools · Google rating · Phone enquiries.
+       Below them: a "Sessions → enquiries" conversion tile (carrying the
+       Visitor → enquiry rate) on the left and the "Phone enquiries · Click-to-call"
+       graph on the right; then the Click-to-call by-channel table; then the
+       GA4 Website Traffic graph + snapshots table.
        • "Website sessions" + "Visits from AI tools" — per-FY figures from
          public.ga4_website_traffic_snapshots (weekly GA4 Data API snapshot via
-         ga4-website-traffic-sync).
-       • "Enquiries (in ActiveCampaign)" / "Organic enquiries" / "Paid-search
-         enquiries" — enquiries defined (per the owner) as leads with an EXISTING
-         SAVED ActiveCampaign contact (ga4_ac_contact_source rows whose contact_id
-         exists in activecampaign_contacts; one matched contact = one enquiry).
-       • "Organic enquiries (incl. unmatched)" — ALL organic-medium website form
-         conversions (matched + anonymous), from ga4_ac_event_matches. Deliberately
-         fuller than the AC-matched organic card.
-       • "New Google reviews" — count and average star rating per AU FY from
-         public.google_reviews (by review_create_time).
+         ga4-website-traffic-sync). Also feed the "Sessions → enquiries" tile.
+       • "Enquiries" / "Paid-search enquiries" — enquiries defined (per the owner)
+         as leads with an EXISTING SAVED ActiveCampaign contact (ga4_ac_contact_source
+         rows whose contact_id exists in activecampaign_contacts; one matched contact
+         = one enquiry); paid-search = cpc medium.
+       • "Google rating" — average star rating per AU FY (with the new-review count
+         below) from public.google_reviews (by review_create_time).
        • "Phone enquiries" — GA4 "click_to_call" (phone-number click) events per AU FY
          from public.ga4_click_to_call_monthly (weekly GA4 Data API snapshot via
          ga4-click-to-call-sync). Also drives the "Phone enquiries · Click-to-call"
          monthly trend chart + by-channel table. Monthly granularity → greyed under a
-         custom date range. */
+         custom date range.
+       Compare toggle (#cmpSeg) drives the per-card delta chips — see kpiDelta. */
 
     // Per-FY + all-years counts and average ratings from public.google_reviews
     // (grouped by Australian FY of review_create_time; used as fallback if the
@@ -738,38 +819,34 @@
     // where it comes from) — per DESIGN_GUIDE §6 that text lives ONLY in the ⓘ, never
     // in the card body. kind:'live' reads the selected FY's record by `key`;
     // kind:'pending' shows the pending chip. No fabricated sample numbers.
+    // Six KPI cards, all on one line at full width. `metric` names the series used
+    // for the Compare delta (see kpiDelta / metricForFy below).
     var TOP_CARDS = [
-      { label: 'Website sessions', kind: 'live', key: 'sessions',
+      { label: 'Website sessions', kind: 'live', key: 'sessions', metric: 'sessions',
         desc: 'The total number of website visits (sessions) for the selected period.',
         source: 'GA4 website analytics' },
-      { label: 'Organic enquiries (incl. unmatched)', kind: 'live', key: 'organicAll',
-        desc: 'Website form submissions that came from organic search, whether or not they matched a saved contact. Current period only.',
-        source: 'GA4 website analytics' },
-      { label: 'Enquiries (in ActiveCampaign)', kind: 'live', key: 'total',
+      { label: 'Enquiries', kind: 'live', key: 'total', metric: 'total',
         desc: 'Website and Ads leads that matched an existing saved contact in ActiveCampaign (one matched contact counts as one enquiry), for the selected period.',
         source: 'Website / Ads leads matched to ActiveCampaign' },
-      { label: 'Organic enquiries', kind: 'live', key: 'organic',
-        desc: 'Enquiries that came from organic search and matched a saved contact. Current period only.',
+      { label: 'Paid-search enquiries', kind: 'live', key: 'cpc', metric: 'cpc',
+        desc: 'Enquiries that came from paid search (Google or Bing) and matched a saved contact, for the selected period.',
         source: 'Website / Ads leads matched to ActiveCampaign' },
-      { label: 'Paid-search enquiries', kind: 'live', key: 'cpc',
-        desc: 'Enquiries that came from paid search (Google or Bing) and matched a saved contact. Current period only.',
-        source: 'Website / Ads leads matched to ActiveCampaign' }
-    ];
-    var BOTTOM_CARDS = [
-      { label: 'Visits from AI tools', kind: 'live', key: 'aiVisits',
+      { label: 'Visits from AI tools', kind: 'live', key: 'aiVisits', metric: 'aiVisits',
         desc: 'Website visits referred from AI assistants (such as ChatGPT, Gemini, Perplexity, Claude and Copilot) for the selected period.',
         source: 'GA4 website analytics' },
-      { label: 'New Google reviews', kind: 'reviews', key: 'reviews',
-        desc: 'New Google Business reviews left in the selected period, with the average star rating.',
+      { label: 'Google rating', kind: 'rating', key: 'rating', metric: 'avgStars',
+        desc: 'Average Google review rating. Reviews lift both search ranking and conversion. The count of new reviews in the selected period is shown below.',
         source: 'Google Business reviews' },
-      { label: 'Phone enquiries', kind: 'c2c', key: 'phone',
+      { label: 'Phone enquiries', kind: 'c2c', key: 'phone', metric: 'phone',
         desc: 'Phone-number clicks on the website — a visitor tapping a phone link to call — for the selected period.',
         source: 'GA4 website analytics' }
     ];
 
-    var WS = null;        // live payload once fetched (null = loading, false = failed)
-    var WS_RANGE = null;  // custom date-range roll-up (null = not loaded yet)
-    var CUSTOM = false;   // true while a custom date range is active (overrides the FY toggle)
+    var WS = null;          // live payload once fetched (null = loading, false = failed)
+    var WS_RANGE = null;    // custom date-range roll-up (null = not loaded yet)
+    var WS_RANGE_CMP = null;// comparison-window roll-up for the Compare toggle (custom range only)
+    var CUSTOM = false;     // true while a custom date range is active (overrides the FY toggle)
+    var CMP = 'yoy';        // Compare basis: 'yoy' (vs last year) | 'prev' (vs previous period)
     var _trafficChart = null;
     var _c2cChart = null;  // Chart.js instance for the click-to-call graph
 
@@ -952,16 +1029,140 @@
       return GOOGLE_REVIEWS_DB[fyKey] || { reviews: 0, avgStars: null };
     }
 
+    /* ============================================================
+       Compare toggle (#cmpSeg) — "vs last year" / "vs previous period".
+       Drives the delta chips on the KPI cards + the Sessions → enquiries tile.
+
+       Our per-FY data is annual, so for a whole-FY selection "last year" IS the
+       "previous period" (both = the prior FY) and the two bases coincide — that's
+       correct for annual figures. The toggle genuinely diverges for a CUSTOM date
+       range: "vs last year" compares the same dates one year earlier, while
+       "vs previous period" compares the equal-length window immediately before.
+       ============================================================ */
+    function selCmp() {
+      var b = document.querySelector('#cmpSeg button.active');
+      return b ? b.getAttribute('data-cmp') : 'yoy';
+    }
+    function cmpRangeLabel() { return CMP === 'prev' ? 'vs prev period' : 'vs last year'; }
+
+    // Prior-FY key for a given FY key ('fy27' → 'fy26'); null for 'all'/invalid.
+    function cmpFyKey(fyKey) {
+      var end = parseInt(String(fyKey).replace(/\D/g, ''), 10) + 2000;
+      if (!isFinite(end)) return null;
+      return 'fy' + String(end - 1 - 2000).padStart(2, '0');
+    }
+    function cmpLabel(cmpKey) { return 'vs ' + String(cmpKey).toUpperCase(); }
+
+    // Google reviews {reviews, avgStars} for an arbitrary FY key (same fallback
+    // chain as selReviews, but parameterized — used by the delta helpers).
+    function reviewsForKey(fyKey) {
+      var fyU = fyKey === 'all' ? 'all' : String(fyKey).toUpperCase();
+      var d = (WS && WS !== true) ? (fyKey === 'all' ? WS.total : (WS.byFy && WS.byFy[fyU])) : null;
+      if (d && d.reviews != null) return { reviews: d.reviews, avgStars: d.avgStars != null ? d.avgStars : null };
+      if (WS && WS.reviews) {
+        var r = fyKey === 'all' ? WS.reviews.total : (WS.reviews.byFy && WS.reviews.byFy[fyU]);
+        if (r && r.reviews != null) return r;
+      }
+      return GOOGLE_REVIEWS_DB[fyU] || { reviews: 0, avgStars: null };
+    }
+
+    // Traffic snapshot row for an arbitrary FY key ('all' → total).
+    function trafficRowByKey(fyKey) {
+      if (fyKey === 'all') return trafficTotalRow();
+      var rows = trafficRows(), up = String(fyKey).toUpperCase();
+      for (var i = 0; i < rows.length; i++) if (rows[i].fy === up) return rows[i];
+      return null;
+    }
+
+    // Value of a named metric for a given FY key — the single source of truth the
+    // Compare deltas read from, so every card compares like with like.
+    function metricForFy(fyKey, m) {
+      if (m === 'sessions' || m === 'aiVisits') { var tr = trafficRowByKey(fyKey); return tr ? tr[m] : null; }
+      if (m === 'phone') { return c2cForFy(fyKey).total; }
+      if (m === 'avgStars') { var rv = reviewsForKey(fyKey); return rv && rv.avgStars != null ? Number(rv.avgStars) : null; }
+      if (m === 'convRate') {
+        var tr2 = trafficRowByKey(fyKey);
+        var enq = metricForFy(fyKey, 'total');
+        return (tr2 && tr2.sessions && enq != null) ? (enq / tr2.sessions * 100) : null;
+      }
+      // total / cpc / organic / organicAll / reviews
+      if (fyKey === 'all') return (WS && WS.total) ? WS.total[m] : null;
+      var rec = (WS && WS.byFy) ? WS.byFy[String(fyKey).toUpperCase()] : null;
+      return rec ? rec[m] : null;
+    }
+
+    // Render a delta chip. opts: {pp} percentage-point (rate values already in %),
+    // {abs, suffix} absolute delta (e.g. a star rating), else percent change.
+    function deltaChip(cur, prev, label, opts) {
+      opts = opts || {};
+      if (cur == null || prev == null || isNaN(cur) || isNaN(prev)) return '';
+      var cmp = '<span class="ws-delta-cmp">' + esc(label) + '</span>';
+      if (opts.abs) {
+        var da = Math.round((cur - prev) * 100) / 100;
+        if (da === 0) return '<div class="ws-delta">▬ no change ' + cmp + '</div>';
+        return '<div class="ws-delta ' + (da > 0 ? 'pos' : 'neg') + '">' +
+          (da > 0 ? '▲ +' : '▼ −') + esc(Math.abs(da).toFixed(2)) + esc(opts.suffix || '') + ' ' + cmp + '</div>';
+      }
+      if (opts.pp) {
+        var dp = Math.round((cur - prev) * 100) / 100;
+        if (dp === 0) return '<div class="ws-delta">▬ no change ' + cmp + '</div>';
+        return '<div class="ws-delta ' + (dp > 0 ? 'pos' : 'neg') + '">' +
+          (dp > 0 ? '▲ +' : '▼ −') + esc(Math.abs(dp).toFixed(2)) + ' pp ' + cmp + '</div>';
+      }
+      if (prev === 0) {
+        if (cur === 0) return '';
+        return '<div class="ws-delta pos">▲ new ' + cmp + '</div>';
+      }
+      var d = cur - prev;
+      var pct = Math.round((d / prev) * 1000) / 10;
+      return '<div class="ws-delta ' + (d >= 0 ? 'pos' : 'neg') + '">' +
+        (d >= 0 ? '▲ ' : '▼ ') + esc(Math.abs(pct)) + '% ' + cmp + '</div>';
+    }
+
+    // Compare delta for a metric, honoring the Compare toggle and FY / custom-range mode.
+    function kpiDelta(metric, opts) {
+      opts = opts || {};
+      if (CUSTOM) {
+        // Dated tiles only (enquiries, paid-search); snapshot tiles are greyed anyway.
+        if (!WS_RANGE || !WS_RANGE_CMP) return '';
+        if (metric !== 'total' && metric !== 'cpc' && metric !== 'convRate') return '';
+        var curR = WS_RANGE[metric], prevR = WS_RANGE_CMP[metric];
+        return deltaChip(curR, prevR, cmpRangeLabel(), opts);
+      }
+      var fyKey = selFyKey();
+      if (fyKey === 'all') return '';
+      var ck = cmpFyKey(fyKey);
+      if (!ck) return '';
+      return deltaChip(metricForFy(fyKey, metric), metricForFy(ck, metric), cmpLabel(ck), opts);
+    }
+
+    // ---- custom-range comparison window (shifted per Compare basis) ----
+    function _isoShiftYears(iso, years) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() + years); return d.toISOString().slice(0, 10); }
+    function _isoAddDays(iso, days) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + days); return d.toISOString().slice(0, 10); }
+    function _isoDaysBetween(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000); }
+
+    function fetchComparisonRange() {
+      var r = getDateRange();
+      if (!r.from || !r.to) { WS_RANGE_CMP = null; return; }
+      var cf, ct;
+      if (CMP === 'prev') { var len = _isoDaysBetween(r.from, r.to); ct = _isoAddDays(r.from, -1); cf = _isoAddDays(ct, -len); }
+      else { cf = _isoShiftYears(r.from, -1); ct = _isoShiftYears(r.to, -1); }
+      fetchJSON('/api/marketing/website-search?from=' + encodeURIComponent(cf) + '&to=' + encodeURIComponent(ct))
+        .then(function (d) { WS_RANGE_CMP = (d && d.range) || {}; renderAll(); })
+        .catch(function () { WS_RANGE_CMP = null; });
+    }
+
     // A single KPI card: label + ONE info tool (desc + source), then the value/chip.
     // The description & source live only in the ⓘ (DESIGN_GUIDE §6) — no sub-line.
     function cardHtml(c) {
       var head = '<div class="label">' + esc(c.label) +
         '<span class="head-info">' + infoTip(c.desc, c.source) + '</span></div>';
-      var body;
+      var body, delta = '';
+      // Weekly / monthly snapshot tiles have no sub-FY history, so a custom range can't filter them.
+      var greySnapshot = CUSTOM && (c.key === 'sessions' || c.key === 'aiVisits' || c.kind === 'c2c' || c.kind === 'rating');
       if (c.kind === 'pending') {
         body = '<div class="value" style="margin-top:14px"><span class="chip warn">pending</span></div>';
-      } else if (CUSTOM && (c.key === 'sessions' || c.key === 'aiVisits' || c.kind === 'c2c')) {
-        // Weekly / monthly snapshot — no sub-FY day-level history, so a custom range can't filter it.
+      } else if (greySnapshot) {
         body = '<div class="value" style="margin-top:14px"><span class="chip warn">FY only</span></div>' +
           '<div class="sub">Not available for custom ranges</div>';
       } else if (c.kind === 'c2c') {
@@ -971,32 +1172,24 @@
           body = '<div class="value">…</div>';
         } else {
           var cc = c2cForFy(selFyKey());
-          var prev = c2cPrevTotal(selFyKey());
-          var sub = '';
-          if (prev != null && prev > 0) {
-            var dd = (cc.total || 0) - prev;
-            var pct = Math.round((dd / prev) * 1000) / 10;
-            sub = '<div class="sub' + (dd >= 0 ? ' pos' : '') + '">' +
-              (dd >= 0 ? '▲ ' : '▼ ') + Math.abs(pct) + '% vs prior FY</div>';
-          } else {
+          body = '<div class="value">' + esc(fmtNum(cc.total)) + '</div>';
+          delta = kpiDelta('phone');
+          if (!delta) {   // 'all' years or no prior FY → show the top channel instead
             var topCh = c2cTopChannel(cc.channels);
-            sub = topCh
-              ? '<div class="sub">Top: ' + esc(topCh.name) + ' (' + esc(fmtNum(topCh.events)) + ')</div>'
-              : '';
+            if (topCh) delta = '<div class="sub">Top: ' + esc(topCh.name) + ' (' + esc(fmtNum(topCh.events)) + ')</div>';
           }
-          body = '<div class="value">' + esc(fmtNum(cc.total)) + '</div>' + sub;
         }
-      } else if (CUSTOM && !WS_RANGE) {
-        body = '<div class="value">…</div>';
-      } else if (c.kind === 'reviews') {
+      } else if (c.kind === 'rating') {
         var rv = selReviews();
-        var sub = (rv && rv.avgStars != null)
-          ? '<div class="sub pos">Average rating ' + esc(Number(rv.avgStars).toFixed(2)) + ' ★</div>'
-          : '';
-        body = '<div class="value">' + esc(fmtNum(rv ? rv.reviews : null)) + '</div>' + sub;
+        body = '<div class="value">' + (rv && rv.avgStars != null ? esc(Number(rv.avgStars).toFixed(2)) + ' ★' : '—') + '</div>' +
+          (rv && rv.reviews != null ? '<div class="sub">' + esc(fmtNum(rv.reviews)) + ' new reviews</div>' : '');
+        delta = kpiDelta('avgStars', { abs: true, suffix: ' ★' });
       } else if (c.key === 'sessions' || c.key === 'aiVisits') {
         var dTraffic = selData();
         body = '<div class="value">' + esc(fmtNum(dTraffic ? dTraffic[c.key] : null)) + '</div>';
+        delta = kpiDelta(c.metric);
+      } else if (CUSTOM && !WS_RANGE) {
+        body = '<div class="value">…</div>';
       } else if (WS === false) {
         body = '<div class="value">—</div>';
       } else if (WS === null) {
@@ -1004,8 +1197,55 @@
       } else {
         var d = selData();
         body = '<div class="value">' + esc(fmtNum(d ? d[c.key] : null)) + '</div>';
+        delta = kpiDelta(c.metric);
       }
-      return '<article class="ws-kpi">' + head + body + '</article>';
+      return '<article class="ws-kpi">' + head + body + delta + '</article>';
+    }
+
+    // Sessions → enquiries tile: the Visitor → enquiry rate headline + a two-step
+    // funnel (sessions → enquiries) for the selected FY.
+    function renderFunnel() {
+      var infoEl = document.getElementById('wsFunnelInfo');
+      if (infoEl && !infoEl.querySelector('.src-info')) {
+        infoEl.innerHTML = infoTip(
+          'Of all website visits, how many became an enquiry — the visitor → enquiry rate (enquiries ÷ sessions). The gap is the conversion opportunity.',
+          'GA4 website analytics + ActiveCampaign'
+        );
+      }
+      var box = document.getElementById('wsFunnelBody');
+      if (!box) return;
+      if (CUSTOM) {
+        // Enquiries are day-level, but sessions are a weekly per-FY snapshot — so no rate for a custom range.
+        box.innerHTML = '<div class="range-na">Not available for custom ranges — the conversion rate needs website sessions, which are a weekly per-FY snapshot. Clear the date range to view it.</div>';
+        return;
+      }
+      if (WS === null) { box.innerHTML = '<div class="muted" style="padding:20px 0">Loading…</div>'; return; }
+      var d = selData();
+      var sessions = d ? Number(d.sessions) || 0 : 0;
+      var enq = d ? Number(d.total) || 0 : 0;
+      var rate = (sessions && enq != null) ? (enq / sessions * 100) : null;
+      var rateStr = (rate != null) ? rate.toFixed(2) + '%' : '—';
+      var enqWidth = (sessions && enq) ? Math.max(2, Math.min(100, Math.round(enq / sessions * 100))) : 0;
+      var k = selFyKey();
+      var scopeTxt = k === 'all' ? ' (all years)' : (' in ' + k.toUpperCase());
+      box.innerHTML =
+        '<div class="ws-funnel-rate kpi-good">' + esc(rateStr) + '</div>' +
+        '<div class="ws-funnel-rate-label">Visitor &rarr; enquiry rate</div>' +
+        kpiDelta('convRate', { pp: true }) +
+        '<div class="ws-funnel-steps">' +
+          '<div class="ws-funnel-step">' +
+            '<div class="ws-funnel-step-top"><span class="ws-funnel-step-name">Website sessions</span>' +
+              '<span class="ws-funnel-step-val">' + esc(fmtNum(sessions)) + '</span></div>' +
+            '<div class="ws-funnel-bar-track"><div class="ws-funnel-bar-fill" style="width:100%"></div></div>' +
+          '</div>' +
+          '<div class="ws-funnel-step">' +
+            '<div class="ws-funnel-step-top"><span class="ws-funnel-step-name">Enquiries</span>' +
+              '<span class="ws-funnel-step-val">' + esc(fmtNum(enq)) + '</span></div>' +
+            '<div class="ws-funnel-bar-track"><div class="ws-funnel-bar-fill" style="width:' + enqWidth + '%"></div></div>' +
+          '</div>' +
+        '</div>' +
+        '<div class="ws-funnel-foot">' + esc(fmtNum(enq)) + ' of ' + esc(fmtNum(sessions)) +
+          ' visits became an enquiry' + esc(scopeTxt) + '.</div>';
     }
 
     function renderTrafficGraph() {
@@ -1624,7 +1864,7 @@
 
     function renderAll() {
       document.getElementById('wsTopKpis').innerHTML = TOP_CARDS.map(cardHtml).join('');
-      document.getElementById('wsBottomKpis').innerHTML = BOTTOM_CARDS.map(cardHtml).join('');
+      renderFunnel();
       renderTrafficGraph();
       renderTrafficTable();
       renderC2cGraph();
@@ -1647,11 +1887,12 @@
     // ?from=&to=); the GA4-traffic snapshot tiles + chart + table grey out. Clearing restores FY.
     function applyRange() {
       CUSTOM = dateRangeActive();
-      if (!CUSTOM) { renderAll(); return; }
-      WS_RANGE = null; renderAll();   // tiles show … while the roll-up loads
+      if (!CUSTOM) { WS_RANGE = null; WS_RANGE_CMP = null; renderAll(); return; }
+      WS_RANGE = null; WS_RANGE_CMP = null; renderAll();   // tiles show … while the roll-ups load
       fetchJSON('/api/marketing/website-search' + dateRangeQS())
         .then(function (d) { WS_RANGE = (d && d.range) || {}; renderAll(); })
         .catch(function () { WS_RANGE = {}; renderAll(); });
+      fetchComparisonRange();                              // comparison window for the Compare deltas
     }
 
     initPage('marketing');
@@ -1660,6 +1901,7 @@
     renderDateRange();
     renderAll();                      // initial render
     wireSeg('fySeg', renderAll);
+    wireSeg('cmpSeg', function () { CMP = selCmp(); if (CUSTOM) fetchComparisonRange(); renderAll(); });
     wireSeg('wsChartModeSeg', renderTrafficGraph);
     wireSeg('wsTableScopeSeg', renderTrafficTable);
     wireSeg('wsC2cModeSeg', renderC2cGraph);
