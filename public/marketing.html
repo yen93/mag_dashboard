@@ -171,6 +171,10 @@
             <button class="active" data-cmp="yoy">vs last year</button>
             <button data-cmp="prev">vs previous period</button>
           </div>
+          <!-- Dates for the current period and the comparison window. Updates live on FY /
+               Compare / custom-range change; the two spans are exactly the months the KPI
+               delta lines sum over, so the figures below the cards always align with it. -->
+          <span class="muted cmp-range" id="cmpRange" style="font-size:12.5px"></span>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
         </div>
@@ -382,6 +386,47 @@
       if (!CUSTOM && selFyKey() !== 'all') return 'vs FY' + String(fyEndOf(selFyKey()) - 1).slice(-2);
       return 'vs last yr';
     }
+    // ----- Date label beside the Compare toggle -----
+    // The span of months actually being shown, and the span it is compared against, as real
+    // calendar dates (e.g. "Showing 1 Jul – 31 Oct 2026 · vs 1 Jul – 31 Oct 2025"). Both are
+    // derived from the SAME month lists (`cur` and `baseMonths(cur)`) the KPI delta lines sum
+    // over, so the dates can never disagree with the figures below the cards. "vs last year"
+    // lines the two windows up on identical month numbers a year apart; "vs previous period"
+    // uses the equal-length window immediately before. Driven by the union of all loaded
+    // monthly series so the window covers the full extent of the data on show.
+    var MONTH_ABBR = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    function unionByMonth() {   // [{month,fyEnd}] distinct, across every loaded KPI series
+      var seen = {}, out = [];
+      [ENQ.byMonth, BOOKINGS.byMonth, MROI.byMonth].forEach(function (arr) {
+        (arr || []).forEach(function (m) {
+          if (m && m.month && !seen[m.month]) { seen[m.month] = 1; out.push({ month: m.month, fyEnd: m.fyEnd }); }
+        });
+      });
+      return out;
+    }
+    // Canonical current-window months for the label (null = "all years", [] = nothing loaded yet).
+    function canonMonths() { return windowMonths(unionByMonth()); }
+    // A sorted 'YYYY-MM' list → "1 Jul – 31 Oct 2026" (the year is shown once when start and
+    // end share it, otherwise on both ends: "1 Jul 2025 – 30 Jun 2026").
+    function spanLabel(months) {
+      if (!months || !months.length) return '';
+      var a = months[0].split('-'), b = months[months.length - 1].split('-');
+      var ay = Number(a[0]), am = Number(a[1]), by = Number(b[0]), bm = Number(b[1]);
+      var lastDay = new Date(by, bm, 0).getDate();   // last calendar day of the final month
+      var start = '1 ' + MONTH_ABBR[am] + (ay === by ? '' : ' ' + ay);
+      var end = lastDay + ' ' + MONTH_ABBR[bm] + ' ' + by;
+      return start + ' – ' + end;
+    }
+    function compareRangeLabel() {
+      var cur = canonMonths();
+      if (cur === null) return 'All financial years';   // "all years" — no period comparison
+      if (!cur.length) return '';                        // data still loading
+      return 'Showing ' + spanLabel(cur) + ' · vs ' + spanLabel(baseMonths(cur));
+    }
+    function renderCmpRange() {
+      var el = document.getElementById('cmpRange');
+      if (el) el.textContent = compareRangeLabel();
+    }
     // Generic delta over a monthly series → { d } or null when there's no current window
     // ("all years") or the comparison window has no data at all (no comparable history).
     function seriesDelta(byMonth, valOf) {
@@ -591,6 +636,7 @@
       }).join('');
       document.getElementById('mktKpis').innerHTML =
         revenueCard() + spendCard() + roiCard() + enqCard() + bookCard() + rateCard() + rest;
+      renderCmpRange();   // keep the Compare date label in step with the cards
     }
     // Fetch the ROI tab's DB-backed figures and index them by fyEnd for the two live
     // $ cards (Marketing revenue + Marketing spend). Re-renders the KPI row once loaded.
