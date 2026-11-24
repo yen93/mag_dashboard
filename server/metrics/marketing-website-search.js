@@ -131,6 +131,54 @@ const CLICK_TO_CALL_SQL = `
   FROM public.ga4_click_to_call_monthly
   ORDER BY year_month, channel`;
 
+// Monthly enquiries (total / organic / cpc) by AU FY — the per-month series the
+// Compare toggle windows so "vs previous period" genuinely differs from "vs last
+// year" on the partial current FY (mirrors marketing.html's byMonth windowing).
+// FY grouped from cdate (same basis as the generated cs.fy used by MATCHED_SQL),
+// so the per-FY sums reconcile with the annual cards.
+const MATCHED_MONTH_SQL = `
+  WITH e AS (
+    SELECT
+      to_char(date_trunc('month', cs.cdate), 'YYYY-MM') AS month,
+      (extract(year FROM cs.cdate)::int
+        + CASE WHEN extract(month FROM cs.cdate) >= 7 THEN 1 ELSE 0 END) AS fy_end,
+      lower(coalesce(cs.medium, '')) AS med
+    FROM public.ga4_ac_contact_source cs
+    JOIN public.activecampaign_contacts c ON c.id::text = cs.contact_id
+    WHERE cs.cdate IS NOT NULL
+  )
+  SELECT
+    month,
+    fy_end                                   AS "fyEnd",
+    count(*)                                 AS total,
+    count(*) FILTER (WHERE med = 'organic')  AS organic,
+    count(*) FILTER (WHERE med LIKE '%cpc%') AS cpc
+  FROM e
+  GROUP BY month, fy_end
+  ORDER BY month`;
+
+// Monthly Google reviews (count + star sum/count) by AU FY — lets the Compare
+// toggle window the average-rating delta (windowed weighted avg = sumStars/starCount).
+const REVIEWS_MONTH_SQL = `
+  WITH r AS (
+    SELECT
+      to_char(date_trunc('month', review_create_time), 'YYYY-MM') AS month,
+      (extract(year FROM review_create_time)::int
+        + CASE WHEN extract(month FROM review_create_time) >= 7 THEN 1 ELSE 0 END) AS fy_end,
+      NULLIF(star_rating, '')::numeric AS stars
+    FROM public.google_reviews
+    WHERE review_create_time IS NOT NULL
+  )
+  SELECT
+    month,
+    fy_end            AS "fyEnd",
+    count(*)          AS reviews,
+    sum(stars)        AS "sumStars",
+    count(stars)      AS "starCount"
+  FROM r
+  GROUP BY month, fy_end
+  ORDER BY month`;
+
 // Build the click-to-call payload section from the raw (month, channel) rows:
 // { channels, byMonth:[{month,fy,fyEnd,channels{},total}], byFy:{FY:{fyEnd,total,channels{}}}, total:{total,channels{}} }
 function buildClickToCall(rows) {
@@ -221,18 +269,32 @@ export async function getWebsiteSearch(opts = {}) {
         sessions: null, aiVisits: null, reviews: 0, avgStars: null,
       },
       clickToCall: { channels: C2C_CHANNELS.slice(), byMonth: [], byFy: {}, total: { total: 0, channels: {} } },
+      enqByMonth: [],
+      reviewsByMonth: [],
       meta: { status: 'pending', source: SRC, note: 'Supabase not configured.' },
     };
   }
   const n = (v) => Number(v) || 0;
-  const [matched, organicAll, trafficRows, reviewRows, clickRows] = await Promise.all([
+  const [matched, organicAll, trafficRows, reviewRows, clickRows, matchedMonth, reviewMonth] = await Promise.all([
     q(MATCHED_SQL),
     q(ORGANIC_ALL_SQL),
     q(TRAFFIC_SNAPSHOT_SQL).catch(() => []), // graceful fallback if migration not yet applied
     q(REVIEWS_SQL).catch(() => []),
     q(CLICK_TO_CALL_SQL).catch(() => []),    // graceful fallback until ga4-click-to-call-sync has run
+    q(MATCHED_MONTH_SQL).catch(() => []),    // monthly enquiries for the Compare-toggle windowing
+    q(REVIEWS_MONTH_SQL).catch(() => []),    // monthly reviews for the Compare-toggle windowing
   ]);
   const clickToCall = buildClickToCall(clickRows);
+  const enqByMonth = matchedMonth.map((r) => ({
+    month: r.month, fyEnd: n(r.fyEnd),
+    total: n(r.total), organic: n(r.organic), cpc: n(r.cpc),
+  }));
+  const reviewsByMonth = reviewMonth.map((r) => ({
+    month: r.month, fyEnd: n(r.fyEnd),
+    reviews: n(r.reviews),
+    sumStars: r.sumStars != null ? Number(r.sumStars) : 0,
+    starCount: n(r.starCount),
+  }));
 
   const byFy = {};                                  // keyed by "FY27"
   const total = {
@@ -291,5 +353,5 @@ export async function getWebsiteSearch(opts = {}) {
 
   const range = (from || to) ? await rangeRollup(from, to) : null;
 
-  return { byFy, total, clickToCall, range, meta: { status: 'live', source: SRC, note: null } };
+  return { byFy, total, clickToCall, enqByMonth, reviewsByMonth, range, meta: { status: 'live', source: SRC, note: null } };
 }

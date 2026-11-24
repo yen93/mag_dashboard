@@ -1033,11 +1033,17 @@
        Compare toggle (#cmpSeg) — "vs last year" / "vs previous period".
        Drives the delta chips on the KPI cards + the Sessions → enquiries tile.
 
-       Our per-FY data is annual, so for a whole-FY selection "last year" IS the
-       "previous period" (both = the prior FY) and the two bases coincide — that's
-       correct for annual figures. The toggle genuinely diverges for a CUSTOM date
-       range: "vs last year" compares the same dates one year earlier, while
-       "vs previous period" compares the equal-length window immediately before.
+       Metrics that carry a monthly series (enquiries total/organic/cpc from
+       WS.enqByMonth, phone from WS.clickToCall.byMonth, rating from
+       WS.reviewsByMonth) are windowed like marketing.html: the current FY's months
+       are compared against either the same months a year earlier ("vs last year")
+       or the equal-length window immediately before ("vs previous period"). For a
+       full past FY both windows resolve to the prior FY and coincide; for the
+       partial current FY (FY27) they genuinely differ, so the toggle changes the
+       delta. Snapshot-only metrics (website sessions, AI-tool visits, and the
+       sessions-based conversion rate) have no monthly history, so they keep a plain
+       prior-FY annual delta regardless of the toggle. A CUSTOM date range always
+       diverges via fetchComparisonRange (same-dates-last-year vs preceding window).
        ============================================================ */
     function selCmp() {
       var b = document.querySelector('#cmpSeg button.active');
@@ -1119,6 +1125,79 @@
         (d >= 0 ? '▲ ' : '▼ ') + esc(Math.abs(pct)) + '% ' + cmp + '</div>';
     }
 
+    /* ---- Monthly windowing for the Compare toggle (mirrors marketing.html) ----
+       Metrics with a per-month series are compared window-to-window so that
+       "vs previous period" (the preceding equal-length window) genuinely differs
+       from "vs last year" (the same months a year earlier) on the partial FY. */
+    function fyEndOfKey(key) { return key === 'all' ? null : 2000 + parseInt(String(key).slice(2), 10); }
+
+    // The per-month series backing a metric's windowed delta, or null if the metric
+    // is snapshot-only (sessions / aiVisits / convRate → plain prior-FY delta).
+    function byMonthFor(metric) {
+      if (!WS || WS === true) return null;
+      if (metric === 'phone') return (WS.clickToCall && WS.clickToCall.byMonth) || null;
+      if (metric === 'total' || metric === 'organic' || metric === 'cpc') return WS.enqByMonth || null;
+      if (metric === 'avgStars') return WS.reviewsByMonth || null;
+      return null;
+    }
+    // Per-row value accessor for a metric's series (phone rows key the total as .total).
+    function valOfMetric(metric) {
+      if (metric === 'phone') return function (m) { return m.total; };
+      return function (m) { return m[metric]; };
+    }
+    // Month keys ('YYYY-MM') of the selected FY present in a byMonth series.
+    function windowMonths(byMonth) {
+      var key = selFyKey();
+      if (!byMonth || key === 'all') return null;
+      var fe = fyEndOfKey(key);
+      return byMonth.filter(function (m) { return m.fyEnd === fe; })
+        .map(function (m) { return m.month; }).sort();
+    }
+    function shiftMonths(months, n) {
+      return months.map(function (mm) { var p = mm.split('-'); return (Number(p[0]) + n) + '-' + p[1]; });
+    }
+    function precedingMonths(months) {
+      if (!months.length) return [];
+      var p = months[0].split('-'), y = Number(p[0]), mo = Number(p[1]), out = [];
+      for (var i = 0; i < months.length; i++) {
+        mo--; if (mo < 1) { mo = 12; y--; }
+        out.unshift(y + '-' + (mo < 10 ? '0' + mo : '' + mo));
+      }
+      return out;
+    }
+    function baseMonths(cur) { return CMP === 'prev' ? precedingMonths(cur) : shiftMonths(cur, -1); }
+    // Label for a windowed FY delta: 'vs prev period', else 'vs FYxx' (the prior FY).
+    function cmpWindowLabel() {
+      if (CMP === 'prev') return 'vs prev period';
+      var k = selFyKey();
+      return k === 'all' ? 'vs last yr' : ('vs FY' + String(fyEndOfKey(k) - 1).slice(-2));
+    }
+    // Windowed { cur, prev } sums of valOf over the selection vs the comparison window,
+    // or null when there's no current window / no comparable history in the base window.
+    function windowPair(byMonth, valOf) {
+      var cur = windowMonths(byMonth);
+      if (!cur || !cur.length) return null;
+      var map = {}, present = {};
+      byMonth.forEach(function (m) { map[m.month] = Number(valOf(m)) || 0; present[m.month] = 1; });
+      var base = baseMonths(cur);
+      if (!base.some(function (mm) { return present[mm]; })) return null;
+      var sum = function (ms) { return ms.reduce(function (a, mm) { return a + (map[mm] || 0); }, 0); };
+      return { cur: sum(cur), prev: sum(base) };
+    }
+    // Windowed weighted average star rating { cur, prev } over the same two windows.
+    function avgStarsPair(byMonth) {
+      var cur = windowMonths(byMonth);
+      if (!cur || !cur.length) return null;
+      var sm = {}, sc = {}, present = {};
+      byMonth.forEach(function (m) { sm[m.month] = Number(m.sumStars) || 0; sc[m.month] = Number(m.starCount) || 0; present[m.month] = 1; });
+      var base = baseMonths(cur);
+      if (!base.some(function (mm) { return present[mm]; })) return null;
+      var s = function (map, ms) { return ms.reduce(function (a, mm) { return a + (map[mm] || 0); }, 0); };
+      var cc = s(sc, cur), cstars = s(sm, cur), bc = s(sc, base), bstars = s(sm, base);
+      if (cc <= 0 || bc <= 0) return null;
+      return { cur: cstars / cc, prev: bstars / bc };
+    }
+
     // Compare delta for a metric, honoring the Compare toggle and FY / custom-range mode.
     function kpiDelta(metric, opts) {
       opts = opts || {};
@@ -1131,6 +1210,14 @@
       }
       var fyKey = selFyKey();
       if (fyKey === 'all') return '';
+      // Metrics with a monthly series honor the Compare toggle via windowing.
+      var bm = byMonthFor(metric);
+      if (bm) {
+        var pair = (metric === 'avgStars') ? avgStarsPair(bm) : windowPair(bm, valOfMetric(metric));
+        if (pair) return deltaChip(pair.cur, pair.prev, cmpWindowLabel(), opts);
+        // No comparable history in the chosen window → fall through to the annual delta.
+      }
+      // Snapshot-only metrics (sessions / aiVisits / convRate) → plain prior-FY delta.
       var ck = cmpFyKey(fyKey);
       if (!ck) return '';
       return deltaChip(metricForFy(fyKey, metric), metricForFy(ck, metric), cmpLabel(ck), opts);
