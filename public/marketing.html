@@ -181,8 +181,8 @@
 
       <!-- Chart grid. Order (graph_order): ROI by month, ROAS by channel, Rev vs spend,
            Enquiries vs bookings, then the rest — mirrors the artifact Overview's
-           "one signature view from every tab". Live where a source exists; EDM trend
-           is now live from the EDM campaign report. Website & AI still pending. -->
+           "one signature view from every tab". All charts are now wired live — EDM trend
+           from the EDM campaign report, Website & AI from the GA4 traffic snapshots. -->
       <div class="grid">
         <!-- 1 · Marketing ROI by month -->
         <div class="card col-6">
@@ -254,15 +254,14 @@
           <div class="chart-box"><canvas id="tailorCanvas"></canvas></div>
         </div>
 
-        <!-- 8 · Website visits & AI (pending — no session source in warehouse) -->
+        <!-- 8 · Website visits & AI (LIVE from the GA4 website-traffic snapshots) -->
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Website visits &amp; AI <span class="head-info"
-              data-info="Website sessions by year and the share arriving from AI tools. Session history isn’t in the warehouse yet."
-              data-src="Not tracked yet"></span></h3>
+              data-info="Website sessions (bars, left axis) and visits referred from AI tools like ChatGPT, Gemini, Perplexity and Claude (line, right axis) by financial year. The selected FY is spotlighted."
+              data-src="GA4 website analytics (weekly per-FY snapshot — same source as the Website &amp; Search tab)"></span></h3>
           </div>
-          <div class="chart-box"><div class="chart-pending"><span class="chip warn">pending</span>
-            <span>Website session history isn’t available as a live feed yet.</span></div></div>
+          <div class="chart-box"><canvas id="webAiCanvas"></canvas></div>
         </div>
 
         <!-- 9 · Followers by platform -->
@@ -759,6 +758,89 @@
       });
     }
 
+    // "Website visits & AI" — LIVE dual-axis combo chart across FY22–FY27 (sessions bars on the
+    // left axis, AI-tool-visit line on the right axis), spotlighting the selected FY. Mirrors the
+    // "GA4 Website Traffic & AI Tool Visits" chart on website_search.html — same source
+    // (GET /api/marketing/website-search → byFy sessions / aiVisits / aiSources, the weekly
+    // public.ga4_website_traffic_snapshots feed). Snapshot is per-FY only, so it greys under a
+    // custom date range.
+    var WST = { byFy: {}, loaded: false };
+    var WST_FYS = ['FY22', 'FY23', 'FY24', 'FY25', 'FY26', 'FY27'];
+    var _webAiChart = null;
+    function sortedAiSources(map) {
+      map = map || {};
+      return Object.keys(map)
+        .map(function (k) { return { source: k, visits: Number(map[k]) || 0 }; })
+        .filter(function (x) { return x.visits > 0; })
+        .sort(function (a, b) { return b.visits - a.visits || a.source.localeCompare(b.source); });
+    }
+    function renderWebAiChart() {
+      var el = document.getElementById('webAiCanvas');
+      if (!el) return;
+      if (_webAiChart) { _webAiChart.destroy(); _webAiChart = null; }
+      if (CUSTOM) { setChartNote('webAiCanvas', 'Website sessions & AI visits are a per-year snapshot — switch off the custom range to see them.'); return; }
+      if (!WST.loaded) { setChartNote('webAiCanvas', 'Loading…'); return; }
+      setChartNote('webAiCanvas', null);
+
+      var rows = WST_FYS.map(function (fy) {
+        var r = WST.byFy[fy] || {};
+        return { fy: fy, sessions: Number(r.sessions) || 0, aiVisits: Number(r.aiVisits) || 0, aiSources: r.aiSources || {} };
+      });
+      var key = selFyKey();
+      var activeFy = key === 'all' ? null : key.toUpperCase();
+      var tc = themeColors();
+      var isDark = currentTheme() === 'dark';
+      var activeBar = isDark ? '#5b85ff' : '#3b6ef0';
+      var dimBar = isDark ? 'rgba(91,133,255,.24)' : 'rgba(59,110,240,.22)';
+      var aiColor = isDark ? '#f5b95f' : '#e08b1a';
+      var aiIdle = isDark ? 'rgba(245,185,95,.35)' : 'rgba(224,139,26,.35)';
+
+      _webAiChart = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: rows.map(function (r) { return r.fy; }),
+          datasets: [
+            {
+              type: 'bar', label: 'Website sessions', data: rows.map(function (r) { return r.sessions; }),
+              backgroundColor: rows.map(function (r) { return (activeFy == null || r.fy === activeFy) ? activeBar : dimBar; }),
+              borderRadius: 5, maxBarThickness: 46, yAxisID: 'ySessions', order: 2,
+            },
+            {
+              type: 'line', label: 'Visits from AI tools', data: rows.map(function (r) { return r.aiVisits; }),
+              borderColor: aiColor, backgroundColor: aiColor,
+              pointBackgroundColor: rows.map(function (r) { return (activeFy == null || r.fy === activeFy) ? aiColor : aiIdle; }),
+              pointBorderColor: isDark ? '#141b2d' : '#fff', pointBorderWidth: 2,
+              pointRadius: rows.map(function (r) { return (activeFy != null && r.fy === activeFy) ? 6 : 4; }),
+              pointHoverRadius: 7, borderWidth: 2.5, tension: 0.28, yAxisID: 'yAi', order: 1,
+            },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
+            ySessions: { type: 'linear', position: 'left', beginAtZero: true, grid: { color: tc.grid },
+              ticks: { color: tc.muted, font: { size: 11 }, callback: function (v) { return v >= 1000 ? (v / 1000) + 'k' : v; } } },
+            yAi: { type: 'linear', position: 'right', beginAtZero: true, grid: { drawOnChartArea: false },
+              ticks: { color: aiColor, font: { size: 11 }, precision: 0 } },
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { color: tc.text, usePointStyle: true, pointStyle: 'rect', boxWidth: 10, padding: 16 } },
+            tooltip: { callbacks: {
+              afterBody: function (items) {
+                var r = rows[items[0].dataIndex]; if (!r) return '';
+                var srcs = sortedAiSources(r.aiSources);
+                var lines = ['AI share of sessions: ' + (r.sessions ? (Math.round((r.aiVisits / r.sessions) * 10000) / 100) + '%' : '—')];
+                if (srcs.length) lines.push('Top AI: ' + srcs.slice(0, 3).map(function (s) { return s.source + ' (' + s.visits + ')'; }).join(', '));
+                return lines;
+              },
+            } },
+          },
+        },
+      });
+    }
+
     // "Revenue vs spend by month" — COPIED from roi.html's renderMonthChart(): a combo chart
     // (green marketing-spend bars + blue marketing-revenue line sharing the left $ axis, gray
     // dashed company-revenue line on its own right $ axis), fed by the live /api/marketing/roi
@@ -1113,6 +1195,12 @@
         try { renderEdmTrendChart(); } catch (e) { console.error('edm trend chart', e); }
       }).catch(function (e) { EDM.loaded = true; console.error('edm', e); try { renderEdmTrendChart(); } catch (x) {} });
     }
+    function loadWebsiteTraffic() {
+      fetchJSON('/api/marketing/website-search').then(function (d) {
+        WST.byFy = (d && d.byFy) || {}; WST.loaded = true;
+        try { renderWebAiChart(); } catch (e) { console.error('web-ai chart', e); }
+      }).catch(function (e) { WST.loaded = true; console.error('website-search', e); try { renderWebAiChart(); } catch (x) {} });
+    }
 
     function drawCharts() {
       renderRoiMonthChart();     // 1 · Marketing ROI by month
@@ -1122,6 +1210,7 @@
       renderRevSrcChart();       // 5 · Where revenue comes from
       renderEdmTrendChart();     // 6 · EDM engagement trend
       renderTailorChart();       // 7 · The Tailor — enquiries vs bookings
+      renderWebAiChart();        // 8 · Website visits & AI
       renderFollowersChart();    // 9 · Followers by platform
       renderLeadSrcChart();      // 10 · Lead source mix
       renderPipelineChart();     // 11 · Deal pipeline by year
@@ -1185,6 +1274,7 @@
     loadChannelResults();                // /api/marketing/channel-results → spend vs revenue by channel
     loadPlatforms();                     // /api/marketing/platforms → followers by platform
     loadEdm();                           // /api/marketing/edm → EDM engagement trend (open/click rate by month)
+    loadWebsiteTraffic();                // /api/marketing/website-search → Website visits & AI (sessions + AI visits by FY)
     wireSeg('fySeg', function () {        // re-render everything live on FY change
       renderMktKpis();
       try { drawCharts(); } catch (e) { console.error('chart', e); }

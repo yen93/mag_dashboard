@@ -1,0 +1,19 @@
+**artifact_link:**
+https://claude.ai/artifact/TbjE87oNez9NFifs6iYwhb?sk=MmFhTMvD8hWYZkVOLGJzQA > "Website & search" tab
+
+**cards_update:**
+"Website sessions" - keep
+"Organic enquiries (incl. unmatched)" - drop
+"Enquiries (in ActiveCampaign)" - rename with "Enquiries"
+"Organic enquiries" - drop
+"Paid-search enquiries" - keep
+"Visits from AI tools" - keep
+"New Google reviews" - replace with "Google rating" card in artifact_link "Website & search" tab
+"Phone enquiries" - keep
+
+## main task: update website_search.html
+- update the kpi cards. see cards_update. make the cards smaller in width but not too small. just make them all fit in one line when a use views it in full screen in pc.
+- retain the "GA4 Website Traffic & AI Tool Visits" and the "GA4 Website Traffic Snapshots"
+- retain "Phone enquiries · Click-to-call" but move it right below the kpi cards on the right side. 
+- and on the left side of "Phone enquiries · Click-to-call", put the "Sessions → enquiries" tile from the artifact_link and put the "Visitor → enquiry rate" card info into that "Sessions → enquiries" tile.
+- add the Compare toggles: "vs last year" and "vs previous period" 
