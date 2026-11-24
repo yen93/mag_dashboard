@@ -601,6 +601,11 @@
             <button class="active" data-cmp="yoy">vs last year</button>
             <button data-cmp="prev">vs previous period</button>
           </div>
+          <!-- Dates for the current period and the comparison window. Updates live on FY /
+               Compare / custom-range change; both spans are derived from the SAME month (FY
+               mode) or day (custom range) windows the windowed KPI delta chips sum over, so the
+               figures on the cards always align with it. -->
+          <span class="muted cmp-range" id="cmpRange" style="font-size:12.5px"></span>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" id="fyNote" style="font-size:13px">Figures are per financial year · deltas compare to the chosen basis · hover any ⓘ for what a tile shows and its source</span>
         </div>
@@ -1171,6 +1176,66 @@
       if (CMP === 'prev') return 'vs prev period';
       var k = selFyKey();
       return k === 'all' ? 'vs last yr' : ('vs FY' + String(fyEndOfKey(k) - 1).slice(-2));
+    }
+
+    // ----- Date label beside the Compare toggle (mirrors marketing.html) -----
+    // The span actually shown, and the span it is compared against, as real calendar dates
+    // (e.g. "Showing 1 Jul – 31 Oct 2026 · vs 1 Jul – 31 Oct 2025"). In FY mode both are built
+    // from the union of the monthly series the windowed KPI deltas sum over (enquiries, phone,
+    // reviews), filtered to the selected FY — "vs last year" lines the two windows up on
+    // identical month numbers a year apart, "vs previous period" uses the equal-length window
+    // right before. Custom ranges use the same from/to + comparison-window math as
+    // fetchComparisonRange. So the dates can never disagree with the delta chips. (The
+    // snapshot-only tiles — sessions / AI visits / conversion rate — keep a whole-FY annual
+    // delta by design; their chips read "vs FYxx", not a date span.)
+    var _MON_ABBR = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    // A sorted 'YYYY-MM' list → "1 Jul – 31 Oct 2026" (year shown once when start/end share it).
+    function spanFromMonths(months) {
+      if (!months || !months.length) return '';
+      var a = months[0].split('-'), b = months[months.length - 1].split('-');
+      var ay = +a[0], am = +a[1], by = +b[0], bm = +b[1];
+      var lastDay = new Date(by, bm, 0).getDate();              // last calendar day of final month
+      var start = '1 ' + _MON_ABBR[am - 1] + (ay === by ? '' : ' ' + ay);
+      return start + ' – ' + lastDay + ' ' + _MON_ABBR[bm - 1] + ' ' + by;
+    }
+    // A day window ('YYYY-MM-DD' × 2) → "1 Jul – 31 Oct 2026".
+    function spanFromDays(from, to) {
+      if (!from || !to) return '';
+      var a = from.split('-'), b = to.split('-');
+      var ay = +a[0], am = +a[1], ad = +a[2], by = +b[0], bm = +b[1], bd = +b[2];
+      var start = ad + ' ' + _MON_ABBR[am - 1] + (ay === by ? '' : ' ' + ay);
+      return start + ' – ' + bd + ' ' + _MON_ABBR[bm - 1] + ' ' + by;
+    }
+    // Union of the FY's months across every windowed series the deltas read (null = all years).
+    function labelMonthsForFy() {
+      var fe = fyEndOfKey(selFyKey());
+      if (fe == null) return null;
+      var seen = {}, out = [];
+      [byMonthFor('total'), byMonthFor('phone'), byMonthFor('avgStars')].forEach(function (arr) {
+        (arr || []).forEach(function (m) {
+          if (m && m.month && m.fyEnd === fe && !seen[m.month]) { seen[m.month] = 1; out.push(m.month); }
+        });
+      });
+      return out.sort();
+    }
+    function compareRangeLabel() {
+      if (CUSTOM) {
+        var r = getDateRange();
+        if (!r.from || !r.to) return '';
+        var cf, ct;
+        if (CMP === 'prev') { var len = _isoDaysBetween(r.from, r.to); ct = _isoAddDays(r.from, -1); cf = _isoAddDays(ct, -len); }
+        else { cf = _isoShiftYears(r.from, -1); ct = _isoShiftYears(r.to, -1); }
+        return 'Showing ' + spanFromDays(r.from, r.to) + ' · vs ' + spanFromDays(cf, ct);
+      }
+      if (selFyKey() === 'all') return 'All financial years';     // no period comparison
+      if (!WS || WS === true) return '';                          // data still loading / failed
+      var cur = labelMonthsForFy();
+      if (!cur || !cur.length) return '';
+      return 'Showing ' + spanFromMonths(cur) + ' · vs ' + spanFromMonths(baseMonths(cur));
+    }
+    function renderCmpRange() {
+      var el = document.getElementById('cmpRange');
+      if (el) el.textContent = compareRangeLabel();
     }
     // Windowed { cur, prev } sums of valOf over the selection vs the comparison window,
     // or null when there's no current window / no comparable history in the base window.
@@ -1950,6 +2015,7 @@
     }
 
     function renderAll() {
+      renderCmpRange();   // keep the Compare date label in step with the cards
       document.getElementById('wsTopKpis').innerHTML = TOP_CARDS.map(cardHtml).join('');
       renderFunnel();
       renderTrafficGraph();
