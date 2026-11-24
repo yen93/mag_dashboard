@@ -372,54 +372,67 @@
 
     /* ============================================================
        Compare toggle (#cmpSeg) — "vs last year" / "vs previous period".
-       Drives a small delta chip under each KPI card's value. Whole-FY
-       selections are annual, so "last year" == "previous period" (both =
-       the prior FY). The two bases diverge only for a CUSTOM date range:
-       "vs last year" compares the same months one year earlier, "vs previous
-       period" the equal-length window immediately before.
+       Mirrors marketing.html: every KPI delta is computed from the
+       already-loaded monthly series so "vs previous period" (the
+       immediately preceding window of equal length) is genuinely
+       different from "vs last year" (the same months one year earlier).
+       This matters for the partial current FY and custom date ranges;
+       for a full past FY both resolve to the prior FY with distinct labels.
        ============================================================ */
     function selCmp() { var b = document.querySelector('#cmpSeg button.active'); return b ? b.getAttribute('data-cmp') : 'yoy'; }
-    function cmpRangeLabel() { return CMP === 'prev' ? 'vs prev period' : 'vs last year'; }
-    function ymAdd(ym, n) {        // 'YYYY-MM' + n months -> 'YYYY-MM'
-      var p = String(ym).split('-'), idx = (+p[0]) * 12 + ((+p[1]) - 1) + n;
-      return Math.floor(idx / 12) + '-' + String((idx % 12) + 1).padStart(2, '0');
-    }
-    function ymDiff(a, b) {        // whole months from a to b
-      var pa = String(a).split('-'), pb = String(b).split('-');
-      return ((+pb[0]) * 12 + (+pb[1])) - ((+pa[0]) * 12 + (+pa[1]));
-    }
 
-    // The row to compare the current selection against (prior FY, or the shifted
-    // custom-range window), honoring the Compare basis. null = no comparison.
-    function comparisonRow() {
-      if (CUSTOM) {
-        var r = getDateRange();
-        if (!r.from || !r.to) return null;        // need a bounded range to compare
-        var fromYM = r.from.slice(0, 7), toYM = r.to.slice(0, 7), cFrom, cTo;
-        if (CMP === 'prev') { var n = ymDiff(fromYM, toYM) + 1; cTo = ymAdd(fromYM, -1); cFrom = ymAdd(cTo, -(n - 1)); }
-        else { cFrom = ymAdd(fromYM, -12); cTo = ymAdd(toYM, -12); }
-        return rangeRowForMonths(function (ym) { return ym >= cFrom && ym <= cTo; });
+    // Month keys ('YYYY-MM') of the current selection, from a monthly series. null = "All".
+    function windowMonths(series) {
+      if (CUSTOM) return (series || []).map(function (m) { return m.month; }).filter(monthInRange).sort();
+      if (SEL === 'all' || SEL == null) return null;
+      return (series || []).filter(function (m) { return m.fyEnd === SEL; }).map(function (m) { return m.month; }).sort();
+    }
+    function shiftMonths(months, years) {  // shift every 'YYYY-MM' by `years`
+      return months.map(function (mm) { var p = mm.split('-'); return (Number(p[0]) + years) + '-' + p[1]; });
+    }
+    function precedingMonths(months) {     // the months.length months immediately before months[0]
+      if (!months.length) return [];
+      var p = months[0].split('-'), y = Number(p[0]), mo = Number(p[1]), out = [];
+      for (var i = 0; i < months.length; i++) {
+        mo--; if (mo < 1) { mo = 12; y--; }
+        out.unshift(y + '-' + (mo < 10 ? '0' + mo : '' + mo));
       }
-      if (SEL === 'all') return null;
-      var prior = SEL - 1;
-      return (ROI.rows.data || []).find(function (x) { return x.fyEnd === prior; }) || null;
+      return out;
     }
-    function cmpDeltaLabel(cmpRow) { return CUSTOM ? cmpRangeLabel() : (cmpRow && cmpRow.fy ? 'vs ' + cmpRow.fy : 'vs prior'); }
+    function baseMonths(cur) { return CMP === 'prev' ? precedingMonths(cur) : shiftMonths(cur, -1); }
+    function cmpDeltaLabel() {
+      if (CMP === 'prev') return 'vs prev period';
+      if (!CUSTOM && SEL !== 'all' && SEL != null) return 'vs FY' + String(SEL - 1).slice(-2);
+      return 'vs last yr';
+    }
 
-    // Normalize a row to the 8 comparable card metrics.
-    function deriveMetrics(row) {
-      if (!row) return null;
-      var spend = row.hasSpend ? row.totalSpend : null;
-      var mRev = (row.marketingRevenue != null) ? row.marketingRevenue : null;
-      var revenue = row.hasRevenue ? row.revenue : null;
-      var roi = (mRev != null && spend) ? mRev / spend : null;
-      return {
-        mRev: mRev, revenue: revenue, spend: spend, roi: roi,
-        netRoi: roi != null ? (roi - 1) * 100 : null,
-        dealsWon: row.dealsWon,
-        cac: (row.hasSpend && spend != null && row.dealsWon) ? spend / row.dealsWon : null,
-        avgRev: (mRev != null && row.dealsWon) ? mRev / row.dealsWon : null
-      };
+    // Current vs comparison-window sums over a monthly series. null when "All" is
+    // selected or the comparison window has no data at all (no comparable history).
+    function seriesWindowPair(series, valOf) {
+      var cur = windowMonths(series);
+      if (!cur || !cur.length) return null;
+      var base = baseMonths(cur);
+      var map = {}, present = {};
+      (series || []).forEach(function (m) { map[m.month] = valOf(m) || 0; present[m.month] = 1; });
+      if (!base.some(function (mm) { return present[mm]; })) return null;
+      var sum = function (ms) { return ms.reduce(function (a, mm) { return a + (map[mm] || 0); }, 0); };
+      return { cur: sum(cur), prev: sum(base) };
+    }
+
+    // Current vs comparison-window ratios over the SAME month windows (derived from
+    // anchorSeries) so numerator and denominator always align.
+    function ratioWindowPair(anchorSeries, numSeries, numOf, denSeries, denOf) {
+      var cur = windowMonths(anchorSeries);
+      if (!cur || !cur.length) return null;
+      var base = baseMonths(cur);
+      var nMap = {}, dMap = {}, nPresent = {}, dPresent = {};
+      (numSeries || []).forEach(function (m) { nMap[m.month] = numOf(m) || 0; nPresent[m.month] = 1; });
+      (denSeries || []).forEach(function (m) { dMap[m.month] = denOf(m) || 0; dPresent[m.month] = 1; });
+      if (!base.some(function (mm) { return nPresent[mm]; }) || !base.some(function (mm) { return dPresent[mm]; })) return null;
+      var sum = function (map, ms) { return ms.reduce(function (a, mm) { return a + (map[mm] || 0); }, 0); };
+      var cn = sum(nMap, cur), cd = sum(dMap, cur), bn = sum(nMap, base), bd = sum(dMap, base);
+      if (cd <= 0 || bd <= 0) return null;
+      return { cur: cn / cd, prev: bn / bd };
     }
 
     // One delta chip. opts: {abs,suffix} absolute, {pp} percentage-point, else percent;
@@ -440,27 +453,49 @@
         return wrap((opts.invert ? dp < 0 : dp > 0) ? 1 : -1, (dp > 0 ? '▲ +' : '▼ −') + esc(Math.abs(dp).toFixed(2)) + ' pp');
       }
       if (prev === 0) { if (cur === 0) return ''; return wrap(opts.invert ? -1 : 1, '▲ new'); }
-      var d = cur - prev, pct = Math.round((d / prev) * 1000) / 10;
-      return wrap((opts.invert ? d < 0 : d >= 0) ? 1 : -1, (d >= 0 ? '▲ ' : '▼ ') + esc(Math.abs(pct)) + '%');
+      var d = cur - prev;
+      if (d === 0) return wrap(0, '▬ no change');
+      var pct = Math.round((d / prev) * 1000) / 10;
+      return wrap((opts.invert ? d < 0 : d > 0) ? 1 : -1, (d > 0 ? '▲ ' : '▼ ') + esc(Math.abs(pct)) + '%');
     }
 
-    // Inject a Compare delta chip under each of the 8 KPI cards (render order).
+    // Inject (or refresh) a Compare delta chip under each of the 8 KPI cards (render order).
     function applyKpiDeltas(cur) {
-      var cmp = comparisonRow();
-      var A = deriveMetrics(cur), B = deriveMetrics(cmp);
-      if (!A || !B) return;
-      var lab = cmpDeltaLabel(cmp);
-      var chips = [
-        deltaChip(A.mRev, B.mRev, lab),
-        deltaChip(A.revenue, B.revenue, lab),
-        deltaChip(A.spend, B.spend, lab),
-        deltaChip(A.roi, B.roi, lab, { abs: true, suffix: '×' }),
-        deltaChip(A.netRoi, B.netRoi, lab, { pp: true }),
-        deltaChip(A.dealsWon, B.dealsWon, lab),
-        deltaChip(A.cac, B.cac, lab, { invert: true }),
-        deltaChip(A.avgRev, B.avgRev, lab)
-      ];
       var cards = document.querySelectorAll('#kpis .kpi');
+      cards.forEach(function (c) {
+        c.querySelectorAll('.delta').forEach(function (el) { el.remove(); });
+      });
+      if (!cur || !ROI) return;
+      var byMonth = (ROI.byMonth && ROI.byMonth.data) || [];
+      var pipeMonths = (ROI.pipelineMonths && ROI.pipelineMonths.data) || [];
+      var lab = cmpDeltaLabel();
+      var pair = function (p, opts) { return p ? deltaChip(p.cur, p.prev, lab, opts) : ''; };
+
+      var mRevP  = cur.marketingRevenue != null ? seriesWindowPair(byMonth, function (m) { return m.marketingRevenue; }) : null;
+      var revP   = cur.hasRevenue ? seriesWindowPair(byMonth, function (m) { return m.revenue; }) : null;
+      var spendP = cur.hasSpend ? seriesWindowPair(byMonth, function (m) { return m.spend; }) : null;
+      var roiP   = (cur.hasSpend && cur.marketingRevenue != null)
+        ? ratioWindowPair(byMonth, byMonth, function (m) { return m.marketingRevenue; }, byMonth, function (m) { return m.spend; })
+        : null;
+      var netP   = roiP ? { cur: (roiP.cur - 1) * 100, prev: (roiP.prev - 1) * 100 } : null;
+      var wonP   = seriesWindowPair(pipeMonths, function (m) { return m.won; });
+      var cacP   = (cur.hasSpend && cur.dealsWon)
+        ? ratioWindowPair(byMonth, byMonth, function (m) { return m.spend; }, pipeMonths, function (m) { return m.won; })
+        : null;
+      var avgP   = (cur.marketingRevenue != null && cur.dealsWon)
+        ? ratioWindowPair(byMonth, byMonth, function (m) { return m.marketingRevenue; }, pipeMonths, function (m) { return m.won; })
+        : null;
+
+      var chips = [
+        pair(mRevP),
+        pair(revP),
+        pair(spendP),
+        pair(roiP, { abs: true, suffix: '×' }),
+        pair(netP, { pp: true }),
+        pair(wonP),
+        pair(cacP, { invert: true }),
+        pair(avgP)
+      ];
       chips.forEach(function (html, i) {
         if (!html || !cards[i]) return;
         var val = cards[i].querySelector('.value');
@@ -1000,7 +1035,7 @@
         document.querySelectorAll('#cmpSeg button').forEach(function (x) { x.classList.remove('active'); });
         b.classList.add('active');
         CMP = selCmp();
-        if (ROI) render();
+        if (ROI) applyKpiDeltas(currentRow());
       });
     });
     window.onThemeChange = function () { if (ROI) render(); renderChannelChart(); };

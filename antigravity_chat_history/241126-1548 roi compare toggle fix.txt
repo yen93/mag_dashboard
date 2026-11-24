@@ -1,0 +1,72 @@
+================================================================================
+UPDATE DOCUMENTATION: ROI COMPARE TOGGLE FIX
+Timestamp: 24/11/26 15:48 (UTC+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. ROI.HTML COMPARE TOGGLE ("VS LAST YEAR" / "VS PREVIOUS PERIOD")
+--------------------------------------------------------------------------------
+* Problem / Context:
+  The Compare toggle (#cmpSeg) in public/roi.html did not update the comparison
+  notes (delta chips) below the 8 KPI card figures when switching between
+  "vs last year" (yoy) and "vs previous period" (prev) in Financial Year mode.
+  Specifically:
+  - comparisonRow() ignored CMP whenever CUSTOM was false, always returning the
+    full prior FY row (e.g., comparing partial FY27 against all 12 months of
+    FY26 under both toggle modes).
+  - cmpDeltaLabel() ignored CMP whenever CUSTOM was false, always displaying
+    "vs FYxx" instead of switching to "vs prev period".
+  - rangeRowForMonths() returned 0 instead of null when a comparison window had
+    no historical data, which could render a spurious "▲ new" delta chip.
+  - Reference implementation requested: public/marketing.html (#cmpSeg logic).
+
+* Technical Changes:
+  - File modified: public/roi.html (C:\Users\Cloverly\claude_code\dashboard\public\roi.html)
+  - Replaced comparisonRow() / deriveMetrics() / ymAdd() / ymDiff() (lines 373-450)
+    with monthly-series window helpers mirroring public/marketing.html:
+    * windowMonths(series): extracts sorted 'YYYY-MM' months for the active FY
+      or active custom date range (returns null for "All").
+    * shiftMonths(months, years): shifts each month by -1 year for YoY.
+    * precedingMonths(months): computes the immediately preceding equal-length
+      month window before months[0] for "vs previous period".
+    * baseMonths(cur): dispatches to precedingMonths(cur) when CMP === 'prev',
+      otherwise shiftMonths(cur, -1).
+    * cmpDeltaLabel(): returns "vs prev period" when CMP === 'prev';
+      "vs FY<prior>" for FY mode in YoY; "vs last yr" for custom ranges in YoY.
+    * seriesWindowPair(series, valOf) & ratioWindowPair(anchorSeries, ...):
+      computes apples-to-apples current vs comparison sums and aligned ratios
+      across the 8 KPI metrics (Marketing revenue, Total company revenue,
+      Marketing spend, Return on spend, Net ROI, Clients won, Cost per client
+      (CAC), Avg revenue / client). Returns null when no base months exist in
+      the series (prevents bogus "▲ new" chips when history is absent).
+  - Updated deltaChip() (lines 452-470) to render "▬ no change" when d === 0 in
+    percentage mode for consistency with absolute and pp modes.
+  - Updated applyKpiDeltas(cur) (lines 472-508) to clear existing .delta nodes
+    from #kpis .kpi before inserting updated chips (idempotent refresh).
+  - Updated #cmpSeg click listener (lines 1033-1040) to call
+    applyKpiDeltas(currentRow()) instead of full render(), updating KPI delta
+    notes instantaneously without re-animating charts.
+
+2. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* None — client-side update only (no backend, database, or Edge Function changes).
+
+3. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Inline script syntax check (Node vm.Script):
+  - All 3 inline <script> blocks in public/roi.html parsed with zero errors.
+* Automated comparison harness assertions (Node):
+  - Partial FY27 (Jul-Nov 2026):
+    * YoY:  ▲ 12.4% vs FY26
+    * Prev: ▲ 7% vs prev period
+    * Distinct values and labels verified; 1 .delta per card (no duplicates).
+  - Full past FY26 (Jul 2025-Jun 2026):
+    * YoY:  ▲ 13.8% vs FY25
+    * Prev: ▲ 13.8% vs prev period
+  - Earliest FY22 (no prior history): 0 delta chips rendered (both modes).
+  - All years: 0 delta chips rendered (both modes).
+  - Custom date range (Aug-Oct 2026):
+    * YoY:  ▲ 12.4% vs last yr
+    * Prev: ▲ 4.1% vs prev period
+  - Result: ALL ASSERTIONS PASSED.
+================================================================================
