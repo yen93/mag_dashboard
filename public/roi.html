@@ -200,6 +200,10 @@
         <button class="active" data-cmp="yoy">vs last year</button>
         <button data-cmp="prev">vs previous period</button>
       </div>
+      <!-- Dates for the current period and the comparison window, as real calendar dates.
+           Updates live on FY / Compare / custom-range change; both spans are exactly the
+           months the KPI delta chips sum over, so they always align with the figures. -->
+      <span class="muted" id="cmpRange" style="font-size:12px;margin-left:10px"></span>
     </div>
 
     <div class="kpi-grid" id="kpis"></div>
@@ -406,6 +410,49 @@
       return 'vs last yr';
     }
 
+    // ---- Date label beside the Compare toggle ----
+    // The span of months actually being shown, and the span it is compared against, as real
+    // calendar dates (e.g. "Showing 1 Jul – 31 Oct 2026 · vs 1 Jul – 31 Oct 2025"). Both are
+    // derived from the SAME month lists (`cur` and `baseMonths(cur)`) the KPI delta chips sum
+    // over, so the dates can never disagree with the figures under the cards. "vs last year"
+    // lines the two windows up on identical month numbers a year apart; "vs previous period"
+    // uses the equal-length window immediately before. Driven by the union of the loaded
+    // monthly series so the window covers the full extent of the data on show.
+    var MONTH_ABBR = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    function unionByMonth() {   // [{month,fyEnd}] distinct, across the loaded monthly series
+      var seen = {}, out = [];
+      var src = [(ROI && ROI.byMonth && ROI.byMonth.data) || [], (ROI && ROI.pipelineMonths && ROI.pipelineMonths.data) || []];
+      src.forEach(function (arr) {
+        arr.forEach(function (m) {
+          if (m && m.month && !seen[m.month]) { seen[m.month] = 1; out.push({ month: m.month, fyEnd: m.fyEnd }); }
+        });
+      });
+      return out;
+    }
+    // Canonical current-window months for the label (null = "All", [] = nothing loaded yet).
+    function canonMonths() { return windowMonths(unionByMonth()); }
+    // A sorted 'YYYY-MM' list → "1 Jul – 31 Oct 2026" (the year is shown once when start and
+    // end share it, otherwise on both ends: "1 Jul 2025 – 30 Jun 2026").
+    function spanLabel(months) {
+      if (!months || !months.length) return '';
+      var a = months[0].split('-'), b = months[months.length - 1].split('-');
+      var ay = Number(a[0]), am = Number(a[1]), by = Number(b[0]), bm = Number(b[1]);
+      var lastDay = new Date(by, bm, 0).getDate();   // last calendar day of the final month
+      var start = '1 ' + MONTH_ABBR[am] + (ay === by ? '' : ' ' + ay);
+      var end = lastDay + ' ' + MONTH_ABBR[bm] + ' ' + by;
+      return start + ' – ' + end;
+    }
+    function compareRangeLabel() {
+      var cur = canonMonths();
+      if (cur === null) return 'All financial years';   // "All" — no period comparison
+      if (!cur.length) return '';                        // data still loading
+      return 'Showing ' + spanLabel(cur) + ' · vs ' + spanLabel(baseMonths(cur));
+    }
+    function renderCmpRange() {
+      var el = document.getElementById('cmpRange');
+      if (el) el.textContent = compareRangeLabel();
+    }
+
     // Current vs comparison-window sums over a monthly series. null when "All" is
     // selected or the comparison window has no data at all (no comparable history).
     function seriesWindowPair(series, valOf) {
@@ -461,6 +508,7 @@
 
     // Inject (or refresh) a Compare delta chip under each of the 8 KPI cards (render order).
     function applyKpiDeltas(cur) {
+      renderCmpRange();   // keep the Compare date label in step with the delta chips
       var cards = document.querySelectorAll('#kpis .kpi');
       cards.forEach(function (c) {
         c.querySelectorAll('.delta').forEach(function (el) { el.remove(); });

@@ -321,6 +321,10 @@
           <button class="active" data-cmp="yoy">vs last year</button>
           <button data-cmp="prev">vs previous period</button>
         </div>
+        <!-- Dates for the current FY and the comparison window, as real calendar dates.
+             Updates live on FY / Compare change; both spans are exactly the months the KPI
+             delta chips sum over, so they always align with the figures. -->
+        <span class="muted" id="cmpRange" style="font-size:12px;margin-left:10px"></span>
         <div class="spacer"></div>
         <span class="muted" id="roasAsOf" style="font-size:13px"></span>
       </div>
@@ -459,6 +463,7 @@
     var _roasCharts = {};
     var SEL = { fy: null, basis: 'allin', status: 'Won', scope: 'counted' };
     var CMP = 'yoy';   // Compare basis: 'yoy' (vs last year) | 'prev' (vs previous period)
+    var CUSTOM = false;   // true while a custom date range is active (overrides the FY toggle)
     var dealSort = { key: 'xeroTotal', dir: -1 }, dealQuery = '';
     var DEAL_NUMKEYS = { value: 1, xeroEngagementFee: 1, xeroGst: 1, xeroOtherFees: 1, xeroTotal: 1 };
 
@@ -468,9 +473,46 @@
     function costLabel() { return SEL.basis === 'google' ? 'Google Ads spend' : 'Paid search cost (all-in)'; }
     function selRow() {
       if (!ROAS_DATA) return null;
+      if (CUSTOM) return rangeRow();
       if (SEL.fy === 'All') return ROAS_DATA.total;
       var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
       return rows.filter(function (r) { return r.fy === SEL.fy; })[0] || ROAS_DATA.total;
+    }
+    // ---- Custom date range (beside the FY toggle) ----
+    // While a range is active it OVERRIDES the FY toggle: the KPI cards + Compare deltas
+    // aggregate the already-loaded monthly series (ROAS_DATA.byMonth) within the range —
+    // no refetch, the per-month series is already in the payload. The FY-only widgets (both
+    // FY bar charts, the ROAS-by-FY table and the deals list) grey out. monthInRange() tests
+    // a 'YYYY-MM' against the range; rangeRow() sums the months in range into a row of the
+    // SAME shape selRow() returns (and the SAME arithmetic the server uses per FY), so every
+    // KPI card + delta chip works unchanged.
+    function monthInRange(ym) {
+      var r = getDateRange();
+      var fm = r.from ? r.from.slice(0, 7) : '', tm = r.to ? r.to.slice(0, 7) : '';
+      return (!fm || ym >= fm) && (!tm || ym <= tm);
+    }
+    function rangeRow() {
+      var ms = ((ROAS_DATA && ROAS_DATA.byMonth && ROAS_DATA.byMonth.data) || [])
+        .filter(function (m) { return monthInRange(m.month); });
+      var sum = function (f) { return ms.reduce(function (a, m) { return a + (f(m) || 0); }, 0); };
+      var googleSpend = sum(function (m) { return m.googleSpend; });
+      var bingSpend   = sum(function (m) { return m.bingSpend; });
+      var sdFee       = sum(function (m) { return m.sdFee; });
+      var totalCost   = googleSpend + bingSpend + sdFee;
+      var won = sum(function (m) { return m.won; }), lost = sum(function (m) { return m.lost; }), open = sum(function (m) { return m.open; });
+      var leads = won + lost + open;
+      var wonRevenue = sum(function (m) { return m.wonRevenue; });
+      return {
+        fy: 'the selected range',
+        googleSpend: googleSpend, bingSpend: bingSpend, sdFee: sdFee, sdSeo: 0,
+        totalCost: totalCost,
+        won: won, lost: lost, open: open,
+        wonRevenue: wonRevenue, openValue: sum(function (m) { return m.openValue; }),
+        winRate: leads ? won / leads : null,
+        roasGoogle: googleSpend ? wonRevenue / googleSpend : null,
+        roasAllin: totalCost ? wonRevenue / totalCost : null,
+        perLeadValue: leads ? wonRevenue / leads : null,
+      };
     }
 
     /* ---------- Compare toggle (#cmpSeg) ----------
@@ -485,8 +527,10 @@
       var n = parseInt(String(SEL.fy).replace(/\D/g, ''), 10);
       return isFinite(n) ? 2000 + n : null;
     }
-    // Month keys ('YYYY-MM') of the selected FY from the monthly series. null = "All".
+    // Month keys ('YYYY-MM') of the selection from the monthly series. A custom range wins;
+    // otherwise the selected FY, or null = "All".
     function windowMonths(series) {
+      if (CUSTOM) return (series || []).map(function (m) { return m.month; }).filter(monthInRange).sort();
       var fe = selFyEnd();
       if (fe == null) return null;
       return (series || []).filter(function (m) { return m.fyEnd === fe; }).map(function (m) { return m.month; }).sort();
@@ -506,8 +550,40 @@
     function baseMonths(cur) { return CMP === 'prev' ? precedingMonths(cur) : shiftMonths(cur, -1); }
     function cmpLabel() {
       if (CMP === 'prev') return 'vs prev period';
+      if (CUSTOM) return 'vs last yr';
       var fe = selFyEnd();
       return fe != null ? 'vs FY' + String(fe - 1).slice(-2) : 'vs last yr';
+    }
+    // ---- Date label beside the Compare toggle ----
+    // The span of months actually being shown, and the span it is compared against, as real
+    // calendar dates (e.g. "Showing 1 Jul – 31 Oct 2026 · vs 1 Jul – 31 Oct 2025"). Both come
+    // from the SAME month lists (`cur` and `baseMonths(cur)`) the KPI delta chips sum over, so
+    // the dates can never disagree with the figures under the cards. "vs last year" lines the
+    // two windows up on identical month numbers a year apart; "vs previous period" uses the
+    // equal-length window immediately before.
+    var MONTH_ABBR = ['', 'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    // Canonical current-window months for the label (null = "All", [] = nothing loaded yet).
+    function canonMonths() { return windowMonths((ROAS_DATA && ROAS_DATA.byMonth && ROAS_DATA.byMonth.data) || []); }
+    // A sorted 'YYYY-MM' list → "1 Jul – 31 Oct 2026" (the year is shown once when start and
+    // end share it, otherwise on both ends: "1 Jul 2025 – 30 Jun 2026").
+    function spanLabel(months) {
+      if (!months || !months.length) return '';
+      var a = months[0].split('-'), b = months[months.length - 1].split('-');
+      var ay = Number(a[0]), am = Number(a[1]), by = Number(b[0]), bm = Number(b[1]);
+      var lastDay = new Date(by, bm, 0).getDate();   // last calendar day of the final month
+      var start = '1 ' + MONTH_ABBR[am] + (ay === by ? '' : ' ' + ay);
+      var end = lastDay + ' ' + MONTH_ABBR[bm] + ' ' + by;
+      return start + ' – ' + end;
+    }
+    function compareRangeLabel() {
+      var cur = canonMonths();
+      if (cur === null) return 'All financial years';   // "All" — no period comparison
+      if (!cur.length) return '';                        // data still loading
+      return 'Showing ' + spanLabel(cur) + ' · vs ' + spanLabel(baseMonths(cur));
+    }
+    function renderCmpRange() {
+      var el = document.getElementById('cmpRange');
+      if (el) el.textContent = compareRangeLabel();
     }
     // Current vs comparison-window sums over the monthly series. null when "All" is
     // selected or no base months exist in the series (no comparable history).
@@ -574,6 +650,7 @@
     }
 
     function renderKpis() {
+      renderCmpRange();   // keep the Compare date label in step with the delta chips
       var r = selRow(); if (!r) return;
       var target = (ROAS_DATA.target) || 2;
       var cost = costOf(r), roas = roasOf(r);
@@ -651,7 +728,34 @@
       } };
     }
 
+    // Show a "not available for custom ranges" note in place of an FY-only chart (and hide
+    // its canvas); msg = null restores the canvas. Returns true when a note is shown.
+    function setChartNote(canvasId, msg) {
+      var cv = document.getElementById(canvasId);
+      if (!cv) return false;
+      var box = cv.closest('.chart-box');
+      if (!box) return false;
+      var note = box.parentNode.querySelector('.range-na');
+      if (msg) {
+        box.style.display = 'none';
+        if (!note) { note = document.createElement('div'); note.className = 'range-na'; box.parentNode.insertBefore(note, box.nextSibling); }
+        note.textContent = msg; note.style.display = '';
+        return true;
+      }
+      box.style.display = '';
+      if (note) note.style.display = 'none';
+      return false;
+    }
+
     function buildCharts() {
+      // Both charts are per-FY bar views — a custom (day/month) range can't slice them.
+      if (CUSTOM) {
+        setChartNote('chartRoas', 'ROAS by financial year is a per-year view — clear the custom range to see it.');
+        setChartNote('chartSpend', 'Spend vs won by financial year is a per-year view — clear the custom range to see it.');
+        return;
+      }
+      setChartNote('chartRoas', null);
+      setChartNote('chartSpend', null);
       var tc = themeColors();
       var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
       var target = ROAS_DATA.target || 2;
@@ -711,6 +815,12 @@
 
     // ---------- ROAS by FY table ----------
     function renderTable() {
+      if (CUSTOM) {   // reported by financial year — a custom range can't slice it
+        document.getElementById('roasTable').innerHTML =
+          '<div class="range-na">Not available for custom ranges — this table is reported by financial year. Clear the date range to view it.</div>';
+        var tn = document.getElementById('roasTableNote'); if (tn) tn.textContent = '';
+        return;
+      }
       var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
       var total = ROAS_DATA.total, target = ROAS_DATA.target || 2;
       var cols = [
@@ -770,6 +880,13 @@
     // ---------- deals table ----------
     function renderDeals() {
       var host = document.getElementById('dealsTable');
+      if (CUSTOM) {   // the deals list is reported by FY (FY22–24 are month-only) — grey it
+        host.innerHTML =
+          '<div class="range-na">Not available for custom ranges — the deals list is reported by financial year. Clear the date range to view it.</div>';
+        var dh = document.getElementById('dealsHead'); if (dh) dh.textContent = 'Deals';
+        var dn = document.getElementById('dealsNote'); if (dn) dn.textContent = '';
+        return;
+      }
       if (!DEALS_DATA) { return; }
       var all = (DEALS_DATA.rows && DEALS_DATA.rows.data) || [];
       var list = all.filter(function (d) {
@@ -831,6 +948,14 @@
     }
 
     // ---------- controls / state ----------
+    // A custom range overrides the FY toggle; clearing it restores FY mode. Pure client-side —
+    // the KPI cards + Compare deltas re-aggregate the already-loaded monthly series.
+    function applyRange() {
+      CUSTOM = dateRangeActive();
+      setFySegDisabled(CUSTOM);
+      if (!ROAS_DATA) return;
+      renderTakeaway(); renderKpis(); buildCharts(); renderTable(); renderDeals();
+    }
     function setFy(fy) { SEL.fy = fy; syncPressed(); renderKpis(); renderTable(); renderDeals(); }  // charts intentionally NOT rebuilt — they show all FYs; only the basis toggle (or theme) re-renders them
     function setBasis(b) { SEL.basis = b; syncPressed(); renderKpis(); buildCharts(); renderTable(); }
     function syncPressed() {
@@ -913,6 +1038,8 @@
 
     initPage('operations'); // login / top-bar / theme only — this page renders its own content
     renderMarketingSidebar('roas');
+    renderDateRange({ after: 'fySeg' });   // inject the shared Custom date range control beside the FY toggle
+    wireDateRange({ onChange: applyRange });
     window.onThemeChange = function () { if (ROAS_DATA) { renderKpis(); buildCharts(); renderTable(); renderDeals(); } };
     if (currentUser()) loadRoas();
   </script>
