@@ -166,6 +166,11 @@
             <button data-fy="fy26">FY26</button>
             <button class="active" data-fy="fy27">FY27</button>
           </div>
+          <span class="ctl-label">Compare</span>
+          <div class="segmented" id="cmpSeg">
+            <button class="active" data-cmp="yoy">vs last year</button>
+            <button data-cmp="prev">vs previous period</button>
+          </div>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span>
         </div>
@@ -372,12 +377,82 @@
       }
       return key === 'all' ? MROI.total : (MROI.byFy[fyEndOf(key)] || null);
     }
-    // A currency delta line vs the prior FY (directional colour, same as the count cards).
-    function currencyDelta(d, prevFyEnd) {
-      var cls = d >= 0 ? 'pos' : 'neg';
-      var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
-      return '<div class="delta ' + cls + '">' + arrow + ' ' + fmt(Math.abs(d), 'currency') +
-        ' vs FY' + String(prevFyEnd).slice(-2) + '</div>';
+    // ----- Compare control (vs last year | vs previous period) -----
+    // Every KPI delta is computed from the already-loaded monthly series, so "previous
+    // period" (the immediately preceding window of equal length) is genuinely different
+    // from "vs last year" (the same window one year earlier). It matters for the partial
+    // current FY and for custom date ranges; for a full past FY both resolve to the prior FY.
+    var COMPARE = 'yoy';
+    function selCmp() {
+      var b = document.querySelector('#cmpSeg button.active');
+      return b ? b.getAttribute('data-cmp') : 'yoy';
+    }
+    // Month keys ('YYYY-MM') of the current selection, from a byMonth series. null = "all years".
+    function windowMonths(byMonth) {
+      if (CUSTOM) return (byMonth || []).map(function (m) { return m.month; }).filter(monthInRange).sort();
+      var key = selFyKey();
+      if (key === 'all') return null;
+      var fe = fyEndOf(key);
+      return (byMonth || []).filter(function (m) { return m.fyEnd === fe; }).map(function (m) { return m.month; }).sort();
+    }
+    function shiftMonths(months, n) {   // shift every 'YYYY-MM' by n years
+      return months.map(function (mm) { var p = mm.split('-'); return (Number(p[0]) + n) + '-' + p[1]; });
+    }
+    function precedingMonths(months) {  // the months.length months immediately before months[0]
+      if (!months.length) return [];
+      var p = months[0].split('-'), y = Number(p[0]), mo = Number(p[1]), out = [];
+      for (var i = 0; i < months.length; i++) {
+        mo--; if (mo < 1) { mo = 12; y--; }
+        out.unshift(y + '-' + (mo < 10 ? '0' + mo : '' + mo));
+      }
+      return out;
+    }
+    function baseMonths(cur) { return selCmp() === 'prev' ? precedingMonths(cur) : shiftMonths(cur, -1); }
+    function cmpLabel() {
+      if (selCmp() === 'prev') return 'vs prev period';
+      if (!CUSTOM && selFyKey() !== 'all') return 'vs FY' + String(fyEndOf(selFyKey()) - 1).slice(-2);
+      return 'vs last yr';
+    }
+    // Generic delta over a monthly series → { d } or null when there's no current window
+    // ("all years") or the comparison window has no data at all (no comparable history).
+    function seriesDelta(byMonth, valOf) {
+      var cur = windowMonths(byMonth);
+      if (!cur || !cur.length) return null;
+      var map = {}, present = {};
+      (byMonth || []).forEach(function (m) { map[m.month] = valOf(m) || 0; present[m.month] = 1; });
+      var base = baseMonths(cur);
+      if (!base.some(function (mm) { return present[mm]; })) return null;
+      var sum = function (ms) { return ms.reduce(function (a, mm) { return a + (map[mm] || 0); }, 0); };
+      return { d: sum(cur) - sum(base) };
+    }
+    // Rate (bookings ÷ enquiries) and ROI need two series summed over the SAME windows.
+    function rateWindowDelta() {
+      var cur = windowMonths(ENQ.byMonth);
+      if (!cur || !cur.length) return null;
+      var base = baseMonths(cur), em = {}, bm = {}, present = {};
+      (ENQ.byMonth || []).forEach(function (m) { em[m.month] = m.total || 0; present[m.month] = 1; });
+      (BOOKINGS.byMonth || []).forEach(function (m) { bm[m.month] = m.total || 0; });
+      if (!base.some(function (mm) { return present[mm]; })) return null;
+      var s = function (map, ms) { return ms.reduce(function (a, mm) { return a + (map[mm] || 0); }, 0); };
+      var ce = s(em, cur), cb = s(bm, cur), be = s(em, base), bb = s(bm, base);
+      if (ce <= 0 || be <= 0) return null;
+      return (cb / ce * 100) - (bb / be * 100);
+    }
+    function roiWindowDelta() {
+      var cur = windowMonths(MROI.byMonth);
+      if (!cur || !cur.length) return null;
+      var base = baseMonths(cur), rm = {}, sm = {}, present = {};
+      (MROI.byMonth || []).forEach(function (m) { rm[m.month] = m.marketingRevenue || 0; sm[m.month] = m.spend || 0; present[m.month] = 1; });
+      if (!base.some(function (mm) { return present[mm]; })) return null;
+      var s = function (map, ms) { return ms.reduce(function (a, mm) { return a + (map[mm] || 0); }, 0); };
+      var cr = s(rm, cur), cs = s(sm, cur), br = s(rm, base), bs = s(sm, base);
+      if (cs <= 0 || bs <= 0) return null;
+      return (cr / cs - 1) * 100 - (br / bs - 1) * 100;
+    }
+    // Format a delta line (directional colour: up = green). absFmt formats the magnitude.
+    function deltaLine(d, absFmt) {
+      var cls = d >= 0 ? 'pos' : 'neg', arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
+      return '<div class="delta ' + cls + '">' + arrow + ' ' + absFmt(Math.abs(d)) + ' ' + cmpLabel() + '</div>';
     }
     function kpiHtml(label, val, info, deltaHtml, href) {
       var tag = href ? 'a' : 'div';
@@ -412,16 +487,8 @@
         val = r ? String(r.total) : '—';
         if (r) {
           info = cfg.loadedInfo(fyName, r);
-          if (!CUSTOM && key !== 'all') {
-            var prev = cfg.state.byFy[fyEndOf(key) - 1];
-            if (prev) {
-              var d = r.total - prev.total;
-              var cls = d >= 0 ? 'pos' : 'neg';
-              var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
-              deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(d) +
-                ' vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
-            }
-          }
+          var sd = seriesDelta(cfg.state.byMonth, function (m) { return m.total; });
+          if (sd) deltaHtml = deltaLine(sd.d, function (x) { return String(x); });
         }
       }
       var tag = cfg.href ? 'a' : 'div';
@@ -474,16 +541,9 @@
       if (loaded) {
         var cur = rateOf(key);
         val = cur.pct === null ? '—' : (Math.round(cur.pct) + '%');
-        if (!CUSTOM && key !== 'all' && cur.pct !== null) {
-          var prevKey = 'fy' + String(fyEndOf(key) - 1).slice(-2);
-          var prev = rateOf(prevKey);
-          if (prev.pct !== null) {
-            var d = cur.pct - prev.pct;
-            var cls = d >= 0 ? 'pos' : 'neg';
-            var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
-            deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(Math.round(d)) +
-              '% vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
-          }
+        if (cur.pct !== null) {
+          var rd = rateWindowDelta();
+          if (rd !== null) deltaHtml = deltaLine(Math.round(rd), function (x) { return x + '%'; });
         }
       }
       return kpiHtml('Enquiry → booking rate', val, info, deltaHtml, 'leads_bookings.html#all-leads');
@@ -502,11 +562,9 @@
         var r = mroiRow(key);
         var mRev = (r && r.marketingRevenue != null) ? r.marketingRevenue : null;
         val = (mRev == null) ? '—' : fmt(mRev, 'currency');
-        if (r) {
-          if (!CUSTOM && key !== 'all' && mRev != null) {
-            var prev = MROI.byFy[fyEndOf(key) - 1];
-            if (prev && prev.marketingRevenue != null) deltaHtml = currencyDelta(mRev - prev.marketingRevenue, fyEndOf(key) - 1);
-          }
+        if (mRev != null) {
+          var sd = seriesDelta(MROI.byMonth, function (m) { return m.marketingRevenue; });
+          if (sd) deltaHtml = deltaLine(sd.d, function (x) { return fmt(x, 'currency'); });
         }
       }
       return kpiHtml('Marketing revenue', val, info, deltaHtml, 'spend_roi.html');
@@ -523,9 +581,9 @@
         var r = mroiRow(key);
         var spend = (r && r.hasSpend) ? r.totalSpend : null;
         val = (spend == null) ? '—' : fmt(spend, 'currency');
-        if (!CUSTOM && key !== 'all' && spend != null) {
-          var prev = MROI.byFy[fyEndOf(key) - 1];
-          if (prev && prev.hasSpend) deltaHtml = currencyDelta(spend - prev.totalSpend, fyEndOf(key) - 1);
+        if (spend != null) {
+          var sd2 = seriesDelta(MROI.byMonth, function (m) { return m.spend; });
+          if (sd2) deltaHtml = deltaLine(sd2.d, function (x) { return fmt(x, 'currency'); });
         }
       }
       return kpiHtml('Marketing spend', val, info, deltaHtml, 'spend_roi.html');
@@ -549,16 +607,8 @@
         var cur = netRoiOf(key);
         val = cur == null ? '—' : (cur > 0 ? '+' : '') + cur + '%';
         if (cur != null) {
-          if (!CUSTOM && key !== 'all') {
-            var prev = netRoiOf('fy' + String(fyEndOf(key) - 1).slice(-2));
-            if (prev != null) {
-              var d = cur - prev;
-              var cls = d >= 0 ? 'pos' : 'neg';
-              var arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
-              deltaHtml = '<div class="delta ' + cls + '">' + arrow + ' ' + Math.abs(d) +
-                '% vs FY' + String(fyEndOf(key) - 1).slice(-2) + '</div>';
-            }
-          }
+          var rd = roiWindowDelta();
+          if (rd !== null) deltaHtml = deltaLine(Math.round(rd), function (x) { return x + '%'; });
         }
       }
       return kpiHtml('Marketing ROI', val, info, deltaHtml, 'spend_roi.html');
@@ -1068,6 +1118,10 @@
     wireSeg('fySeg', function () {        // re-render everything live on FY change
       renderMktKpis();
       try { drawCharts(); } catch (e) { console.error('chart', e); }
+    });
+    wireSeg('cmpSeg', function () {       // Compare mode only changes the KPI delta lines
+      COMPARE = selCmp();
+      renderMktKpis();
     });
     wireDateRange({ onChange: applyRange });
     try {                                // a chart error must never block the live KPI load above

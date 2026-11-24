@@ -1,0 +1,14 @@
+**artifact_link:**
+https://claude.ai/artifact/TbjE87oNez9NFifs6iYwhb?sk=MmFhTMvD8hWYZkVOLGJzQA
+
+**cards_val:**
+Contacts - all bureau and the tailor contacts
+Enquiries - all deals in the ac_indirect_deals in all status in the selected period
+Bookings - won status only within the Enquiries
+Won revenue - engagement fee total of the Bookings (xero engagement fee primary, AC deal value fallback)
+
+## main task: update email_partners.html
+- replace kpi cards with the cards in artifact_link "Outreach campaign"
+- add the 2 graphs shown in the artifact_link "Outreach campaign". but there should only be 1 bar per month wherein the single bar in each month will show both values in the same blue and green color. like a stacked bar graph.
+- see cards_val
+- add the Compare toggles: "vs last year" and "vs previous period" 
