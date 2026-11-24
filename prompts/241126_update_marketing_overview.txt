@@ -1,0 +1,23 @@
+**artifact_design:**
+https://claude.ai/artifact/TbjE87oNez9NFifs6iYwhb?sk=MmFhTMvD8hWYZkVOLGJzQA
+
+**card_order:**
+1. Marketing revenue
+2. Marketing spend
+3. Marketing ROI
+4. Inbound enquiries
+5. Inbound bookings
+6. Enquiry → booking rate
+
+**graph_order:**
+ROI, ROAS, Rev vs Spend, enquiries > bookings, [THE REST]
+
+**to_remove:**
+1. Cadence delivered
+2. Cost per enquiry 
+3. Live AI Insight 
+
+## main task: update marketing.html/overview
+1. update kpi cards. follow card_order
+2. remove the bottom cards. see to_remove
+3. replace graphs in marketing.html with the graphs in the artifact. follow graph_order
