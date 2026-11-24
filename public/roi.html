@@ -8,6 +8,10 @@
   <style>
     /* Wide layout — use the full screen width (same responsive design as the Sales tab). */
     .content { max-width: none; }
+    /* Drop the 1200px cap on the sub-tab bar + shared "Marketing" head so they left-align
+       flush with the full-width content (matches marketing.html). */
+    #marketingNav { max-width: none; }
+    .mkt-head { max-width: none; }
     /* Sticky FY toolbar: stays pinned under the top bar when scrolling (like a frozen row). */
     .toolbar {
       position: sticky;

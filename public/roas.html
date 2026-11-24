@@ -32,6 +32,10 @@
     /* Wide tables — use the full screen width (still scrolls on narrow screens). */
     .content { max-width: none; }
     .marketing-layout .content { padding: 26px 30px 72px; }
+    /* Drop the 1200px cap on the sub-tab bar + shared "Marketing" head so they left-align
+       flush with the full-width content (matches marketing.html). */
+    #marketingNav { max-width: none; }
+    .mkt-head { max-width: none; }
 
     /* Soft aurora backdrop behind the whole tab. */
     body {
