@@ -308,36 +308,51 @@
     /* ============================================================
        Compare toggle (#cmpSeg) — "vs last year" / "vs previous period".
        Drives a delta chip under each campaign KPI (open rate, click rate, …).
-       A whole-FY selection is annual, so "last year" == "previous period" (both =
-       the prior FY). The two bases diverge for a CUSTOM date range: "vs last year"
-       compares the same dates one year earlier; "vs previous period" the equal-length
-       window immediately before. The contact snapshot has no history, so it's never compared.
+       The comparison window is derived from the current period's effective
+       [from,to] (mirrors marketing.html): "vs last year" is the same window one
+       year earlier, "vs previous period" the equal-length window immediately
+       before. For an FY the current window is the FY, with its end CLAMPED TO TODAY
+       so the partial CURRENT FY (FY27) compares like-for-like windows and the two
+       bases genuinely diverge; a full PAST FY keeps its whole 12-month window, so
+       the two bases coincide (both = the prior FY). Same divergence for a CUSTOM
+       date range. The contact snapshot has no history, so it's never compared.
        ============================================================ */
     function selCmp() { var b = document.querySelector('#cmpSeg button.active'); return b ? b.getAttribute('data-cmp') : 'yoy'; }
     function _addDays(iso, n) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
     function _shiftYears(iso, n) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() + n); return d.toISOString().slice(0, 10); }
     function _daysBetween(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000); }
+    function _todayIso() { return new Date().toISOString().slice(0, 10); }
 
-    // The campaign set to compare the current period against (prior FY, or the shifted
-    // custom-range window), honoring the Compare basis. null = no comparison.
-    function comparisonCampaigns() {
-      var rows = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+    // The current period's effective [from,to]. Custom range → the range itself;
+    // FY → the FY window with 'to' clamped to today (so a partial current FY yields
+    // a partial window, making "previous period" differ from "last year"). null = no
+    // comparable current period ('all years', or an incomplete custom range).
+    function currentPeriodBounds() {
       if (dateRangeActive()) {
         var r = getDateRange();
-        if (!r.from || !r.to) return null;        // need both bounds to compare
-        var cf, ct;
-        if (CMP === 'prev') { var len = _daysBetween(r.from, r.to); ct = _addDays(r.from, -1); cf = _addDays(ct, -len); }
-        else { cf = _shiftYears(r.from, -1); ct = _shiftYears(r.to, -1); }
-        return rows.filter(function (c) { var d = c.lastSent; return d && d >= cf && d <= ct; });
+        return (r.from && r.to) ? { from: r.from, to: r.to } : null;
       }
       var k = selFyKey();
       if (k === 'all') return null;
-      var pe = fyEndOf(k) - 1;                     // prior FY end-year
-      var w = { from: (pe - 1) + '-07-01', to: pe + '-06-30' };
-      return rows.filter(function (c) { var d = c.lastSent; return d && d >= w.from && d <= w.to; });
+      var w = fyWindow(k), today = _todayIso();
+      return { from: w.from, to: w.to < today ? w.to : today };
+    }
+
+    // The campaign set to compare the current period against, honoring the Compare
+    // basis: "vs last year" = the same window one year earlier; "vs previous period"
+    // = the equal-length window immediately before. null = no comparison.
+    function comparisonCampaigns() {
+      var rows = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+      var cur = currentPeriodBounds();
+      if (!cur) return null;
+      var cf, ct;
+      if (CMP === 'prev') { var len = _daysBetween(cur.from, cur.to); ct = _addDays(cur.from, -1); cf = _addDays(ct, -len); }
+      else { cf = _shiftYears(cur.from, -1); ct = _shiftYears(cur.to, -1); }
+      return rows.filter(function (c) { var d = c.lastSent; return d && d >= cf && d <= ct; });
     }
     function cmpLabel() {
-      if (dateRangeActive()) return CMP === 'prev' ? 'vs prev period' : 'vs last year';
+      if (CMP === 'prev') return 'vs prev period';
+      if (dateRangeActive()) return 'vs last year';
       var k = selFyKey();
       if (k === 'all') return '';
       return 'vs FY' + String(fyEndOf(k) - 1 - 2000).padStart(2, '0');
