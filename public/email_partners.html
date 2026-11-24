@@ -218,6 +218,11 @@
             <button data-fy="fy26">FY26</button>
             <button class="active" data-fy="fy27">FY27</button>
           </div>
+          <span class="ctl-label">Compare</span>
+          <div class="segmented" id="cmpSeg">
+            <button class="active" data-cmp="yoy">vs last year</button>
+            <button data-cmp="prev">vs previous period</button>
+          </div>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" id="fyNote" style="font-size:13px">Loading…</span>
         </div>
@@ -226,27 +231,21 @@
       <!-- Top 4 KPI cards -->
       <div class="ep-kpi-grid" id="epKpis"></div>
 
-      <!-- Partner outreach table card -->
-      <!-- <div class="card ep-outreach-card">
-        <div class="card-head block-head">
-          <h3 id="outreachHeading">Partner outreach<span class="head-info" data-info="Bureau and tailor partner deals for the selected period — contacts, enquiries, bookings and won revenue, with the previous year's revenue alongside." data-src="ActiveCampaign (partner deals and contacts)"></span></h3>
+      <!-- Enquiries vs bookings by month — one stacked bar per month per partner -->
+      <div class="grid">
+        <div class="card col-6">
+          <div class="card-head" style="display:block;margin-bottom:10px">
+            <h3>The Tailor — enquiries vs bookings <span class="head-info" data-info="One bar per month for The Tailor: enquiries (deals created that month) with the won bookings stacked on top, for the selected period. Bookings are counted in the month the enquiry came in, so recent months may still rise." data-src="ActiveCampaign — The Tailor (indirect deals)"></span></h3>
+          </div>
+          <div class="chart-box"><canvas id="tailorCanvas"></canvas></div>
         </div>
-        <div class="ep-table-wrap" tabindex="0" role="region" aria-labelledby="outreachHeading">
-          <table class="ep-table">
-            <thead>
-              <tr>
-                <th>Partner</th>
-                <th>Contacts</th>
-                <th>Enquiries</th>
-                <th>Bookings</th>
-                <th>Revenue (won)</th>
-                <th>Prior FY</th>
-              </tr>
-            </thead>
-            <tbody id="outreachBody"></tbody>
-          </table>
+        <div class="card col-6">
+          <div class="card-head" style="display:block;margin-bottom:10px">
+            <h3>Speaker Bureaus — enquiries vs bookings <span class="head-info" data-info="One bar per month for the Speaker Bureaus: enquiries (deals created that month) with the won bookings stacked on top, for the selected period. Bookings are counted in the month the enquiry came in." data-src="ActiveCampaign — Speaker bureaus (indirect deals)"></span></h3>
+          </div>
+          <div class="chart-box"><canvas id="bureauCanvas"></canvas></div>
         </div>
-      </div> -->
+      </div>
 
       <!-- Indirect Deals table card -->
       <div class="card ep-deals-card">
@@ -266,73 +265,96 @@
     </main>
   </div>
 
+  <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=27"></script>
   <script>
-    /* Email & Partners — LIVE.
-       Email KPIs come from ActiveCampaign (run_campaign_performance_report), and
-       partner deal figures from the CRM (ac_indirect_deals). Both are snapshotted
-       WEEKLY by the email-partners-sync routine into public.email_partner_metrics
-       and served by /api/marketing/email-partners (latest row per FY). */
+    /* Outreach Campaign (Email & Partners) — LIVE.
+       Everything on this page derives from the INDIRECT (Speaker Bureaus + The Tailor)
+       deals in ActiveCampaign, served per-deal by /api/marketing/indirect-deals
+       (public.ac_indirect_deals, with the Xero engagement fee joined by deal title).
+       The 4 KPI cards + both enquiries-vs-bookings charts are computed CLIENT-SIDE from
+       those rows for the selected financial year (or custom date range), with deltas
+       driven by the Compare toggle (vs last year | vs previous period). */
 
-    var EP = { byFy: {}, all: null, loaded: false, capturedAt: null };
-    var DEALS = { rows: null, loading: false };
+    var DEALS = { rows: null, loading: false, loaded: false };
     var DEALS_TABLE_STATE = {};
+    var CUSTOM = false;
 
+    // Enquiries green, bookings blue — stacked, one bar per month.
+    var C_ENQ = '#17a673', C_BOOK = '#3b6ef0';
+    var EP_SRC = 'ActiveCampaign indirect deals (public.ac_indirect_deals). Won revenue uses the ' +
+      'Xero engagement fee where the deal is invoiced, otherwise the ActiveCampaign deal value.';
+
+    // ---- selection helpers -------------------------------------------------
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
       return b ? b.getAttribute('data-fy') : 'fy27';
     }
     function fyEndOf(key) { return key === 'all' ? null : 2000 + parseInt(key.slice(2), 10); }
-    function fyName(key) { return key === 'all' ? 'All years' : key.toUpperCase(); }
-
-    function money(n) { return (n == null || isNaN(n)) ? '—' : '$' + Math.round(n).toLocaleString('en-AU'); }
-    function pct(n)   { return (n == null || isNaN(n)) ? '—' : (Math.round(n * 10) / 10) + '%'; }
-    function num(n)   { return (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString('en-AU'); }
-
-    // Aggregate every FY row into the "All years" view (send-weighted rates).
-    function buildAll(rows) {
-      if (!rows.length) return null;
-      var sum = function (f) { return rows.reduce(function (a, r) { return a + (f(r) || 0); }, 0); };
-      var sends  = sum(function (r) { return r.email.totalSends; });
-      var uopens = sum(function (r) { return r.email.totalUniqueOpens; });
-      var uclk   = sum(function (r) { return r.email.totalUniqueClicks; });
-      var unsub  = sum(function (r) { return r.email.totalUnsubscribes; });
-      var latest = rows[rows.length - 1]; // rows sorted by fyEnd asc → current FY
-      return {
-        fyEnd: null, fyLabel: 'all',
-        email: {
-          campaignsSent: sum(function (r) { return r.email.campaignsSent; }),
-          totalSends: sends,
-          openRate: sends ? (uopens / sends) * 100 : null,
-          clickRate: sends ? (uclk / sends) * 100 : null,
-          clickToOpenRate: uopens ? (uclk / uopens) * 100 : null,
-          unsubscribeRate: sends ? (unsub / sends) * 100 : null,
-          totalUnsubscribes: unsub,
-          totalUniqueOpens: uopens, totalUniqueClicks: uclk
-        },
-        subscribers: latest.subscribers,
-        partners: {
-          bureau: {
-            enquiries: sum(function (r) { return r.partners.bureau.enquiries; }),
-            bookings:  sum(function (r) { return r.partners.bureau.bookings; }),
-            revenue:   sum(function (r) { return r.partners.bureau.revenue; }),
-            contacts:  latest.partners.bureau.contacts
-          },
-          tailor: {
-            enquiries: sum(function (r) { return r.partners.tailor.enquiries; }),
-            bookings:  sum(function (r) { return r.partners.tailor.bookings; }),
-            revenue:   sum(function (r) { return r.partners.tailor.revenue; }),
-            contacts:  latest.partners.tailor.contacts
-          }
-        }
-      };
+    function selCmp() {
+      var b = document.querySelector('#cmpSeg button.active');
+      return b ? b.getAttribute('data-cmp') : 'yoy';
     }
 
-    function curRow()  { var k = selFyKey(); return k === 'all' ? EP.all : (EP.byFy[fyEndOf(k)] || null); }
-    function prevRow() { var k = selFyKey(); return k === 'all' ? null  : (EP.byFy[fyEndOf(k) - 1] || null); }
+    function money(n) { return (n == null || isNaN(n)) ? '—' : '$' + Math.round(n).toLocaleString('en-AU'); }
+    function num(n)   { return (n == null || isNaN(n)) ? '—' : Number(n).toLocaleString('en-AU'); }
 
-    // Shared provenance string for every email KPI (goes in the ⓘ only).
-    var EP_SRC = 'ActiveCampaign (email campaigns and partner deals)';
+    // Won revenue for a deal: Xero engagement fee where invoiced, else AC deal value.
+    function dealRev(d) { return (d.engagementFee != null ? d.engagementFee : (d.value || 0)) || 0; }
+
+    // ---- date math (YYYY-MM-DD) --------------------------------------------
+    function addDays(s, n)   { var d = new Date(s + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+    function shiftYear(s, n) { var p = s.split('-'); return (Number(p[0]) + n) + '-' + p[1] + '-' + p[2]; }
+    function daysBetween(a, b) { return Math.round((Date.parse(b) - Date.parse(a)) / 86400000); }
+
+    // ---- period windows ----------------------------------------------------
+    // A window is {fyEnd} for an FY, {from,to} (inclusive) for a custom range, or null = all.
+    function curWindow() {
+      if (CUSTOM) { var r = getDateRange(); return { from: r.from || null, to: r.to || null }; }
+      var key = selFyKey();
+      if (key === 'all') return null;
+      return { fyEnd: fyEndOf(key) };
+    }
+    // The comparison window, given the Compare mode.
+    function baseWindow(w) {
+      if (!w) return null;                                     // all years → no baseline
+      if (w.fyEnd != null) return { fyEnd: w.fyEnd - 1 };      // prior FY (both modes)
+      if (!w.from || !w.to) return null;                       // open-ended range → no baseline
+      if (selCmp() === 'prev') {                               // equal-length window right before `from`
+        var days = daysBetween(w.from, w.to) + 1;
+        var to = addDays(w.from, -1);
+        return { from: addDays(to, -(days - 1)), to: to };
+      }
+      return { from: shiftYear(w.from, -1), to: shiftYear(w.to, -1) };  // same window a year earlier
+    }
+    function rowsIn(w) {
+      var rows = DEALS.rows || [];
+      if (!w) return rows;
+      if (w.fyEnd != null) return rows.filter(function (d) { return d.fyEnd === w.fyEnd; });
+      return rows.filter(function (d) {
+        return (!w.from || d.date >= w.from) && (!w.to || d.date <= w.to);
+      });
+    }
+
+    // ---- KPI figures over a row set ----------------------------------------
+    // Contacts = distinct partner contacts; Enquiries = all deals; Bookings = won deals;
+    // Won revenue = engagement-fee total of the won deals.
+    function figures(rows) {
+      var contacts = {}, enquiries = 0, bookings = 0, wonRev = 0;
+      rows.forEach(function (d) {
+        var k = d.contactId || d.contactEmail || d.contactName;
+        if (k) contacts[k] = 1;
+        enquiries++;
+        if (d.won) { bookings++; wonRev += dealRev(d); }
+      });
+      return { contacts: Object.keys(contacts).length, enquiries: enquiries, bookings: bookings, wonRev: wonRev };
+    }
+
+    function cmpLabel() {
+      if (selCmp() === 'prev') return 'vs prev period';
+      if (!CUSTOM && selFyKey() !== 'all') return 'vs FY' + String(fyEndOf(selFyKey()) - 1).slice(-2);
+      return 'vs last yr';
+    }
 
     function kpiCard(label, value, subHtml, subCls, info) {
       return '<div class="ep-kpi">' +
@@ -345,69 +367,109 @@
     function renderKpiRow() {
       var grid = document.getElementById('epKpis');
       if (!grid) return;
-      if (!EP.loaded) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">Loading…</div>'; return; }
-      var r = curRow();
-      if (!r) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">No snapshot for ' + esc(fyName(selFyKey())) + ' yet.</div>'; return; }
+      if (!DEALS.loaded) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">Loading…</div>'; return; }
+      var w = curWindow(), bw = baseWindow(w);
+      var cur = figures(rowsIn(w));
+      var base = bw ? figures(rowsIn(bw)) : null;
 
-      var e = r.email, key = selFyKey(), prev = prevRow();
-      var priorTag = (key === 'all' || !prev) ? '' : (' vs FY' + String(fyEndOf(key) - 1).slice(-2));
-
-      // Click-rate delta (percentage points) vs prior FY.
-      var clkSub = 'Click rate', clkCls = '';
-      if (prev && prev.email.clickRate != null && e.clickRate != null) {
-        var d = e.clickRate - prev.email.clickRate, flat = Math.abs(d) < 0.05;
-        clkSub = (flat ? '' : (d > 0 ? '▲ ' : '▼ ')) + (Math.round(Math.abs(d) * 10) / 10) + ' pts' + priorTag;
-        clkCls = flat ? '' : (d > 0 ? 'pos' : 'warn');
+      // Delta line for a field (up is good for all four KPIs).
+      function sub(field, fmt) {
+        if (!base) return { html: '&nbsp;', cls: '' };
+        var d = cur[field] - base[field], flat = Math.abs(d) < 0.5;
+        return {
+          html: (flat ? '' : (d > 0 ? '▲ ' : '▼ ')) + fmt(Math.abs(d)) + ' ' + esc(cmpLabel()),
+          cls: flat ? '' : (d > 0 ? 'pos' : 'warn'),
+        };
       }
+      var sc = sub('contacts', num), se = sub('enquiries', num),
+          sb = sub('bookings', num), sr = sub('wonRev', money);
 
       grid.innerHTML = [
-        kpiCard('Subscribed contacts', num(r.subscribers.activeContacts), '&nbsp;', '',
-          infoTip('The number of contacts currently subscribed and active in ActiveCampaign, for the selected period.', EP_SRC)),
-        kpiCard('EDM sends', num(e.campaignsSent), num(e.totalSends) + ' emails sent', 'pos',
-          infoTip('Email campaigns sent in the selected period, with the total number of emails delivered shown below. Open rates are unreliable because Apple Mail privacy inflates them.', EP_SRC)),
-        kpiCard('Click rate', pct(e.clickRate), clkSub, clkCls,
-          infoTip('The share of people who clicked a link in the emails, for the selected period. The line below is the change versus the previous year, in percentage points.', EP_SRC)),
-        kpiCard('Unsubscribes', num(e.totalUnsubscribes), pct(e.unsubscribeRate) + ' of sends', 'warn',
-          infoTip('The number of people who unsubscribed in the selected period, with the percentage of emails sent shown below.', EP_SRC))
+        kpiCard('Contacts', num(cur.contacts), sc.html, sc.cls,
+          infoTip('Distinct Speaker Bureaus and The Tailor contacts with an indirect deal in the selected period.', EP_SRC)),
+        kpiCard('Enquiries', num(cur.enquiries), se.html, se.cls,
+          infoTip('Every indirect (bureau + The Tailor) deal created in the selected period, in any status.', EP_SRC)),
+        kpiCard('Bookings', num(cur.bookings), sb.html, sb.cls,
+          infoTip('Indirect deals won in the selected period — a booking is a won deal.', EP_SRC)),
+        kpiCard('Won revenue', money(cur.wonRev), sr.html, sr.cls,
+          infoTip('Engagement-fee total of the won indirect deals — the Xero engagement fee where invoiced, otherwise the AC deal value.', EP_SRC)),
       ].join('');
     }
 
-    function partnerRow(name, p, prevP) {
-      return '<tr>' +
-        '<td>' + esc(name) + '</td>' +
-        '<td>' + num(p.contacts) + '</td>' +
-        '<td>' + num(p.enquiries) + '</td>' +
-        '<td>' + num(p.bookings) + '</td>' +
-        '<td>' + money(p.revenue) + '</td>' +
-        '<td>' + (prevP ? money(prevP.revenue) : '—') + '</td>' +
-      '</tr>';
+    // ---- Enquiries vs bookings by month (stacked bars) ---------------------
+    var _MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    function monthSpanLabel(ym) {
+      var p = String(ym).split('-'), year = +p[0], m1 = +p[1];
+      var last = new Date(Date.UTC(year, m1, 0)).getUTCDate();
+      var startDay = 1, endDay = last;
+      if (dateRangeActive()) {
+        var r = getDateRange();
+        if (r.from && r.from.slice(0, 7) === ym) startDay = +r.from.slice(8, 10) || 1;
+        if (r.to && r.to.slice(0, 7) === ym) endDay = +r.to.slice(8, 10) || last;
+      }
+      return _MON[m1 - 1] + ' ' + startDay + '-' + endDay;
+    }
+    // One partner, over the current window → { months, enq[], book[] }.
+    function monthSeries(isTailor) {
+      var rows = rowsIn(curWindow()).filter(function (d) { return d.isTailor === isTailor; });
+      var months = Array.from(new Set(rows.map(function (d) { return d.month; }).filter(Boolean))).sort();
+      var enq = {}, book = {};
+      rows.forEach(function (d) {
+        enq[d.month] = (enq[d.month] || 0) + 1;
+        if (d.won) book[d.month] = (book[d.month] || 0) + 1;
+      });
+      return {
+        months: months,
+        enq: months.map(function (m) { return enq[m] || 0; }),
+        book: months.map(function (m) { return book[m] || 0; }),
+      };
+    }
+    var _charts = {};
+    function renderPartnerChart(canvasId, isTailor) {
+      var el = document.getElementById(canvasId);
+      if (!el) return;
+      var s = monthSeries(isTailor), tc = themeColors();
+      if (_charts[canvasId]) { _charts[canvasId].destroy(); _charts[canvasId] = null; }
+      _charts[canvasId] = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: s.months.map(monthSpanLabel),
+          datasets: [
+            { label: 'Enquiries', data: s.enq, backgroundColor: C_ENQ, borderRadius: 3, maxBarThickness: 44, stack: 'eb' },
+            { label: 'Bookings',  data: s.book, backgroundColor: C_BOOK, borderRadius: 3, maxBarThickness: 44, stack: 'eb' },
+          ],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { stacked: true, grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 }, autoSkip: true, maxRotation: 0 } },
+            y: { stacked: true, beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 } },
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { color: tc.text, usePointStyle: true, pointStyle: 'rect', boxWidth: 10, padding: 14 } },
+          },
+        },
+      });
+    }
+    function renderCharts() {
+      renderPartnerChart('tailorCanvas', true);
+      renderPartnerChart('bureauCanvas', false);
     }
 
-    function renderOutreachTable() {
-      var body = document.getElementById('outreachBody');
-      if (!body) return;
-      if (!EP.loaded) { body.innerHTML = '<tr><td colspan="6" class="muted">Loading…</td></tr>'; return; }
-      var r = curRow(), prev = prevRow();
-      if (!r) { body.innerHTML = '<tr><td colspan="6" class="muted">No snapshot for ' + esc(fyName(selFyKey())) + ' yet.</td></tr>'; return; }
-      body.innerHTML =
-        partnerRow('The Tailor',      r.partners.tailor, prev && prev.partners.tailor) +
-        partnerRow('Speaker bureaus', r.partners.bureau, prev && prev.partners.bureau);
-    }
-
-    // Rows for the Indirect Deals table: filtered by FY AND custom date range (if active).
+    // ---- Indirect Deals table (per-deal rows, FY / date-range filtered) -----
     function currentDealRows() {
       var rows = DEALS.rows || [];
-      var key = selFyKey();
-      if (key !== 'all') {
-        var fyEnd = fyEndOf(key);
-        rows = rows.filter(function (r) {
-          return r.fyEnd === fyEnd || (r.fy && r.fy.toLowerCase() === key);
-        });
-      }
       if (dateRangeActive()) {
         var r = getDateRange();
         if (r.from) rows = rows.filter(function (d) { return d.date >= r.from; });
         if (r.to)   rows = rows.filter(function (d) { return d.date <= r.to; });
+        return rows;
+      }
+      var key = selFyKey();
+      if (key !== 'all') {
+        var fyEnd = fyEndOf(key);
+        rows = rows.filter(function (d) { return d.fyEnd === fyEnd || (d.fy && d.fy.toLowerCase() === key); });
       }
       return rows;
     }
@@ -451,11 +513,11 @@
         emptyText: 'No indirect deals match the selected filters.',
         pageSize: 50,
         onCount: function (shown, total, list) {
-          var won = (list || []).filter(function (r) { return r.won; }).length;
-          var wonRev = (list || []).filter(function (r) { return r.won; }).reduce(function (a, r) { return a + (r.value || 0); }, 0);
+          var won = (list || []).filter(function (r) { return r.won; });
+          var wonRev = won.reduce(function (a, r) { return a + dealRev(r); }, 0);
           if (cnt) {
             cnt.textContent = (shown === total ? total : shown + ' of ' + total) +
-              ' deal' + (total === 1 ? '' : 's') + ' · ' + won + ' booked (' + money(wonRev) + ')';
+              ' deal' + (total === 1 ? '' : 's') + ' · ' + won.length + ' booked (' + money(wonRev) + ')';
           }
         },
       });
@@ -463,28 +525,13 @@
 
     function renderAll() {
       renderKpiRow();
-      renderOutreachTable();
+      renderCharts();
       renderIndirectDealsTable();
     }
 
     function setFyNote() {
       var el = document.getElementById('fyNote');
-      if (!el) return;
-      if (EP.capturedAt) {
-        var dt = new Date(EP.capturedAt);
-        el.textContent = 'Weekly snapshot · ' +
-          dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
-      } else {
-        el.textContent = '';
-      }
-    }
-
-    function setActiveFy(key) {
-      var seg = document.getElementById('fySeg');
-      if (!seg || !key) return;
-      seg.querySelectorAll('button').forEach(function (b) {
-        b.classList.toggle('active', b.getAttribute('data-fy') === key);
-      });
+      if (el) el.textContent = DEALS.loaded ? 'Live · ActiveCampaign indirect deals' : '';
     }
 
     function wireSeg(id, onChange) {
@@ -499,62 +546,37 @@
       });
     }
 
-    function loadIndirectDeals() {
-      if (DEALS.rows !== null || DEALS.loading) return;
-      DEALS.loading = true;
-      renderIndirectDealsTable();
-      fetchJSON('/api/marketing/indirect-deals').then(function (d) {
-        DEALS.rows = (d && d.deals) || [];
-        DEALS.loading = false;
-        renderIndirectDealsTable();
-      }).catch(function (err) {
-        console.error('indirect-deals', err);
-        DEALS.rows = [];
-        DEALS.loading = false;
-        renderIndirectDealsTable();
-      });
+    function applyRange() {
+      CUSTOM = dateRangeActive();
+      setFySegDisabled(CUSTOM);
+      renderAll();
     }
 
     function load() {
-      fetchJSON('/api/marketing/email-partners').then(function (d) {
-        var rows = (d && d.data) || [];
-        rows.sort(function (a, b) { return a.fyEnd - b.fyEnd; });
-        EP.byFy = {};
-        rows.forEach(function (r) { EP.byFy[r.fyEnd] = r; });
-        EP.all = buildAll(rows);
-        EP.capturedAt = d && d.capturedAt;
-        EP.loaded = true;
-        if (d && d.defaultFy) setActiveFy(d.defaultFy);
+      fetchJSON('/api/marketing/indirect-deals').then(function (d) {
+        DEALS.rows = (d && d.deals) || [];
+        DEALS.loading = false;
+        DEALS.loaded = true;
         setFyNote();
-        if (d && d.deals) {
-          DEALS.rows = d.deals;
-          DEALS.loading = false;
-        } else {
-          loadIndirectDeals();
-        }
         renderAll();
       }).catch(function (err) {
-        console.error('email-partners', err);
-        EP.loaded = true;
+        console.error('indirect-deals', err);
+        DEALS.rows = [];
+        DEALS.loaded = true;
         var grid = document.getElementById('epKpis');
-        if (grid) grid.innerHTML = '<div class="muted" style="padding:8px 2px">Failed to load email &amp; partner metrics.</div>';
-        document.getElementById('outreachBody').innerHTML = '<tr><td colspan="6" class="muted">Failed to load.</td></tr>';
+        if (grid) grid.innerHTML = '<div class="muted" style="padding:8px 2px">Failed to load partner metrics.</div>';
         var note = document.getElementById('fyNote'); if (note) note.textContent = '';
-        loadIndirectDeals();
+        renderAll();
       });
-    }
-
-    function applyRange() {
-      setFySegDisabled(false);
-      renderIndirectDealsTable();
     }
 
     initPage('marketing');
     renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('email-partners');
     renderDateRange({ after: 'drAnchor' });
-    fillHeadInfo();              // fill the static table-heading info tool(s)
+    fillHeadInfo();              // fill the static chart / table heading info tools
     wireSeg('fySeg', renderAll);
+    wireSeg('cmpSeg', renderKpiRow);   // Compare mode only changes the KPI delta lines
     wireDateRange({ onChange: applyRange });
     renderAll();                 // loading placeholders
     load();

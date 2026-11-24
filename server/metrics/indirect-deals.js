@@ -7,39 +7,53 @@ import { q, supabaseConfigured } from '../providers/supabase.js';
 
 const SRC = 'Supabase public.ac_indirect_deals (ActiveCampaign indirect / bureau / tailor deals mirror)';
 
+// Xero engagement fee per deal, summed across the deal's invoices (deposit + final)
+// and keyed by AC deal title — IDENTICAL to the roas_counted_deals view's `xero` CTE,
+// so Won revenue here reconciles with the buyer sheet / ROAS. A deal not yet invoiced
+// in the 2026+ invoice_tracking cache comes back NULL, and the Won-revenue card falls
+// back to the AC-contracted value.
 const SQL = `
+  WITH xero AS (
+    SELECT ac_deal_title,
+           round(sum(engagement_fee)::numeric, 2) AS engagement_fee
+    FROM public.invoice_tracking
+    WHERE ac_deal_title IS NOT NULL
+    GROUP BY ac_deal_title
+  )
   SELECT
-    deal_id        AS "dealId",
-    title,
-    deal_source    AS "dealSource",
-    pipeline_id    AS "pipelineId",
-    pipeline_name  AS "pipelineName",
-    stage_id       AS "stageId",
-    status,
-    status_label   AS "statusLabel",
-    contact_id     AS "contactId",
-    contact_name   AS "contactName",
-    contact_email  AS "contactEmail",
-    account_id     AS "accountId",
-    organization,
-    coalesce(nullif(organization, ''), contact_name) AS org,
-    value_raw      AS "valueRaw",
-    value_aud      AS "value",
-    currency,
-    cdate,
-    to_char(cdate, 'YYYY-MM-DD') AS date,
-    to_char(date_trunc('month', cdate), 'YYYY-MM') AS month,
-    mdate,
-    event_date     AS "eventDate",
-    cal_yr         AS "calYr",
-    fy,
-    (extract(year from cdate)::int + case when extract(month from cdate) >= 7 then 1 else 0 end) AS "fyEnd",
-    is_tailor      AS "isTailor",
-    CASE WHEN is_tailor THEN 'The Tailor' ELSE 'Speaker bureaus' END AS partner,
-    (status = 1)   AS won
-  FROM public.ac_indirect_deals
-  WHERE cdate IS NOT NULL
-  ORDER BY cdate DESC`;
+    d.deal_id        AS "dealId",
+    d.title,
+    d.deal_source    AS "dealSource",
+    d.pipeline_id    AS "pipelineId",
+    d.pipeline_name  AS "pipelineName",
+    d.stage_id       AS "stageId",
+    d.status,
+    d.status_label   AS "statusLabel",
+    d.contact_id     AS "contactId",
+    d.contact_name   AS "contactName",
+    d.contact_email  AS "contactEmail",
+    d.account_id     AS "accountId",
+    d.organization,
+    coalesce(nullif(d.organization, ''), d.contact_name) AS org,
+    d.value_raw      AS "valueRaw",
+    d.value_aud      AS "value",
+    xt.engagement_fee AS "engagementFee",
+    d.currency,
+    d.cdate,
+    to_char(d.cdate, 'YYYY-MM-DD') AS date,
+    to_char(date_trunc('month', d.cdate), 'YYYY-MM') AS month,
+    d.mdate,
+    d.event_date     AS "eventDate",
+    d.cal_yr         AS "calYr",
+    d.fy,
+    (extract(year from d.cdate)::int + case when extract(month from d.cdate) >= 7 then 1 else 0 end) AS "fyEnd",
+    d.is_tailor      AS "isTailor",
+    CASE WHEN d.is_tailor THEN 'The Tailor' ELSE 'Speaker bureaus' END AS partner,
+    (d.status = 1)   AS won
+  FROM public.ac_indirect_deals d
+  LEFT JOIN xero xt ON xt.ac_deal_title = d.title
+  WHERE d.cdate IS NOT NULL
+  ORDER BY d.cdate DESC`;
 
 export async function getIndirectDeals() {
   if (!supabaseConfigured()) {
@@ -60,12 +74,15 @@ export async function getIndirectDeals() {
     statusCode: r.status,
     status: r.statusLabel || (r.status === 1 ? 'Won' : r.status === 2 ? 'Lost' : 'Open'),
     statusLabel: r.statusLabel || (r.status === 1 ? 'Won' : r.status === 2 ? 'Lost' : 'Open'),
+    contactId: r.contactId == null ? null : String(r.contactId),
     contactName: r.contactName || '',
     contactEmail: r.contactEmail || '',
     contact: r.contactName || r.contactEmail || '',
     organization: r.organization || '',
     org: r.org || '',
     value: n(r.value),
+    // Xero engagement fee where the deal has been invoiced, else null (card falls back to `value`).
+    engagementFee: r.engagementFee == null ? null : Number(r.engagementFee),
     currency: r.currency || 'AUD',
     cdate: r.cdate,
     date: r.date || '',
