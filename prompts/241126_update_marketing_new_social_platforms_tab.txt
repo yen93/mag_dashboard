@@ -1,0 +1,12 @@
+**artifact_link:**
+https://claude.ai/artifact/TbjE87oNez9NFifs6iYwhb?sk=MmFhTMvD8hWYZkVOLGJzQA > "Social platforms" tab
+
+## create a new "Social Platforms" html page:
+- move the old content_social.html under the "more" dropdown
+- just replicate what's shown in artifact_link
+
+
+
+
+
+                   

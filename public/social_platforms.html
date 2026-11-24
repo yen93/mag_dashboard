@@ -1,0 +1,499 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Social Platforms — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    /* ============================================================
+       Social Platforms — Meta Business Suite–style layout mockup,
+       replicating the Marketing-dashboard reference design. Sample
+       data only; bespoke visual layer follows DESIGN_GUIDE.md.
+       ============================================================ */
+    :root {
+      --mkt-accent: var(--accent);
+      --mkt-accent-2: #6a4bf5;
+      --mkt-shadow:      0 1px 2px rgba(20,30,60,.05), 0 12px 32px -14px rgba(20,30,60,.22);
+      --mkt-shadow-lift: 0 1px 2px rgba(20,30,60,.06), 0 20px 44px -18px rgba(20,30,60,.30);
+    }
+    html[data-theme='dark'] {
+      --mkt-accent-2: #9b7dff;
+      --mkt-shadow:      0 1px 2px rgba(0,0,0,.4), 0 16px 40px -18px rgba(0,0,0,.6);
+      --mkt-shadow-lift: 0 1px 2px rgba(0,0,0,.5), 0 24px 54px -20px rgba(0,0,0,.72);
+    }
+
+    /* Full-width layout matching the sibling Marketing pages */
+    .content { max-width: none; }
+    #marketingNav { max-width: none; }
+    .mkt-head { max-width: none; }
+
+    .sp-lead { font-size: 15px; color: var(--text-muted); max-width: 72ch; margin: 2px 2px 4px; line-height: 1.55; }
+    .sp-note { font-size: 13px; color: var(--text-muted); max-width: 96ch; margin: 0 2px 6px; line-height: 1.6; }
+    .sp-note b { color: var(--text); font-weight: 600; }
+
+    /* Controls bar + segmented toggles (same as the other Marketing pages) */
+    .mkt-controls { display: flex; flex-wrap: wrap; gap: 12px 16px; align-items: center; }
+    .ctl-label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .08em; font-weight: 700; }
+    .segmented { border-radius: 11px; padding: 4px; gap: 2px; flex-wrap: wrap; }
+    .segmented button { padding: 7px 14px; border-radius: 8px; transition: color .16s ease, background .16s ease, box-shadow .16s ease; }
+    .segmented button:hover { color: var(--text); }
+    .segmented button.active {
+      background: linear-gradient(135deg, var(--mkt-accent), var(--mkt-accent-2));
+      color: #fff;
+      box-shadow: 0 5px 14px -4px color-mix(in srgb, var(--mkt-accent) 60%, transparent);
+    }
+
+    /* KPI cards (6, auto-fit) */
+    .sp-kpi-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 9.5rem), 1fr));
+      gap: 16px;
+      margin: 16px 0 4px;
+    }
+    .sp-kpi {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 18px 20px 16px;
+      box-shadow: var(--mkt-shadow);
+      transition: transform .2s ease, box-shadow .2s ease;
+    }
+    .sp-kpi:hover { transform: translateY(-2px); box-shadow: var(--mkt-shadow-lift); }
+    .sp-kpi .label { font-size: 12px; color: var(--text-muted); font-weight: 600; display: flex; align-items: center; gap: .3em; text-transform: uppercase; letter-spacing: .03em; }
+    .sp-kpi .value { font-size: 28px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 8px 0 4px; color: var(--text); }
+    .sp-kpi .delta { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    .sp-kpi .delta.pos { color: var(--pos); }
+    .sp-kpi .delta.neg { color: var(--neg); }
+
+    /* Cards grid */
+    .sp-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+      gap: 16px;
+      margin-top: 8px;
+    }
+    .card {
+      border-radius: 16px;
+      box-shadow: var(--mkt-shadow);
+      display: flex;
+      flex-direction: column;
+    }
+    .card.wide { grid-column: 1 / -1; }
+    .sp-card { padding: 20px 22px 18px; }
+    .sp-card-head { margin-bottom: 4px; }
+    .sp-card-head h3 { margin: 0; font-size: 15px; font-weight: 700; letter-spacing: -.01em; color: var(--text); display: flex; align-items: center; gap: .4em; }
+    .sp-card .cap { font-size: 12px; color: var(--text-muted); margin: 2px 0 10px; }
+    .sp-chart-box { position: relative; flex: 1; width: 100%; }
+    .sp-chart-box.h-sm { min-height: 170px; }
+    .sp-chart-box.h-md { min-height: 230px; }
+    .sp-chart-box.h-lg { min-height: 280px; }
+
+    /* Top-posts table */
+    .sp-table-wrap { overflow-x: auto; }
+    table.sp-table { width: 100%; border-collapse: collapse; font-size: 14px; min-width: 620px; }
+    table.sp-table th, table.sp-table td { padding: 11px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
+    table.sp-table th:first-child, table.sp-table td:first-child { text-align: left; padding-left: 4px; }
+    table.sp-table thead th { font-size: 12px; font-weight: 600; color: var(--text-muted); }
+    table.sp-table tbody td { font-variant-numeric: tabular-nums; color: var(--text); }
+    table.sp-table tbody td:first-child { font-weight: 500; }
+    .sp-plat-chip { font-size: 12px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab active" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="builds_monitoring.html">AI &amp; Automation</a>
+  </nav>
+
+  <div class="marketing-layout">
+    <nav class="subtabs" id="marketingNav"></nav>
+
+    <main class="content">
+      <!-- Controls bar (same per-FY top toggle as the sibling Marketing pages) -->
+      <div class="card" style="margin-bottom:16px">
+        <div class="mkt-controls">
+          <span class="ctl-label">Financial year</span>
+          <div class="segmented" id="fySeg">
+            <button data-fy="all">All years</button>
+            <button data-fy="fy22">FY22</button>
+            <button data-fy="fy23">FY23</button>
+            <button data-fy="fy24">FY24</button>
+            <button data-fy="fy25">FY25</button>
+            <button data-fy="fy26">FY26</button>
+            <button class="active" data-fy="fy27">FY27</button>
+          </div>
+          <span class="ctl-label" style="margin-left:4px">Compare</span>
+          <div class="segmented" id="cmpSeg" aria-label="Comparison basis">
+            <button class="active" data-cmp="yoy">vs last year</button>
+            <button data-cmp="prev">vs previous period</button>
+          </div>
+          <div class="spacer" style="flex:1"></div>
+          <span class="muted" id="fyNote" style="font-size:13px">Meta-Business-Suite layout · hover any ⓘ for what a tile shows and its source</span>
+        </div>
+      </div>
+
+      <p class="sp-lead">Is James's authority audience growing, who is it, and is social earning real attention?</p>
+      <p class="sp-note">Meta Business Suite–style layout, across <b>all four channels</b> — Facebook, Instagram, James's &amp; MAG LinkedIn. Audience is shown the way each platform actually reports it: LinkedIn (≈69% of the audience) gives <b>seniority &amp; industry</b> — the keynote decision-maker view; Facebook/Instagram give <b>age &amp; gender</b>. <b>Live on the production page:</b> total audience, followers &amp; engagement by platform, newsletter. <b>Sample (wire to each platform's own insights):</b> reach, net-follower growth, seniority, industry, age/gender, locations, post-level reach.</p>
+
+      <!-- 6 headline KPI cards -->
+      <div class="sp-kpi-grid" id="spKpis"></div>
+
+      <!-- Card grid -->
+      <div class="sp-grid">
+        <div class="card sp-card wide">
+          <div class="sp-card-head"><h3>Reach &amp; content interactions — trend <span class="head-info" data-info="Meta's headline view: reach (bars) and content interactions (line) over time. The question isn't today's number, it's the direction." data-src="Sample — wire to each platform's insights"></span></h3></div>
+          <div class="cap">Bars = reach · line = interactions</div>
+          <div class="sp-chart-box h-md"><canvas id="reachTrend"></canvas></div>
+        </div>
+
+        <div class="card sp-card">
+          <div class="sp-card-head"><h3>Net follower growth <span class="head-info" data-info="Follows vs unfollows by month — Meta's Audience view. A rising unfollow bar is an early warning the content is missing." data-src="Sample — follows vs unfollows"></span></h3></div>
+          <div class="cap">Follows vs unfollows, by month</div>
+          <div class="sp-chart-box h-sm"><canvas id="netFollowers"></canvas></div>
+        </div>
+
+        <div class="card sp-card">
+          <div class="sp-card-head"><h3>Followers by platform <span class="head-info" data-info="Followers on each channel. James's personal LinkedIn carries the authority audience that drives keynote enquiries." data-src="Live on the production page · current followers"></span></h3></div>
+          <div class="cap">Current followers</div>
+          <div class="sp-chart-box h-sm"><canvas id="followers"></canvas></div>
+        </div>
+
+        <div class="card sp-card">
+          <div class="sp-card-head"><h3>Engagement by platform <span class="head-info" data-info="Reactions, comments and shares per channel. Shows where the audience actually responds, not just where it's biggest." data-src="Live on the production page · this period"></span></h3></div>
+          <div class="cap">Reactions, comments &amp; shares</div>
+          <div class="sp-chart-box h-sm"><canvas id="engagement"></canvas></div>
+        </div>
+
+        <div class="card sp-card">
+          <div class="sp-card-head"><h3>Audience by seniority <span class="head-info" data-info="Follower seniority on LinkedIn (James's + MAG, ~69% of the audience). The keynote-relevant cut: are we reaching the directors, VPs and owners who actually book James? Sample until LinkedIn analytics are connected." data-src="LinkedIn · sample · share of audience"></span></h3></div>
+          <div class="cap">LinkedIn · share of audience</div>
+          <div class="sp-chart-box h-md"><canvas id="seniority"></canvas></div>
+        </div>
+
+        <div class="card sp-card">
+          <div class="sp-card-head"><h3>Audience by industry <span class="head-info" data-info="Which industries the LinkedIn audience works in. Shows whether the audience matches the sectors MAG sells offsites and keynotes into. Sample until LinkedIn analytics are connected." data-src="LinkedIn · sample · share of audience"></span></h3></div>
+          <div class="cap">LinkedIn · share of audience</div>
+          <div class="sp-chart-box h-md"><canvas id="industry"></canvas></div>
+        </div>
+
+        <div class="card sp-card">
+          <div class="sp-card-head"><h3>Audience — age &amp; gender <span class="head-info" data-info="Age and gender split for the Facebook + Instagram audience (LinkedIn doesn't report gender). Meta's signature audience view. Sample until Meta insights are connected." data-src="Facebook + Instagram · sample"></span></h3></div>
+          <div class="cap">Facebook + Instagram · ← women · men →</div>
+          <div class="sp-chart-box h-md"><canvas id="demographics"></canvas></div>
+        </div>
+
+        <div class="card sp-card">
+          <div class="sp-card-head"><h3>Top locations <span class="head-info" data-info="Where the audience is based, across all four channels. Useful for timing posts and knowing which markets the keynote audience sits in. Sample until platform insights are connected." data-src="All channels · sample · share of audience"></span></h3></div>
+          <div class="cap">All channels · share of audience</div>
+          <div class="sp-chart-box h-md"><canvas id="locations"></canvas></div>
+        </div>
+
+        <div class="card sp-card wide">
+          <div class="sp-card-head"><h3>Top posts <span class="head-info" data-info="Recent posts ranked by reach — Meta's Content view. Shows what topics and formats land, so we do more of what works. Post-level reach is sample until insights are connected." data-src="Sample reach · by reach"></span></h3></div>
+          <div class="cap">By reach</div>
+          <div class="sp-table-wrap" tabindex="0" role="region" aria-label="Top posts by reach">
+            <table class="sp-table">
+              <thead>
+                <tr><th>Post</th><th>Platform</th><th>Date</th><th>Reach</th><th>Interactions</th></tr>
+              </thead>
+              <tbody id="postsBody"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="vendor/chart.umd.min.js"></script>
+  <script src="app.js?v=29"></script>
+  <script>
+    /* Social Platforms — frontend-only Meta-Business-Suite layout mockup.
+       Sample data, replicating the Marketing-dashboard reference design. No API
+       calls; charts are drawn inline with Chart.js and are theme-aware. */
+
+    // ── Sample data (from the reference design) ──────────────────────────────
+    var KPIS = [
+      { label: 'Total audience',       value: 10727, delta: 320,  good: 'up' },
+      { label: 'Net new followers',    value: 255,   delta: 35,   good: 'up' },
+      { label: 'Reach',                value: 52400, delta: 4300, good: 'up' },
+      { label: 'Content interactions', value: 179,   delta: 22,   good: 'up' },
+      { label: 'Newsletter subscribers', value: 923, delta: 28,   good: 'up' },
+      { label: 'Posts published',      value: 84,    delta: 6,    good: 'up' }
+    ];
+
+    var REACH_TREND = [
+      { month: '2026-04', reach: 34000, interactions: 150 },
+      { month: '2026-05', reach: 36000, interactions: 160 },
+      { month: '2026-06', reach: 39000, interactions: 175 },
+      { month: '2026-07', reach: 42000, interactions: 190 },
+      { month: '2026-08', reach: 45000, interactions: 210 },
+      { month: '2026-09', reach: 47000, interactions: 225 },
+      { month: '2026-10', reach: 50000, interactions: 240 },
+      { month: '2026-11', reach: 52400, interactions: 262 }
+    ];
+
+    var NET_FOLLOWERS = [
+      { month: '2026-04', follows: 210, unfollows: 60 },
+      { month: '2026-05', follows: 230, unfollows: 70 },
+      { month: '2026-06', follows: 250, unfollows: 55 },
+      { month: '2026-07', follows: 240, unfollows: 80 },
+      { month: '2026-08', follows: 300, unfollows: 90 },
+      { month: '2026-09', follows: 280, unfollows: 70 },
+      { month: '2026-10', follows: 320, unfollows: 80 },
+      { month: '2026-11', follows: 340, unfollows: 85 }
+    ];
+
+    var FOLLOWERS = [
+      { platform: 'James’s LinkedIn', followers: 6927 },
+      { platform: 'Instagram',            followers: 1904 },
+      { platform: 'Facebook',             followers: 1440 },
+      { platform: 'MAG LinkedIn',         followers: 456 }
+    ];
+
+    var ENGAGEMENT = [
+      { platform: 'James’s LinkedIn', engagement: 62 },
+      { platform: 'MAG LinkedIn',          engagement: 60 },
+      { platform: 'Facebook',              engagement: 36 },
+      { platform: 'Instagram',             engagement: 21 }
+    ];
+
+    var SENIORITY = [
+      { level: 'Owner / C-suite', share: 22 },
+      { level: 'VP / Head',       share: 15 },
+      { level: 'Director',        share: 18 },
+      { level: 'Manager',         share: 20 },
+      { level: 'Senior (IC)',     share: 16 },
+      { level: 'Entry / Other',   share: 9 }
+    ];
+
+    var INDUSTRY = [
+      { industry: 'Professional services', share: 19 },
+      { industry: 'Financial services',    share: 15 },
+      { industry: 'Construction & mining', share: 12 },
+      { industry: 'Technology',            share: 11 },
+      { industry: 'Healthcare',            share: 9 },
+      { industry: 'Education & training',  share: 8 },
+      { industry: 'Government',            share: 7 }
+    ];
+
+    var DEMOGRAPHICS = [
+      { age: '18–24', female: 2,  male: 3 },
+      { age: '25–34', female: 9,  male: 13 },
+      { age: '35–44', female: 10, male: 18 },
+      { age: '45–54', female: 7,  male: 15 },
+      { age: '55–64', female: 4,  male: 10 },
+      { age: '65+',   female: 2,  male: 4 }
+    ];
+
+    var LOCATIONS = [
+      { place: 'Sydney',    share: 19 },
+      { place: 'Melbourne', share: 15 },
+      { place: 'Brisbane',  share: 9 },
+      { place: 'Perth',     share: 6 },
+      { place: 'Auckland',  share: 5 },
+      { place: 'London',    share: 4 },
+      { place: 'Singapore', share: 3 }
+    ];
+
+    var POSTS = [
+      { post: 'Antarctica grit — keynote clip',   platform: 'James’s LinkedIn', date: '2026-11-12', reach: 12400, interactions: 540 },
+      { post: 'Newsletter: Define your summit',    platform: 'James’s LinkedIn', date: '2026-10-14', reach: 5400,  interactions: 210 },
+      { post: 'Blue Mountains offsite recap',      platform: 'MAG LinkedIn',          date: '2026-11-05', reach: 3200,  interactions: 110 },
+      { post: 'Fear vs preparation — carousel',    platform: 'Instagram',             date: '2026-10-28', reach: 2800,  interactions: 95 },
+      { post: 'Team culture — reel',               platform: 'Facebook',              date: '2026-10-20', reach: 2100,  interactions: 70 }
+    ];
+
+    // ── Helpers ──────────────────────────────────────────────────────────────
+    var PAL = PALETTE;                              // from app.js: [blue, purple, green, amber, red]
+    var _charts = {};
+    function destroyAll() { Object.keys(_charts).forEach(function (k) { if (_charts[k]) { _charts[k].destroy(); _charts[k] = null; } }); }
+    function monthLabels(rows) {
+      var MO = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return rows.map(function (r) { var p = r.month.split('-'); return MO[+p[1] - 1] + ' ' + p[0].slice(2); });
+    }
+    function cmpLabel() {
+      var b = document.querySelector('#cmpSeg button.active');
+      return (b && b.getAttribute('data-cmp') === 'prev') ? 'vs prev period' : 'vs last year';
+    }
+
+    function renderKpis() {
+      document.getElementById('spKpis').innerHTML = KPIS.map(function (k) {
+        var up = k.delta >= 0, good = (k.good === 'up') === up;
+        var cls = k.delta === 0 ? '' : (good ? 'pos' : 'neg');
+        var arrow = k.delta === 0 ? '' : (up ? '▲ ' : '▼ ');
+        return '<div class="sp-kpi">' +
+          '<div class="label">' + esc(k.label) + '</div>' +
+          '<div class="value">' + fmt(k.value, 'count') + '</div>' +
+          '<div class="delta ' + cls + '">' + arrow + fmt(Math.abs(k.delta), 'count') + ' ' + esc(cmpLabel()) + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    // Horizontal bar chart (value labels on the axis labels, single series).
+    function hbar(id, labels, data, opts) {
+      opts = opts || {};
+      var el = document.getElementById(id); if (!el) return;
+      var tc = themeColors();
+      var pct = !!opts.pct;
+      _charts[id] = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: { labels: labels, datasets: [{
+          data: data,
+          backgroundColor: opts.colors || PAL[0],
+          borderRadius: 4, maxBarThickness: 26
+        }] },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, callback: function (v) { return pct ? v + '%' : fmt(v, 'count'); } } },
+            y: { grid: { display: false }, ticks: { color: tc.text, font: { size: 12 } } }
+          },
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: function (c) { return pct ? (c.parsed.x + '% of audience') : fmt(c.parsed.x, 'count'); } } }
+          }
+        }
+      });
+    }
+
+    // Reach (bars) + interactions (line), dual axis.
+    function renderReachTrend() {
+      var el = document.getElementById('reachTrend'); if (!el) return;
+      var tc = themeColors();
+      _charts.reachTrend = new Chart(el.getContext('2d'), {
+        data: {
+          labels: monthLabels(REACH_TREND),
+          datasets: [
+            { type: 'bar', label: 'Reach', data: REACH_TREND.map(function (r) { return r.reach; }), backgroundColor: PAL[1], borderRadius: 4, maxBarThickness: 40, yAxisID: 'y' },
+            { type: 'line', label: 'Interactions', data: REACH_TREND.map(function (r) { return r.interactions; }), borderColor: PAL[0], backgroundColor: PAL[0], borderWidth: 2, tension: .35, pointRadius: 3, yAxisID: 'y1' }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
+            y: { beginAtZero: true, position: 'left', grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, callback: function (v) { return fmt(v, 'count'); } } },
+            y1: { beginAtZero: true, position: 'right', grid: { display: false }, ticks: { color: PAL[0], font: { size: 11 } } }
+          },
+          plugins: {
+            legend: { display: true, position: 'bottom', labels: { color: tc.muted, font: { size: 11 }, boxWidth: 12, usePointStyle: true } },
+            tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + fmt(c.parsed.y, 'count'); } } }
+          }
+        }
+      });
+    }
+
+    // Grouped follows vs unfollows by month.
+    function renderNetFollowers() {
+      var el = document.getElementById('netFollowers'); if (!el) return;
+      var tc = themeColors();
+      _charts.netFollowers = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: monthLabels(NET_FOLLOWERS),
+          datasets: [
+            { label: 'Follows', data: NET_FOLLOWERS.map(function (r) { return r.follows; }), backgroundColor: PAL[0], borderRadius: 3, maxBarThickness: 16 },
+            { label: 'Unfollows', data: NET_FOLLOWERS.map(function (r) { return r.unfollows; }), backgroundColor: PAL[4], borderRadius: 3, maxBarThickness: 16 }
+          ]
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 10 } } },
+            y: { beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 } } }
+          },
+          plugins: { legend: { display: true, position: 'bottom', labels: { color: tc.muted, font: { size: 11 }, boxWidth: 12, usePointStyle: true } } }
+        }
+      });
+    }
+
+    // Age & gender pyramid (women negative / men positive, stacked horizontal).
+    function renderDemographics() {
+      var el = document.getElementById('demographics'); if (!el) return;
+      var tc = themeColors();
+      _charts.demographics = new Chart(el.getContext('2d'), {
+        type: 'bar',
+        data: {
+          labels: DEMOGRAPHICS.map(function (r) { return r.age; }),
+          datasets: [
+            { label: 'Women', data: DEMOGRAPHICS.map(function (r) { return -r.female; }), backgroundColor: PAL[1], borderRadius: 3, maxBarThickness: 18, stack: 'd' },
+            { label: 'Men',   data: DEMOGRAPHICS.map(function (r) { return r.male; }),    backgroundColor: PAL[0], borderRadius: 3, maxBarThickness: 18, stack: 'd' }
+          ]
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          scales: {
+            x: { stacked: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, callback: function (v) { return Math.abs(v) + '%'; } } },
+            y: { stacked: true, grid: { display: false }, ticks: { color: tc.text, font: { size: 12 } } }
+          },
+          plugins: {
+            legend: { display: true, position: 'bottom', labels: { color: tc.muted, font: { size: 11 }, boxWidth: 12, usePointStyle: true } },
+            tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + Math.abs(c.parsed.x) + '% of audience'; } } }
+          }
+        }
+      });
+    }
+
+    function renderPosts() {
+      document.getElementById('postsBody').innerHTML = POSTS.slice().sort(function (a, b) { return b.reach - a.reach; }).map(function (p) {
+        return '<tr>' +
+          '<td>' + esc(p.post) + '</td>' +
+          '<td class="sp-plat-chip">' + esc(p.platform) + '</td>' +
+          '<td>' + esc(p.date) + '</td>' +
+          '<td>' + fmt(p.reach, 'count') + '</td>' +
+          '<td>' + fmt(p.interactions, 'count') + '</td>' +
+        '</tr>';
+      }).join('');
+    }
+
+    function drawCharts() {
+      destroyAll();
+      renderReachTrend();
+      renderNetFollowers();
+      hbar('followers', FOLLOWERS.map(function (r) { return r.platform; }), FOLLOWERS.map(function (r) { return r.followers; }), { colors: PAL[0] });
+      hbar('engagement', ENGAGEMENT.map(function (r) { return r.platform; }), ENGAGEMENT.map(function (r) { return r.engagement; }), { colors: PAL[2] });
+      hbar('seniority', SENIORITY.map(function (r) { return r.level; }), SENIORITY.map(function (r) { return r.share; }), { colors: PAL[0], pct: true });
+      hbar('industry', INDUSTRY.map(function (r) { return r.industry; }), INDUSTRY.map(function (r) { return r.share; }), { colors: PAL[1], pct: true });
+      renderDemographics();
+      hbar('locations', LOCATIONS.map(function (r) { return r.place; }), LOCATIONS.map(function (r) { return r.share; }), { colors: PAL[2], pct: true });
+    }
+
+    function renderAll() { renderKpis(); drawCharts(); renderPosts(); }
+
+    function wireSeg(id, onChange) {
+      var seg = document.getElementById(id);
+      if (!seg) return;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          seg.querySelectorAll('button').forEach(function (x) { x.classList.remove('active'); });
+          b.classList.add('active');
+          if (onChange) onChange();
+        });
+      });
+    }
+
+    initPage('marketing');
+    renderMarketingHead();             // layout mockup with sample data → keep the "Sample data — layout only" badge
+    renderMarketingSidebar('social-platforms');
+    fillHeadInfo();                    // fill the static card/chart ⓘ info tools (DESIGN_GUIDE §6)
+    renderAll();
+    wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
+    wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
+    window.onThemeChange = drawCharts; // redraw charts on light/dark switch
+  </script>
+</body>
+</html>

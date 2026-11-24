@@ -342,12 +342,13 @@ function renderMarketingSidebar(active) {
     ['roi',            'ROI',               'roi.html'],
     ['roas',           'ROAS',              'roas.html'],
     ['email-partners', 'Outreach Campaign', 'email_partners.html'],
-    ['website-search', 'Website & Search',  'website_search.html'],
-    ['content-social', 'Social Platforms',  'content_social.html'],
-    ['edm',            'EDM',               'edm.html'],
+    ['website-search',  'Website & Search',  'website_search.html'],
+    ['social-platforms','Social Platforms',  'social_platforms.html'],
+    ['edm',             'EDM',               'edm.html'],
   ];
   // "More" dropdown — the remaining Marketing tools.
   var more = [
+    ['content-social', 'Content & Social',      'content_social.html'],
     ['leads-bookings', 'Leads & Bookings',      'leads_bookings.html'],
     ['spend-roi',      'Spend & ROI',           'spend_roi.html'],
     ['nurture-events', 'Nurture & Events',      'nurture_events.html'],
