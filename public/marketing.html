@@ -184,16 +184,6 @@
            "one signature view from every tab". All charts are now wired live — EDM trend
            from the EDM campaign report, Website & AI from the GA4 traffic snapshots. -->
       <div class="grid">
-        <!-- 1 · Marketing ROI by month -->
-        <div class="card col-6">
-          <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>Marketing ROI by month <span class="head-info"
-              data-info="Net return on marketing spend each month — (marketing revenue ÷ marketing spend − 1). Above 0% means marketing more than paid for itself."
-              data-src="Xero (revenue and marketing spend)"></span></h3>
-          </div>
-          <div class="chart-box"><canvas id="roiMonthCanvas"></canvas></div>
-        </div>
-
         <!-- 2 · ROAS / spend vs revenue by channel -->
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
@@ -244,16 +234,6 @@
           <div class="chart-box"><canvas id="edmTrendCanvas"></canvas></div>
         </div>
 
-        <!-- 7 · The Tailor — enquiries vs bookings -->
-        <div class="card col-6">
-          <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>The Tailor — enquiries vs bookings <span class="head-info"
-              data-info="Partner outreach through The Tailor: enquiries created versus bookings won, by month, for the selected period."
-              data-src="Leads &amp; Bookings (The Tailor source)"></span></h3>
-          </div>
-          <div class="chart-box"><canvas id="tailorCanvas"></canvas></div>
-        </div>
-
         <!-- 8 · Website visits & AI (LIVE from the GA4 website-traffic snapshots) -->
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
@@ -284,15 +264,6 @@
           <div class="chart-box"><canvas id="leadSrcCanvas"></canvas></div>
         </div>
 
-        <!-- 11 · Deal pipeline by year -->
-        <div class="card col-6">
-          <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>Deal pipeline by year <span class="head-info"
-              data-info="Deals won, still open and lost each financial year — how healthy the book is. Always shown across all years."
-              data-src="Spend &amp; ROI (ActiveCampaign pipeline)"></span></h3>
-          </div>
-          <div class="chart-box"><canvas id="pipelineCanvas"></canvas></div>
-        </div>
       </div>
     </main>
   </div>
@@ -632,7 +603,7 @@
         MROI.pipelines = (d && d.pipelines && d.pipelines.data) || [];
         MROI.loaded = true;
         renderMktKpis();
-        try { renderMonthChart(); renderRoiMonthChart(); renderRevSrcChart(); renderPipelineChart(); }
+        try { renderMonthChart(); renderRevSrcChart(); }
         catch (e) { console.error('roi charts', e); }
       }).catch(function (err) { console.error('roi cards', err); MROI.loaded = true; renderMktKpis(); });
     }
@@ -647,7 +618,7 @@
         ENQ.loaded = BOOKINGS.loaded = true;
         LBS_ROWS = rows;
         renderMktKpis();
-        try { renderEnqBookChart(); renderTailorChart(); renderLeadSrcChart(); }
+        try { renderEnqBookChart(); renderLeadSrcChart(); }
         catch (e2) { console.error('enq charts', e2); }
       }).catch(function (err) { console.error(err); ENQ.loaded = BOOKINGS.loaded = true; renderMktKpis(); });
     }
@@ -961,33 +932,6 @@
     }
     function fyAggRow(key) { return key === 'all' ? CHRES.total : (CHRES.byFy[fyEndOf(key)] || null); }
 
-    // 1 · Marketing ROI by month = (marketing revenue ÷ spend − 1) × 100, FY/range-filtered.
-    var _roiMonthChart = null;
-    function renderRoiMonthChart() {
-      var el = document.getElementById('roiMonthCanvas'); if (!el) return;
-      var rows = currentMroiMonths().map(function (m) {
-        return { month: m.month, roi: m.spend > 0 ? (m.marketingRevenue / m.spend - 1) * 100 : null };
-      });
-      var tc = themeColors();
-      if (_roiMonthChart) _roiMonthChart.destroy();
-      _roiMonthChart = new Chart(el.getContext('2d'), {
-        type: 'line',
-        data: { labels: rows.map(function (r) { return ymSpanLabel(r.month); }), datasets: [
-          { label: 'Marketing ROI', data: rows.map(function (r) { return r.roi; }),
-            borderColor: C_REV_LINE, backgroundColor: C_REV_LINE, borderWidth: 2, tension: 0.3,
-            pointRadius: 3, pointHoverRadius: 5, spanGaps: true } ] },
-        options: {
-          responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-          scales: {
-            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
-            y: { grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, callback: function (v) { return v + '%'; } } },
-          },
-          plugins: { legend: { display: false },
-            tooltip: { callbacks: { label: function (ctx) { return ctx.parsed.y == null ? 'No spend' : 'ROI: ' + Math.round(ctx.parsed.y) + '%'; } } } },
-        },
-      });
-    }
-
     // 2 · Spend vs revenue by channel — grouped bars from channel-results (selected FY).
     var _roasChChart = null;
     var CH_DEFS = [ { k: 'paid', label: 'Paid Ads' }, { k: 'execX', label: 'Executive X' },
@@ -1044,38 +988,6 @@
           },
           plugins: { legend: { display: false },
             tooltip: { callbacks: { label: function (ctx) { return fmt(ctx.parsed.y, 'currency'); } } } },
-        },
-      });
-    }
-
-    // 7 · The Tailor — enquiries vs bookings by month (selected FY / range).
-    var _tailorChart = null;
-    function renderTailorChart() {
-      var el = document.getElementById('tailorCanvas'); if (!el) return;
-      var key = selFyKey(), fyEnd = key === 'all' ? null : fyEndOf(key), map = {};
-      (LBS_ROWS || []).forEach(function (r) {
-        if (r.source !== 'Tailor') return;
-        if (CUSTOM) { if (!monthInRange(r.month)) return; }
-        else if (fyEnd != null && r.fyEnd !== fyEnd) return;
-        var o = map[r.month] || (map[r.month] = { month: r.month, enq: 0, book: 0 });
-        o.enq += Number(r.enquiries) || 0; o.book += Number(r.bookings) || 0;
-      });
-      var rows = Object.keys(map).sort().map(function (k) { return map[k]; });
-      var tc = themeColors();
-      if (_tailorChart) _tailorChart.destroy();
-      _tailorChart = new Chart(el.getContext('2d'), {
-        type: 'bar',
-        data: { labels: rows.map(function (r) { return ymSpanLabel(r.month); }), datasets: [
-          { label: 'Enquiries', data: rows.map(function (r) { return r.enq; }), backgroundColor: C_ENQ, borderRadius: 3, maxBarThickness: 22 },
-          { label: 'Bookings', data: rows.map(function (r) { return r.book; }), backgroundColor: C_BOOK, borderRadius: 3, maxBarThickness: 22 },
-        ] },
-        options: {
-          responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-          scales: {
-            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
-            y: { beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 } },
-          },
-          plugins: { legend: { position: 'bottom', labels: { color: tc.text, usePointStyle: true, pointStyle: 'rect', boxWidth: 10, padding: 16 } } },
         },
       });
     }
@@ -1145,36 +1057,6 @@
       });
     }
 
-    // 11 · Deal pipeline by year — won/open/lost stacked, all FYs (ignores the FY toggle).
-    var _pipeChart = null;
-    function renderPipelineChart() {
-      var el = document.getElementById('pipelineCanvas'); if (!el) return;
-      var by = {};
-      (MROI.pipelines || []).forEach(function (p) {
-        var o = by[p.fyEnd] || (by[p.fyEnd] = { fyEnd: p.fyEnd, won: 0, open: 0, lost: 0 });
-        o.won += p.won || 0; o.open += p.open || 0; o.lost += p.lost || 0;
-      });
-      var rows = Object.keys(by).map(function (k) { return by[k]; }).sort(function (a, b) { return a.fyEnd - b.fyEnd; });
-      var tc = themeColors();
-      if (_pipeChart) _pipeChart.destroy();
-      _pipeChart = new Chart(el.getContext('2d'), {
-        type: 'bar',
-        data: { labels: rows.map(function (r) { return 'FY' + String(r.fyEnd).slice(-2); }), datasets: [
-          { label: 'Won', data: rows.map(function (r) { return r.won; }), backgroundColor: C_SPEND, stack: 's', maxBarThickness: 40 },
-          { label: 'Open', data: rows.map(function (r) { return r.open; }), backgroundColor: C_REV_LINE, stack: 's', maxBarThickness: 40 },
-          { label: 'Lost', data: rows.map(function (r) { return r.lost; }), backgroundColor: C_GREY, stack: 's', maxBarThickness: 40 },
-        ] },
-        options: {
-          responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false },
-          scales: {
-            x: { stacked: true, grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
-            y: { stacked: true, beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, precision: 0 } },
-          },
-          plugins: { legend: { position: 'bottom', labels: { color: tc.text, usePointStyle: true, pointStyle: 'rect', boxWidth: 10, padding: 16 } } },
-        },
-      });
-    }
-
     // Loaders for the two extra live sources (channel-results + platforms).
     function loadChannelResults() {
       fetchJSON('/api/marketing/channel-results').then(function (d) {
@@ -1203,17 +1085,14 @@
     }
 
     function drawCharts() {
-      renderRoiMonthChart();     // 1 · Marketing ROI by month
       renderRoasChannelChart();  // 2 · Spend vs revenue by channel
       renderMonthChart();        // 3 · Revenue vs spend by month
       renderEnqBookChart();      // 4 · Enquiries vs bookings
       renderRevSrcChart();       // 5 · Where revenue comes from
       renderEdmTrendChart();     // 6 · EDM engagement trend
-      renderTailorChart();       // 7 · The Tailor — enquiries vs bookings
       renderWebAiChart();        // 8 · Website visits & AI
       renderFollowersChart();    // 9 · Followers by platform
       renderLeadSrcChart();      // 10 · Lead source mix
-      renderPipelineChart();     // 11 · Deal pipeline by year
     }
 
     // ----- Segmented toggles (§4) — active state driven by a class toggle,
