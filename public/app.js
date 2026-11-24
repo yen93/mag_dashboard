@@ -347,19 +347,21 @@ function renderMarketingSidebar(active) {
     ['edm',             'EDM',               'edm.html'],
   ];
   // "More" dropdown — the remaining Marketing tools.
+  // A 4th element `true` HIDES the tab from the dropdown (kept here, not deleted,
+  // so it can be re-enabled by removing the flag). Hidden pages stay reachable by URL.
   var more = [
-    ['content-social', 'Content & Social',      'content_social.html'],
+    ['content-social', 'Content & Social',      'content_social.html', true],
     ['leads-bookings', 'Leads & Bookings',      'leads_bookings.html'],
-    ['spend-roi',      'Spend & ROI',           'spend_roi.html'],
+    ['spend-roi',      'Spend & ROI',           'spend_roi.html', true],
     ['nurture-events', 'Nurture & Events',      'nurture_events.html'],
-    ['monthly-log',    'Monthly Log',           'monthly_log.html'],
+    ['monthly-log',    'Monthly Log',           'monthly_log.html', true],
     ['adplatforms',    'Ad Platforms',          'ad_platforms.html'],
     ['leads',          'Lead Tracker',          'ac_contact_sources.html'],
     ['calendly',       'Calendly-AC Sync',      'new_paid_leads_tracking.html'],
     ['ga4-agent',      'GA4 Agent',             'ga4_agent.html'],
     ['historical',     'Historical Paid Leads', 'historical_paid_leads.html'],
     ['collab-leads',   'Collaboration Leads',   'collaboration_leads.html'],
-  ];
+  ].filter(function (it) { return !it[3]; });
   var moreActive = more.some(function (it) { return it[0] === active; });
   var mainHtml = main.map(function (it) {
     return '<a class="subtab' + (it[0] === active ? ' active' : '') + '" href="' + it[2] + '">' + esc(it[1]) + '</a>';

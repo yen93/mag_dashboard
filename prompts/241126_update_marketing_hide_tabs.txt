@@ -1,0 +1,7 @@
+**hide_tabs:**
+content & social
+spend & ROI
+Monthly log
+
+## main task: update marketing department dashboard
+hide the hide_tabs which currently live under the "More" button. do not delete them. simply hide them from being seen or clicked.
