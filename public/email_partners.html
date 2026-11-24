@@ -336,6 +336,53 @@
       });
     }
 
+    // ---- month-windowed FY comparison (matches marketing.html) --------------
+    // So "vs previous period" (the N data-months immediately before the current
+    // window) is genuinely different from "vs last year" (those same months one
+    // year earlier). For a full past FY both resolve to the prior FY; they diverge
+    // for the partial CURRENT FY. (Custom ranges keep the day-level windows above.)
+    function monthsWithData() {
+      var set = {};
+      (DEALS.rows || []).forEach(function (d) { if (d.month) set[d.month] = 1; });
+      return set;
+    }
+    function fyMonths(fyEnd) {
+      var set = {};
+      (DEALS.rows || []).forEach(function (d) { if (d.fyEnd === fyEnd && d.month) set[d.month] = 1; });
+      return Object.keys(set).sort();
+    }
+    function shiftMonths(months, n) {   // shift every 'YYYY-MM' by n years
+      return months.map(function (mm) { var p = mm.split('-'); return (Number(p[0]) + n) + '-' + p[1]; });
+    }
+    function precedingMonths(months) {  // the months.length months immediately before months[0]
+      if (!months.length) return [];
+      var p = months[0].split('-'), y = Number(p[0]), mo = Number(p[1]), out = [];
+      for (var i = 0; i < months.length; i++) {
+        mo--; if (mo < 1) { mo = 12; y--; }
+        out.unshift(y + '-' + (mo < 10 ? '0' + mo : '' + mo));
+      }
+      return out;
+    }
+    function figuresForMonths(monthKeys) {
+      var set = {};
+      monthKeys.forEach(function (m) { set[m] = 1; });
+      return figures((DEALS.rows || []).filter(function (d) { return d.month && set[d.month]; }));
+    }
+    // Current + baseline KPI figures for the active selection and Compare mode.
+    function curBaseFigures() {
+      if (CUSTOM) {                       // custom range → day-level windows (already mode-aware)
+        var w = curWindow(), bw = baseWindow(w);
+        return { cur: figures(rowsIn(w)), base: bw ? figures(rowsIn(bw)) : null };
+      }
+      var key = selFyKey();
+      if (key === 'all') return { cur: figures(DEALS.rows || []), base: null };   // no baseline
+      var curMonths = fyMonths(fyEndOf(key));
+      var baseMonths = selCmp() === 'prev' ? precedingMonths(curMonths) : shiftMonths(curMonths, -1);
+      var present = monthsWithData();
+      var hasBase = baseMonths.some(function (m) { return present[m]; });
+      return { cur: figuresForMonths(curMonths), base: hasBase ? figuresForMonths(baseMonths) : null };
+    }
+
     // ---- KPI figures over a row set ----------------------------------------
     // Contacts = distinct partner contacts; Enquiries = all deals; Bookings = won deals;
     // Won revenue = engagement-fee total of the won deals.
@@ -368,9 +415,8 @@
       var grid = document.getElementById('epKpis');
       if (!grid) return;
       if (!DEALS.loaded) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">Loading…</div>'; return; }
-      var w = curWindow(), bw = baseWindow(w);
-      var cur = figures(rowsIn(w));
-      var base = bw ? figures(rowsIn(bw)) : null;
+      var cb = curBaseFigures();
+      var cur = cb.cur, base = cb.base;
 
       // Delta line for a field (up is good for all four KPIs).
       function sub(field, fmt) {
