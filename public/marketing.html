@@ -181,8 +181,8 @@
 
       <!-- Chart grid. Order (graph_order): ROI by month, ROAS by channel, Rev vs spend,
            Enquiries vs bookings, then the rest — mirrors the artifact Overview's
-           "one signature view from every tab". Live where a source exists; the two
-           without one (EDM trend, Website & AI) show a pending placeholder. -->
+           "one signature view from every tab". Live where a source exists; EDM trend
+           is now live from the EDM campaign report. Website & AI still pending. -->
       <div class="grid">
         <!-- 1 · Marketing ROI by month -->
         <div class="card col-6">
@@ -234,15 +234,14 @@
           <div class="chart-box"><canvas id="revSrcCanvas"></canvas></div>
         </div>
 
-        <!-- 6 · EDM engagement trend (pending — no monthly live source) -->
+        <!-- 6 · EDM engagement trend (LIVE from the EDM campaign report) -->
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>EDM engagement trend <span class="head-info"
-              data-info="Email open rate and click rate by month. Not wired to a monthly live feed yet."
-              data-src="Not tracked yet"></span></h3>
+              data-info="Email open rate and click rate by month, send-weighted across every campaign sent that month (unique opens ÷ sends, unique clicks ÷ sends). Apple Mail privacy can inflate opens, so treat open rate as a soft signal."
+              data-src="ActiveCampaign all-campaigns performance report (same source as the EDM tab)"></span></h3>
           </div>
-          <div class="chart-box"><div class="chart-pending"><span class="chip warn">pending</span>
-            <span>Monthly email open / click rates aren’t available as a live feed yet.</span></div></div>
+          <div class="chart-box"><canvas id="edmTrendCanvas"></canvas></div>
         </div>
 
         <!-- 7 · The Tailor — enquiries vs bookings -->
@@ -697,6 +696,69 @@
       });
     }
 
+    // "EDM engagement trend" — LIVE monthly email open rate + click rate, send-weighted across
+    // every campaign sent that month, from GET /api/marketing/edm (campaigns.rows — the SAME
+    // all-campaigns performance report the EDM tab uses). Bucketed by each campaign's last-send
+    // month, filtered to the selected FY (or the custom date range, month-level).
+    var EDM = { rows: [], loaded: false };
+    var C_OPEN = '#3b6ef0', C_CLICK = '#d9663a';
+    var _edmTrendChart = null;
+    // AU financial-year END year for a 'YYYY-MM' month (Jul→next year).
+    function fyEndForMonth(ym) { var p = String(ym).split('-'); return +p[0] + (+p[1] >= 7 ? 1 : 0); }
+    function currentEdmMonths() {
+      var key = selFyKey();
+      var fyEnd = key === 'all' ? null : fyEndOf(key);
+      var by = {};   // month -> { sends, uOpens, uClicks }
+      (EDM.rows || []).forEach(function (c) {
+        var d = c && c.lastSent;
+        if (!d) return;
+        var ym = String(d).slice(0, 7);
+        if (CUSTOM ? !monthInRange(ym) : (fyEnd != null && fyEndForMonth(ym) !== fyEnd)) return;
+        var o = by[ym] || (by[ym] = { sends: 0, uOpens: 0, uClicks: 0 });
+        o.sends += c.sends || 0; o.uOpens += c.uOpens || 0; o.uClicks += c.uClicks || 0;
+      });
+      return Object.keys(by).sort().map(function (k) {
+        var o = by[k];
+        return {
+          month: k,
+          open: o.sends ? Math.round((o.uOpens / o.sends) * 1000) / 10 : null,
+          click: o.sends ? Math.round((o.uClicks / o.sends) * 1000) / 10 : null,
+        };
+      });
+    }
+    function renderEdmTrendChart() {
+      var el = document.getElementById('edmTrendCanvas');
+      if (!el) return;
+      var rows = currentEdmMonths();
+      var tc = themeColors();
+      if (_edmTrendChart) _edmTrendChart.destroy();
+      if (!EDM.loaded && !rows.length) { setChartNote('edmTrendCanvas', 'Loading…'); return; }
+      if (!rows.length) {
+        setChartNote('edmTrendCanvas', 'No campaigns sent in the selected period.');
+        return;
+      }
+      setChartNote('edmTrendCanvas', null);
+      _edmTrendChart = new Chart(el.getContext('2d'), {
+        type: 'line',
+        data: { labels: rows.map(function (r) { return ymSpanLabel(r.month); }), datasets: [
+          { label: 'Open rate',  data: rows.map(function (r) { return r.open; }),  borderColor: C_OPEN,  backgroundColor: C_OPEN,  borderWidth: 2, tension: 0.3, pointRadius: 2, pointHoverRadius: 4, spanGaps: true },
+          { label: 'Click rate', data: rows.map(function (r) { return r.click; }), borderColor: C_CLICK, backgroundColor: C_CLICK, borderWidth: 2, tension: 0.3, pointRadius: 2, pointHoverRadius: 4, spanGaps: true },
+        ] },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          interaction: { mode: 'index', intersect: false },
+          scales: {
+            x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
+            y: { beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, callback: function (v) { return v + '%'; } } },
+          },
+          plugins: {
+            legend: { position: 'bottom', labels: { color: tc.text, usePointStyle: true, pointStyle: 'rect', boxWidth: 10, padding: 16 } },
+            tooltip: { callbacks: { label: function (ctx) { return ctx.dataset.label + ': ' + (ctx.parsed.y == null ? '—' : ctx.parsed.y + '%'); } } },
+          },
+        },
+      });
+    }
+
     // "Revenue vs spend by month" — COPIED from roi.html's renderMonthChart(): a combo chart
     // (green marketing-spend bars + blue marketing-revenue line sharing the left $ axis, gray
     // dashed company-revenue line on its own right $ axis), fed by the live /api/marketing/roi
@@ -1045,6 +1107,12 @@
         try { renderFollowersChart(); } catch (e) { console.error('followers chart', e); }
       }).catch(function (e) { console.error('platforms', e); });
     }
+    function loadEdm() {
+      fetchJSON('/api/marketing/edm').then(function (d) {
+        EDM.rows = (d && d.campaigns && d.campaigns.rows) || []; EDM.loaded = true;
+        try { renderEdmTrendChart(); } catch (e) { console.error('edm trend chart', e); }
+      }).catch(function (e) { EDM.loaded = true; console.error('edm', e); try { renderEdmTrendChart(); } catch (x) {} });
+    }
 
     function drawCharts() {
       renderRoiMonthChart();     // 1 · Marketing ROI by month
@@ -1052,6 +1120,7 @@
       renderMonthChart();        // 3 · Revenue vs spend by month
       renderEnqBookChart();      // 4 · Enquiries vs bookings
       renderRevSrcChart();       // 5 · Where revenue comes from
+      renderEdmTrendChart();     // 6 · EDM engagement trend
       renderTailorChart();       // 7 · The Tailor — enquiries vs bookings
       renderFollowersChart();    // 9 · Followers by platform
       renderLeadSrcChart();      // 10 · Lead source mix
@@ -1115,6 +1184,7 @@
     loadRoiCards();                      // /api/marketing/roi → $ cards + ROI-by-month + rev-by-source + pipeline
     loadChannelResults();                // /api/marketing/channel-results → spend vs revenue by channel
     loadPlatforms();                     // /api/marketing/platforms → followers by platform
+    loadEdm();                           // /api/marketing/edm → EDM engagement trend (open/click rate by month)
     wireSeg('fySeg', function () {        // re-render everything live on FY change
       renderMktKpis();
       try { drawCharts(); } catch (e) { console.error('chart', e); }
