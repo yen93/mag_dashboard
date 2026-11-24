@@ -382,7 +382,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
   <script>
     // ROAS-specific colours, matched to the source report's charts.
     var C_CYAN = '#17a6c9';   // Won revenue / ROAS
@@ -1037,6 +1037,7 @@
     document.getElementById('dealSearch').addEventListener('input', function (e) { dealQuery = e.target.value.trim(); renderDeals(); });
 
     initPage('operations'); // login / top-bar / theme only — this page renders its own content
+    renderMarketingHead(true);           // shared "Marketing" department header (live page → no sample badge)
     renderMarketingSidebar('roas');
     renderDateRange({ after: 'fySeg' });   // inject the shared Custom date range control beside the FY toggle
     wireDateRange({ onChange: applyRange });

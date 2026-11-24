@@ -244,7 +244,7 @@
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
-  <script src="app.js?v=27"></script>
+  <script src="app.js?v=28"></script>
   <script>
     var ROI = null;    // full API payload
     var SEL = null;    // selected fy_end (number) or 'all'
@@ -1068,6 +1068,7 @@
     }
 
     initPage('marketing');               // login / top bar / theme only (no auto-fetch)
+    renderMarketingHead(true);           // shared "Marketing" department header (live page → no sample badge)
     renderMarketingSidebar('roi');
     renderDateRange({ after: 'fyBar' }); // inject the Custom date range control beside the FY toggle
     wireDateRange({ onChange: applyRange });
