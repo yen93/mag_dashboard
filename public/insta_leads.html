@@ -388,6 +388,8 @@
         { key: 'review', label: 'Decision', render: decisionCell, text: function (v, r) { return reviewLabel(r.review, r); } },
         { key: 'org', label: 'Organisation & Event', render: orgCell, text: function (v, r) { return (r.org || '') + ' ' + (r.eventName || ''); } },
         { key: 'speaker', label: 'Speaker', render: speakerCell, text: function (v, r) { return (r.speaker || '') + (r.instaHandle ? ' @' + r.instaHandle : ''); } },
+        { key: 'poc', label: 'POC Name', render: function (v, r) { return txt(r.poc); }, text: function (v, r) { return r.poc || ''; } },
+        { key: 'pocPosition', label: 'POC Role', render: function (v, r) { return txt(r.pocPosition); }, text: function (v, r) { return r.pocPosition || ''; } },
         { key: 'description', label: 'Story summary', render: descCell, text: function (v, r) { return r.description || ''; } },
         { key: 'savedImgLink', label: 'Story', render: storyCell, text: function (v, r) { return r.savedImgLink ? 'Archived' : ''; } },
         { key: 'createdAt', label: 'Date found', unit: 'date' },

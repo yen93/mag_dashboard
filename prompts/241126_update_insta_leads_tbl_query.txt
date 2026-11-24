@@ -1,0 +1,17 @@
+**new_query:**
+SELECT
+  l.id, l.created_at, l.speaker, l.insta_handle, l.org, l.event_name,
+  l.poc, l.poc_email, l.poc_position, l.description,
+  l.saved_img_link, l.status, l.is_added_to_sheet, l.enrichment_is_processed,
+  l.sheet_remark, l.outreach_status,
+  rv.set_by AS reviewed_by, rv.created_at AS reviewed_at
+FROM public.insta_stories l
+LEFT JOIN LATERAL (
+  SELECT set_by, created_at FROM public.insta_stories_review_log g
+  WHERE g.lead_id = l.id AND g.action = 'set' ORDER BY g.created_at DESC LIMIT 1
+) rv ON TRUE
+WHERE l.org IS NOT NULL
+ORDER BY l.created_at DESC, l.id DESC
+
+## main task:
+pls use the new_query and display the insta_stories.poc column as "POC Name" as well as the insta_stories.poc_position as  "POC Role"
