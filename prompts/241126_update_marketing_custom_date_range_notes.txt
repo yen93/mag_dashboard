@@ -1,0 +1,7 @@
+**yrly_data_note:**
+"Annual data provided by other teams"
+
+## main task: update marketing.html
+- when we use custom date range, put a note in the graphs that cannot display data. explain why they cannot show anything when we use custom dates.
+- only show the note when the custom date range is in use
+- for snapshot data where we got them from other teams or if we only have yrly data from them just like the offsite rev, or the bureau and tailor revenue, add the yrly_data_note

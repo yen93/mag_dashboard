@@ -130,6 +130,20 @@
       align-items: center; justify-content: center; text-align: center; padding: 0 20px;
     }
     .chart-pending span:last-child { color: var(--text-muted); font-size: 13px; line-height: 1.5; max-width: 34ch; }
+
+    /* Always-on provenance note for widgets fed by annual / other-team data
+       (offsite / Executive X, bureau & tailor revenue). These figures only exist
+       at a yearly grain, so they cannot be sliced to a custom date range — this
+       note stays visible in every view (DESIGN_GUIDE §4 keeps "as of"-style
+       freshness/provenance notes visible rather than hiding them in the ⓘ). */
+    .yrly-note {
+      margin: 10px 0 0; font-size: 12px; line-height: 1.4; color: var(--text-muted);
+      display: flex; align-items: center; gap: 7px;
+    }
+    .yrly-note::before {
+      content: ""; width: 6px; height: 6px; border-radius: 50%; flex: none;
+      background: var(--mkt-accent-2); opacity: .7;
+    }
   </style>
 </head>
 <body>
@@ -178,7 +192,7 @@
           <div class="spacer" style="flex:1"></div>
           <!-- <span class="muted" style="font-size:13px">Data through October 2026 · October provisional until 8 November</span> -->
         </div>
-        <p class="mkt-take">Keynote enquiries are <b>up 27%</b> on September and the enquiry → booking rate is holding at <b>27%</b> — revenue is <b>$8k ahead</b> while spend stays under budget.</p>
+        <!-- <p class="mkt-take">Keynote enquiries are <b>up 27%</b> on September and the enquiry → booking rate is holding at <b>27%</b> — revenue is <b>$8k ahead</b> while spend stays under budget.</p> -->
       </div>
 
       <div class="kpi-grid" id="mktKpis"></div>
@@ -196,6 +210,7 @@
               data-src="ROAS metric, Executive X revenue and Leads &amp; Bookings"></span></h3>
           </div>
           <div class="chart-box"><canvas id="roasChCanvas"></canvas></div>
+          <p class="yrly-note">Annual data provided by other teams</p>
         </div>
 
         <!-- 3 · Revenue vs spend by month -->
@@ -226,6 +241,7 @@
               data-src="Spend &amp; ROI (marketing-attributed deals)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="revSrcCanvas"></canvas></div>
+          <p class="yrly-note">Annual data provided by other teams</p>
         </div>
 
         <!-- 6 · EDM engagement trend (LIVE from the EDM campaign report) -->
@@ -795,7 +811,7 @@
       var el = document.getElementById('webAiCanvas');
       if (!el) return;
       if (_webAiChart) { _webAiChart.destroy(); _webAiChart = null; }
-      if (CUSTOM) { setChartNote('webAiCanvas', 'Website sessions & AI visits are a per-year snapshot — switch off the custom range to see them.'); return; }
+      if (CUSTOM) { setChartNote('webAiCanvas', 'Website sessions & AI visits are stored as a per-year snapshot, not a daily series, so they cannot be sliced to a custom date range. Switch off the custom range to see them.'); return; }
       if (!WST.loaded) { setChartNote('webAiCanvas', 'Loading…'); return; }
       setChartNote('webAiCanvas', null);
 
@@ -983,7 +999,7 @@
     var CH_DEFS = [ { k: 'paid', label: 'Paid Ads' }, { k: 'execX', label: 'Executive X' },
                     { k: 'bureau', label: 'Bureau' }, { k: 'tailor', label: 'Tailor' } ];
     function renderRoasChannelChart() {
-      if (setChartNote('roasChCanvas', CUSTOM ? 'Spend vs revenue by channel is a per-year view — switch off the custom range to see it.' : null)) {
+      if (setChartNote('roasChCanvas', CUSTOM ? 'Spend vs revenue by channel is reported per financial year — Executive X, bureau and tailor revenue is annual data provided by other teams, so it cannot be broken down to a custom date range. Switch off the custom range to see it.' : null)) {
         if (_roasChChart) { _roasChChart.destroy(); _roasChChart = null; } return;
       }
       var el = document.getElementById('roasChCanvas'); if (!el) return;
@@ -1011,7 +1027,7 @@
     // 5 · Where revenue comes from — marketing-attributed won revenue by source (selected FY).
     var _revSrcChart = null;
     function renderRevSrcChart() {
-      if (setChartNote('revSrcCanvas', CUSTOM ? 'Revenue by source is a per-year view — switch off the custom range to see it.' : null)) {
+      if (setChartNote('revSrcCanvas', CUSTOM ? 'Revenue by source is reported per financial year — bureau, tailor and Executive X figures are annual data provided by other teams, so they cannot be split by custom dates. Switch off the custom range to see it.' : null)) {
         if (_revSrcChart) { _revSrcChart.destroy(); _revSrcChart = null; } return;
       }
       var el = document.getElementById('revSrcCanvas'); if (!el) return;
@@ -1048,7 +1064,7 @@
       return Object.keys(best).map(function (k) { return best[k]; });
     }
     function renderFollowersChart() {
-      if (setChartNote('followersCanvas', CUSTOM ? 'Followers are a per-year snapshot — switch off the custom range to see them.' : null)) {
+      if (setChartNote('followersCanvas', CUSTOM ? 'Followers are captured as a periodic snapshot, not a day-by-day series, so there is nothing to show for a custom date range. Switch off the custom range to see the latest per-year snapshot.' : null)) {
         if (_follChart) { _follChart.destroy(); _follChart = null; } return;
       }
       var el = document.getElementById('followersCanvas'); if (!el) return;
@@ -1074,7 +1090,7 @@
     // 10 · Lead source mix — enquiries by source (selected FY).
     var _leadSrcChart = null;
     function renderLeadSrcChart() {
-      if (setChartNote('leadSrcCanvas', CUSTOM ? 'Lead source mix is a per-year view — switch off the custom range to see it.' : null)) {
+      if (setChartNote('leadSrcCanvas', CUSTOM ? 'Lead source mix is charted per financial year. Switch off the custom range to see it — the enquiry cards above already reflect your selected dates.' : null)) {
         if (_leadSrcChart) { _leadSrcChart.destroy(); _leadSrcChart = null; } return;
       }
       var el = document.getElementById('leadSrcCanvas'); if (!el) return;
