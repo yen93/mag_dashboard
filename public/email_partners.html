@@ -255,9 +255,6 @@
               <h3 id="indirectDealsHeading">Indirect Deals<span class="head-info" data-info="Every individual bureau and tailor deal from ActiveCampaign — one row per deal — for the selected period. Sort, search and filter by column." data-src="ActiveCampaign (a booking is a won deal)"></span></h3>
               <div class="muted" style="font-size:12px;margin-top:4px" id="indirectDealsCount"></div>
             </div>
-            <div class="mkt-controls" style="margin:0">
-              <span id="drAnchor" hidden></span>
-            </div>
           </div>
         </div>
         <div id="indirectDealsRows"></div>
@@ -619,7 +616,7 @@
     initPage('marketing');
     renderMarketingHead(true);   // live page — shared Marketing head, no "sample data" badge
     renderMarketingSidebar('email-partners');
-    renderDateRange({ after: 'drAnchor' });
+    renderDateRange({ after: 'fySeg' });   // beside the FY toggle (top), consistent with the other Marketing tabs
     fillHeadInfo();              // fill the static chart / table heading info tools
     wireSeg('fySeg', renderAll);
     wireSeg('cmpSeg', renderKpiRow);   // Compare mode only changes the KPI delta lines
