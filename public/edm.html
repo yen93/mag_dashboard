@@ -113,12 +113,14 @@
     .lh-bar { position: relative; height: 12px; border-radius: 6px; background: var(--surface-2); border: 1px solid var(--border); overflow: hidden; }
     .lh-fill { position: absolute; left: 0; top: 0; bottom: 0; background: var(--mkt-accent); transition: width .3s ease; }
 
-    /* Contact segmentation — two pies stacked in the right cell */
-    .seg-grid { display: flex; flex-direction: column; gap: 16px; flex: 1; }
-    .seg-pie { display: flex; flex-direction: column; }
-    .seg-pie-title { font-size: 12.5px; font-weight: 600; color: var(--text-muted); margin-bottom: 4px; }
-    .seg-pie-box { position: relative; height: 150px; }
-    @media (min-width: 1200px) { .seg-pie-box { height: 168px; } }
+    /* Contact segmentation — single donut */
+    .seg-donut-wrap { display: flex; flex-direction: column; align-items: center; gap: 16px; flex: 1; }
+    .seg-donut-box { position: relative; width: 100%; max-width: 300px; height: 230px; }
+    .seg-legend { width: 100%; display: flex; flex-direction: column; gap: 10px; }
+    .seg-leg-row { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--text); }
+    .seg-leg-dot { width: 12px; height: 12px; border-radius: 3px; flex: none; }
+    .seg-leg-pct { color: var(--text-muted); margin-left: 2px; }
+    .seg-note { width: 100%; font-size: 13px; color: var(--text-muted); line-height: 1.5; border-top: 1px solid var(--border); padding-top: 12px; }
 
     /* Campaigns table card */
     .edm-campaigns-card { padding: 22px 24px; margin-top: 16px; }
@@ -193,18 +195,13 @@
 
             <div class="card edm-chart-card">
               <div class="card-head block-head">
-                <h3 id="segHeading">Contact segmentation <span class="head-info" data-info="How many contacts fall into each engagement band, from ActiveCampaign's engagement tags: Engaged = opened something in the last 90 days; Quiet = no open for 90–180 days (the re-engagement audience); Dormant = no open for 180+ days (reduced cadence)." data-src="ActiveCampaign engagement tags, refreshed weekly"></span></h3>
+                <h3 id="segHeading">Contact segmentation <span class="head-info" data-info="How the contact database splits across engagement bands: Active = opened or clicked in the last 90 days (your reliable audience); Quiet = no open for 90–180 days (the re-engagement audience); Dormant = no open for 180+ days (re-engage or sunset). The total is the real ActiveCampaign contact count; the band split is a sample until 3 saved AC segments are wired in." data-src="ActiveCampaign contacts (real total) · sample band split"></span></h3>
                 <div class="chart-cap" id="segCap"></div>
               </div>
-              <div class="seg-grid">
-                <div class="seg-pie">
-                  <div class="seg-pie-title">% of Total Contacts by Segment</div>
-                  <div class="seg-pie-box"><canvas id="segTotalCanvas"></canvas></div>
-                </div>
-                <div class="seg-pie">
-                  <div class="seg-pie-title">% of Active Contacts by Segment</div>
-                  <div class="seg-pie-box"><canvas id="segActiveCanvas"></canvas></div>
-                </div>
+              <div class="seg-donut-wrap">
+                <div class="seg-donut-box"><canvas id="segCanvas"></canvas></div>
+                <div class="seg-legend" id="segLegend"></div>
+                <div class="seg-note" id="segNote"></div>
               </div>
             </div>
           </div>
@@ -388,79 +385,91 @@
       }).join('');
     }
 
-    // Contact segmentation — two pies from the live AC engagement tags
-    // (Engaged / Quiet / Dormant), plus an "Other" slice so each pie sums to its
-    // denominator: left = share of ALL contacts, right = share of ACTIVE contacts.
-    var _segTotalChart = null, _segActiveChart = null;
-    var SEG_COLORS = { active: '#16a34a', quiet: '#d9883a', dormant: '#8a94a6' };
-    var SEG_OTHER = '#3b6ef0';
+    // Contact segmentation — a single donut. The total in the centre is the real
+    // ActiveCampaign contact count; the band split (Quiet / Active / Dormant) is a
+    // sample until 3 saved AC segments are wired in.
+    var _segChart = null;
+    var SEG_SAMPLE = [
+      { label: 'Quiet (91–180d)', pct: 40, color: '#3b82f6', desc: 'No open for 90–180 days — the re-engagement audience' },
+      { label: 'Active (opened/clicked ≤90d)', pct: 35, color: '#e8742e', desc: 'Opened or clicked in the last 90 days — your reliable audience' },
+      { label: 'Dormant (no engagement 180d+)', pct: 25, color: '#12a884', desc: 'No open for 180+ days — re-engage or sunset' }
+    ];
 
-    function segItems(seg, denom, otherLabel, otherDesc) {
-      var sum = seg.reduce(function (a, s) { return a + (s.count || 0); }, 0);
-      var other = Math.max(0, (denom || 0) - sum);
-      var items = seg.map(function (s) {
-        return { label: s.label, value: s.count || 0, color: SEG_COLORS[s.key] || SEG_OTHER, desc: s.desc };
-      });
-      items.push({ label: otherLabel, value: other, color: SEG_OTHER, desc: otherDesc });
-      return items;
-    }
+    // Draws the big total + "contacts" label in the hole of the donut.
+    var segCenterText = {
+      id: 'segCenterText',
+      afterDraw: function (chart) {
+        var o = chart.$segCenter;
+        if (!o) return;
+        var a = chart.chartArea, ctx = chart.ctx;
+        var cx = (a.left + a.right) / 2, cy = (a.top + a.bottom) / 2;
+        ctx.save();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = o.textColor;
+        ctx.font = '700 28px Inter, system-ui, -apple-system, sans-serif';
+        ctx.fillText(o.big, cx, cy - 8);
+        ctx.fillStyle = o.mutedColor;
+        ctx.font = '500 13px Inter, system-ui, -apple-system, sans-serif';
+        ctx.fillText('contacts', cx, cy + 16);
+        ctx.restore();
+      }
+    };
 
-    function makeSegPie(canvasId, items) {
-      var el = document.getElementById(canvasId);
-      if (!el) return null;
+    function renderSegmentation() {
+      var c = (EDM && EDM.contact) || {};
+      var total = (c.total != null && c.total > 0) ? c.total : 15698;
+      var cap = document.getElementById('segCap');
+      var legend = document.getElementById('segLegend');
+      var note = document.getElementById('segNote');
+      if (_segChart) { _segChart.destroy(); _segChart = null; }
+
+      var counts = SEG_SAMPLE.map(function (s) { return Math.round(total * s.pct / 100); });
+      if (cap) cap.textContent = 'Sample split on real ' + total.toLocaleString('en-AU') +
+        ' total · click a slice → opens that segment in ActiveCampaign';
+
+      if (legend) {
+        legend.innerHTML = SEG_SAMPLE.map(function (s) {
+          return '<div class="seg-leg-row"><span class="seg-leg-dot" style="background:' + s.color + '"></span>' +
+            esc(s.label) + '<span class="seg-leg-pct">· ' + s.pct + '%</span></div>';
+        }).join('');
+      }
+      if (note) {
+        note.textContent = 'Active → your reliable audience · Quiet → nurture harder · ' +
+          'Dormant → re-engage or sunset. Needs 3 saved AC segments.';
+      }
+
+      var el = document.getElementById('segCanvas');
+      if (!el) return;
       var tc = themeColors();
-      var tot = items.reduce(function (a, i) { return a + (i.value || 0); }, 0);
-      var p = function (v) { return tot ? Math.round((v / tot) * 1000) / 10 : 0; };
-      return new Chart(el.getContext('2d'), {
-        type: 'pie',
+      _segChart = new Chart(el.getContext('2d'), {
+        type: 'doughnut',
         data: {
-          labels: items.map(function (i) { return i.label; }),
+          labels: SEG_SAMPLE.map(function (s) { return s.label; }),
           datasets: [{
-            data: items.map(function (i) { return i.value; }),
-            backgroundColor: items.map(function (i) { return i.color; }),
-            borderColor: tc.surface || '#fff', borderWidth: 2
+            data: counts,
+            backgroundColor: SEG_SAMPLE.map(function (s) { return s.color; }),
+            borderColor: tc.surface || '#fff', borderWidth: 3
           }]
         },
         options: {
-          responsive: true, maintainAspectRatio: false,
+          responsive: true, maintainAspectRatio: false, cutout: '68%',
           plugins: {
-            legend: {
-              position: 'right',
-              labels: {
-                color: tc.text || tc.muted, font: { size: 11 }, padding: 8, boxWidth: 10, boxHeight: 10, usePointStyle: true, pointStyle: 'circle',
-                generateLabels: function (chart) {
-                  var ds = chart.data.datasets[0];
-                  return chart.data.labels.map(function (lab, i) {
-                    var v = ds.data[i] || 0;
-                    return { text: lab + '  ' + p(v) + '%', fillStyle: ds.backgroundColor[i], strokeStyle: ds.backgroundColor[i], index: i };
-                  });
-                }
-              }
-            },
+            legend: { display: false },
             tooltip: { callbacks: {
-              title: function (its) { return (items[its[0].dataIndex] || {}).label || its[0].label; },
-              label: function (ctx) { var v = ctx.parsed || 0; return v.toLocaleString('en-AU') + ' contacts (' + p(v) + '%)'; },
-              afterLabel: function (ctx) { return (items[ctx.dataIndex] || {}).desc || ''; }
+              title: function (its) { return (SEG_SAMPLE[its[0].dataIndex] || {}).label || its[0].label; },
+              label: function (ctx) { var v = ctx.parsed || 0; return v.toLocaleString('en-AU') + ' contacts (' + (SEG_SAMPLE[ctx.dataIndex] || {}).pct + '%)'; },
+              afterLabel: function (ctx) { return (SEG_SAMPLE[ctx.dataIndex] || {}).desc || ''; }
             } }
           }
-        }
+        },
+        plugins: [segCenterText]
       });
-    }
-
-    function renderSegmentation() {
-      var seg = (EDM && EDM.contact && EDM.contact.segmentation) || [];
-      var c = (EDM && EDM.contact) || {};
-      var cap = document.getElementById('segCap');
-      if (_segTotalChart) { _segTotalChart.destroy(); _segTotalChart = null; }
-      if (_segActiveChart) { _segActiveChart.destroy(); _segActiveChart = null; }
-      if (!contactLive()) { if (cap) cap.textContent = contactNaMsg(); return; }
-      if (!seg.length) { if (cap) cap.textContent = 'No data'; return; }
-      var tagged = seg.reduce(function (a, s) { return a + (s.count || 0); }, 0);
-      if (cap) cap.textContent = 'ActiveCampaign engagement tags · ' + tagged.toLocaleString('en-AU') + ' tagged';
-      _segTotalChart = makeSegPie('segTotalCanvas',
-        segItems(seg, c.total, 'Not tagged', 'Contacts without an engagement tag yet'));
-      _segActiveChart = makeSegPie('segActiveCanvas',
-        segItems(seg, c.active, 'Not tagged', 'Active contacts without an engagement tag yet'));
+      _segChart.$segCenter = {
+        big: total.toLocaleString('en-AU'),
+        textColor: tc.text || '#222',
+        mutedColor: tc.muted || '#888'
+      };
+      _segChart.update();
     }
 
     var CAMP_TYPE = { single: 'One-off', single_automated: 'Automated', recurring: 'Recurring', responder: 'Autoresponder', reminder: 'Reminder', special: 'Special', text: 'SMS/Text', activerss: 'RSS', split: 'Split test' };
