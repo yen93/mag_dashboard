@@ -223,6 +223,11 @@
             <button class="active" data-cmp="yoy">vs last year</button>
             <button data-cmp="prev">vs previous period</button>
           </div>
+          <!-- Dates for the current period and the comparison window. Updates live on FY /
+               Compare / custom-range change; both spans are derived from the SAME month (or
+               day) lists the KPI delta lines sum over, so the figures below the cards always
+               align with it. -->
+          <span class="muted cmp-range" id="cmpRange" style="font-size:12.5px"></span>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" id="fyNote" style="font-size:13px">Loading…</span>
         </div>
@@ -400,6 +405,52 @@
       return 'vs last yr';
     }
 
+    // ----- Date label beside the Compare toggle (mirrors marketing.html) -----
+    // The span actually being shown, and the span it is compared against, as real calendar
+    // dates (e.g. "Showing 1 Jul – 31 Oct 2026 · vs 1 Jul – 31 Oct 2025"). Both are built from
+    // the SAME month lists (FY mode) or day windows (custom range) that curBaseFigures() sums
+    // the KPI deltas over, so the dates can never disagree with the figures below the cards.
+    // "vs last year" lines the two windows up on identical month numbers a year apart; "vs
+    // previous period" uses the equal-length window immediately before.
+    // A sorted 'YYYY-MM' list → "1 Jul – 31 Oct 2026" (year shown once when start/end share it).
+    function spanFromMonths(months) {
+      if (!months || !months.length) return '';
+      var a = months[0].split('-'), b = months[months.length - 1].split('-');
+      var ay = +a[0], am = +a[1], by = +b[0], bm = +b[1];
+      var lastDay = new Date(by, bm, 0).getDate();              // last calendar day of final month
+      var start = '1 ' + _MON[am - 1] + (ay === by ? '' : ' ' + ay);
+      var end = lastDay + ' ' + _MON[bm - 1] + ' ' + by;
+      return start + ' – ' + end;
+    }
+    // A day window {from,to} ('YYYY-MM-DD') → "1 Jul – 31 Oct 2026".
+    function spanFromDays(from, to) {
+      if (!from || !to) return '';
+      var a = from.split('-'), b = to.split('-');
+      var ay = +a[0], am = +a[1], ad = +a[2], by = +b[0], bm = +b[1], bd = +b[2];
+      var start = ad + ' ' + _MON[am - 1] + (ay === by ? '' : ' ' + ay);
+      var end = bd + ' ' + _MON[bm - 1] + ' ' + by;
+      return start + ' – ' + end;
+    }
+    function compareRangeLabel() {
+      if (!CUSTOM && selFyKey() === 'all') return 'All financial years';   // no period comparison
+      if (!DEALS.loaded) return '';                                        // data still loading
+      if (CUSTOM) {
+        var w = curWindow();
+        if (!w || !w.from || !w.to) return '';                            // open-ended range
+        var bw = baseWindow(w);
+        return 'Showing ' + spanFromDays(w.from, w.to) +
+          (bw ? ' · vs ' + spanFromDays(bw.from, bw.to) : '');
+      }
+      var curMonths = fyMonths(fyEndOf(selFyKey()));
+      if (!curMonths.length) return '';
+      var baseMonths = selCmp() === 'prev' ? precedingMonths(curMonths) : shiftMonths(curMonths, -1);
+      return 'Showing ' + spanFromMonths(curMonths) + ' · vs ' + spanFromMonths(baseMonths);
+    }
+    function renderCmpRange() {
+      var el = document.getElementById('cmpRange');
+      if (el) el.textContent = compareRangeLabel();
+    }
+
     function kpiCard(label, value, subHtml, subCls, info) {
       return '<div class="ep-kpi">' +
         '<div class="label">' + esc(label) + (info || '') + '</div>' +
@@ -409,6 +460,7 @@
     }
 
     function renderKpiRow() {
+      renderCmpRange();   // keep the Compare date label in step with the cards
       var grid = document.getElementById('epKpis');
       if (!grid) return;
       if (!DEALS.loaded) { grid.innerHTML = '<div class="muted" style="padding:8px 2px">Loading…</div>'; return; }
