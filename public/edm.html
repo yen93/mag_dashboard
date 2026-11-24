@@ -89,6 +89,10 @@
     .edm-kpi .label { font-size: 13px; color: var(--text-muted); font-weight: 500; display: flex; align-items: center; gap: 6px; }
     .edm-kpi .value { font-size: 30px; font-weight: 700; letter-spacing: -.02em; font-variant-numeric: tabular-nums; margin: 8px 0 6px; color: var(--text); }
     .edm-kpi .sub { font-size: 13px; font-weight: 500; color: var(--text-muted); }
+    /* Compare delta chip (driven by the #cmpSeg toggle) */
+    .edm-kpi .edm-delta { font-size: 12px; font-weight: 600; margin-top: 5px; display: inline-flex; flex-wrap: wrap; align-items: baseline; gap: 4px; color: var(--text-muted); }
+    .edm-kpi .edm-delta.pos { color: var(--pos); }
+    .edm-kpi .edm-delta.neg { color: var(--neg); }
 
     /* Chart + side tables row */
     .edm-row2 { display: grid; grid-template-columns: 1.3fr 1fr; gap: 16px; align-items: stretch; }
@@ -159,6 +163,11 @@
             <button data-fy="fy25">FY25</button>
             <button data-fy="fy26">FY26</button>
             <button class="active" data-fy="fy27">FY27</button>
+          </div>
+          <span class="ctl-label" style="margin-left:4px">Compare</span>
+          <div class="segmented" id="cmpSeg" aria-label="Comparison basis">
+            <button class="active" data-cmp="yoy">vs last year</button>
+            <button data-cmp="prev">vs previous period</button>
           </div>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" id="freshNote" style="font-size:13px">Loading…</span>
@@ -249,6 +258,7 @@
     var EDM = null;
     var CAMP_TABLE_STATE = {};
     var CUR_FY = 'fy27';   // the financial year containing "today" (Jul 2026 – Jun 2027)
+    var CMP = 'yoy';       // Compare basis: 'yoy' (vs last year) | 'prev' (vs previous period)
 
     function selFyKey() { var b = document.querySelector('#fySeg button.active'); return b ? b.getAttribute('data-fy') : 'fy27'; }
     function fyEndOf(k) { return k === 'all' ? null : 2000 + parseInt(k.slice(2), 10); }
@@ -294,6 +304,61 @@
       var k = selFyKey();
       return k === 'all' ? 'All years' : k.toUpperCase();
     }
+
+    /* ============================================================
+       Compare toggle (#cmpSeg) — "vs last year" / "vs previous period".
+       Drives a delta chip under each campaign KPI (open rate, click rate, …).
+       A whole-FY selection is annual, so "last year" == "previous period" (both =
+       the prior FY). The two bases diverge for a CUSTOM date range: "vs last year"
+       compares the same dates one year earlier; "vs previous period" the equal-length
+       window immediately before. The contact snapshot has no history, so it's never compared.
+       ============================================================ */
+    function selCmp() { var b = document.querySelector('#cmpSeg button.active'); return b ? b.getAttribute('data-cmp') : 'yoy'; }
+    function _addDays(iso, n) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); }
+    function _shiftYears(iso, n) { var d = new Date(iso + 'T00:00:00Z'); d.setUTCFullYear(d.getUTCFullYear() + n); return d.toISOString().slice(0, 10); }
+    function _daysBetween(a, b) { return Math.round((new Date(b + 'T00:00:00Z') - new Date(a + 'T00:00:00Z')) / 86400000); }
+
+    // The campaign set to compare the current period against (prior FY, or the shifted
+    // custom-range window), honoring the Compare basis. null = no comparison.
+    function comparisonCampaigns() {
+      var rows = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+      if (dateRangeActive()) {
+        var r = getDateRange();
+        if (!r.from || !r.to) return null;        // need both bounds to compare
+        var cf, ct;
+        if (CMP === 'prev') { var len = _daysBetween(r.from, r.to); ct = _addDays(r.from, -1); cf = _addDays(ct, -len); }
+        else { cf = _shiftYears(r.from, -1); ct = _shiftYears(r.to, -1); }
+        return rows.filter(function (c) { var d = c.lastSent; return d && d >= cf && d <= ct; });
+      }
+      var k = selFyKey();
+      if (k === 'all') return null;
+      var pe = fyEndOf(k) - 1;                     // prior FY end-year
+      var w = { from: (pe - 1) + '-07-01', to: pe + '-06-30' };
+      return rows.filter(function (c) { var d = c.lastSent; return d && d >= w.from && d <= w.to; });
+    }
+    function cmpLabel() {
+      if (dateRangeActive()) return CMP === 'prev' ? 'vs prev period' : 'vs last year';
+      var k = selFyKey();
+      if (k === 'all') return '';
+      return 'vs FY' + String(fyEndOf(k) - 1 - 2000).padStart(2, '0');
+    }
+
+    // One delta chip. opts: {pp} percentage-point (rate values already in %), else percent;
+    // {invert} = lower is better (down = good/green).
+    function deltaChip(cur, prev, label, opts) {
+      opts = opts || {};
+      if (cur == null || prev == null || isNaN(cur) || isNaN(prev)) return '';
+      var lbl = ' <span class="muted" style="font-weight:500;font-size:11px">' + esc(label) + '</span>';
+      function wrap(sign, txt) { return '<div class="edm-delta ' + (sign === 0 ? '' : sign > 0 ? 'pos' : 'neg') + '">' + txt + lbl + '</div>'; }
+      if (opts.pp) {
+        var dp = Math.round((cur - prev) * 100) / 100;
+        if (dp === 0) return wrap(0, '▬ no change');
+        return wrap((opts.invert ? dp < 0 : dp > 0) ? 1 : -1, (dp > 0 ? '▲ +' : '▼ −') + esc(Math.abs(dp).toFixed(2)) + ' pp');
+      }
+      if (prev === 0) { if (cur === 0) return ''; return wrap(opts.invert ? -1 : 1, '▲ new'); }
+      var d = cur - prev, pct = Math.round((d / prev) * 1000) / 10;
+      return wrap((opts.invert ? d < 0 : d >= 0) ? 1 : -1, (d >= 0 ? '▲ ' : '▼ ') + esc(Math.abs(pct)) + '%');
+    }
     // The contact snapshot is "as of now" — only meaningful for the current FY or All years,
     // and never for a custom date range.
     function contactLive() { return !dateRangeActive() && (selFyKey() === 'all' || selFyKey() === CUR_FY); }
@@ -310,11 +375,12 @@
       return Math.round((part / whole) * 1000) / 10 + '% of total';
     }
 
-    function kpiCard(label, value, sub, info) {
+    function kpiCard(label, value, sub, info, cmp) {
       return '<div class="edm-kpi">' +
         '<div class="label">' + esc(label) + (info || '') + '</div>' +
         '<div class="value">' + value + '</div>' +
         '<div class="sub">' + (sub || '&nbsp;') + '</div>' +
+        (cmp || '') +
       '</div>';
     }
 
@@ -336,19 +402,28 @@
       var s = campSummaryOf(filteredCampaigns());
       var pc = document.getElementById('campPeriodCap');
       if (pc) pc.textContent = periodLabel() + ' · by campaign last-send date · ' + num(s.count) + ' campaign' + (s.count === 1 ? '' : 's');
+      // Compare deltas (prior FY, or the shifted custom-range window). null = no comparison.
+      var cc = comparisonCampaigns(), ps = cc ? campSummaryOf(cc) : null, lab = cmpLabel();
+      var dl = function (cur, prev, opts) { return ps ? deltaChip(cur, prev, lab, opts) : ''; };
       document.getElementById('campaignKpis').innerHTML = [
         kpiCard('Campaigns sent', num(s.count), periodLabel(),
-          infoTip('Sent email campaigns whose last send falls in the selected period (FY toggle or custom date range).', 'ActiveCampaign all-campaigns performance report')),
+          infoTip('Sent email campaigns whose last send falls in the selected period (FY toggle or custom date range).', 'ActiveCampaign all-campaigns performance report'),
+          dl(s.count, ps && ps.count)),
         kpiCard('Emails sent', num(s.totalSends), 'total delivered',
-          infoTip('The total number of individual emails delivered across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report')),
+          infoTip('The total number of individual emails delivered across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report'),
+          dl(s.totalSends, ps && ps.totalSends)),
         kpiCard('Open rate', rate(s.openRate), num(s.totalUniqueOpens) + ' unique opens',
-          infoTip('Share of delivered emails that were opened, across the campaigns in the selected period. Apple Mail privacy can inflate opens, so treat this as a soft signal.', 'ActiveCampaign all-campaigns performance report')),
+          infoTip('Share of delivered emails that were opened, across the campaigns in the selected period. Apple Mail privacy can inflate opens, so treat this as a soft signal.', 'ActiveCampaign all-campaigns performance report'),
+          dl(s.openRate, ps && ps.openRate, { pp: true })),
         kpiCard('Click rate', rate(s.clickRate), num(s.totalUniqueClicks) + ' unique clicks',
-          infoTip('Share of delivered emails where a link was clicked, across the campaigns in the selected period. The most reliable engagement signal.', 'ActiveCampaign all-campaigns performance report')),
+          infoTip('Share of delivered emails where a link was clicked, across the campaigns in the selected period. The most reliable engagement signal.', 'ActiveCampaign all-campaigns performance report'),
+          dl(s.clickRate, ps && ps.clickRate, { pp: true })),
         kpiCard('Bounce rate', rate(s.bounceRate), num(s.totalBounces) + ' bounces',
-          infoTip('Share of emails that could not be delivered, across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report')),
+          infoTip('Share of emails that could not be delivered, across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report'),
+          dl(s.bounceRate, ps && ps.bounceRate, { pp: true, invert: true })),
         kpiCard('Unsubscribe rate', rate(s.unsubscribeRate), num(s.totalUnsubscribes) + ' unsubscribes',
-          infoTip('Share of delivered emails that led to an unsubscribe, across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report'))
+          infoTip('Share of delivered emails that led to an unsubscribe, across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report'),
+          dl(s.unsubscribeRate, ps && ps.unsubscribeRate, { pp: true, invert: true }))
       ].join('');
     }
 
@@ -580,6 +655,7 @@
     wireCollapse('toggleContact', 'contactBody');
     wireCollapse('toggleCampaigns', 'campaignsBody');
     wireSeg('fySeg', applyControls);      // FY toggle re-renders campaigns + contact gating
+    wireSeg('cmpSeg', function () { CMP = selCmp(); renderCampaignKpis(); });   // Compare basis drives campaign KPI deltas
     wireDateRange({ onChange: applyControls });   // custom range overrides the FY toggle
     load();
     window.onThemeChange = function () { renderSegmentation(); };

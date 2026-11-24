@@ -111,6 +111,22 @@
     .cs-kpi .sub.pos {
       color: var(--pos);
     }
+    .cs-kpi .sub.neg {
+      color: var(--neg);
+    }
+    /* Compare delta chip (driven by the #cmpSeg toggle) */
+    .cs-kpi .cs-delta {
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 4px;
+      display: inline-flex;
+      flex-wrap: wrap;
+      align-items: baseline;
+      gap: 4px;
+      color: var(--text-muted);
+    }
+    .cs-kpi .cs-delta.pos { color: var(--pos); }
+    .cs-kpi .cs-delta.neg { color: var(--neg); }
 
     /* Section title above the follower cards */
     .cs-block-title {
@@ -265,6 +281,11 @@
             <button data-fy="fy25">FY25</button>
             <button data-fy="fy26">FY26</button>
             <button class="active" data-fy="fy27">FY27</button>
+          </div>
+          <span class="ctl-label" style="margin-left:4px">Compare</span>
+          <div class="segmented" id="cmpSeg" aria-label="Comparison basis">
+            <button class="active" data-cmp="yoy">vs last year</button>
+            <button data-cmp="prev">vs previous period</button>
           </div>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" id="fyNote" style="font-size:13px">Figures are per financial year · hover any ⓘ for what a tile shows and its source</span>
@@ -514,6 +535,7 @@
     // newsletter) with no sub-FY history, so a custom date range can't filter it — the live
     // widgets grey out while a range is active. (The other tiles are already pending.)
     var CUSTOM = false;
+    var CMP = 'yoy';   // Compare basis: 'yoy' (vs last year) | 'prev' (vs previous period)
     var RANGE_NA = 'Not available for custom ranges — this is a weekly snapshot. Clear the date range to view it.';
 
     function selFyKey() {
@@ -583,6 +605,41 @@
       return rows.sort(function (a, b) { return (b.followers || 0) - (a.followers || 0); });
     }
 
+    /* ============================================================
+       Compare toggle (#cmpSeg) — "vs last year" / "vs previous period".
+       Drives a follower delta chip on each platform card. These are weekly
+       snapshots with one figure per financial year, so "last year" and
+       "previous period" both resolve to the prior FY here; the chip shows the
+       change against that FY's snapshot (when one exists — social scraping only
+       captures the current state, so earlier FYs may be empty).
+       ============================================================ */
+    function selCmp() { var b = document.querySelector('#cmpSeg button.active'); return b ? b.getAttribute('data-cmp') : 'yoy'; }
+
+    // The latest prior-FY follower count for a platform (null when absent / "All years").
+    function priorFollowers(platformKey) {
+      var fy = curFyEnd();
+      if (fy === 'all' || !ALL_PLATFORM_ROWS) return null;
+      var prior = fy - 1, best = null;
+      ALL_PLATFORM_ROWS.forEach(function (r) {
+        if (r.platformKey === platformKey && r.fyEnd === prior && (!best || r.snapshotDate > best.snapshotDate)) best = r;
+      });
+      return best ? best.followers : null;
+    }
+    function deltaChip(cur, prev, label) {
+      if (cur == null || prev == null || isNaN(cur) || isNaN(prev)) return '';
+      var lbl = ' <span class="muted" style="font-weight:500;font-size:11px">' + esc(label) + '</span>';
+      function wrap(sign, txt) { return '<div class="cs-delta ' + (sign === 0 ? '' : sign > 0 ? 'pos' : 'neg') + '">' + txt + lbl + '</div>'; }
+      if (prev === 0) { if (cur === 0) return ''; return wrap(1, '▲ new'); }
+      var d = cur - prev, pct = Math.round((d / prev) * 1000) / 10;
+      if (d === 0) return wrap(0, '▬ no change');
+      return wrap(d > 0 ? 1 : -1, (d > 0 ? '▲ ' : '▼ ') + esc(Math.abs(pct)) + '%');
+    }
+    function followerDelta(p) {
+      var prev = priorFollowers(p.platformKey);
+      if (prev == null) return '';
+      return deltaChip(p.followers, prev, 'vs FY' + String(curFyEnd() - 1 - 2000).padStart(2, '0'));
+    }
+
     function renderPlatforms() {
       var cap = document.getElementById('platformsCap');
       var body = document.getElementById('platformsBody');
@@ -613,6 +670,7 @@
           '<div class="label">' + esc(p.platformName) + '</div>' +
           '<div class="value">' + fmtNum(p.followers) + '</div>' +
           '<div class="sub">followers</div>' +
+          followerDelta(p) +
         '</div>';
       }).join('');
       body.innerHTML = rows.map(function (p) {
@@ -786,6 +844,7 @@
     loadPlatforms();                  // then fetch the live per-FY snapshots + re-render
     loadContentMetrics();             // live newsletter-subscriber card (cookie sync / manual)
     wireSeg('fySeg', renderCS);       // FY toggle drives the pending KPIs AND the live platforms + chart
+    wireSeg('cmpSeg', function () { CMP = selCmp(); renderPlatforms(); });   // Compare basis drives the follower delta chips
     wireDateRange({ onChange: applyRange });
     window.onThemeChange = renderEngagementChart;
   </script>

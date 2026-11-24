@@ -316,6 +316,11 @@
           <button data-basis="allin">All-in (Google + Bing + Simple Digital)</button>
           <button data-basis="google">Ads only</button>
         </div>
+        <span class="ctl-label">Compare</span>
+        <div class="segmented" id="cmpSeg" aria-label="Comparison basis">
+          <button class="active" data-cmp="yoy">vs last year</button>
+          <button data-cmp="prev">vs previous period</button>
+        </div>
         <div class="spacer"></div>
         <span class="muted" id="roasAsOf" style="font-size:13px"></span>
       </div>
@@ -453,6 +458,7 @@
     var ROAS_DATA = null, DEALS_DATA = null;   // cached payloads for theme re-render
     var _roasCharts = {};
     var SEL = { fy: null, basis: 'allin', status: 'Won', scope: 'counted' };
+    var CMP = 'yoy';   // Compare basis: 'yoy' (vs last year) | 'prev' (vs previous period)
     var dealSort = { key: 'xeroTotal', dir: -1 }, dealQuery = '';
     var DEAL_NUMKEYS = { value: 1, xeroEngagementFee: 1, xeroGst: 1, xeroOtherFees: 1, xeroTotal: 1 };
 
@@ -467,14 +473,45 @@
       return rows.filter(function (r) { return r.fy === SEL.fy; })[0] || ROAS_DATA.total;
     }
 
+    /* ---------- Compare toggle (#cmpSeg) ----------
+       ROAS is reported per financial year with no sub-FY series, so the prior FY IS
+       the "previous period" — "vs last year" and "vs previous period" both resolve to
+       the prior FY here. The toggle drives the per-tile delta chips (prior-FY change). */
+    function selCmp() { var b = document.querySelector('#cmpSeg button.active'); return b ? b.getAttribute('data-cmp') : 'yoy'; }
+    // The prior-FY row for the current selection (null for "All" or when absent).
+    function priorRow() {
+      if (!ROAS_DATA || SEL.fy === 'All') return null;
+      var cur = parseInt(String(SEL.fy).replace(/\D/g, ''), 10);
+      if (!isFinite(cur)) return null;
+      var want = 'FY' + String(cur - 1).padStart(2, '0');
+      var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
+      return rows.filter(function (r) { return r.fy === want; })[0] || null;
+    }
+    // One delta chip. opts: {abs,suffix} absolute, else percent; {invert} = lower is better.
+    function deltaChip(cur, prev, label, opts) {
+      opts = opts || {};
+      if (cur == null || prev == null || isNaN(cur) || isNaN(prev)) return '';
+      var lbl = ' <span class="muted" style="font-weight:500;font-size:11px">' + esc(label) + '</span>';
+      function wrap(sign, txt) { return '<div class="delta ' + (sign === 0 ? '' : sign > 0 ? 'pos' : 'neg') + '">' + txt + lbl + '</div>'; }
+      if (opts.abs) {
+        var da = Math.round((cur - prev) * 100) / 100;
+        if (da === 0) return wrap(0, '▬ no change');
+        return wrap((opts.invert ? da < 0 : da > 0) ? 1 : -1, (da > 0 ? '▲ +' : '▼ −') + esc(Math.abs(da).toFixed(2)) + esc(opts.suffix || ''));
+      }
+      if (prev === 0) { if (cur === 0) return ''; return wrap(opts.invert ? -1 : 1, '▲ new'); }
+      var d = cur - prev, pct = Math.round((d / prev) * 1000) / 10;
+      return wrap((opts.invert ? d < 0 : d >= 0) ? 1 : -1, (d >= 0 ? '▲ ' : '▼ ') + esc(Math.abs(pct)) + '%');
+    }
+
     // ---------- KPI tiles ----------
-    function kpi(label, value, sub, subClass, info, status) {
+    function kpi(label, value, sub, subClass, info, status, cmp) {
       var ic = info ? ' <span class="kpi-info" tabindex="0" title="' + esc(info) + '">ⓘ</span>' : '';
       var tag = status ? 'button' : 'div';
       var attrs = status ? ' class="kpi" data-status="' + esc(status) + '" type="button"' : ' class="kpi"';
       return '<' + tag + attrs + '><div class="label">' + esc(label) + ic + '</div>' +
         '<div class="value">' + esc(String(value)) + '</div>' +
-        (sub ? '<div class="delta ' + (subClass || '') + '">' + sub + '</div>' : '') + '</' + tag + '>';
+        (sub ? '<div class="delta ' + (subClass || '') + '">' + sub + '</div>' : '') +
+        (cmp || '') + '</' + tag + '>';
     }
 
     function renderKpis() {
@@ -483,21 +520,29 @@
       var cost = costOf(r), roas = roasOf(r);
       var pass = (roas || 0) >= target;
       var roiDollars = (r.wonRevenue || 0) - cost;
+      // Compare delta chips (prior FY, basis-aware for ROAS/cost). None for the "All" selection.
+      var p = priorRow(), lab = p ? 'vs ' + p.fy : '';
+      var dRoas = p ? deltaChip(roas, roasOf(p), lab, { abs: true, suffix: '×' }) : '';
+      var dCost = p ? deltaChip(cost, costOf(p), lab, { invert: true }) : '';
+      var dWonRev = p ? deltaChip(r.wonRevenue, p.wonRevenue, lab) : '';
+      var dWon = p ? deltaChip(r.won, p.won, lab) : '';
+      var dLost = p ? deltaChip(r.lost, p.lost, lab, { invert: true }) : '';
+      var dOpen = p ? deltaChip(r.openValue, p.openValue, lab) : '';
       var host = document.getElementById('roasKpis');
       host.innerHTML =
         kpi('ROAS', roasFmt(roas),
             '<span class="pill ' + (pass ? 'roas-pass' : 'roas-fail') + '">' + (pass ? 'clears' : 'below') + ' ' + roasFmt(target) + '</span>',
-            '', 'Won revenue ÷ ' + costLabel().toLowerCase() + ' for ' + r.fy + '. Target ' + roasFmt(target) + ' ($' + target.toFixed(2) + ' won per $1 spent).') +
+            '', 'Won revenue ÷ ' + costLabel().toLowerCase() + ' for ' + r.fy + '. Target ' + roasFmt(target) + ' ($' + target.toFixed(2) + ' won per $1 spent).', '', dRoas) +
         kpi(costLabel(), money(cost),
             SEL.basis === 'google' ? 'Google Ads only' : ('Google ' + moneyShort(r.googleSpend) + ' · Bing ' + moneyShort(r.bingSpend) + ' · SD ' + moneyShort(r.sdFee)),
-            '', 'Paid-search cost for ' + r.fy + '. Google Ads = billed Xero charges (all FYs)' + ((r.bingSpend || r.sdFee) ? ' + Bing + Simple Digital' : '') + '.') +
+            '', 'Paid-search cost for ' + r.fy + '. Google Ads = billed Xero charges (all FYs)' + ((r.bingSpend || r.sdFee) ? ' + Bing + Simple Digital' : '') + '.', '', dCost) +
         kpi('Won revenue from ads', money(r.wonRevenue), (r.won || 0) + ' won deals', 'pos',
-            'Won revenue credited to Google Ads in ' + r.fy + ' — the billed Xero engagement fee where the deal is invoiced, else the contracted value. FY22–24 from Niki\'s log; FY25+ = audit final_gads_tag=Yes ∪ GA4 cpc.') +
+            'Won revenue credited to Google Ads in ' + r.fy + ' — the billed Xero engagement fee where the deal is invoiced, else the contracted value. FY22–24 from Niki\'s log; FY25+ = audit final_gads_tag=Yes ∪ GA4 cpc.', '', dWonRev) +
         kpi('Won', String(r.won || 0), (r.winRate == null ? 'No closed deals' : pct(r.winRate) + ' win rate'), (r.winRate >= 0.5 ? 'pos' : ''),
-            'Won deals ÷ (won + lost + open) = win rate. Click to see the deals.', 'Won') +
-        kpi('Lost', String(r.lost || 0), 'Click to see the deals', '', 'Lost Google-Ads-counted deals in ' + r.fy + '.', 'Lost') +
+            'Won deals ÷ (won + lost + open) = win rate. Click to see the deals.', 'Won', dWon) +
+        kpi('Lost', String(r.lost || 0), 'Click to see the deals', '', 'Lost Google-Ads-counted deals in ' + r.fy + '.', 'Lost', dLost) +
         kpi('Open pipeline', money(r.openValue), (r.open || 0) + ' open deal' + ((r.open === 1) ? '' : 's') + ', not counted yet', '',
-            'Value of open (not-yet-closed) Google-Ads-counted deals in ' + r.fy + '.', 'Open');
+            'Value of open (not-yet-closed) Google-Ads-counted deals in ' + r.fy + '.', 'Open', dOpen);
       // Clickable status tiles jump to the deals table.
       host.querySelectorAll('button.kpi[data-status]').forEach(function (b) {
         b.addEventListener('click', function () {
@@ -781,6 +826,13 @@
 
     // Static control wiring (segments that exist in the HTML from the start).
     document.getElementById('basisSeg').addEventListener('click', function (e) { var b = e.target.closest('button[data-basis]'); if (b) setBasis(b.getAttribute('data-basis')); });
+    document.getElementById('cmpSeg').addEventListener('click', function (e) {
+      var b = e.target.closest('button[data-cmp]'); if (!b) return;
+      document.querySelectorAll('#cmpSeg button').forEach(function (x) { x.classList.remove('active'); });
+      b.classList.add('active');
+      CMP = selCmp();
+      if (ROAS_DATA) renderKpis();
+    });
     document.getElementById('statusSeg').addEventListener('click', function (e) { var b = e.target.closest('button[data-st]'); if (b) { SEL.status = b.getAttribute('data-st'); syncPressed(); renderDeals(); } });
     document.getElementById('dealSearch').addEventListener('input', function (e) { dealQuery = e.target.value.trim(); renderDeals(); });
 
