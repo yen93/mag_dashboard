@@ -1,7 +1,7 @@
 // Instagram Leads — Sales review queue for AI-extracted speaker Instagram Story leads
 // (replaces manual Remark triage in the ai_scraped_insta_stories Google Sheet).
 //
-// Source: public.insta_stories (rows where org IS NOT NULL).
+// Source: public.insta_stories (rows where org IS NOT NULL AND poc IS NOT NULL).
 // A lead is FOR REVIEW while org IS NOT NULL AND sheet_remark IS NULL AND outreach_status IS NULL.
 // Reviewing from the dashboard writes `outreach_status`:
 //   'Send intro' = approved for outreach
@@ -31,7 +31,7 @@ const SQL_WITH_LOG = `
     SELECT set_by, created_at FROM public.insta_stories_review_log g
     WHERE g.lead_id = l.id AND g.action = 'set' ORDER BY g.created_at DESC LIMIT 1
   ) rv ON TRUE
-  WHERE l.org IS NOT NULL
+  WHERE l.org IS NOT NULL AND l.poc IS NOT NULL
   ORDER BY l.created_at DESC, l.id DESC`;
 
 const SQL_NO_LOG = `
@@ -42,7 +42,7 @@ const SQL_NO_LOG = `
     l.sheet_remark, l.outreach_status,
     NULL::text AS reviewed_by, NULL::timestamptz AS reviewed_at
   FROM public.insta_stories l
-  WHERE l.org IS NOT NULL
+  WHERE l.org IS NOT NULL AND l.poc IS NOT NULL
   ORDER BY l.created_at DESC, l.id DESC`;
 
 function classify(r) {
