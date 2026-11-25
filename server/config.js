@@ -86,6 +86,7 @@ export const config = {
     // deprecated by Meta (views only); Instagram reach IS available.
     pageToken: env.META_PAGE_TOKEN || '',
     pageId: env.META_PAGE_ID || '1421118044806726',
+    igId: env.META_IG_ID || '17841401738850546',   // MAG Instagram business account (@myadventuregroup)
   },
 };
 

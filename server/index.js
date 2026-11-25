@@ -28,6 +28,7 @@ import { getEmailPartnerMetrics } from './metrics/email-partner-metrics.js';
 import { getIndirectDeals } from './metrics/indirect-deals.js';
 import { getMarketingPlatforms } from './metrics/marketing-platforms.js';
 import { getMetaFbInsights } from './metrics/meta-fb-insights.js';
+import { getMetaIgTrend } from './metrics/meta-ig-trend.js';
 import { getEdmReport } from './metrics/edm-report.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
@@ -668,6 +669,20 @@ marketing.get('/meta-fb', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:meta-fb]', err);
     res.status(502).json({ error: 'Failed to load Facebook insights.', detail: err.message });
+  }
+});
+// Instagram monthly reach + content-interactions trend — plain read of the monthly cache
+// public.meta_ig_monthly, which the metric self-refreshes (current + previous month) from the
+// Meta Graph API on each cache-miss. Backs the "Instagram — reach & content interactions ·
+// trend" chart on social_platforms.html. Instagram only (FB page reach is deprecated). See
+// server/metrics/meta-ig-trend.js. Cached briefly.
+marketing.get('/meta-ig-trend', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:meta-ig-trend', getMetaIgTrend, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:meta-ig-trend]', err);
+    res.status(502).json({ error: 'Failed to load Instagram trend.', detail: err.message });
   }
 });
 // EDM — the ActiveCampaign Contact Performance + All Campaigns Performance reports for

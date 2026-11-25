@@ -171,8 +171,8 @@
       <!-- Card grid -->
       <div class="sp-grid">
         <div class="card sp-card wide">
-          <div class="sp-card-head"><h3>Reach &amp; content interactions — trend <span class="chip warn">pending</span> <span class="head-info" data-info="Reach (how many saw us) and interactions (likes, comments, shares) over time. Watch the direction, not just today's number. SAMPLE until platforms are connected." data-src="SAMPLE — wire to Meta + LinkedIn insights"></span></h3></div>
-          <div class="cap">Bars = reach · line = interactions</div>
+          <div class="sp-card-head"><h3>Instagram — reach &amp; content interactions · trend <span class="chip warn" id="trendPending">pending</span> <span class="head-info" data-info="Instagram monthly reach (unique accounts reached, bars) and content interactions (likes, comments, saves, shares; line), last 12 months. LIVE from the Meta Graph API — true de-duplicated monthly reach per calendar month. Facebook has no reach via the API, so this trend is Instagram only." data-src="Live — Instagram (Meta Graph API) · monthly total_value"></span></h3></div>
+          <div class="cap">Bars = reach · line = interactions · Instagram</div>
           <div class="sp-chart-box h-md"><canvas id="reachTrend"></canvas></div>
         </div>
 
@@ -542,6 +542,20 @@
       }).catch(function () { /* keep sample on any error */ });
     }
 
+    // ── LIVE Instagram monthly trend (real Meta Graph API via meta_ig_monthly cache) ──
+    // Replaces the sample REACH_TREND with the real monthly IG reach + interactions series,
+    // re-renders the chart, and drops the "pending" chip. Keeps sample + chip on any error.
+    function loadIgTrend() {
+      fetchJSON('/api/marketing/meta-ig-trend').then(function (res) {
+        var d = res && res.data;
+        if (!d || !d.length) return;
+        REACH_TREND = d;                                         // live monthly series (ascending)
+        if (_charts.reachTrend) { _charts.reachTrend.destroy(); _charts.reachTrend = null; }
+        renderReachTrend();
+        var chip = document.getElementById('trendPending'); if (chip) chip.remove();
+      }).catch(function () { /* keep sample on error */ });
+    }
+
     function wireSeg(id, onChange) {
       var seg = document.getElementById(id);
       if (!seg) return;
@@ -560,6 +574,7 @@
     fillHeadInfo();                    // fill the static card/chart ⓘ info tools (DESIGN_GUIDE §6)
     renderAll();
     loadMetaLive();                    // overlay the REAL Facebook + Instagram figures (Meta Graph API)
+    loadIgTrend();                     // overlay the REAL Instagram monthly reach + interactions trend
     wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
     wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
     window.onThemeChange = drawCharts; // redraw charts on light/dark switch
