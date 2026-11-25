@@ -189,7 +189,7 @@
         </div>
 
         <div class="card sp-card">
-          <div class="sp-card-head"><h3>Engagement by platform <span class="head-info" data-info="Likes, comments and shares per channel — where the audience actually responds, not just where it's biggest." data-src="Apify snapshot (platform engagement)"></span></h3></div>
+          <div class="sp-card-head"><h3>Engagement by platform <span class="head-info" data-info="Engagement per channel over the last 24 posts for Instagram and LinkedIn (same window). Instagram counts likes + comments; LinkedIn also counts reactions + shares. Facebook uses Meta's 28-day page post-engagements, so compare it only loosely." data-src="Meta API (Instagram last 24 posts, Facebook 28-day) + Apify (LinkedIn last 24 posts)"></span></h3></div>
           <div class="cap">Reactions, comments &amp; shares</div>
           <div class="sp-chart-box h-sm"><canvas id="engagement"></canvas></div>
         </div>
@@ -508,7 +508,7 @@
         }
         if (ig) {
           patch(FOLLOWERS, /instagram/i, 'followers', ig.followers);
-          patch(ENGAGEMENT, /instagram/i, 'engagement', ig.recentEngagement);
+          patch(ENGAGEMENT, /instagram/i, 'engagement', ig.recentEngagement);   // Meta API, last 24 posts (matches LinkedIn's 24)
         }
         drawCharts();                                 // redraw with the live FB + IG bars
 
@@ -535,9 +535,9 @@
         }
         html += '<div class="fbl-note">Real figures from the Meta Graph API as of ' +
           esc((fb && fb.asOf) || (ig && ig.asOf)) +
-          '. Facebook &amp; Instagram followers/engagement are patched into the two per-platform charts above ' +
-          '(LinkedIn there comes from the weekly Apify scrape). Facebook reach is deprecated by Meta (views shown ' +
-          'instead); Instagram reach is the real 28-day figure. IG engagement = likes + comments on recent posts.</div>';
+          '. Chart followers: Facebook &amp; Instagram from the Meta API, LinkedIn from the weekly Apify scrape. ' +
+          'In the Engagement chart, Instagram and LinkedIn both use their last 24 posts; Facebook uses Meta ' +
+          '28-day post engagements. Facebook reach is deprecated by Meta (views shown instead); Instagram reach is the real 28-day figure.</div>';
         el.innerHTML = html;
         el.style.display = 'block';
       }).catch(function () { /* keep sample on any error */ });

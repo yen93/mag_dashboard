@@ -26,7 +26,9 @@
 import { config, hasSource } from '../config.js';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
-const IG_MEDIA_LIMIT = 25;   // recent posts summed for the IG engagement figure
+const IG_MEDIA_LIMIT = 24;   // recent posts summed for the IG banner engagement figure (24 to match
+                             // the Apify scrape's MAX_POSTS=24 — the Engagement chart's IG + LinkedIn
+                             // bars both use the Apify 24-post value; this keeps the banner consistent)
 
 const SRC =
   'Live (Meta Graph API): Facebook Page Insights + the linked Instagram Business account, ' +

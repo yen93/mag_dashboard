@@ -478,9 +478,10 @@
     // sample until 3 saved AC segments are wired in.
     var _segChart = null;
     var SEG_SAMPLE = [
-      { label: 'Quiet (91–180d)', pct: 40, color: '#3b82f6', desc: 'No open for 90–180 days — the re-engagement audience' },
-      { label: 'Active (opened/clicked ≤90d)', pct: 35, color: '#e8742e', desc: 'Opened or clicked in the last 90 days — your reliable audience' },
-      { label: 'Dormant (no engagement 180d+)', pct: 25, color: '#12a884', desc: 'No open for 180+ days — re-engage or sunset' }
+      { label: 'Active (opened/clicked ≤90d)', pct: 30, color: '#12a884', desc: 'Opened or clicked in the last 90 days — your reliable audience' },
+      { label: 'Quiet (91–180d)', pct: 35, color: '#3b82f6', desc: 'No open for 90–180 days — the re-engagement audience' },
+      { label: 'Dormant (no engagement 180d+)', pct: 25, color: '#e8742e', desc: 'No open for 180+ days — re-engage or sunset' },
+      { label: 'Not tagged', pct: 10, color: '#ef4444', desc: 'Contacts without an engagement tag — not yet classified' }
     ];
 
     // Draws the big total + "contacts" label in the hole of the donut.
@@ -511,19 +512,31 @@
       var note = document.getElementById('segNote');
       if (_segChart) { _segChart.destroy(); _segChart = null; }
 
-      var counts = SEG_SAMPLE.map(function (s) { return Math.round(total * s.pct / 100); });
-      if (cap) cap.textContent = 'Sample split on real ' + total.toLocaleString('en-AU') +
-        ' total · click a slice → opens that segment in ActiveCampaign';
+      // LIVE: counts of the AC engagement tags (edm_report_metrics.segmentation);
+      // "Not tagged" = total − the three tagged bands.
+      var live = {};
+      ((c.segmentation) || []).forEach(function (s) { live[s.key] = Number(s.count) || 0; });
+      var hasLive = c.segmentation && c.segmentation.length > 0;
+      var tagged = (live.active || 0) + (live.quiet || 0) + (live.dormant || 0);
+      var counts = hasLive
+        ? [live.active || 0, live.quiet || 0, live.dormant || 0, Math.max(total - tagged, 0)]
+        : SEG_SAMPLE.map(function (s) { return Math.round(total * s.pct / 100); });
+      var sum = counts.reduce(function (a, b) { return a + b; }, 0) || 1;
+      var SEG = SEG_SAMPLE.map(function (s, i) {
+        return { label: s.label, color: s.color, desc: s.desc, count: counts[i], pct: Math.round(counts[i] / sum * 1000) / 10 };
+      });
+      if (cap) cap.textContent = (hasLive ? 'Live split of ' : 'Sample split on ') + total.toLocaleString('en-AU') +
+        ' total contacts';
 
       if (legend) {
-        legend.innerHTML = SEG_SAMPLE.map(function (s) {
+        legend.innerHTML = SEG.map(function (s) {
           return '<div class="seg-leg-row"><span class="seg-leg-dot" style="background:' + s.color + '"></span>' +
-            esc(s.label) + '<span class="seg-leg-pct">· ' + s.pct + '%</span></div>';
+            esc(s.label) + '<span class="seg-leg-pct">· ' + s.count.toLocaleString('en-AU') + ' (' + s.pct + '%)</span></div>';
         }).join('');
       }
       if (note) {
         note.textContent = 'Active → your reliable audience · Quiet → nurture harder · ' +
-          'Dormant → re-engage or sunset. Needs 3 saved AC segments.';
+          'Dormant → re-engage or sunset · Not tagged → no engagement tag yet.';
       }
 
       var el = document.getElementById('segCanvas');
@@ -532,7 +545,7 @@
       _segChart = new Chart(el.getContext('2d'), {
         type: 'doughnut',
         data: {
-          labels: SEG_SAMPLE.map(function (s) { return s.label; }),
+          labels: SEG.map(function (s) { return s.label; }),
           datasets: [{
             data: counts,
             backgroundColor: SEG_SAMPLE.map(function (s) { return s.color; }),
@@ -544,9 +557,9 @@
           plugins: {
             legend: { display: false },
             tooltip: { callbacks: {
-              title: function (its) { return (SEG_SAMPLE[its[0].dataIndex] || {}).label || its[0].label; },
-              label: function (ctx) { var v = ctx.parsed || 0; return v.toLocaleString('en-AU') + ' contacts (' + (SEG_SAMPLE[ctx.dataIndex] || {}).pct + '%)'; },
-              afterLabel: function (ctx) { return (SEG_SAMPLE[ctx.dataIndex] || {}).desc || ''; }
+              title: function (its) { return (SEG[its[0].dataIndex] || {}).label || its[0].label; },
+              label: function (ctx) { var v = ctx.parsed || 0; return v.toLocaleString('en-AU') + ' contacts (' + (SEG[ctx.dataIndex] || {}).pct + '%)'; },
+              afterLabel: function (ctx) { return (SEG[ctx.dataIndex] || {}).desc || ''; }
             } }
           }
         },

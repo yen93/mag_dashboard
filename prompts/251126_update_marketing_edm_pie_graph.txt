@@ -1,0 +1,8 @@
+**color_system:**
+Active (opened/clicked ≤90d) - green 
+Quiet (91–180d) - blue
+Dormant (no engagement 180d+) - orange
+Not tagged - red
+
+## update edm.html "Contact segmentation" graph
+- please include another one: "not tagged" for the contacts without tags. Please position the list to color_system
