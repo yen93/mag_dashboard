@@ -1,0 +1,8 @@
+**pending_graphs:**
+"Audience by seniority"
+"Audience by industry"
+"Audience — age & gender"
+"Top locations"
+
+## main q:
+/q can we use the ig and fb connections to get data for pending_graphs
