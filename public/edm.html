@@ -169,6 +169,7 @@
             <button class="active" data-cmp="yoy">vs last year</button>
             <button data-cmp="prev">vs previous period</button>
           </div>
+          <span class="muted cmp-range" id="cmpRange" style="font-size:12.5px"></span>
           <div class="spacer" style="flex:1"></div>
           <span class="muted" id="freshNote" style="font-size:13px">Loading…</span>
         </div>
@@ -186,6 +187,7 @@
         </div>
         <div class="edm-sec-body" id="contactBody">
           <!-- 3 KPI cards -->
+          <div class="chart-cap" id="contactCmpRange" style="margin:0 2px 10px"></div>
           <div class="edm-kpi-grid" style="--cols:3" id="contactKpis"></div>
 
           <!-- List health (left) + contact segmentation (right) -->
@@ -341,14 +343,71 @@
     // The campaign set to compare the current period against, honoring the Compare
     // basis: "vs last year" = the same window one year earlier; "vs previous period"
     // = the equal-length window immediately before. null = no comparison.
-    function comparisonCampaigns() {
-      var rows = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+    function comparisonBounds() {
       var cur = currentPeriodBounds();
       if (!cur) return null;
       var cf, ct;
       if (CMP === 'prev') { var len = _daysBetween(cur.from, cur.to); ct = _addDays(cur.from, -1); cf = _addDays(ct, -len); }
       else { cf = _shiftYears(cur.from, -1); ct = _shiftYears(cur.to, -1); }
-      return rows.filter(function (c) { var d = c.lastSent; return d && d >= cf && d <= ct; });
+      return { from: cf, to: ct };
+    }
+    function comparisonCampaigns() {
+      var rows = (EDM && EDM.campaigns && EDM.campaigns.rows) || [];
+      var b = comparisonBounds();
+      if (!b) return null;
+      return rows.filter(function (c) { var d = c.lastSent; return d && d >= b.from && d <= b.to; });
+    }
+
+    // ----- "Showing [range] · vs [range]" line beside the Compare toggle (mirrors marketing.html) -----
+    // Built from the SAME windows the campaign KPI deltas are computed over (currentPeriodBounds /
+    // comparisonBounds), so the dates can never disagree with the chips under the cards.
+    var _MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    function daySpan(from, to) {   // 'YYYY-MM-DD' pair → "1 Jul – 25 Nov 2026" (year once if shared)
+      var a = from.split('-'), b = to.split('-');
+      var start = (+a[2]) + ' ' + _MON[+a[1] - 1] + (a[0] === b[0] ? '' : ' ' + a[0]);
+      return start + ' – ' + (+b[2]) + ' ' + _MON[+b[1] - 1] + ' ' + b[0];
+    }
+    function dayFmt(d) { var p = d.split('-'); return (+p[2]) + ' ' + _MON[+p[1] - 1] + ' ' + p[0]; }
+    function compareRangeLabel() {
+      var cur = currentPeriodBounds();
+      if (!cur) return (!dateRangeActive() && selFyKey() === 'all') ? 'All financial years' : '';
+      var b = comparisonBounds();
+      return 'Showing ' + daySpan(cur.from, cur.to) + ' · vs ' + daySpan(b.from, b.to);
+    }
+    function renderCmpRange() {
+      var el = document.getElementById('cmpRange');
+      if (el) el.textContent = compareRangeLabel();
+    }
+
+    // ----- Contact KPI deltas: the contact figures are snapshots, so the comparison is the latest
+    // snapshot vs an earlier one (prev = ~28 days before, else the oldest earlier snapshot; yoy =
+    // nearest to a year before ±21 days — none until a year of history exists). -----
+    function contactBase() {
+      var h = (EDM && EDM.contact && EDM.contact.history) || [];
+      if (h.length < 2) return null;
+      var latest = h[h.length - 1], lt = Date.parse(latest.d + 'T00:00:00Z'), DAY = 86400000;
+      var older = h.filter(function (s) { return s.d < latest.d; });
+      if (!older.length) return null;
+      if (CMP === 'prev') {
+        var far = older.filter(function (s) { return Date.parse(s.d + 'T00:00:00Z') <= lt - 28 * DAY; });
+        return far.length ? far[far.length - 1] : older[0];
+      }
+      var best = null, gap = 21 * DAY + 1;
+      older.forEach(function (s) {
+        var g = Math.abs(Date.parse(s.d + 'T00:00:00Z') - (lt - 365 * DAY));
+        if (g < gap) { best = s; gap = g; }
+      });
+      return best;
+    }
+    function renderContactCmpRange() {
+      var el = document.getElementById('contactCmpRange');
+      if (!el) return;
+      var h = (EDM && EDM.contact && EDM.contact.history) || [];
+      if (!contactLive() || !h.length) { el.textContent = ''; return; }
+      var base = contactBase(), latest = h[h.length - 1];
+      el.textContent = base
+        ? 'Showing ' + dayFmt(latest.d) + ' · vs ' + dayFmt(base.d) + ' (contact snapshots)'
+        : 'Showing ' + dayFmt(latest.d) + ' · no ' + (CMP === 'prev' ? 'earlier' : 'year-ago') + ' snapshot to compare yet';
     }
     function cmpLabel() {
       if (CMP === 'prev') return 'vs prev period';
@@ -398,20 +457,27 @@
     }
 
     function renderContactKpis() {
+      renderContactCmpRange();
       var host = document.getElementById('contactKpis');
       if (!contactLive()) { host.innerHTML = '<div class="range-na" style="grid-column:1/-1">' + esc(contactNaMsg()) + '</div>'; return; }
       var c = (EDM && EDM.contact) || {};
+      var b = contactBase(), lab = cmpLabel() || 'vs same period last year';
+      var dl = function (cur, prev, opts) { return b ? deltaChip(cur, prev, lab, opts) : ''; };
       host.innerHTML = [
         kpiCard('Total Contacts', num(c.total), 'Everyone in ActiveCampaign',
-          infoTip('Everyone in ActiveCampaign, whatever their status.', 'ActiveCampaign (contacts)')),
+          infoTip('Everyone in ActiveCampaign, whatever their status.', 'ActiveCampaign (contacts)'),
+          dl(c.total, b && b.total)),
         kpiCard('Active Contacts', num(c.active), pctOf(c.active, c.total),
-          infoTip('Contacts who are subscribed and can be emailed.', 'ActiveCampaign (contacts)')),
+          infoTip('Contacts who are subscribed and can be emailed.', 'ActiveCampaign (contacts)'),
+          dl(c.active, b && b.active)),
         kpiCard('Non-Active Contacts', num(c.nonactive), pctOf(c.nonactive, c.total),
-          infoTip('Contacts we can\'t email — unconfirmed, unsubscribed or bounced.', 'ActiveCampaign (contacts)'))
+          infoTip('Contacts we can\'t email — unconfirmed, unsubscribed or bounced.', 'ActiveCampaign (contacts)'),
+          dl(c.nonactive, b && b.nonactive, { invert: true }))
       ].join('');
     }
 
     function renderCampaignKpis() {
+      renderCmpRange();
       var s = campSummaryOf(filteredCampaigns());
       var pc = document.getElementById('campPeriodCap');
       if (pc) pc.textContent = periodLabel() + ' · by campaign last-send date · ' + num(s.count) + ' campaign' + (s.count === 1 ? '' : 's');
@@ -681,7 +747,7 @@
     wireCollapse('toggleContact', 'contactBody');
     wireCollapse('toggleCampaigns', 'campaignsBody');
     wireSeg('fySeg', applyControls);      // FY toggle re-renders campaigns + contact gating
-    wireSeg('cmpSeg', function () { CMP = selCmp(); renderCampaignKpis(); });   // Compare basis drives campaign KPI deltas
+    wireSeg('cmpSeg', function () { CMP = selCmp(); renderContactKpis(); renderCampaignKpis(); });   // Compare basis drives campaign KPI deltas
     wireDateRange({ onChange: applyControls });   // custom range overrides the FY toggle
     load();
     window.onThemeChange = function () { renderSegmentation(); };

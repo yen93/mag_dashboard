@@ -1338,6 +1338,37 @@ Cloud Run.
 - **Ticketing tab (2026-11-17).** `ticketing.html` (AI & Automation sidebar key `ticketing`, now `app.js?v=21`) is a LIVE internal ticket board — the ONE table the server WRITES directly: `public.dashboard_tickets` (migration `20261117120000`, RLS on/no policies, no sync/edge fn/cron). `server/metrics/tickets.js` + a `tickets` router in `server/index.js` at `/api/tickets` (`requireAuth`+`requireFullAccess`, so restricted partners are blocked): `GET /` uncached, `POST /` any team member files (submitter from the JWT, never the body), `POST /:id/update` **admin-only** (`role==='admin'`) triage of status/priority/assignee/admin_notes. Types: issue/feedback/build_feedback/build_request/other. The page shows triage controls only for admins (`currentUser().role`). Needs a manual redeploy.
 - **Education Outreach tab (2026-11-17).** `education_outreach.html` (Sales left sidebar key `education`, `app.js?v=21`) shows school/association cold-email outreach from `manually_found_educ_leads` + `educ_processed_messages`; status labels come from the `public.status` dictionary (**8A = responded, 10A = bounced**, `1B/2B/3B/4B/9B` = Nth email sent, `1A…` = drafted) — there is no explicit bounce column. Backend `server/metrics/education-outreach.js` (`/api/sales/education-outreach`) + `server/educationInsight.js` (`/api/sales/education-insight`, both behind `requireFullAccess`). **AI insights use GEMINI (not OpenAI):** `config.gemini` (`GEMINI_API_KEY` mounted from GSM secret `gemini-ai-api-key-131126` via `--update-secrets`; the service account needs `secretAccessor`; `GEMINI_MODEL` default `gemini-3.8-flash`). gemini-3.x are THINKING models — keep `maxOutputTokens` high (8192) or the JSON truncates. The insight is **DB-cached once/24h** in `public.educ_ai_insight_cache` (upsert-only; falls back to the stored row if Gemini fails), so page views never spend tokens. Needs a manual redeploy.
 - **Education Leads tab (2026-11-19).** `education_leads.html` (Sales left sidebar key `educ-leads`; the 5 pages using `renderSalesSidebar` are `app.js?v=23`) is Liv's review queue for the ORG-level education leads scraped into `public.auto_found_educ_leads` by the separate `education_sector_lead_finder` project (`C:\Users\Cloverly\claude_code\education_sector_automations\education_sector_lead_finder`), replacing the "Liv's Remark" column of the `ai_scraped_educ_leads` sheet. Distinct from Education Outreach (contact-level `manually_found_educ_leads`). `server/metrics/education-leads.js` + `GET /api/sales/education-leads` (uncached, returns `canReview`) + `POST /api/sales/education-leads/:id/review`. **Tagging writes `auto_found_educ_leads.status` = `'Send intro'` / `'skip'`; `'new'` (NOT NULL default) = for review and is what a reset restores.** Safe because the finder only upserts brand-new orgs (dedups on `org_name_norm`). Gate `canReviewEducLeads` (liv@ + julienne@). Audit: append-only `public.auto_found_educ_leads_review_log` (migration `20261119120000`, applied). Same bigint-id-as-string gotcha as Alternate Leads. Needs a manual redeploy.
+- **Social Platforms tab — LIVE from Meta + Apify (2026-11-25).** `social_platforms.html` (Marketing sub-tab key
+  `social-platforms`) used to be a sample mockup; everything except "Audience by seniority"/"Audience by
+  industry" is now real, each loader falling back to sample/pending on error. **Facebook + Instagram = Meta
+  Graph API v21** via ONE non-expiring Page token (`config.meta.pageToken` ← `META_PAGE_TOKEN`; Page id
+  1421118044806726, IG business account 17841401738850546 discovered from the Page's
+  `instagram_business_account` edge). **LinkedIn (James + MAG) = the existing Apify cache** via
+  `GET /api/marketing/platforms` (`loadLinkedinLive`). Server modules in `server/metrics/` + routes under
+  `/api/marketing/`: `meta-fb-insights.js` → `/meta-fb` ({facebook, instagram}; IG engagement = likes+comments
+  over `IG_MEDIA_LIMIT=24` posts to match LinkedIn's 24), `meta-ig-trend.js` → `/meta-ig-trend`,
+  `meta-fb-trend.js` → `/meta-fb-trend`, `meta-ig-demographics.js` → `/meta-ig-demographics`,
+  `meta-top-posts.js` → `/meta-top-posts`, `social-audience.js` → `/social-audience` (follower history from
+  `social_platform_stats`). The two TREND charts read monthly caches **`public.meta_ig_monthly`** /
+  **`public.meta_fb_monthly`** (upsert-only, RLS on) that the **dashboard server itself self-refreshes** (current
+  + previous month on each cache-miss, via the pooled `pg` connection) — no edge fn, no cron, no second secret;
+  history was backfilled once. **Meta API traps (all verified live — don't re-litigate):** Facebook
+  reach/impressions are deprecated at page AND post level (every metric name rejected across v18–v23), FB audience
+  demographics (`page_fans_*`) deprecated, FB per-post like/comment counts fail with error #10 (need Page Public
+  Content Access / app review); only FB `page_views_total` / `page_daily_follows_unique` /
+  `page_daily_unfollows_unique` / `page_post_engagements` work. Instagram: **reach is NOT additive** (use
+  `metric_type=total_value` per calendar month; Graph rejects since→until spans >30 days, so 31-day months drop the
+  last day); account engagement metrics (`total_interactions`, `accounts_engaged`) only support `period=day`;
+  `follower_count` is last-30-days only; IG has no unfollows metric; `follower_demographics` supports
+  `breakdown=age,gender` and `city`. So reach/age-gender/locations/top-posts/trends are **Instagram-only** (cards
+  are labelled so) and net-follower growth is **Facebook-only**. Seniority/industry are LinkedIn-only concepts
+  (company analytics are admin/login-gated; no personal-profile API) → still `pending`. **Token provenance:** the
+  Facebook-Login route (IG linked to the Page in Business Suite; token needs `instagram_basic` +
+  `instagram_manage_insights`) was used — the Explorer on the `graph.instagram.com` domain shows a different
+  (Instagram-Login) scope list and issues `IGAA…` tokens; don't mix them. App "MAG Analytics Connector" is in
+  Development mode (Standard Access, no App Review). Needs a manual redeploy for changes; the plain
+  `deployment_script.txt` preserves `META_PAGE_TOKEN`. Known gap: LinkedIn **posts** aren't in Top posts (the
+  Apify sync only sums engagement; storing per-post rows needs an `apify-platforms-sync` extension).
 - **Alternate Leads tab (2026-11-18).** `alternate_leads.html` (Sales left sidebar key `alternate`; the 4 pages using `renderSalesSidebar` are `app.js?v=22`) replaces Liv's old "alternate_leads_found" Google Sheet. Rows come from `public.alternate_leads`, filled weekly by the separate Alternate Lead Finder project (`C:\Users\Cloverly\claude_code\Alternate Lead Finder`; DeepMine, **`email` is always NULL**). `server/metrics/alternate-leads.js` + `GET /api/sales/alternate-leads` (uncached; returns per-user `canReview`) + `POST /api/sales/alternate-leads/:id/review`. **Tagging writes `alternate_leads.status` = `'Send intro'` / `'skip'` (NULL = for review) — NOT `sheet_remark`** (that is only a legacy one-time copy of the sheet, read as a fallback, cleared when a reviewer changes that row). Only rows with `is_processed IS NULL` can be tagged. Gate: `canReviewAltLeads` (`ALT_LEADS_REVIEW_EMAILS` in `server/users.js` = liv@ + julienne@; server 403s everyone else, UI shows read-only pills). Audit: append-only `public.alternate_leads_review_log` (migration `20261118120000`, applied). The downstream "send intro" email step lives elsewhere. **Gotcha:** `alternate_leads.id` is a bigint and `pg` returns it as a STRING in the JSON, so client-side id matching must compare `String(l.id) === dataId` (a strict compare against `Number(...)` silently never matched, so the dropdown did nothing and sent no request). Needs a manual redeploy.
 - **Auth = passwordless email code (OTP).** No passwords, no user table.
   `login.html` is a two-step form (email → code). `POST /api/request-code`
@@ -1441,6 +1472,14 @@ before changing them).
   existing `SUPABASE_DB_URL`/`GMAIL_*` secrets aren't dropped). MVP only — deeper/cross-tab
   Q&A would need read-only *tools* (the GET endpoints or a SELECT-only DB role), never a
   write path.
+- **`META_PAGE_TOKEN`** (+ optional `META_PAGE_ID`, `META_IG_ID`) — non-expiring Facebook PAGE token with the
+  Instagram insight scopes; powers the Social Platforms tab's live Facebook/Instagram figures
+  (`server/metrics/meta-*.js`). Cloud Run **service** env var from Secret Manager secret `META_PAGE_TOKEN`
+  (attached 2026-11-25 with `--update-secrets META_PAGE_TOKEN=META_PAGE_TOKEN:latest`; grant the runtime service
+  account `secretAccessor`). Plain redeploys keep it. If it ever stops working (admin password change / revoked
+  app access), re-mint: Graph API Explorer user token → `fb_exchange_token` → `GET /{page-id}?fields=access_token`
+  → `gcloud secrets versions add META_PAGE_TOKEN`. Never commit it; the minted tokens may also sit in a local
+  Downloads file — delete it once the secret is stored.
 - Not yet configured: `AC_API_URL`/`AC_API_KEY` (ActiveCampaign), `XERO_*`
   (Xero OAuth), `CALENDLY_TOKEN`, `MONDAY_TOKEN`,
   `GOOGLE_SERVICE_ACCOUNT_JSON`/`BUYER_ANALYSIS_SHEET_ID` (the MAG Buyer

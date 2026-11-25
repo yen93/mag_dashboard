@@ -1,56 +1,68 @@
 // Marketing — Social audience summary (Social Platforms KPI cards).
 //
-// Total followers across all four social accounts + the net-follower change, from the weekly
-// Apify cache public.social_platform_stats (follower snapshots for Facebook, Instagram, James's
-// LinkedIn and MAG's LinkedIn). Backs the "Total audience" + "Net new followers" KPI cards on
-// social_platforms.html (the one place that needs follower HISTORY — /platforms only returns the
-// latest snapshot). Plain SELECT, cached by the route.
+// Per-snapshot totals (followers, recent-post engagement, recent-post count) across all four social
+// accounts, from the weekly Apify cache public.social_platform_stats. Backs the KPI cards on
+// social_platforms.html — the one place that needs snapshot HISTORY (/platforms only returns the
+// latest snapshot). Returns three snapshots: `latest`, `prior` (the newest snapshot at least ~28 days
+// older, else the oldest snapshot) and `prior2` (the same rule applied again from `prior`, used to
+// compare net-new-followers period against period). Plain SELECT, cached by the route.
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 
 const SRC =
-  'Live (Supabase): public.social_platform_stats — total followers across Facebook, Instagram and ' +
-  'both LinkedIn accounts (latest weekly snapshot) + the net-follower change since a prior snapshot ' +
-  '~28 days earlier (or the oldest snapshot when there is less history).';
+  'Live (Supabase): public.social_platform_stats — totals across Facebook, Instagram and both ' +
+  'LinkedIn accounts for the latest weekly snapshot, compared with the snapshot ~28 days earlier ' +
+  '(or the oldest snapshot when there is less history).';
 
 const SQL = `
-  with snaps as (
-    select snapshot_date, sum(followers) as total
-    from public.social_platform_stats
-    group by snapshot_date
-  ),
-  latest as (select total, snapshot_date from snaps order by snapshot_date desc limit 1),
-  prior as (
-    select total, snapshot_date from snaps
-    where snapshot_date <= (select snapshot_date from latest) - interval '28 days'
-    order by snapshot_date desc limit 1
-  ),
-  oldest as (select total, snapshot_date from snaps order by snapshot_date asc limit 1)
-  select
-    (select total from latest)::int                                                   as total_followers,
-    to_char((select snapshot_date from latest), 'YYYY-MM-DD')                         as latest_date,
-    coalesce((select total from prior), (select total from oldest))::int              as prior_total,
-    to_char(coalesce((select snapshot_date from prior), (select snapshot_date from oldest)), 'YYYY-MM-DD') as since_date`;
+  select to_char(snapshot_date, 'YYYY-MM-DD') as d,
+         sum(followers)::int        as followers,
+         sum(total_engagement)::int as engagement,
+         sum(posts)::int            as posts
+  from public.social_platform_stats
+  group by snapshot_date
+  order by snapshot_date asc`;
+
+const DAY = 86400000;
+const t = (d) => Date.parse(d + 'T00:00:00Z');
+
+// Newest snapshot strictly older than `from` by >= 28 days; else the oldest snapshot older than `from`.
+function pickPrior(snaps, from) {
+  if (!from) return null;
+  const older = snaps.filter((s) => t(s.d) < t(from.d));
+  if (!older.length) return null;
+  const far = older.filter((s) => t(s.d) <= t(from.d) - 28 * DAY);
+  return far.length ? far[far.length - 1] : older[0];
+}
 
 export async function getSocialAudience() {
   if (!supabaseConfigured()) {
-    return { totalFollowers: null, netNew: null, sinceDate: null, meta: { status: 'pending', source: SRC, note: 'Supabase not configured.' } };
+    return { latest: null, prior: null, prior2: null, totalFollowers: null, netNew: null, sinceDate: null,
+      meta: { status: 'pending', source: SRC, note: 'Supabase not configured.' } };
   }
-  const rows = await q(SQL);
-  const r = rows[0] || {};
-  const total = r.total_followers == null ? null : Number(r.total_followers);
-  const prior = r.prior_total == null ? null : Number(r.prior_total);
-  const netNew = total != null && prior != null ? total - prior : null;
-  const live = total != null;
+  const snaps = (await q(SQL)).map((r) => ({
+    d: r.d,
+    followers: r.followers == null ? null : Number(r.followers),
+    engagement: r.engagement == null ? null : Number(r.engagement),
+    posts: r.posts == null ? null : Number(r.posts),
+  }));
+  const latest = snaps.length ? snaps[snaps.length - 1] : null;
+  const prior = pickPrior(snaps, latest);
+  const prior2 = pickPrior(snaps, prior);
+  const netNew = latest && prior ? latest.followers - prior.followers : null;
+  const live = !!latest;
   return {
-    totalFollowers: total,
+    latest, prior, prior2,
+    snaps,   // every snapshot (small), so the client can pick a year-ago comparison when one exists
+    // back-compat fields
+    totalFollowers: latest ? latest.followers : null,
     netNew,
-    sinceDate: r.since_date || null,
-    latestDate: r.latest_date || null,
+    sinceDate: prior ? prior.d : null,
+    latestDate: latest ? latest.d : null,
     meta: {
       status: live ? 'live' : 'pending',
       source: SRC,
-      note: live ? `Total ${total} followers; net ${netNew >= 0 ? '+' : ''}${netNew} since ${r.since_date}.` : 'No snapshots yet.',
+      note: live ? `Total ${latest.followers} followers; net ${netNew == null ? 'n/a' : (netNew >= 0 ? '+' : '') + netNew}${prior ? ' since ' + prior.d : ''}.` : 'No snapshots yet.',
     },
   };
 }

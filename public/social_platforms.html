@@ -154,8 +154,8 @@
             <button class="active" data-cmp="yoy">vs last year</button>
             <button data-cmp="prev">vs previous period</button>
           </div>
+          <span class="muted cmp-range" id="cmpRange" style="font-size:12.5px"></span>
           <div class="spacer" style="flex:1"></div>
-          <span class="muted" id="fyNote" style="font-size:13px">Meta-Business-Suite layout · hover any ⓘ for what a tile shows and its source</span>
         </div>
       </div>
 
@@ -348,16 +348,71 @@
       return (b && b.getAttribute('data-cmp') === 'prev') ? 'vs prev period' : 'vs same period last year';
     }
 
+    // ----- Snapshot comparison (delta notes + the "Showing … · vs …" line) -----
+    // The follower / engagement / post figures come from weekly Apify snapshots, so a comparison is
+    // snapshot-to-snapshot: "vs previous period" = the snapshot ~28 days before the latest one;
+    // "vs last year" = the snapshot closest to a year before (±21 days) — none exists until a year of
+    // history has built up. SNAPS comes from /api/marketing/social-audience (loadKpis).
+    var SNAPS = { list: [], latest: null, prior: null, prior2: null };
+    var _MON = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    function selCmp() {
+      var b = document.querySelector('#cmpSeg button.active');
+      return b ? b.getAttribute('data-cmp') : 'yoy';
+    }
+    function snapT(d) { return Date.parse(d + 'T00:00:00Z'); }
+    function snapFmt(d) { var p = d.split('-'); return (+p[2]) + ' ' + _MON[+p[1] - 1] + ' ' + p[0]; }
+    // Snapshot nearest to (date − 1 year), within ±21 days; else null.
+    function yearAgoSnap(d) {
+      var target = snapT(d) - 365 * 86400000, best = null, bestGap = 21 * 86400000 + 1;
+      SNAPS.list.forEach(function (s) {
+        var gap = Math.abs(snapT(s.d) - target);
+        if (snapT(s.d) < snapT(d) && gap < bestGap) { best = s; bestGap = gap; }
+      });
+      return best;
+    }
+    // { latest, base, base2 } for the active Compare basis (base/base2 may be null).
+    function snapPair() {
+      var latest = SNAPS.latest;
+      if (!latest) return { latest: null, base: null, base2: null };
+      if (selCmp() === 'prev') return { latest: latest, base: SNAPS.prior, base2: SNAPS.prior2 };
+      var base = yearAgoSnap(latest.d);
+      return { latest: latest, base: base, base2: base ? yearAgoSnap(base.d) : null };
+    }
+    function compareRangeLabel() {
+      var p = snapPair();
+      if (!p.latest) return '';
+      if (!p.base) return 'Showing ' + snapFmt(p.latest.d) + ' · no ' + (selCmp() === 'prev' ? 'earlier' : 'year-ago') + ' snapshot to compare yet';
+      return 'Showing ' + snapFmt(p.latest.d) + ' · vs ' + snapFmt(p.base.d);
+    }
+    function renderCmpRange() {
+      var el = document.getElementById('cmpRange');
+      if (el) el.textContent = compareRangeLabel();
+    }
+    // Absolute change for a KPI card under the active basis, or null when there's no comparable data.
+    function kpiDelta(key) {
+      var p = snapPair();
+      if (!p.latest || !p.base) return null;
+      var L = p.latest, B = p.base;
+      if (key === 'audience')     return L.followers - B.followers;
+      if (key === 'interactions') return (L.engagement != null && B.engagement != null) ? L.engagement - B.engagement : null;
+      if (key === 'posts')        return (L.posts != null && B.posts != null) ? L.posts - B.posts : null;
+      if (key === 'netnew')       return p.base2 ? (L.followers - B.followers) - (B.followers - p.base2.followers) : null;
+      return null;   // reach + newsletter have no stored history to compare
+    }
+
     function renderKpis() {
+      renderCmpRange();   // keep the date line in step with the cards
       // Real values come from loadKpis() → KPI_STATE; a card with no value yet shows a pending chip.
       document.getElementById('spKpis').innerHTML = KPI_CARDS.map(function (c) {
         var s = KPI_STATE[c.key] || {};
         var valHtml = (s.value == null) ? '<span class="chip warn">pending</span>' : fmt(s.value, 'count');
         var deltaHtml = '';
-        if (s.value != null && s.delta != null && s.delta !== 0) {
-          var up = s.delta > 0;
-          deltaHtml = '<div class="delta ' + (up ? 'pos' : 'neg') + '">' + (up ? '▲ ' : '▼ ') +
-            fmt(Math.abs(s.delta), 'count') + (s.deltaLabel ? ' ' + esc(s.deltaLabel) : '') + '</div>';
+        if (s.value != null) {
+          var d = kpiDelta(c.key);
+          if (d == null) deltaHtml = '<div class="delta">No ' + (selCmp() === 'prev' ? 'prior-period' : 'year-ago') + ' data yet</div>';
+          else if (d === 0) deltaHtml = '<div class="delta">No change ' + esc(cmpLabel()) + '</div>';
+          else deltaHtml = '<div class="delta ' + (d > 0 ? 'pos' : 'neg') + '">' + (d > 0 ? '▲ ' : '▼ ') +
+            fmt(Math.abs(d), 'count') + ' ' + esc(cmpLabel()) + '</div>';
         }
         return '<div class="sp-kpi">' +
           '<div class="label">' + esc(c.label) + ' ' + infoTip(c.info, c.src) + '</div>' +
@@ -661,9 +716,9 @@
         }
         // Total audience + net new followers (Apify follower snapshot + delta)
         if (aud && aud.totalFollowers != null) {
-          var sinceLbl = aud.sinceDate ? 'since ' + aud.sinceDate : '';
-          KPI_STATE.audience = { value: aud.totalFollowers, delta: aud.netNew, deltaLabel: sinceLbl };
-          if (aud.netNew != null) KPI_STATE.netnew = { value: aud.netNew, deltaLabel: sinceLbl };
+          SNAPS = { list: aud.snaps || [], latest: aud.latest, prior: aud.prior, prior2: aud.prior2 };
+          KPI_STATE.audience = { value: aud.totalFollowers };
+          if (aud.netNew != null) KPI_STATE.netnew = { value: aud.netNew };
         }
         // Reach — Instagram only (FB reach deprecated, LinkedIn N/A)
         if (meta && meta.instagram && meta.instagram.reach28d != null) KPI_STATE.reach = { value: meta.instagram.reach28d };

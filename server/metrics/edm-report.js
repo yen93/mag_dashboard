@@ -24,6 +24,15 @@ const LATEST_SQL = `
   ORDER BY captured_at DESC
   LIMIT 1`;
 
+// Contact-total history: the last snapshot of each day (the table is append-only, so this is the
+// trail the Compare deltas on the Contact KPI cards read — a past snapshot vs the latest one).
+const HISTORY_SQL = `
+  SELECT DISTINCT ON (captured_at::date)
+         to_char(captured_at::date, 'YYYY-MM-DD') AS d,
+         total_contacts, active_contacts, nonactive_contacts
+  FROM public.edm_report_metrics
+  ORDER BY captured_at::date ASC, captured_at DESC`;
+
 function pending(note) {
   return {
     contact: { total: null, active: null, nonactive: null, lists: [], segmentation: [] },
@@ -41,12 +50,21 @@ export async function getEdmReport() {
 
   const r = rows[0];
   const n = (v) => (v == null ? null : Number(v));
+  let history = [];
+  try {
+    history = (await q(HISTORY_SQL)).map((h) => ({
+      d: h.d, total: n(h.total_contacts), active: n(h.active_contacts), nonactive: n(h.nonactive_contacts),
+    }));
+  } catch (err) {
+    console.error('[edm-report] history failed:', err.message);   // deltas just degrade to "no data"
+  }
 
   return {
     contact: {
       total: n(r.total_contacts),
       active: n(r.active_contacts),
       nonactive: n(r.nonactive_contacts),
+      history,   // [{d,total,active,nonactive}] oldest → newest, one per day
       // List health — top lists by total size, each as active / total (non_deleted).
       lists: (r.top_lists || []).map((l) => ({
         name: l.name,

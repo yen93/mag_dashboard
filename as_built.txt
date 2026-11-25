@@ -1,6 +1,6 @@
 ================================================================================
 AS-BUILT — MAG Metrics Dashboard
-Last updated: 2026-11-19 (EDUCATION LEADS TAB BUILT: new Sales sub-tab education_leads.html + server/metrics/education-leads.js + /api/sales/education-leads review routes + public.auto_found_educ_leads_review_log (migration 20261119120000 APPLIED); NEEDS a manual Cloud Run redeploy. Earlier 2026-11-17: FORTNIGHTLY TEAM CHECK-IN BUILT: checkin.html + POST /api/checkin + anonymous check_in tickets + edge fn fortnightly-checkin-email (deployed, verify_jwt=false) + pg_cron fortnightly-checkin-email-weekly '0 6 * * 5' (Fri 14:00 Manila, fortnight anchor 2026-11-20) — migrations/fn/cron APPLIED; frontend+server NEED a manual Cloud Run redeploy. Earlier same day TICKETING TAB BUILT: ticketing.html + server/metrics/tickets.js + /api/tickets + public.dashboard_tickets (live-written by the server, no sync); NEEDS a manual Cloud Run redeploy. Earlier same day EDUCATION OUTREACH TAB: new Sales sub-tab education_outreach.html + server/metrics/education-outreach.js + server/educationInsight.js (Gemini, DB-cached daily in educ_ai_insight_cache); NEEDS a manual Cloud Run redeploy. Earlier 2026-11-16: CARDS UNIFIED ON /leads-by-source: marketing.html cards 1–3 (+ chart, cost-per-enquiry, rate) and leads_bookings.html "Events Booked"/"Enquiries" cards now sum the same /api/marketing/leads-by-source rows as the By source + All leads tables (aggByFy/aggByMonth/buildCardStates) because /api/marketing/overview + /insight were 502ing on the deployed site; server/marketingInsight.js now uses getMarketingLeadsBySource; /overview route kept but unused by public/. Also sub-tab "Email & Partners" renamed "Outreach Campaign" (app.js label + email_partners.html title), all pages app.js?v=20. Frontend + 1 server file → NEEDS a manual Cloud Run redeploy. Earlier same day PAID SOURCING REFACTOR: roas_counted_deals is now an EXPLICIT paid source for ALL FYs in the Leads & Bookings + Overview metrics — precedence ga4-cpc(FY27 platform) > roas(all FYs) > ac_google_ads_yes_deals; new ga_cpc_ids CTE, counted_ids roas arm spans all FYs; fixes FY27 roas deals with no ga4 cpc row e.g. Tilray (now Google Ads FY27 won); aggregate totals unchanged. Server-only, NEEDS a manual Cloud Run redeploy. Earlier 2026-11-13 GOOGLE ADS? = YES DEALS: new table public.ac_google_ads_yes_deals + upsert-only RPC reload_ac_google_ads_yes_deals + edge fn ac-google-ads-yes-deals-sync + WEEKLY cron (Mon 06:20 PH) — all APPLIED/DEPLOYED, 95 rows backfilled; Leads & Bookings + Marketing Overview server metrics now add the not-already-counted ones (Paid Ads FY22–26, Google Ads FY27) — server change, NEEDS a manual Cloud Run redeploy; earlier same day RESTRICTED PARTNER ROLE EXTENDED: also roas.html — see RESTRICTED PARTNER ACCESS entry; earlier same day RESTRICTED PARTNER ROLE: simpledigital.net.au + testertwo gmail can log in but see only leads_bookings.html; needs redeploy; earlier 2026-11-11 AI & AUTOMATION TAB: new top tab + blank Builds Monitoring / Ticketing subtabs; earlier 2026-11-10 — SPEND & ROI CHANNEL RESULTS: the Executive X row is now labelled "Offsite" in the table. Its spend comes from the Xero "MAG program delivery expenses" account (code 376, cost of sales) per FY via public.xero_pnl_accounts_fy — a shared all-programs account (Geocon + all immersive programs; Xero has no tracking category to split it), so spend overcounts and ROAS total reads low (owner's deliberate choice). ROAS total = revenue ÷ that spend. Enquiries = companies listed per season in the Executive X ROI Report sheet, static: FY24 21, FY25 23, FY26 23 (EXEC_X_ENQUIRIES_BY_FY, same basis as the Nurture & Events EXEC_X table). ROAS ads stays pending. Edited server/metrics/marketing-channel-results.js (new PROGRAM_DELIVERY_SQL, execXFrom(e, spend), FY axis + all-years total) and public/spend_roi.html (Channel results ⓘ + source text). Server + frontend change → NEEDS a manual Cloud Run redeploy). Then 2026-11-10 (CONFERENCES PAGE (public/sales.html) + server/metrics/liv-deals.js: NEW Deal column (live join to activecampaign_deals.title by deal id, 340/340 match), NEW Custom Date Range popover (Created date, mirrors ac_contact_sources.html) and NEW "Export CSV" of the current filtered/sorted view — server + frontend, NEEDS a manual Cloud Run redeploy. MONTHLY LOG: "Deals behind the summary" table + FY toggle/date range moved into it — frontend-only, needs redeploy. AI-SOURCE LIST: new public.ai_source_patterns table + ai-source-patterns-sync monthly edge fn (curated + OpenAI discovery, append-only) — WRITTEN, NOT YET APPLIED/DEPLOYED; ga4-website-traffic-sync rewired to read it with regex fallback — NOT YET DEPLOYED. SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
+Last updated: 2026-11-25 (SOCIAL PLATFORMS TAB NOW LIVE FROM META + APIFY: social_platforms.html (Marketing sub-tab key social-platforms) no longer sample — Facebook + Instagram come from the Meta Graph API via ONE non-expiring Page token (Cloud Run secret META_PAGE_TOKEN, attached + deployed as revision dashboard-00335-fmm; server-side only), LinkedIn (James + MAG) from the existing Apify cache. New server modules meta-fb-insights.js, meta-ig-trend.js, meta-fb-trend.js, meta-ig-demographics.js, meta-top-posts.js, social-audience.js + routes /api/marketing/{meta-fb,meta-ig-trend,meta-fb-trend,meta-ig-demographics,meta-top-posts,social-audience}; new Supabase caches public.meta_ig_monthly + public.meta_fb_monthly (migrations applied, 12 months backfilled, self-refreshed by the server). Live: 6 KPI cards, Followers + Engagement by platform (4 platforms), IG reach/interactions trend, FB net-follower growth, IG age/gender, IG top locations, IG top posts. Still pending: Audience by seniority/industry (LinkedIn-only data). The earlier batches are deployed; the later ones (IG 24-post window, KPI cards, /social-audience) NEED a manual Cloud Run redeploy — verify. Earlier 2026-11-19 (EDUCATION LEADS TAB BUILT: new Sales sub-tab education_leads.html + server/metrics/education-leads.js + /api/sales/education-leads review routes + public.auto_found_educ_leads_review_log (migration 20261119120000 APPLIED); NEEDS a manual Cloud Run redeploy. Earlier 2026-11-17: FORTNIGHTLY TEAM CHECK-IN BUILT: checkin.html + POST /api/checkin + anonymous check_in tickets + edge fn fortnightly-checkin-email (deployed, verify_jwt=false) + pg_cron fortnightly-checkin-email-weekly '0 6 * * 5' (Fri 14:00 Manila, fortnight anchor 2026-11-20) — migrations/fn/cron APPLIED; frontend+server NEED a manual Cloud Run redeploy. Earlier same day TICKETING TAB BUILT: ticketing.html + server/metrics/tickets.js + /api/tickets + public.dashboard_tickets (live-written by the server, no sync); NEEDS a manual Cloud Run redeploy. Earlier same day EDUCATION OUTREACH TAB: new Sales sub-tab education_outreach.html + server/metrics/education-outreach.js + server/educationInsight.js (Gemini, DB-cached daily in educ_ai_insight_cache); NEEDS a manual Cloud Run redeploy. Earlier 2026-11-16: CARDS UNIFIED ON /leads-by-source: marketing.html cards 1–3 (+ chart, cost-per-enquiry, rate) and leads_bookings.html "Events Booked"/"Enquiries" cards now sum the same /api/marketing/leads-by-source rows as the By source + All leads tables (aggByFy/aggByMonth/buildCardStates) because /api/marketing/overview + /insight were 502ing on the deployed site; server/marketingInsight.js now uses getMarketingLeadsBySource; /overview route kept but unused by public/. Also sub-tab "Email & Partners" renamed "Outreach Campaign" (app.js label + email_partners.html title), all pages app.js?v=20. Frontend + 1 server file → NEEDS a manual Cloud Run redeploy. Earlier same day PAID SOURCING REFACTOR: roas_counted_deals is now an EXPLICIT paid source for ALL FYs in the Leads & Bookings + Overview metrics — precedence ga4-cpc(FY27 platform) > roas(all FYs) > ac_google_ads_yes_deals; new ga_cpc_ids CTE, counted_ids roas arm spans all FYs; fixes FY27 roas deals with no ga4 cpc row e.g. Tilray (now Google Ads FY27 won); aggregate totals unchanged. Server-only, NEEDS a manual Cloud Run redeploy. Earlier 2026-11-13 GOOGLE ADS? = YES DEALS: new table public.ac_google_ads_yes_deals + upsert-only RPC reload_ac_google_ads_yes_deals + edge fn ac-google-ads-yes-deals-sync + WEEKLY cron (Mon 06:20 PH) — all APPLIED/DEPLOYED, 95 rows backfilled; Leads & Bookings + Marketing Overview server metrics now add the not-already-counted ones (Paid Ads FY22–26, Google Ads FY27) — server change, NEEDS a manual Cloud Run redeploy; earlier same day RESTRICTED PARTNER ROLE EXTENDED: also roas.html — see RESTRICTED PARTNER ACCESS entry; earlier same day RESTRICTED PARTNER ROLE: simpledigital.net.au + testertwo gmail can log in but see only leads_bookings.html; needs redeploy; earlier 2026-11-11 AI & AUTOMATION TAB: new top tab + blank Builds Monitoring / Ticketing subtabs; earlier 2026-11-10 — SPEND & ROI CHANNEL RESULTS: the Executive X row is now labelled "Offsite" in the table. Its spend comes from the Xero "MAG program delivery expenses" account (code 376, cost of sales) per FY via public.xero_pnl_accounts_fy — a shared all-programs account (Geocon + all immersive programs; Xero has no tracking category to split it), so spend overcounts and ROAS total reads low (owner's deliberate choice). ROAS total = revenue ÷ that spend. Enquiries = companies listed per season in the Executive X ROI Report sheet, static: FY24 21, FY25 23, FY26 23 (EXEC_X_ENQUIRIES_BY_FY, same basis as the Nurture & Events EXEC_X table). ROAS ads stays pending. Edited server/metrics/marketing-channel-results.js (new PROGRAM_DELIVERY_SQL, execXFrom(e, spend), FY axis + all-years total) and public/spend_roi.html (Channel results ⓘ + source text). Server + frontend change → NEEDS a manual Cloud Run redeploy). Then 2026-11-10 (CONFERENCES PAGE (public/sales.html) + server/metrics/liv-deals.js: NEW Deal column (live join to activecampaign_deals.title by deal id, 340/340 match), NEW Custom Date Range popover (Created date, mirrors ac_contact_sources.html) and NEW "Export CSV" of the current filtered/sorted view — server + frontend, NEEDS a manual Cloud Run redeploy. MONTHLY LOG: "Deals behind the summary" table + FY toggle/date range moved into it — frontend-only, needs redeploy. AI-SOURCE LIST: new public.ai_source_patterns table + ai-source-patterns-sync monthly edge fn (curated + OpenAI discovery, append-only) — WRITTEN, NOT YET APPLIED/DEPLOYED; ga4-website-traffic-sync rewired to read it with regex fallback — NOT YET DEPLOYED. SPEND & ROI page (public/spend_roi.html): (1) NEW "Marketing revenue" KPI card (first, highlighted;
 = row.marketingRevenue from /api/marketing/roi, FY-aware with vs-prior-FY delta) — 6 KPI cards now. (2) Channel results
 table: the Executive X row carries a small muted note "Updated at the close of each season." (3) NEW click-to-drill-down on
 the "Spend by type" bars: clicking a type opens a modal listing the distinct VENDOR names under that type (names only, no $),
@@ -867,6 +867,12 @@ ENVIRONMENT VARIABLES / CREDENTIALS
   repo or in any local file — only Cloud Run's runtime service account
   (`<project-number>-compute@developer.gserviceaccount.com`) has
   secretmanager.secretAccessor on it.
+- META_PAGE_TOKEN (+ optional META_PAGE_ID default 1421118044806726, META_IG_ID default
+  17841401738850546) — non-expiring Facebook PAGE token (with instagram_basic + instagram_manage_insights)
+  used server-side by the Social Platforms metric modules. Stored in Google Secret Manager as the secret
+  META_PAGE_TOKEN (project claudegwscli-502400; runtime service account has secretAccessor), attached to
+  Cloud Run ADDITIVELY with `--update-secrets META_PAGE_TOKEN=META_PAGE_TOKEN:latest`; the plain
+  deployment_script.txt redeploy preserves it. Not in the repo. Unset => Meta tiles degrade to sample/pending.
 - AC_API_URL / AC_API_KEY, XERO_CLIENT_ID/XERO_CLIENT_SECRET/
   XERO_REFRESH_TOKEN/XERO_TENANT_ID, CALENDLY_TOKEN, MONDAY_TOKEN,
   GOOGLE_SERVICE_ACCOUNT_JSON / BUYER_ANALYSIS_SHEET_ID — read by
@@ -920,8 +926,62 @@ ENVIRONMENT VARIABLES / CREDENTIALS
   generateContent call, cached 24h in Postgres (upsert-only). Requires GEMINI_API_KEY (Cloud Run env,
   mounted from Secret Manager secret gemini-ai-api-key-131126) and optional GEMINI_MODEL
   (default gemini-3.8-flash; maxOutputTokens 8192 because gemini-3.x are thinking models).
+- public/social_platforms.html (Marketing sub-tab "Social Platforms", key social-platforms, app.js?v=30 —
+  no bump needed, infoTip already present) — Meta-Business-Suite-style page, now LIVE except two charts.
+  renderMarketingHead(true) (no "Sample data" badge); each non-live widget carries a red pending chip.
+  Frontend loaders (all fall back silently to sample/pending on error): loadMetaLive() (FB + IG
+  followers/engagement bars + two-row green live banner), loadIgTrend(), loadFbTrend(),
+  loadIgDemographics(), loadTopPosts(), loadLinkedinLive() (reads GET /api/marketing/platforms →
+  LinkedIn followers/engagement bars), loadKpis() (6 KPI cards from /meta-fb + /platforms +
+  /content-metrics + /social-audience; KPI_CARDS + KPI_STATE, one infoTip per card).
+  Live: Total audience 10,727, Net new followers (Apify delta), Reach (Instagram 28-day only),
+  Content interactions (FB 28-day + IG/LinkedIn 24-post sum), Newsletter subscribers, Posts published;
+  Followers by platform + Engagement by platform (all 4 platforms: IG engagement = Meta API over the last
+  24 posts to match LinkedIn's 24; FB = 28-day page post engagements); "Instagram — reach & content
+  interactions · trend"; "Facebook — net follower growth"; "Audience — age & gender" + "Top locations"
+  (Instagram); "Top posts" (Instagram, by engagement, real per-post reach, linked to the permalink).
+  STILL PENDING (red chip): "Audience by seniority" + "Audience by industry" — LinkedIn-only attributes;
+  Meta has none and LinkedIn's API is gated (company page only; no personal-profile API).
+- Meta metric modules (server/metrics/, all Instagram/Facebook via graph.facebook.com v21.0 with
+  config.meta.pageToken = META_PAGE_TOKEN; request-time or self-refreshing; cached 10 min by the route):
+    meta-fb-insights.js getMetaFbInsights -> GET /api/marketing/meta-fb: {facebook, instagram, meta}.
+      FB: followers_count + 28-day page_views_total / page_daily_follows_unique / page_post_engagements.
+      IG (account discovered at runtime from the Page's instagram_business_account edge): followers,
+      media_count, 28-day reach, recent-media engagement (likes+comments over IG_MEDIA_LIMIT=24 posts).
+    meta-ig-trend.js getMetaIgTrend -> GET /api/marketing/meta-ig-trend: reads public.meta_ig_monthly and
+      refreshes the current + previous month from Graph (metric_type=total_value per calendar month,
+      since/until capped at 30 days — 31-day months drop their last day; reach is NOT summed from daily).
+    meta-fb-trend.js getMetaFbTrend -> GET /api/marketing/meta-fb-trend: reads public.meta_fb_monthly and
+      refreshes current + previous month (SUM of daily follows/unfollows over the full month).
+    meta-ig-demographics.js getMetaIgDemographics -> GET /api/marketing/meta-ig-demographics: IG
+      follower_demographics lifetime snapshot (breakdown age,gender + city; undeclared gender dropped;
+      top 8 cities). No table.
+    meta-top-posts.js getMetaTopPosts -> GET /api/marketing/meta-top-posts: recent IG media ranked by
+      likes+comments, top 8, each enriched with /media/insights reach. Instagram only (FB per-post counts
+      need Page Public Content Access; LinkedIn posts not stored per post).
+    social-audience.js getSocialAudience -> GET /api/marketing/social-audience: total followers +
+      net change from public.social_platform_stats snapshot history (Apify).
+  config: server/config.js `meta` block {pageToken, pageId (default 1421118044806726), igId (default
+  17841401738850546)} + hasSource('meta'); with no token every Meta tile degrades to sample/pending.
+  Hard API limits (verified live): Facebook reach/impressions at page AND post level are deprecated (all
+  metric names rejected across v18–v23); FB audience demographics (page_fans_*) deprecated; FB per-post
+  like/comment counts error #10; IG account engagement metrics only support period=day; IG follower_count is
+  last-30-days only and IG has no unfollows metric.
 
 EXTERNAL INTEGRATIONS
+- **Meta Graph API** (graph.facebook.com/v21.0) — Facebook Page "MyAdventure Group" (id 1421118044806726)
+  + the linked Instagram Business account @myadventuregroup (id 17841401738850546, discovered from the
+  Page's instagram_business_account edge). Accessed read-only, server-side, with ONE non-expiring Facebook
+  PAGE token carrying read_insights, pages_read_engagement, pages_show_list, business_management,
+  instagram_basic, instagram_manage_insights (minted 2026-11-25 by exchanging a user token for a 60-day
+  token and deriving the Page token; Facebook Login route — the newer graph.instagram.com "Instagram Login"
+  product was NOT used). Meta app: "MAG Analytics Connector" (Business type, Development mode, Standard
+  Access only — no App Review). Credential: Google Secret Manager secret META_PAGE_TOKEN (project
+  claudegwscli-502400) mounted on the Cloud Run service via --update-secrets; the minted tokens + app
+  secret also sit in a local file outside the repo (C:\Users\Cloverly\Downloads\mag_meta_credentials.txt) —
+  consider deleting it. The token stays valid while the admin's Facebook login/password does; if it
+  breaks, re-mint it (Graph API Explorer -> long-lived exchange -> Page token) and add a new secret version.
+  Note Page access requires the Page to stay linked to the Instagram account.
 - **Supabase** (MAG's "MAGTestProject", ref aivitcomiywiysrfwqxt,
   ap-northeast-1) — direct Postgres access via `pg`, credential in Secret
   Manager (see above). This mirrors most of MAG's other systems: the AC deal
@@ -985,6 +1045,16 @@ EXTERNAL INTEGRATIONS
   life, refreshed manually when the function's expiry alert fires. ToS caveat: automated logged-in access.
 
 DATA STORES (all in MAG's Supabase project aivitcomiywiysrfwqxt)
+- public.meta_ig_monthly (migration create_meta_ig_monthly, 2026-11-25) — monthly Instagram reach +
+  content interactions (month_start date PK, reach int, interactions int, captured_at). Meta Graph API
+  total_value per calendar month (30-day-capped window). 12 months (Dec 2025 -> Nov 2026) backfilled once;
+  the DASHBOARD SERVER upserts the current + previous month on each /meta-ig-trend cache-miss (pooled pg
+  connection; no edge fn / cron). Upsert-only on month_start, never truncated. RLS on, no policies.
+- public.meta_fb_monthly (migration create_meta_fb_monthly, 2026-11-25) — monthly Facebook follows +
+  unfollows (month_start date PK, follows int, unfollows int, captured_at), summed from the daily Page
+  metrics page_daily_follows_unique / page_daily_unfollows_unique. Same self-refresh pattern via
+  /meta-fb-trend; 12 months backfilled (small numbers: 0-5 follows, 0-3 unfollows per month); upsert-only;
+  RLS on, no policies.
 - public.dashboard_tickets (migration 20261117120000) — Ticketing board rows. Unlike the caches it is
   WRITTEN LIVE by the dashboard server over pg (INSERT on submit, UPDATE on admin triage); no sync/edge
   fn/cron. RLS on, no policies; updated_at trigger. 3 example rows seeded. ticket_type now also allows
