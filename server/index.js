@@ -32,6 +32,7 @@ import { getMetaIgTrend } from './metrics/meta-ig-trend.js';
 import { getMetaFbTrend } from './metrics/meta-fb-trend.js';
 import { getMetaIgDemographics } from './metrics/meta-ig-demographics.js';
 import { getMetaTopPosts } from './metrics/meta-top-posts.js';
+import { getSocialAudience } from './metrics/social-audience.js';
 import { getEdmReport } from './metrics/edm-report.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
@@ -726,6 +727,18 @@ marketing.get('/meta-top-posts', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:meta-top-posts]', err);
     res.status(502).json({ error: 'Failed to load top posts.', detail: err.message });
+  }
+});
+// Social audience — total followers across all 4 accounts + the net-follower change, from the
+// weekly Apify follower snapshots (public.social_platform_stats). Backs the "Total audience" +
+// "Net new followers" KPI cards on social_platforms.html. See server/metrics/social-audience.js.
+marketing.get('/social-audience', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:social-audience', getSocialAudience, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:social-audience]', err);
+    res.status(502).json({ error: 'Failed to load social audience.', detail: err.message });
   }
 });
 // EDM — the ActiveCampaign Contact Performance + All Campaigns Performance reports for

@@ -242,14 +242,16 @@
        calls; charts are drawn inline with Chart.js and are theme-aware. */
 
     // ── Sample data (from the reference design) ──────────────────────────────
-    var KPIS = [
-      { label: 'Total audience',       value: 10727, delta: 320,  good: 'up' },
-      { label: 'Net new followers',    value: 255,   delta: 35,   good: 'up' },
-      { label: 'Reach',                value: 52400, delta: 4300, good: 'up' },
-      { label: 'Content interactions', value: 179,   delta: 22,   good: 'up' },
-      { label: 'Newsletter subscribers', value: 923, delta: 28,   good: 'up' },
-      { label: 'Posts published',      value: 84,    delta: 6,    good: 'up' }
+    // KPI card definitions; real values are filled by loadKpis() into KPI_STATE.
+    var KPI_CARDS = [
+      { key: 'audience',     label: 'Total audience',        info: 'Total followers across Facebook, Instagram and both LinkedIn accounts (latest weekly snapshot).', src: 'Apify · social_platform_stats' },
+      { key: 'netnew',       label: 'Net new followers',     info: 'Change in total followers across all four accounts since the prior tracked snapshot.', src: 'Apify · social_platform_stats (follower delta)' },
+      { key: 'reach',        label: 'Reach',                 info: 'Instagram accounts reached in the last 28 days. Instagram only — Facebook reach is deprecated by Meta and LinkedIn reach is not available via API.', src: 'Meta Graph API · Instagram reach (28d)' },
+      { key: 'interactions', label: 'Content interactions',  info: 'Recent engagement across platforms: Facebook 28-day post engagements, plus Instagram and LinkedIn over their last 24 posts.', src: 'Meta API (FB/IG) + Apify (LinkedIn)' },
+      { key: 'newsletter',   label: 'Newsletter subscribers', info: 'Subscribers to James’s LinkedIn newsletter.', src: 'content_social_metrics · LinkedIn (cookie fetch)' },
+      { key: 'posts',        label: 'Posts published',       info: 'Recent posts captured across all platforms in the latest scrape (up to ~24 per platform).', src: 'Apify · social_platform_stats (posts per platform)' }
     ];
+    var KPI_STATE = {};   // key -> { value, delta?, deltaLabel? }, filled by loadKpis()
 
     var REACH_TREND = [
       { month: '2026-04', reach: 34000, interactions: 150 },
@@ -347,12 +349,20 @@
     }
 
     function renderKpis() {
-      // These headline KPIs are cross-platform and have no live source yet → red "pending"
-      // chip instead of a fabricated number. (Real Facebook figures live in the banner above.)
-      document.getElementById('spKpis').innerHTML = KPIS.map(function (k) {
+      // Real values come from loadKpis() → KPI_STATE; a card with no value yet shows a pending chip.
+      document.getElementById('spKpis').innerHTML = KPI_CARDS.map(function (c) {
+        var s = KPI_STATE[c.key] || {};
+        var valHtml = (s.value == null) ? '<span class="chip warn">pending</span>' : fmt(s.value, 'count');
+        var deltaHtml = '';
+        if (s.value != null && s.delta != null && s.delta !== 0) {
+          var up = s.delta > 0;
+          deltaHtml = '<div class="delta ' + (up ? 'pos' : 'neg') + '">' + (up ? '▲ ' : '▼ ') +
+            fmt(Math.abs(s.delta), 'count') + (s.deltaLabel ? ' ' + esc(s.deltaLabel) : '') + '</div>';
+        }
         return '<div class="sp-kpi">' +
-          '<div class="label">' + esc(k.label) + '</div>' +
-          '<div class="value"><span class="chip warn">pending</span></div>' +
+          '<div class="label">' + esc(c.label) + ' ' + infoTip(c.info, c.src) + '</div>' +
+          '<div class="value">' + valHtml + '</div>' +
+          deltaHtml +
         '</div>';
       }).join('');
     }
@@ -635,6 +645,50 @@
       }).catch(function () { /* keep hardcoded LinkedIn on error */ });
     }
 
+    // ── KPI cards — real cross-platform figures (Meta API + Apify + content-metrics) ──
+    function loadKpis() {
+      Promise.all([
+        fetchJSON('/api/marketing/meta-fb').catch(function () { return null; }),
+        fetchJSON('/api/marketing/platforms').catch(function () { return null; }),
+        fetchJSON('/api/marketing/content-metrics').catch(function () { return null; }),
+        fetchJSON('/api/marketing/social-audience').catch(function () { return null; })
+      ]).then(function (r) {
+        var meta = r[0], plats = r[1], content = r[2], aud = r[3];
+        function latest(key) {
+          if (!plats || !plats.data) return null;
+          return plats.data.filter(function (x) { return x.platformKey === key; })
+            .sort(function (a, b) { return (b.fyEnd || 0) - (a.fyEnd || 0) || String(b.snapshotDate).localeCompare(String(a.snapshotDate)); })[0];
+        }
+        // Total audience + net new followers (Apify follower snapshot + delta)
+        if (aud && aud.totalFollowers != null) {
+          var sinceLbl = aud.sinceDate ? 'since ' + aud.sinceDate : '';
+          KPI_STATE.audience = { value: aud.totalFollowers, delta: aud.netNew, deltaLabel: sinceLbl };
+          if (aud.netNew != null) KPI_STATE.netnew = { value: aud.netNew, deltaLabel: sinceLbl };
+        }
+        // Reach — Instagram only (FB reach deprecated, LinkedIn N/A)
+        if (meta && meta.instagram && meta.instagram.reach28d != null) KPI_STATE.reach = { value: meta.instagram.reach28d };
+        // Content interactions — sum of recent engagement across platforms
+        var james = latest('james_linkedin'), mag = latest('mag_linkedin');
+        var inter = 0, haveInter = false;
+        function addInter(v) { if (v != null) { inter += v; haveInter = true; } }
+        if (meta && meta.facebook) addInter(meta.facebook.postEngagements28d);
+        if (meta && meta.instagram) addInter(meta.instagram.recentEngagement);
+        if (james) addInter(james.totalEngagement);
+        if (mag) addInter(mag.totalEngagement);
+        if (haveInter) KPI_STATE.interactions = { value: inter };
+        // Newsletter subscribers (LinkedIn newsletter, content-metrics)
+        var nl = content && content.data && content.data.li_newsletter_subscribers_james;
+        if (nl && nl.value != null) KPI_STATE.newsletter = { value: nl.value };
+        // Posts published — sum of latest recent-post counts across the 4 accounts
+        var posts = 0, havePosts = false;
+        ['mag_facebook', 'mag_instagram', 'james_linkedin', 'mag_linkedin'].forEach(function (k) {
+          var row = latest(k); if (row && row.posts != null) { posts += row.posts; havePosts = true; }
+        });
+        if (havePosts) KPI_STATE.posts = { value: posts };
+        renderKpis();
+      }).catch(function () { /* leave pending chips on failure */ });
+    }
+
     function wireSeg(id, onChange) {
       var seg = document.getElementById(id);
       if (!seg) return;
@@ -658,6 +712,7 @@
     loadIgDemographics();              // overlay the REAL Instagram age/gender + top-locations demographics
     loadTopPosts();                    // overlay the REAL Instagram top posts (by engagement, with reach)
     loadLinkedinLive();                // overlay the REAL LinkedIn followers + engagement (Apify scrape)
+    loadKpis();                        // fill the 6 KPI cards with real cross-platform figures
     wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
     wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
     window.onThemeChange = drawCharts; // redraw charts on light/dark switch
