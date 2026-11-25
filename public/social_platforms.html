@@ -535,9 +535,9 @@
         }
         html += '<div class="fbl-note">Real figures from the Meta Graph API as of ' +
           esc((fb && fb.asOf) || (ig && ig.asOf)) +
-          '. Facebook &amp; Instagram followers/engagement are patched into the two per-platform charts above; ' +
-          'LinkedIn stays sample. Facebook reach is deprecated by Meta (views shown instead); Instagram reach is ' +
-          'the real 28-day figure. IG engagement = likes + comments on recent posts.</div>';
+          '. Facebook &amp; Instagram followers/engagement are patched into the two per-platform charts above ' +
+          '(LinkedIn there comes from the weekly Apify scrape). Facebook reach is deprecated by Meta (views shown ' +
+          'instead); Instagram reach is the real 28-day figure. IG engagement = likes + comments on recent posts.</div>';
         el.innerHTML = html;
         el.style.display = 'block';
       }).catch(function () { /* keep sample on any error */ });
@@ -606,6 +606,35 @@
       }).catch(function () { /* keep sample on error */ });
     }
 
+    // ── LIVE LinkedIn (real, from the weekly Apify scrape via /api/marketing/platforms) ──
+    // Patches the LinkedIn (James + MAG) bars in the Followers + Engagement per-platform charts
+    // with the live social_platform_stats values, then redraws those two bars. Keeps the
+    // hardcoded LinkedIn figures on any error.
+    function loadLinkedinLive() {
+      fetchJSON('/api/marketing/platforms').then(function (res) {
+        var rows = res && res.data;
+        if (!rows || !rows.length) return;
+        function latest(key) {
+          return rows.filter(function (r) { return r.platformKey === key; })
+            .sort(function (a, b) { return (b.fyEnd || 0) - (a.fyEnd || 0) || String(b.snapshotDate).localeCompare(String(a.snapshotDate)); })[0];
+        }
+        var james = latest('james_linkedin');
+        var mag = latest('mag_linkedin');
+        var touched = false;
+        function patch(arr, re, key, val) {
+          var r = arr.find(function (x) { return re.test(x.platform); });
+          if (r && val != null) { r[key] = val; touched = true; }
+        }
+        if (james) { patch(FOLLOWERS, /james/i, 'followers', james.followers); patch(ENGAGEMENT, /james/i, 'engagement', james.totalEngagement); }
+        if (mag) { patch(FOLLOWERS, /mag linkedin/i, 'followers', mag.followers); patch(ENGAGEMENT, /mag linkedin/i, 'engagement', mag.totalEngagement); }
+        if (!touched) return;
+        if (_charts.followers) { _charts.followers.destroy(); _charts.followers = null; }
+        hbar('followers', FOLLOWERS.map(function (r) { return r.platform; }), FOLLOWERS.map(function (r) { return r.followers; }), { colors: PAL[0] });
+        if (_charts.engagement) { _charts.engagement.destroy(); _charts.engagement = null; }
+        hbar('engagement', ENGAGEMENT.map(function (r) { return r.platform; }), ENGAGEMENT.map(function (r) { return r.engagement; }), { colors: PAL[2] });
+      }).catch(function () { /* keep hardcoded LinkedIn on error */ });
+    }
+
     function wireSeg(id, onChange) {
       var seg = document.getElementById(id);
       if (!seg) return;
@@ -628,6 +657,7 @@
     loadFbTrend();                     // overlay the REAL Facebook monthly net-follower-growth trend
     loadIgDemographics();              // overlay the REAL Instagram age/gender + top-locations demographics
     loadTopPosts();                    // overlay the REAL Instagram top posts (by engagement, with reach)
+    loadLinkedinLive();                // overlay the REAL LinkedIn followers + engagement (Apify scrape)
     wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
     wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
     window.onThemeChange = drawCharts; // redraw charts on light/dark switch
