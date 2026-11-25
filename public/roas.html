@@ -555,9 +555,7 @@
     function baseMonths(cur) { return CMP === 'prev' ? precedingMonths(cur) : shiftMonths(cur, -1); }
     function cmpLabel() {
       if (CMP === 'prev') return 'vs prev period';
-      if (CUSTOM) return 'vs last yr';
-      var fe = selFyEnd();
-      return fe != null ? 'vs FY' + String(fe - 1).slice(-2) : 'vs last yr';
+      return 'vs same period last year';
     }
     // ---- Date label beside the Compare toggle ----
     // The span of months actually being shown, and the span it is compared against, as real

@@ -352,10 +352,8 @@
     }
     function cmpLabel() {
       if (CMP === 'prev') return 'vs prev period';
-      if (dateRangeActive()) return 'vs last year';
-      var k = selFyKey();
-      if (k === 'all') return '';
-      return 'vs FY' + String(fyEndOf(k) - 1 - 2000).padStart(2, '0');
+      if (!dateRangeActive() && selFyKey() === 'all') return '';
+      return 'vs same period last year';
     }
 
     // One delta chip. opts: {pp} percentage-point (rate values already in %), else percent;

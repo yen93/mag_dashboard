@@ -1054,7 +1054,7 @@
       var b = document.querySelector('#cmpSeg button.active');
       return b ? b.getAttribute('data-cmp') : 'yoy';
     }
-    function cmpRangeLabel() { return CMP === 'prev' ? 'vs prev period' : 'vs last year'; }
+    function cmpRangeLabel() { return CMP === 'prev' ? 'vs prev period' : 'vs same period last year'; }
 
     // Prior-FY key for a given FY key ('fy27' → 'fy26'); null for 'all'/invalid.
     function cmpFyKey(fyKey) {
@@ -1174,8 +1174,7 @@
     // Label for a windowed FY delta: 'vs prev period', else 'vs FYxx' (the prior FY).
     function cmpWindowLabel() {
       if (CMP === 'prev') return 'vs prev period';
-      var k = selFyKey();
-      return k === 'all' ? 'vs last yr' : ('vs FY' + String(fyEndOfKey(k) - 1).slice(-2));
+      return 'vs same period last year';
     }
 
     // ----- Date label beside the Compare toggle (mirrors marketing.html) -----

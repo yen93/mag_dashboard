@@ -401,8 +401,7 @@
 
     function cmpLabel() {
       if (selCmp() === 'prev') return 'vs prev period';
-      if (!CUSTOM && selFyKey() !== 'all') return 'vs FY' + String(fyEndOf(selFyKey()) - 1).slice(-2);
-      return 'vs last yr';
+      return 'vs same period last year';
     }
 
     // ----- Date label beside the Compare toggle (mirrors marketing.html) -----

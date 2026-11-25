@@ -29,6 +29,7 @@ import { getIndirectDeals } from './metrics/indirect-deals.js';
 import { getMarketingPlatforms } from './metrics/marketing-platforms.js';
 import { getMetaFbInsights } from './metrics/meta-fb-insights.js';
 import { getMetaIgTrend } from './metrics/meta-ig-trend.js';
+import { getMetaFbTrend } from './metrics/meta-fb-trend.js';
 import { getEdmReport } from './metrics/edm-report.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
@@ -683,6 +684,20 @@ marketing.get('/meta-ig-trend', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:meta-ig-trend]', err);
     res.status(502).json({ error: 'Failed to load Instagram trend.', detail: err.message });
+  }
+});
+// Facebook monthly net-follower-growth trend — plain read of the monthly cache
+// public.meta_fb_monthly (follows vs unfollows), which the metric self-refreshes (current +
+// previous month) from the Meta Graph API on each cache-miss. Backs the "Facebook — net follower
+// growth" chart on social_platforms.html. Facebook only (IG has no unfollows metric). See
+// server/metrics/meta-fb-trend.js. Cached briefly.
+marketing.get('/meta-fb-trend', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:meta-fb-trend', getMetaFbTrend, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:meta-fb-trend]', err);
+    res.status(502).json({ error: 'Failed to load Facebook follower trend.', detail: err.message });
   }
 });
 // EDM — the ActiveCampaign Contact Performance + All Campaigns Performance reports for

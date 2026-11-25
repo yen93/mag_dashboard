@@ -436,8 +436,7 @@
     function baseMonths(cur) { return CMP === 'prev' ? precedingMonths(cur) : shiftMonths(cur, -1); }
     function cmpDeltaLabel() {
       if (CMP === 'prev') return 'vs prev period';
-      if (!CUSTOM && SEL !== 'all' && SEL != null) return 'vs FY' + String(SEL - 1).slice(-2);
-      return 'vs last yr';
+      return 'vs same period last year';
     }
 
     // ---- Date label beside the Compare toggle ----

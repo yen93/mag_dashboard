@@ -177,8 +177,8 @@
         </div>
 
         <div class="card sp-card">
-          <div class="sp-card-head"><h3>Net follower growth <span class="chip warn">pending</span> <span class="head-info" data-info="Follows vs unfollows each month. A rising unfollow bar is an early warning the content's missing. SAMPLE until connected." data-src="SAMPLE — wire to platform insights"></span></h3></div>
-          <div class="cap">Follows vs unfollows, by month</div>
+          <div class="sp-card-head"><h3>Facebook — net follower growth <span class="chip warn" id="netFollowPending">pending</span> <span class="head-info" data-info="Facebook follows vs unfollows each month, last 12 months. LIVE from the Meta Graph API. A rising unfollow bar is an early warning the content's missing. Facebook only — Instagram's API exposes no unfollows metric." data-src="Live — Facebook (Meta Graph API) · monthly follows/unfollows"></span></h3></div>
+          <div class="cap">Follows vs unfollows, by month · Facebook</div>
           <div class="sp-chart-box h-sm"><canvas id="netFollowers"></canvas></div>
         </div>
 
@@ -343,7 +343,7 @@
     }
     function cmpLabel() {
       var b = document.querySelector('#cmpSeg button.active');
-      return (b && b.getAttribute('data-cmp') === 'prev') ? 'vs prev period' : 'vs last year';
+      return (b && b.getAttribute('data-cmp') === 'prev') ? 'vs prev period' : 'vs same period last year';
     }
 
     function renderKpis() {
@@ -556,6 +556,20 @@
       }).catch(function () { /* keep sample on error */ });
     }
 
+    // ── LIVE Facebook net-follower-growth (real Meta Graph API via meta_fb_monthly cache) ──
+    // Replaces the sample NET_FOLLOWERS with the real monthly FB follows/unfollows series,
+    // re-renders the chart, and drops the "pending" chip. Keeps sample + chip on any error.
+    function loadFbTrend() {
+      fetchJSON('/api/marketing/meta-fb-trend').then(function (res) {
+        var d = res && res.data;
+        if (!d || !d.length) return;
+        NET_FOLLOWERS = d;                                      // live monthly series (ascending)
+        if (_charts.netFollowers) { _charts.netFollowers.destroy(); _charts.netFollowers = null; }
+        renderNetFollowers();
+        var chip = document.getElementById('netFollowPending'); if (chip) chip.remove();
+      }).catch(function () { /* keep sample on error */ });
+    }
+
     function wireSeg(id, onChange) {
       var seg = document.getElementById(id);
       if (!seg) return;
@@ -575,6 +589,7 @@
     renderAll();
     loadMetaLive();                    // overlay the REAL Facebook + Instagram figures (Meta Graph API)
     loadIgTrend();                     // overlay the REAL Instagram monthly reach + interactions trend
+    loadFbTrend();                     // overlay the REAL Facebook monthly net-follower-growth trend
     wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
     wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
     window.onThemeChange = drawCharts; // redraw charts on light/dark switch

@@ -1,0 +1,14 @@
+**overview_update:**
+update marketing.html delta comparison notes on the kpi cards. when the "vs last year" toggle is on, it should say "[FIGURE] vs same period last year"
+
+**other_tabs:**
+1. roi.html
+2. roas.html
+3. email_partners.html
+4. website_search.html
+5. social_platforms.html
+6. edm.html
+
+## main task:
+- also update other_tabs the same way.
+- see overview_update as reference
