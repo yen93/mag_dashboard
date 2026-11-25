@@ -207,14 +207,14 @@
         </div>
 
         <div class="card sp-card">
-          <div class="sp-card-head"><h3>Audience — age &amp; gender <span class="chip warn">pending</span> <span class="head-info" data-info="Age and gender of the Facebook + Instagram audience (LinkedIn doesn't give gender). SAMPLE until Meta is connected." data-src="SAMPLE — wire to Meta (Facebook/Instagram) insights"></span></h3></div>
-          <div class="cap">Facebook + Instagram · ← women · men →</div>
+          <div class="sp-card-head"><h3>Audience — age &amp; gender <span class="chip warn" id="demoPending">pending</span> <span class="head-info" data-info="Age and gender of the Instagram follower base (lifetime snapshot). LIVE from the Meta Graph API. Instagram only — Facebook audience demographics are deprecated by Meta; undeclared-gender followers are excluded." data-src="Live — Instagram (Meta Graph API) · follower demographics"></span></h3></div>
+          <div class="cap">Instagram · ← women · men →</div>
           <div class="sp-chart-box h-md"><canvas id="demographics"></canvas></div>
         </div>
 
         <div class="card sp-card">
-          <div class="sp-card-head"><h3>Top locations <span class="chip warn">pending</span> <span class="head-info" data-info="Where the audience is based, across all channels. SAMPLE until platforms are connected." data-src="SAMPLE — wire to platform insights"></span></h3></div>
-          <div class="cap">All channels · share of audience</div>
+          <div class="sp-card-head"><h3>Top locations <span class="chip warn" id="locPending">pending</span> <span class="head-info" data-info="Where the Instagram audience is based — top cities (lifetime snapshot). LIVE from the Meta Graph API. Instagram only — Facebook audience demographics are deprecated by Meta." data-src="Live — Instagram (Meta Graph API) · follower cities"></span></h3></div>
+          <div class="cap">Instagram · share of audience</div>
           <div class="sp-chart-box h-md"><canvas id="locations"></canvas></div>
         </div>
 
@@ -570,6 +570,28 @@
       }).catch(function () { /* keep sample on error */ });
     }
 
+    // ── LIVE Instagram follower demographics (real Meta Graph API) ─────────────
+    // Fills the "Audience — age & gender" + "Top locations" charts from the IG follower base
+    // (lifetime snapshot), re-renders, and drops their pending chips. Keeps sample on error.
+    function loadIgDemographics() {
+      fetchJSON('/api/marketing/meta-ig-demographics').then(function (res) {
+        if (!res) return;
+        if (res.ageGender && res.ageGender.length) {
+          DEMOGRAPHICS = res.ageGender;
+          if (_charts.demographics) { _charts.demographics.destroy(); _charts.demographics = null; }
+          renderDemographics();
+          var dc = document.getElementById('demoPending'); if (dc) dc.remove();
+        }
+        if (res.locations && res.locations.length) {
+          LOCATIONS = res.locations;
+          if (_charts.locations) { _charts.locations.destroy(); _charts.locations = null; }
+          hbar('locations', LOCATIONS.map(function (r) { return r.place; }),
+               LOCATIONS.map(function (r) { return r.share; }), { colors: PAL[2], pct: true });
+          var lc = document.getElementById('locPending'); if (lc) lc.remove();
+        }
+      }).catch(function () { /* keep sample on error */ });
+    }
+
     function wireSeg(id, onChange) {
       var seg = document.getElementById(id);
       if (!seg) return;
@@ -590,6 +612,7 @@
     loadMetaLive();                    // overlay the REAL Facebook + Instagram figures (Meta Graph API)
     loadIgTrend();                     // overlay the REAL Instagram monthly reach + interactions trend
     loadFbTrend();                     // overlay the REAL Facebook monthly net-follower-growth trend
+    loadIgDemographics();              // overlay the REAL Instagram age/gender + top-locations demographics
     wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
     wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
     window.onThemeChange = drawCharts; // redraw charts on light/dark switch

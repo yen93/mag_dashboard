@@ -30,6 +30,7 @@ import { getMarketingPlatforms } from './metrics/marketing-platforms.js';
 import { getMetaFbInsights } from './metrics/meta-fb-insights.js';
 import { getMetaIgTrend } from './metrics/meta-ig-trend.js';
 import { getMetaFbTrend } from './metrics/meta-fb-trend.js';
+import { getMetaIgDemographics } from './metrics/meta-ig-demographics.js';
 import { getEdmReport } from './metrics/edm-report.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
@@ -698,6 +699,19 @@ marketing.get('/meta-fb-trend', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:meta-fb-trend]', err);
     res.status(502).json({ error: 'Failed to load Facebook follower trend.', detail: err.message });
+  }
+});
+// Instagram follower demographics — a lifetime snapshot (age×gender + top cities) of the current
+// follower base from the Meta Graph API (follower_demographics). Backs the "Audience — age &
+// gender" + "Top locations" charts on social_platforms.html. Instagram only (FB demographics are
+// deprecated; seniority/industry are LinkedIn-only). See server/metrics/meta-ig-demographics.js.
+marketing.get('/meta-ig-demographics', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:meta-ig-demographics', getMetaIgDemographics, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:meta-ig-demographics]', err);
+    res.status(502).json({ error: 'Failed to load Instagram demographics.', detail: err.message });
   }
 });
 // EDM — the ActiveCampaign Contact Performance + All Campaigns Performance reports for
