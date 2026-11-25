@@ -99,6 +99,19 @@
     table.sp-table tbody td { font-variant-numeric: tabular-nums; color: var(--text); }
     table.sp-table tbody td:first-child { font-weight: 500; }
     .sp-plat-chip { font-size: 12px; color: var(--text-muted); }
+
+    /* Live Facebook banner (real Meta Graph API figures) */
+    #fbLive { margin: 6px 0 2px; }
+    .fbl-inner {
+      display: flex; flex-wrap: wrap; align-items: center; gap: 10px 20px;
+      background: var(--surface); border: 1px solid var(--border);
+      border-left: 3px solid var(--pos); border-radius: 12px;
+      padding: 12px 16px; box-shadow: var(--mkt-shadow);
+    }
+    .fbl-badge { font-size: 12px; font-weight: 700; color: var(--pos); text-transform: uppercase; letter-spacing: .04em; }
+    .fbl-stat { font-size: 13px; color: var(--text-muted); }
+    .fbl-stat b { color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums; margin-right: 3px; }
+    .fbl-note { font-size: 12px; color: var(--text-muted); flex-basis: 100%; line-height: 1.5; }
   </style>
 </head>
 <body>
@@ -151,16 +164,19 @@
       <!-- 6 headline KPI cards -->
       <div class="sp-kpi-grid" id="spKpis"></div>
 
+      <!-- Live Facebook figures (real Meta Graph API) — populated async; hidden until loaded -->
+      <div id="fbLive" style="display:none"></div>
+
       <!-- Card grid -->
       <div class="sp-grid">
         <div class="card sp-card wide">
-          <div class="sp-card-head"><h3>Reach &amp; content interactions — trend <span class="head-info" data-info="Meta's headline view: reach (bars) and content interactions (line) over time. The question isn't today's number, it's the direction." data-src="Sample — wire to each platform's insights"></span></h3></div>
+          <div class="sp-card-head"><h3>Reach &amp; content interactions — trend <span class="chip warn">pending</span> <span class="head-info" data-info="Meta's headline view: reach (bars) and content interactions (line) over time. The question isn't today's number, it's the direction." data-src="Sample — wire to each platform's insights"></span></h3></div>
           <div class="cap">Bars = reach · line = interactions</div>
           <div class="sp-chart-box h-md"><canvas id="reachTrend"></canvas></div>
         </div>
 
         <div class="card sp-card">
-          <div class="sp-card-head"><h3>Net follower growth <span class="head-info" data-info="Follows vs unfollows by month — Meta's Audience view. A rising unfollow bar is an early warning the content is missing." data-src="Sample — follows vs unfollows"></span></h3></div>
+          <div class="sp-card-head"><h3>Net follower growth <span class="chip warn">pending</span> <span class="head-info" data-info="Follows vs unfollows by month — Meta's Audience view. A rising unfollow bar is an early warning the content is missing." data-src="Sample — follows vs unfollows"></span></h3></div>
           <div class="cap">Follows vs unfollows, by month</div>
           <div class="sp-chart-box h-sm"><canvas id="netFollowers"></canvas></div>
         </div>
@@ -178,31 +194,31 @@
         </div>
 
         <div class="card sp-card">
-          <div class="sp-card-head"><h3>Audience by seniority <span class="head-info" data-info="Follower seniority on LinkedIn (James's + MAG, ~69% of the audience). The keynote-relevant cut: are we reaching the directors, VPs and owners who actually book James? Sample until LinkedIn analytics are connected." data-src="LinkedIn · sample · share of audience"></span></h3></div>
+          <div class="sp-card-head"><h3>Audience by seniority <span class="chip warn">pending</span> <span class="head-info" data-info="Follower seniority on LinkedIn (James's + MAG, ~69% of the audience). The keynote-relevant cut: are we reaching the directors, VPs and owners who actually book James? Sample until LinkedIn analytics are connected." data-src="LinkedIn · sample · share of audience"></span></h3></div>
           <div class="cap">LinkedIn · share of audience</div>
           <div class="sp-chart-box h-md"><canvas id="seniority"></canvas></div>
         </div>
 
         <div class="card sp-card">
-          <div class="sp-card-head"><h3>Audience by industry <span class="head-info" data-info="Which industries the LinkedIn audience works in. Shows whether the audience matches the sectors MAG sells offsites and keynotes into. Sample until LinkedIn analytics are connected." data-src="LinkedIn · sample · share of audience"></span></h3></div>
+          <div class="sp-card-head"><h3>Audience by industry <span class="chip warn">pending</span> <span class="head-info" data-info="Which industries the LinkedIn audience works in. Shows whether the audience matches the sectors MAG sells offsites and keynotes into. Sample until LinkedIn analytics are connected." data-src="LinkedIn · sample · share of audience"></span></h3></div>
           <div class="cap">LinkedIn · share of audience</div>
           <div class="sp-chart-box h-md"><canvas id="industry"></canvas></div>
         </div>
 
         <div class="card sp-card">
-          <div class="sp-card-head"><h3>Audience — age &amp; gender <span class="head-info" data-info="Age and gender split for the Facebook + Instagram audience (LinkedIn doesn't report gender). Meta's signature audience view. Sample until Meta insights are connected." data-src="Facebook + Instagram · sample"></span></h3></div>
+          <div class="sp-card-head"><h3>Audience — age &amp; gender <span class="chip warn">pending</span> <span class="head-info" data-info="Age and gender split for the Facebook + Instagram audience (LinkedIn doesn't report gender). Meta's signature audience view. Sample until Meta insights are connected." data-src="Facebook + Instagram · sample"></span></h3></div>
           <div class="cap">Facebook + Instagram · ← women · men →</div>
           <div class="sp-chart-box h-md"><canvas id="demographics"></canvas></div>
         </div>
 
         <div class="card sp-card">
-          <div class="sp-card-head"><h3>Top locations <span class="head-info" data-info="Where the audience is based, across all four channels. Useful for timing posts and knowing which markets the keynote audience sits in. Sample until platform insights are connected." data-src="All channels · sample · share of audience"></span></h3></div>
+          <div class="sp-card-head"><h3>Top locations <span class="chip warn">pending</span> <span class="head-info" data-info="Where the audience is based, across all four channels. Useful for timing posts and knowing which markets the keynote audience sits in. Sample until platform insights are connected." data-src="All channels · sample · share of audience"></span></h3></div>
           <div class="cap">All channels · share of audience</div>
           <div class="sp-chart-box h-md"><canvas id="locations"></canvas></div>
         </div>
 
         <div class="card sp-card wide">
-          <div class="sp-card-head"><h3>Top posts <span class="head-info" data-info="Recent posts ranked by reach — Meta's Content view. Shows what topics and formats land, so we do more of what works. Post-level reach is sample until insights are connected." data-src="Sample reach · by reach"></span></h3></div>
+          <div class="sp-card-head"><h3>Top posts <span class="chip warn">pending</span> <span class="head-info" data-info="Recent posts ranked by reach — Meta's Content view. Shows what topics and formats land, so we do more of what works. Post-level reach is sample until insights are connected." data-src="Sample reach · by reach"></span></h3></div>
           <div class="cap">By reach</div>
           <div class="sp-table-wrap" tabindex="0" role="region" aria-label="Top posts by reach">
             <table class="sp-table">
@@ -330,14 +346,12 @@
     }
 
     function renderKpis() {
+      // These headline KPIs are cross-platform and have no live source yet → red "pending"
+      // chip instead of a fabricated number. (Real Facebook figures live in the banner above.)
       document.getElementById('spKpis').innerHTML = KPIS.map(function (k) {
-        var up = k.delta >= 0, good = (k.good === 'up') === up;
-        var cls = k.delta === 0 ? '' : (good ? 'pos' : 'neg');
-        var arrow = k.delta === 0 ? '' : (up ? '▲ ' : '▼ ');
         return '<div class="sp-kpi">' +
           '<div class="label">' + esc(k.label) + '</div>' +
-          '<div class="value">' + fmt(k.value, 'count') + '</div>' +
-          '<div class="delta ' + cls + '">' + arrow + fmt(Math.abs(k.delta), 'count') + ' ' + esc(cmpLabel()) + '</div>' +
+          '<div class="value"><span class="chip warn">pending</span></div>' +
         '</div>';
       }).join('');
     }
@@ -474,6 +488,36 @@
 
     function renderAll() { renderKpis(); drawCharts(); renderPosts(); }
 
+    // ── LIVE Facebook (real Meta Graph API) ───────────────────────────────────
+    // Patches the FB entries in the per-platform charts and shows a live banner with
+    // the real figures. Everything else on the page stays sample: Instagram isn't
+    // linked yet, and reach/impressions are deprecated by Meta's Page Insights API.
+    function loadFacebookLive() {
+      fetchJSON('/api/marketing/meta-fb').then(function (res) {
+        var fb = res && res.facebook;
+        if (!fb) return;                              // token unset / no data → keep sample
+        var f = FOLLOWERS.find(function (r) { return /facebook/i.test(r.platform); });
+        if (f && fb.followers != null) f.followers = fb.followers;
+        var e = ENGAGEMENT.find(function (r) { return /facebook/i.test(r.platform); });
+        if (e && fb.postEngagements28d != null) e.engagement = fb.postEngagements28d;
+        drawCharts();                                 // redraw with the live FB bars
+
+        var el = document.getElementById('fbLive'); if (!el) return;
+        function stat(label, v) { return v == null ? '' : '<span class="fbl-stat"><b>' + fmt(v, 'count') + '</b>' + esc(label) + '</span>'; }
+        el.innerHTML =
+          '<div class="fbl-inner">' +
+            '<span class="fbl-badge">● Facebook — live</span>' +
+            stat('followers', fb.followers) +
+            stat('views · 28d', fb.views28d) +
+            stat('new follows · 28d', fb.newFollows28d) +
+            stat('post engagements · 28d', fb.postEngagements28d) +
+            '<span class="fbl-note">Real figures from the Meta Graph API (MAG Facebook Page) as of ' + esc(fb.asOf) +
+            '. Instagram and reach stay sample — IG isn’t linked as a Business account yet, and reach/impressions are deprecated by Meta’s Page Insights API.</span>' +
+          '</div>';
+        el.style.display = 'block';
+      }).catch(function () { /* keep sample on any error */ });
+    }
+
     function wireSeg(id, onChange) {
       var seg = document.getElementById(id);
       if (!seg) return;
@@ -487,10 +531,11 @@
     }
 
     initPage('marketing');
-    renderMarketingHead();             // layout mockup with sample data → keep the "Sample data — layout only" badge
+    renderMarketingHead(true);         // Facebook is live (banner + FB bars); non-live widgets carry a "pending" chip → no global sample badge
     renderMarketingSidebar('social-platforms');
     fillHeadInfo();                    // fill the static card/chart ⓘ info tools (DESIGN_GUIDE §6)
     renderAll();
+    loadFacebookLive();                // overlay the REAL Facebook figures (Meta Graph API)
     wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
     wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
     window.onThemeChange = drawCharts; // redraw charts on light/dark switch

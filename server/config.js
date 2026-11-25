@@ -75,6 +75,17 @@ export const config = {
     apiKey: env.N8N_API_KEY || '',
     supabaseProjectId: env.N8N_SUPABASE_PROJECT_ID || 'uwsncuowtzydylfabikj',
   },
+  meta: {
+    // Facebook Page (Meta Graph API) — the Social Platforms tab's LIVE Facebook figures
+    // (server/metrics/meta-fb-insights.js) are fetched at request time with a non-expiring
+    // Page access token (a Page token derived from a long-lived user token; stays valid
+    // while the admin's login does). Server-side only — set META_PAGE_TOKEN via Secret
+    // Manager + --update-secrets, never in the client. Instagram needs a Business/Creator
+    // account linked to the Page + instagram_* scopes before it can be added here. Reach /
+    // impressions are deprecated by Meta's Page Insights API and are not available.
+    pageToken: env.META_PAGE_TOKEN || '',
+    pageId: env.META_PAGE_ID || '1421118044806726',
+  },
 };
 
 export function hasSource(name) {
@@ -101,6 +112,8 @@ export function hasSource(name) {
       return Boolean(config.openai.apiKey);
     case 'gemini':
       return Boolean(config.gemini.apiKey);
+    case 'meta':
+      return Boolean(config.meta.pageToken);
     default:
       return false;
   }

@@ -27,6 +27,7 @@ import { getMarketingNurtureEvents } from './metrics/marketing-nurture-events.js
 import { getEmailPartnerMetrics } from './metrics/email-partner-metrics.js';
 import { getIndirectDeals } from './metrics/indirect-deals.js';
 import { getMarketingPlatforms } from './metrics/marketing-platforms.js';
+import { getMetaFbInsights } from './metrics/meta-fb-insights.js';
 import { getEdmReport } from './metrics/edm-report.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
@@ -650,6 +651,22 @@ marketing.get('/platforms', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:platforms]', err);
     res.status(502).json({ error: 'Failed to load platform stats from data source.', detail: err.message });
+  }
+});
+// Facebook LIVE insights — real MAG Facebook Page metrics (followers + 28-day views / new
+// follows / post engagements) fetched at request time from the Meta Graph API with a
+// non-expiring Page token (META_PAGE_TOKEN, server-side only). Feeds the live Facebook
+// figures on public/social_platforms.html; everything else on that page stays sample (IG
+// not linked yet; reach/impressions deprecated by Meta). Degrades to {facebook:null,
+// status:pending} when the token is unset or Meta returns nothing. See
+// server/metrics/meta-fb-insights.js. Cached briefly.
+marketing.get('/meta-fb', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:meta-fb', getMetaFbInsights, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:meta-fb]', err);
+    res.status(502).json({ error: 'Failed to load Facebook insights.', detail: err.message });
   }
 });
 // EDM — the ActiveCampaign Contact Performance + All Campaigns Performance reports for
