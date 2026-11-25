@@ -214,12 +214,12 @@
 
     <div class="grid">
       <div class="card col-12">
-        <div class="card-head"><h3>Revenue vs spend by month</h3><span class="head-info" id="monthInfo" data-info="The payoff over time — green marketing-spend bars and the blue marketing-revenue line share the left axis; the gray dashed line is whole-business company revenue (context) on the right axis."></span><span class="chips" id="monthChips"></span></div>
+        <div class="card-head"><h3>Revenue vs spend by month</h3><span class="head-info" id="monthInfo" data-info="The payoff over time: green = marketing spend, blue line = marketing revenue. Grey dashed line = whole-company revenue (context)."></span><span class="chips" id="monthChips"></span></div>
         <div class="chart-box" id="roi-month-chart"><canvas id="roiMonthCanvas"></canvas></div>
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>Channel Summary</h3><span class="head-info" id="channelInfo" data-info="Marketing spend per calendar month for the selected FY, stacked by category (or by ad platform). Live from Xero, refreshed monthly. Vendors on the ad accounts not yet categorised show as &quot;Uncategorized&quot;."></span>
+        <div class="card-head"><h3>Channel Summary</h3><span class="head-info" id="channelInfo" data-info="Marketing spend per month, stacked by category or ad platform. From Xero. Vendors not yet sorted show as &#39;Uncategorized&#39;."></span>
           <div class="segmented" id="channelDimBar" style="margin-left:6px"><button data-dim="type">By type</button><button data-dim="platform">By platform</button><button data-dim="account">By account</button></div>
           <span class="chips" id="channelChips" style="margin-left:auto"></span>
         </div>
@@ -227,12 +227,12 @@
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>ROI by financial year</h3><div class="spacer"></div><span class="muted" id="roiFyNote">Click a row to filter the page to that FY.</span><span class="chips" id="fyTableChips"></span></div>
+        <div class="card-head"><h3>ROI by financial year</h3><span class="head-info" id="fyInfo" data-info="Each year&#39;s revenue, marketing spend, deals and ROI. The ROI column is marketing revenue ÷ marketing spend — the same basis as &#39;Return on spend&#39; above, so the two now agree."></span><div class="spacer"></div><span class="muted" id="roiFyNote">Click a row to filter the page to that FY.</span><span class="chips" id="fyTableChips"></span></div>
         <div id="roiFyTable"></div>
       </div>
 
       <div class="card col-12">
-        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by month</h3><div class="segmented" id="pipeWonSeg" style="margin-left:10px"><button data-won="all" class="active">All</button><button data-won="won">Won only</button></div><span class="chips" id="pipeChips"></span></div>
+        <div class="card-head"><h3>AC pipeline — Won / Open / Lost by month</h3><span class="head-info" id="pipeInfo" data-info="Deals won, still open, and lost each month, from ActiveCampaign."></span><div class="segmented" id="pipeWonSeg" style="margin-left:10px"><button data-won="all" class="active">All</button><button data-won="won">Won only</button></div><span class="chips" id="pipeChips"></span></div>
         <div class="chart-box" id="roi-pipe-chart" style="height:380px"><canvas id="roiPipelineCanvas"></canvas></div>
       </div>
 
@@ -298,6 +298,17 @@
     // carrying the description (the sub-line) + the data source (pulled out of the
     // bottom chips so the card isn't showing two icons). ROI tab only — renderKpis
     // itself (shared) is untouched.
+    // Approved plain-MAG-language wording per KPI card (sheet 'MAG Dashboard Marketing Tooltips').
+    // 'Clients won' is deliberately absent — its sheet text describes a different basis than the card.
+    var KPI_TIPS = {
+      'Marketing revenue': { desc: 'Money won from deals marketing sourced, duplicates removed — split across paid ads, organic search, bureau/The Tailor and Executive X.', source: 'ActiveCampaign won deals (ads, organic, bureau/Tailor) + Executive X ROI sheet' },
+      'Total company revenue': { desc: "The whole company's income from Xero (not just marketing) — shown here for context.", source: 'Xero P&L total income' },
+      'Marketing spend': { desc: 'Only marketing costs from Xero — ads, website, software, printing and the work-pod team — before GST.', source: 'Xero marketing accounts (Advertising, Website, Software, Printing, WrkPod)' },
+      'Return on spend': { desc: 'Marketing revenue ÷ marketing spend. Above 1× means marketing paid for itself.', source: 'Calculated — marketing revenue ÷ marketing spend' },
+      'Net ROI': { desc: 'Return on spend minus 1, shown as a %. +74% = $1.74 back for every $1.', source: 'Calculated — return on spend − 1' },
+      'Cost per client (CAC)': { desc: 'What we spent on marketing to win each client (spend ÷ clients won).', source: 'Calculated — marketing spend ÷ clients won' },
+      'Avg revenue / client': { desc: 'Average revenue per client won (marketing revenue ÷ clients won).', source: 'Calculated — marketing revenue ÷ clients won' }
+    };
     function tuckKpiSubs() {
       document.querySelectorAll('#kpis .kpi').forEach(function (card) {
         var sub = card.querySelector(':scope > .muted');
@@ -310,6 +321,14 @@
           srcIcon.remove();           // drop the duplicate source icon
         }
         var label = card.querySelector('.label');
+        var tip = label && KPI_TIPS[label.textContent.trim()];
+        if (tip) {
+          // Keep the live per-bucket figures on Marketing revenue (computed, not static copy).
+          var live = (label.textContent.trim() === 'Marketing revenue' && desc.indexOf('ROAS-paid') > -1)
+            ? ' ' + desc.slice(desc.indexOf('ROAS-paid')) : '';
+          desc = tip.desc + live;
+          source = tip.source;
+        }
         if (label && !label.querySelector('.src-info') && (desc || source)) {
           label.insertAdjacentHTML('beforeend', infoTip(desc, source));
         }
@@ -328,12 +347,19 @@
     // Charts that carry a description show ONE icon (in the head) with description +
     // source; their chips span then holds only the readiness chip. Charts without a
     // description (pipeline, FY table) keep the plain single source icon via metaChips.
-    var CHIP_TO_INFO = { monthChips: 'monthInfo', catChips: 'catInfo', channelChips: 'channelInfo' };
+    var CHIP_TO_INFO = { monthChips: 'monthInfo', catChips: 'catInfo', channelChips: 'channelInfo', fyTableChips: 'fyInfo', pipeChips: 'pipeInfo' };
+    // Approved 'Source' wording (sheet 'MAG Dashboard Marketing Tooltips') — overrides the payload meta.source.
+    var INFO_SRC = {
+      monthInfo: 'Xero (marketing & company revenue, marketing spend)',
+      channelInfo: 'Xero (marketing spend by month)',
+      fyInfo: 'Marketing-sourced won deals (ActiveCampaign) and Xero marketing spend; company revenue shown from Xero P&L (data cache)',
+      pipeInfo: 'ActiveCampaign deals'
+    };
     function setChips(id, meta) {
       var infoId = CHIP_TO_INFO[id];
       if (infoId) {
         var info = document.getElementById(infoId);
-        if (info) info.innerHTML = infoTip(info.getAttribute('data-info'), meta && meta.source);
+        if (info) info.innerHTML = infoTip(info.getAttribute('data-info'), INFO_SRC[infoId] || (meta && meta.source));
         var el = document.getElementById(id);
         if (el) el.innerHTML = statusChipHtml(meta);
       } else {
@@ -1027,8 +1053,8 @@
         .then(function (data) {
           ROI = data;
           document.getElementById('roiNoteInfo').innerHTML =
-            infoTip((data.rows.meta && data.rows.meta.note) || '',
-                    data.rows.meta && data.rows.meta.source);
+            infoTip("How this page works: company revenue is from Xero; marketing spend is only the marketing accounts in Xero; deals are from ActiveCampaign. 'Return on spend' = marketing revenue ÷ marketing spend. Part-years (FY22, this year) have less spend, so compare full years to full years.",
+                    'Xero P&L (revenue) + Xero marketing accounts (spend) + ActiveCampaign (deals), live via the data cache');
           if (!data.rows.data || !data.rows.data.length) {
             // Pending / empty — show source chips + a needs-setup note, no charts.
             setChips('monthChips', data.rows.meta);

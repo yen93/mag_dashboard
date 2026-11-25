@@ -1,0 +1,5 @@
+**ttip_link:**
+https://docs.google.com/spreadsheets/d/1oFLIowhtDTaZQJcLsX7CUm8ipVLUMdWpLi9nt40tFVI/edit?usp=sharing
+
+## main task: 
+- update all tooltips in the marketing dashboard. apply the "Suggested — plain MAG language" in the ttip_link

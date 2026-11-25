@@ -181,7 +181,7 @@
             <span class="edm-chev">▾</span>
             <h2>Contact Performance</h2>
           </button>
-          <span class="head-info" data-info="The health of the ActiveCampaign contact database — how many contacts there are, how many are active (subscribed), and how the list has grown over time." data-src="ActiveCampaign (contacts, lists and tags)"></span>
+          <span class="head-info" data-info="Health of the email database: how many contacts, how many are active (subscribed), and how it's grown." data-src="ActiveCampaign (contacts &amp; lists)"></span>
           <span class="edm-sec-sub">Click the title to show or hide this section</span>
         </div>
         <div class="edm-sec-body" id="contactBody">
@@ -193,7 +193,7 @@
             <div class="card edm-chart-card">
               <div class="card-head block-head">
                 <div style="display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap">
-                  <h3 id="lhHeading">List health <span class="head-info" data-info="The largest ActiveCampaign lists and how much of each is still active (subscribed) versus the full list size. The headline is account-wide active contacts as a share of all contacts." data-src="ActiveCampaign lists, refreshed weekly"></span></h3>
+                  <h3 id="lhHeading">List health <span class="head-info" data-info="Our biggest lists and how much of each is still active (subscribed) vs the full size." data-src="ActiveCampaign (lists)"></span></h3>
                   <span class="chart-cap" id="lhCap"></span>
                 </div>
                 <div class="lh-headline" id="lhHeadline">Loading…</div>
@@ -204,7 +204,7 @@
 
             <div class="card edm-chart-card">
               <div class="card-head block-head">
-                <h3 id="segHeading">Contact segmentation <span class="head-info" data-info="How the contact database splits across engagement bands: Active = opened or clicked in the last 90 days (your reliable audience); Quiet = no open for 90–180 days (the re-engagement audience); Dormant = no open for 180+ days (re-engage or sunset). The total is the real ActiveCampaign contact count; the band split is a sample until 3 saved AC segments are wired in." data-src="ActiveCampaign contacts (real total) · sample band split"></span></h3>
+                <h3 id="segHeading">Contact segmentation <span class="head-info" data-info="Contacts split by engagement: Active = opened/clicked in the last 90 days (reliable audience); Quiet = nothing for 90–180 days (re-engage); Dormant = nothing for 180+ days (re-engage or remove); Not tagged = not yet classified — too new (under 180 days) to fall into a band. Total is real." data-src="ActiveCampaign contact count"></span></h3>
                 <div class="chart-cap" id="segCap"></div>
               </div>
               <div class="seg-donut-wrap">
@@ -224,7 +224,7 @@
             <span class="edm-chev">▾</span>
             <h2>Campaigns Performance</h2>
           </button>
-          <span class="head-info" data-info="How every sent email campaign has performed across the account — total emails delivered and the account-wide open, click, bounce and unsubscribe rates, with the per-campaign breakdown below." data-src="ActiveCampaign all-campaigns performance report"></span>
+          <span class="head-info" data-info="How emails are performing overall — total sent and the open, click, bounce and unsubscribe rates, with each campaign below." data-src="ActiveCampaign all-campaigns performance report"></span>
           <span class="edm-sec-sub">Click the title to show or hide this section</span>
         </div>
         <div class="edm-sec-body" id="campaignsBody">
@@ -235,7 +235,7 @@
           <!-- campaigns table (mirror AC columns, no preview) -->
           <div class="card edm-campaigns-card">
             <div class="card-head block-head">
-              <h3 id="campTableHeading">All campaigns <span class="head-info" data-info="Every sent email campaign with its ActiveCampaign report columns: send volume, opens and clicks (counts and rates), click-to-open, bounces and unsubscribes. Sort, search and filter by any column." data-src="ActiveCampaign all-campaigns performance report"></span></h3>
+              <h3 id="campTableHeading">All campaigns <span class="head-info" data-info="Every email sent with its full stats — sends, opens, clicks, click-to-open, bounces, unsubscribes. Sort, search, filter." data-src="ActiveCampaign all-campaigns performance report"></span></h3>
               <div class="muted" style="font-size:12px;margin-top:4px" id="campTableCount"></div>
             </div>
             <div id="campTableRows"></div>
@@ -405,11 +405,11 @@
       var c = (EDM && EDM.contact) || {};
       host.innerHTML = [
         kpiCard('Total Contacts', num(c.total), 'Everyone in ActiveCampaign',
-          infoTip('Every contact in the ActiveCampaign account, whatever their subscription status.', 'ActiveCampaign, refreshed weekly')),
+          infoTip('Everyone in ActiveCampaign, whatever their status.', 'ActiveCampaign (contacts)')),
         kpiCard('Active Contacts', num(c.active), pctOf(c.active, c.total),
-          infoTip('Contacts who are subscribed and can be emailed (ActiveCampaign status "Active").', 'ActiveCampaign, refreshed weekly')),
+          infoTip('Contacts who are subscribed and can be emailed.', 'ActiveCampaign (contacts)')),
         kpiCard('Non-Active Contacts', num(c.nonactive), pctOf(c.nonactive, c.total),
-          infoTip('Contacts who are not currently mailable — unconfirmed, unsubscribed or bounced. (Total minus Active.)', 'ActiveCampaign, refreshed weekly'))
+          infoTip('Contacts we can\'t email — unconfirmed, unsubscribed or bounced.', 'ActiveCampaign (contacts)'))
       ].join('');
     }
 
@@ -422,22 +422,22 @@
       var dl = function (cur, prev, opts) { return ps ? deltaChip(cur, prev, lab, opts) : ''; };
       document.getElementById('campaignKpis').innerHTML = [
         kpiCard('Campaigns sent', num(s.count), periodLabel(),
-          infoTip('Sent email campaigns whose last send falls in the selected period (FY toggle or custom date range).', 'ActiveCampaign all-campaigns performance report'),
+          infoTip('Email campaigns whose last send falls in the selected period.', 'ActiveCampaign all-campaigns report'),
           dl(s.count, ps && ps.count)),
         kpiCard('Emails sent', num(s.totalSends), 'total delivered',
-          infoTip('The total number of individual emails delivered across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report'),
+          infoTip('Total individual emails delivered this period.', 'ActiveCampaign all-campaigns report'),
           dl(s.totalSends, ps && ps.totalSends)),
         kpiCard('Open rate', rate(s.openRate), num(s.totalUniqueOpens) + ' unique opens',
-          infoTip('Share of delivered emails that were opened, across the campaigns in the selected period. Apple Mail privacy can inflate opens, so treat this as a soft signal.', 'ActiveCampaign all-campaigns performance report'),
+          infoTip('Share of delivered emails opened. Apple Mail auto-opens inflate this, so treat it as a soft signal.', 'ActiveCampaign all-campaigns report'),
           dl(s.openRate, ps && ps.openRate, { pp: true })),
         kpiCard('Click rate', rate(s.clickRate), num(s.totalUniqueClicks) + ' unique clicks',
-          infoTip('Share of delivered emails where a link was clicked, across the campaigns in the selected period. The most reliable engagement signal.', 'ActiveCampaign all-campaigns performance report'),
+          infoTip('Share of delivered emails where a link was clicked — the most reliable engagement signal.', 'ActiveCampaign all-campaigns report'),
           dl(s.clickRate, ps && ps.clickRate, { pp: true })),
         kpiCard('Bounce rate', rate(s.bounceRate), num(s.totalBounces) + ' bounces',
-          infoTip('Share of emails that could not be delivered, across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report'),
+          infoTip('Share of emails that couldn\'t be delivered.', 'ActiveCampaign all-campaigns report'),
           dl(s.bounceRate, ps && ps.bounceRate, { pp: true, invert: true })),
         kpiCard('Unsubscribe rate', rate(s.unsubscribeRate), num(s.totalUnsubscribes) + ' unsubscribes',
-          infoTip('Share of delivered emails that led to an unsubscribe, across the campaigns in the selected period.', 'ActiveCampaign all-campaigns performance report'),
+          infoTip('Share of delivered emails that led to an unsubscribe.', 'ActiveCampaign all-campaigns report'),
           dl(s.unsubscribeRate, ps && ps.unsubscribeRate, { pp: true, invert: true }))
       ].join('');
     }

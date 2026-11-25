@@ -828,23 +828,23 @@
     // for the Compare delta (see kpiDelta / metricForFy below).
     var TOP_CARDS = [
       { label: 'Website sessions', kind: 'live', key: 'sessions', metric: 'sessions',
-        desc: 'The total number of website visits (sessions) for the selected period.',
+        desc: 'Total website visits this period.',
         source: 'GA4 website analytics' },
       { label: 'Enquiries', kind: 'live', key: 'total', metric: 'total',
-        desc: 'Website and Ads leads that matched an existing saved contact in ActiveCampaign (one matched contact counts as one enquiry), for the selected period.',
-        source: 'Website / Ads leads matched to ActiveCampaign' },
+        desc: 'Website/ad leads that matched a saved contact in ActiveCampaign (one match = one enquiry).',
+        source: 'Website/Ads leads matched to ActiveCampaign' },
       { label: 'Paid-search enquiries', kind: 'live', key: 'cpc', metric: 'cpc',
-        desc: 'Enquiries that came from paid search (Google or Bing) and matched a saved contact, for the selected period.',
-        source: 'Website / Ads leads matched to ActiveCampaign' },
+        desc: 'Enquiries that came from a paid Google or Bing ad.',
+        source: 'Website/Ads leads matched to ActiveCampaign (paid Google/Bing)' },
       { label: 'Visits from AI tools', kind: 'live', key: 'aiVisits', metric: 'aiVisits',
-        desc: 'Website visits referred from AI assistants (such as ChatGPT, Gemini, Perplexity, Claude and Copilot) for the selected period.',
-        source: 'GA4 website analytics' },
+        desc: 'Website visits sent from AI assistants like ChatGPT, Gemini, Perplexity, Claude and Copilot.',
+        source: 'GA4 website analytics (AI referrers)' },
       { label: 'Google rating', kind: 'rating', key: 'rating', metric: 'avgStars',
-        desc: 'Average Google review rating. Reviews lift both search ranking and conversion. The count of new reviews in the selected period is shown below.',
+        desc: 'Average Google review rating. Good reviews lift both ranking and conversion. New reviews this period shown below.',
         source: 'Google Business reviews' },
       { label: 'Phone enquiries', kind: 'c2c', key: 'phone', metric: 'phone',
-        desc: 'Phone-number clicks on the website — a visitor tapping a phone link to call — for the selected period.',
-        source: 'GA4 website analytics' }
+        desc: 'Taps on a phone number on the website to call us.',
+        source: 'GA4 website analytics (click-to-call events)' }
     ];
 
     var WS = null;          // live payload once fetched (null = loading, false = failed)
@@ -1360,8 +1360,8 @@
       var infoEl = document.getElementById('wsFunnelInfo');
       if (infoEl && !infoEl.querySelector('.src-info')) {
         infoEl.innerHTML = infoTip(
-          'Of all website visits, how many became an enquiry — the visitor → enquiry rate (enquiries ÷ sessions). The gap is the conversion opportunity.',
-          'GA4 website analytics + ActiveCampaign'
+          'Of all website visits, how many became an enquiry. The gap is the room to convert more.',
+          'GA4 sessions ÷ ActiveCampaign-matched enquiries'
         );
       }
       var box = document.getElementById('wsFunnelBody');
@@ -1423,7 +1423,7 @@
       var infoEl = document.getElementById('wsGraphInfo');
       if (infoEl && !infoEl.querySelector('.src-info')) {
         infoEl.innerHTML = infoTip(
-          'Website visits and visits from AI tools by period. Selecting a period highlights it on the chart and updates the summary strip and the breakdown of AI tools.',
+          'Website visits and AI-tool visits by period. Click a period to highlight it and see the AI-source breakdown.',
           'GA4 website analytics'
         );
       }
@@ -1698,8 +1698,8 @@
       var infoEl = document.getElementById('wsTableInfo');
       if (infoEl && !infoEl.querySelector('.src-info')) {
         infoEl.innerHTML = infoTip(
-          'Website visits and visits from AI tools, one row per period. Click any row to switch the selected period.',
-          'GA4 website analytics'
+          'Website and AI-tool visits, one row per period. Click a row to switch the period.',
+          'GA4 website analytics (per-FY snapshots)'
         );
       }
 
@@ -1821,8 +1821,8 @@
       var infoEl = document.getElementById('wsC2cGraphInfo');
       if (infoEl && !infoEl.querySelector('.src-info')) {
         infoEl.innerHTML = infoTip(
-          'Website phone-number clicks each month — a visitor tapping a phone link to call — split by where the visit came from. "Monthly trend" stacks the selected period by channel; "By channel" ranks the channels.',
-          'GA4 website analytics'
+          'Website phone taps each month, split by where the visit came from.',
+          'GA4 (click-to-call events)'
         );
       }
 

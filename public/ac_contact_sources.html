@@ -581,17 +581,17 @@
 
       host.innerHTML =
         kpi('Total Deal Value', money(revenue), revSub, revenue ? 'pos' : '',
-            'Total value of all deals (AUD) for contacts in the current view. AC deal value is CRM-contracted, not billed revenue.' + (openPipeline > 0 ? ' Open pipeline: ' + money(openPipeline) + ' across ' + openDeals + ' open deals.' : '')) +
+            'Total value of all deals in view. Note: this is the CRM-contracted value, not billed revenue.' + (openPipeline > 0 ? ' Open pipeline: ' + money(openPipeline) + ' across ' + openDeals + ' open deals.' : '') + '\nSource: ActiveCampaign deal value') +
         kpi('Total Leads', total, 'in selected range', '',
-            'Every ActiveCampaign contact created in the selected date range — the total inbound enquiries for that period.') +
+            'Every ActiveCampaign contact created in the selected dates — the period\'s total enquiries.\nSource: ActiveCampaign contacts') +
         kpi('Paid Google (google / cpc)', gcpc, 'paid search', gcpc ? 'pos' : '',
-            'Contacts whose GA4 session channel was google / cpc — a paid Google Ads click. Channel is only known for contacts in the last ~60 days (GA4 data retention).') +
+            'Contacts from a paid Google Ads click. Source is only known for the last ~60 days (GA4 limit).\nSource: GA4 session channel (google / cpc)') +
         kpi('Paid Bing (bing / cpc)', bcpc, 'paid search', bcpc ? 'pos' : '',
-            'Contacts whose GA4 session channel was bing / cpc — a paid Microsoft (Bing) Ads click. Last ~60 days only (GA4 retention).') +
+            'Contacts from a paid Bing Ads click. Last ~60 days only.\nSource: GA4 session channel (bing / cpc)') +
         kpi('Organic search (google / organic)', gorg, 'organic search', gorg ? 'pos' : '',
-            'Contacts from google / organic — a free, unpaid Google search result (not an ad). Last ~60 days only (GA4 retention).') +
+            'Contacts from a free (non-ad) Google search. Last ~60 days only.\nSource: GA4 session channel (google / organic)') +
         kpi('Organic search (bing / organic)', borg, 'organic search', borg ? 'pos' : '',
-            'Contacts from bing / organic — a free, unpaid Bing search result (not an ad). Last ~60 days only (GA4 retention).');
+            'Contacts from a free (non-ad) Bing search. Last ~60 days only.\nSource: GA4 session channel (bing / organic)');
     }
 
     // ---- table ----
@@ -928,7 +928,9 @@
       fetchJSON('/api/operations/contact-sources').then(function (data) {
         var rawRows = (data.rows && data.rows.data) || [];
         ALL_ROWS = rawRows.filter(function (r) { return !isExcludedRow(r); });
-        setChips('acsChips', data.rows && data.rows.meta);
+        document.getElementById('acsChips').innerHTML =
+          infoTip('Every lead with its source, matched from GA4 and Calendly to ActiveCampaign.', 'GA4 + Calendly matched to ActiveCampaign (data cache)') +
+          metaChips(Object.assign({}, data.rows && data.rows.meta, { source: null }));
         apply();
       }).catch(function (err) {
         console.error(err);

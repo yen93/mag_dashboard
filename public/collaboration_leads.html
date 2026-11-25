@@ -91,7 +91,7 @@
     <main class="content">
       <div class="toolbar al-toolbar">
         <strong>Collaboration Leads</strong>
-        <span class="head-info" data-info="Potential podcast, YouTube, media, and social-media collaborators discovered weekly for James Castrission / My Adventure Group. Review each lead and tag it 'Send intro' (approved for outreach) or 'Skip'." data-src="Supabase → collaboration_leads"></span>
+        <span class="head-info" data-info="Potential podcast, YouTube, media and social collaborators found weekly for James. Review each and tag 'Send intro' or 'Skip'." data-src="Weekly collaborator finder (Supabase)"></span>
         <div class="spacer"></div>
         <span class="ctl-label" id="viewLabel">Show</span>
         <div class="segmented" id="viewSeg" role="toolbar" aria-labelledby="viewLabel">
@@ -111,7 +111,7 @@
 
       <div class="section-head">
         <span class="step">2</span><h2>Leads</h2>
-        <span class="head-info" data-info="Collaboration leads from public.collaboration_leads. New leads (outreach_status = 'new') are pending review. Tagging 'Send intro' sets outreach_status = 'approved'; 'Skip' sets 'rejected'. Once a lead moves to contacted/replied/collaborated it becomes read-only. Cloverly, Julienne and James can tag; everyone else is view-only." data-src="Supabase → collaboration_leads (+ reviewer from collaboration_leads_review_log)"></span>
+        <span class="head-info" data-info="The full queue — brand, type, contact, platforms, region, niche and your decision." data-src="Collaboration leads list (Supabase)"></span>
         <div class="spacer"></div>
         <span class="muted" id="clCount" style="font-size:13px"></span>
       </div>
@@ -191,7 +191,7 @@
         ? ' type="button" data-view="' + o.view + '" aria-pressed="' + (o.view === VIEW ? 'true' : 'false') + '"'
         : '';
       return '<' + tag + ' class="' + cls + '"' + attrs + '>' +
-        '<div class="label">' + esc(o.label) + (o.info ? ' ' + infoTip(o.info, 'Supabase → collaboration_leads') : '') + '</div>' +
+        '<div class="label">' + esc(o.label) + (o.info ? ' ' + infoTip(o.info, o.src || 'Collaboration leads list (Supabase)') : '') + '</div>' +
         '<div class="value">' + o.value + '</div>' +
         (o.sub ? '<div class="kpi-sub">' + o.sub + '</div>' : '') +
         '</' + tag + '>';
@@ -240,16 +240,17 @@
           sub: c.pending
             ? (c.pendingEmail + ' with verified email' + (c.oldest ? ' · oldest ' + fmtDate(c.oldest) : ''))
             : 'All caught up 🎉',
-          info: 'Leads with outreach_status = new — waiting for Cloverly, Julienne or James to choose Send intro or Skip.' },
+          info: 'Leads waiting for someone to choose Send intro or Skip.' },
         { label: 'Send intro', value: numfmt(c.sendAll), view: 'send', sub: sendSub,
-          info: 'Every lead tagged Send intro (outreach_status = approved), including leads that have moved into contacted, replied, or collaborated.' },
+          info: 'Leads approved for outreach (including ones already contacted or replied).' },
         { label: 'Skipped', value: numfmt(c.skip), view: 'skip', sub: 'not pursued',
-          info: 'Leads tagged Skip (outreach_status = rejected / do_not_contact) — not pursued.' },
+          info: 'Leads marked Skip — not pursued.' },
         { label: 'Verified emails', value: numfmt(c.queueVerifiedEmail),
           sub: c.emailPct == null ? 'no leads in queue' : (c.emailPct + '% of queue · RSS / website'),
-          info: 'Queue leads whose outreach email was verified directly from an official podcast RSS feed or brand website. Leads without an email still list the POC for manual lookup.' },
+          info: 'Leads whose email was verified from an official RSS feed or brand site.' },
         { label: 'Send-intro rate', value: c.sendRate == null ? '—' : c.sendRate + '%', sub: 'of reviewed leads',
-          info: 'All Send intro ÷ (all Send intro + all Skipped), across every reviewed lead. Helps gauge whether the weekly finder is surfacing strong collaboration fits.' },
+          info: 'Send intro ÷ (Send intro + Skipped) — whether the weekly finder is surfacing good fits.',
+          src: 'Calculated — Send intro ÷ (Send intro + Skipped)' },
       ];
       document.getElementById('kpis').innerHTML = cards.map(kpiCard).join('');
       document.querySelectorAll('#kpis .kpi-click').forEach(function (el) {

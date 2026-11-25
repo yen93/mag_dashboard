@@ -346,6 +346,7 @@
       <div class="card col-12">
         <div class="card-head">
           <h3>ROAS by FY</h3>
+          <span class="head-info" data-info="Each year&#39;s ad cost (Google + Bing + Simple Digital), deals and won revenue. Early years come from Niki&#39;s ad log; FY25+ from audited Google-Ads-tagged deals plus GA4 paid-click deals." data-src="Xero (Google Ads/Bing/Simple Digital) + audited ad deals (early years: Niki&#39;s ad log)"></span>
           <div class="spacer"></div>
           <span class="muted" id="roasTableNote" style="font-size:12px"></span>
         </div>
@@ -688,17 +689,19 @@
       host.innerHTML =
         kpi('ROAS', roasFmt(roas),
             '<span class="pill ' + (pass ? 'roas-pass' : 'roas-fail') + '">' + (pass ? 'clears' : 'below') + ' ' + roasFmt(target) + '</span>',
-            '', 'Won revenue ÷ ' + costLabel().toLowerCase() + ' for ' + r.fy + '. Target ' + roasFmt(target) + ' ($' + target.toFixed(2) + ' won per $1 spent).', '', dRoas) +
+            '', 'Revenue won ÷ paid-search cost for the year. Target is ' + roasFmt(target) + ' ($' + target + ' won per $1 spent).\nSource: Calculated — won revenue ÷ paid-search cost', '', dRoas) +
         kpi(costLabel(), money(cost),
             SEL.basis === 'google' ? 'Google Ads only' : ('Google ' + moneyShort(r.googleSpend) + ' · Bing ' + moneyShort(r.bingSpend) + ' · SD ' + moneyShort(r.sdFee)),
-            '', 'Paid-search cost for ' + r.fy + '. Google Ads = billed Xero charges (all FYs)' + ((r.bingSpend || r.sdFee) ? ' + Bing + Simple Digital' : '') + '.', '', dCost) +
+            '', (SEL.basis === 'google'
+              ? 'Paid-search cost for ' + r.fy + '. Google Ads = billed Xero charges (all FYs).\nSource: Xero (Google Ads charges)'
+              : 'Total paid-search cost: Google Ads + Bing + Simple Digital (the SEO/ads agency).\nSource: Xero (Google Ads + Bing + Simple Digital charges)'), '', dCost) +
         kpi('Won revenue from ads', money(r.wonRevenue), (r.won || 0) + ' won deals', 'pos',
-            'Won revenue credited to Google Ads in ' + r.fy + ' — the billed Xero engagement fee where the deal is invoiced, else the contracted value. FY22–24 from Niki\'s log; FY25+ = audit final_gads_tag=Yes ∪ GA4 cpc.', '', dWonRev) +
+            'Revenue won from deals credited to Google Ads — the invoiced fee where billed, otherwise the contract value.\nSource: Audited Google-Ads-tagged deals (ActiveCampaign) — invoiced fee from Xero where billed', '', dWonRev) +
         kpi('Won', String(r.won || 0), (r.winRate == null ? 'No closed deals' : pct(r.winRate) + ' win rate'), (r.winRate >= 0.5 ? 'pos' : ''),
-            'Won deals ÷ (won + lost + open) = win rate. Click to see the deals.', 'Won', dWon) +
-        kpi('Lost', String(r.lost || 0), 'Click to see the deals', '', 'Lost Google-Ads-counted deals in ' + r.fy + '.', 'Lost', dLost) +
+            'Won deals ÷ (won + lost + open) = win rate. Click to see the deals.\nSource: Audited ad deals (ActiveCampaign)', 'Won', dWon) +
+        kpi('Lost', String(r.lost || 0), 'Click to see the deals', '', 'Ad-credited deals lost this year.\nSource: Audited ad deals (ActiveCampaign)', 'Lost', dLost) +
         kpi('Open pipeline', money(r.openValue), (r.open || 0) + ' open deal' + ((r.open === 1) ? '' : 's') + ', not counted yet', '',
-            'Value of open (not-yet-closed) Google-Ads-counted deals in ' + r.fy + '.', 'Open', dOpen);
+            'Value of ad-credited deals still open (not yet won or lost).\nSource: Audited ad deals (ActiveCampaign)', 'Open', dOpen);
       // Clickable status tiles jump to the deals table.
       host.querySelectorAll('button.kpi[data-status]').forEach(function (b) {
         b.addEventListener('click', function () {
@@ -835,7 +838,7 @@
         { label: 'Google Ads',     num: true, cell: function (r) { return money(r.googleSpend); } },
         { label: 'Bing Ads',       num: true, cell: function (r) { return money(r.bingSpend); } },
         { label: 'Simple Digital', num: true, cell: function (r) { return money(r.sdFee); } },
-        { label: 'SEO (excluded)', num: true, title: 'Simple Digital SEO component — billed but NOT counted in the ROAS cost.', cell: function (r) { return money(r.sdSeo); } },
+        { label: 'SEO (excluded)', num: true, title: 'Simple Digital\'s SEO portion — billed, but NOT counted in the ROAS cost.\nSource: Xero (Simple Digital SEO charges)', cell: function (r) { return money(r.sdSeo); } },
         { label: 'Total cost',     num: true, cell: function (r) { return money(r.totalCost); } },
         { label: 'Won',            num: true, cell: function (r) { return r.won == null ? '—' : r.won; } },
         { label: 'Lost',           num: true, cell: function (r) { return r.lost == null ? '—' : r.lost; } },
@@ -844,9 +847,9 @@
         { label: 'ROAS Ads',       num: true, cell: function (r) { return pill(r.roasGoogle, target); } },
         { label: 'ROAS all-in',    num: true, cell: function (r) { return pill(r.roasAllin, target); } },
         { label: 'Win rate',       num: true, cell: function (r) { return pct(r.winRate); } },
-        { label: 'ROI ($)',        num: true, title: 'Won revenue − cost (on the selected basis).', cell: function (r) { return money((r.wonRevenue || 0) - costOf(r)); } },
+        { label: 'ROI ($)',        num: true, title: 'Revenue won minus cost.\nSource: Calculated — won revenue − cost', cell: function (r) { return money((r.wonRevenue || 0) - costOf(r)); } },
         { label: 'ROI %',          num: true, cell: function (r) { var c = costOf(r); return pct(c ? ((r.wonRevenue || 0) - c) / c : null); } },
-        { label: 'Per-Lead Value', num: true, title: 'Won revenue ÷ (won + lost + open).', cell: function (r) { return money(r.perLeadValue); } },
+        { label: 'Per-Lead Value', num: true, title: 'Won revenue spread across all ad deals (won + lost + open).\nSource: Calculated — won revenue ÷ all ad deals', cell: function (r) { return money(r.perLeadValue); } },
       ];
       // Each basis shows only its own ROAS column. "Ads only" (google) also hides Simple Digital
       // (it isn't in that cost stack) and the all-in ROAS; "All-in" hides the ads-only ROAS.
@@ -978,7 +981,12 @@
     function renderAll() {
       var rows = (ROAS_DATA.rows && ROAS_DATA.rows.data) || [];
       var total = ROAS_DATA.total;
-      document.getElementById('roasChips').innerHTML = metaChips(ROAS_DATA.rows && ROAS_DATA.rows.meta);
+      var roasMeta = ROAS_DATA.rows && ROAS_DATA.rows.meta;
+      // One ⓘ: approved page-note wording + source (sheet 'MAG Dashboard Marketing Tooltips'); keep the readiness chip.
+      document.getElementById('roasChips').innerHTML =
+        infoTip('How this page works: deal counts and won/open value from our audited ad-deal list; Google Ads spend from Xero; Bing and Simple Digital (agency) from their monthly Xero charges.',
+                'Audited ad-deals list + Xero (Google Ads, Bing, Simple Digital), via the data cache') +
+        metaChips(roasMeta ? { status: roasMeta.status, note: roasMeta.note } : null);
       var asOf = document.getElementById('roasAsOf');
       if (asOf && ROAS_DATA.asOf) asOf.textContent = 'as of ' + fmtDate(ROAS_DATA.asOf);
 
@@ -1041,6 +1049,7 @@
     document.getElementById('dealSearch').addEventListener('input', function (e) { dealQuery = e.target.value.trim(); renderDeals(); });
 
     initPage('operations'); // login / top-bar / theme only — this page renders its own content
+    fillHeadInfo();
     renderMarketingHead(true);           // shared "Marketing" department header (live page → no sample badge)
     renderMarketingSidebar('roas');
     renderDateRange({ after: 'fySeg' });   // inject the shared Custom date range control beside the FY toggle

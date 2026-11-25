@@ -126,7 +126,7 @@
       <!-- Enquiries by source (stacked bar, per month) -->
       <div class="card">
         <div class="card-head" style="display:block;margin-bottom:10px">
-          <h3>Enquiries by source <span class="head-info" data-info="Enquiries each month, stacked by where the lead came from, for the selected period. Paid leads are shown by platform (Google Ads, Bing Ads) where that detail is available, otherwise grouped as Paid Ads." data-src="ActiveCampaign deals and GA4 / Ads leads"></span></h3>
+          <h3>Enquiries by source <span class="head-info" data-info="Enquiries each month, stacked by source. Paid leads split by platform (Google, Bing) where known." data-src="ActiveCampaign deals + GA4/Ads leads"></span></h3>
         </div>
         <div class="chart-box"><canvas id="sourceCanvas"></canvas></div>
       </div>
@@ -135,7 +135,7 @@
       <div class="lb-lower">
         <div class="card">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>By source <span class="head-info" data-info="Enquiries, bookings and booking rate for each lead source, with a total row, for the selected period. The total matches the Keynote enquiries and bookings cards on the Overview." data-src="ActiveCampaign deals and GA4 / Ads leads (a booking is a won deal)"></span></h3>
+            <h3>By source <span class="head-info" data-info="Enquiries, bookings and booking rate per source, with a total. The total matches the Overview's enquiries and bookings." data-src="ActiveCampaign deals + GA4/Ads leads"></span></h3>
           </div>
           <div class="lb-table-wrap">
             <table class="lb-table">
@@ -170,7 +170,7 @@
       <!-- All leads (one row per individual lead/deal from the four sources) -->
       <div class="card" id="all-leads" style="margin-top:16px">
         <div class="card-head" style="display:block;margin-bottom:10px">
-          <h3>All leads <span class="head-info" data-info="Every individual lead behind the counts above — one row per deal — for the selected period. Shows the date, source, organisation, deal, status and value." data-src="ActiveCampaign deals and GA4 / Ads leads"></span></h3>
+          <h3>All leads <span class="head-info" data-info="Every lead behind the counts — date, source, organisation, deal, status and value." data-src="ActiveCampaign deals + GA4/Ads leads"></span></h3>
           <div class="muted" style="font-size:12px;margin-top:4px" id="leadsCount"></div>
         </div>
         <div id="leadsRows"></div>
@@ -458,18 +458,16 @@
     function renderCards() {
       paintCard({
         state: BOOKINGS, valueEl: 'bookValue', deltaEl: 'bookDelta', labelEl: 'bookLabel', title: 'Events Booked',
-        source: 'ActiveCampaign deals and GA4 / Ads leads',
+        source: 'ActiveCampaign deals + GA4/Ads leads (won)',
         loadedInfo: function (fName, r) {
-          return 'Bookings — won deals and leads created in the selected period, across all sources. ' +
-            'Matches the Keynote bookings card on the Overview and the total in the By source table.';
+          return 'Won bookings each month, all sources. Matches the Overview bookings tile.';
         },
       });
       paintCard({
         state: ENQ, valueEl: 'enqValue', deltaEl: 'enqDelta', labelEl: 'enqLabel', title: 'Enquiries',
-        source: 'ActiveCampaign deals and GA4 / Ads leads',
+        source: 'ActiveCampaign deals + GA4/Ads leads',
         loadedInfo: function (fName, r) {
-          return 'All enquiries — deals and leads created in the selected period, across all sources. ' +
-            'Matches the Keynote enquiries card on the Overview and the total in the By source table.';
+          return 'All enquiries each month, all sources. Matches the Overview enquiries tile.';
         },
       });
     }

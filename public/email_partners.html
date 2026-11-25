@@ -240,13 +240,13 @@
       <div class="grid">
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>The Tailor — enquiries vs bookings <span class="head-info" data-info="One bar per month for The Tailor: enquiries (deals created that month) with the won bookings stacked on top, for the selected period. Bookings are counted in the month the enquiry came in, so recent months may still rise." data-src="ActiveCampaign — The Tailor (indirect deals)"></span></h3>
+            <h3>The Tailor — enquiries vs bookings <span class="head-info" data-info="Each month for The Tailor: enquiries, with won bookings stacked on top. Bookings sit in the month the enquiry came in, so recent months may still climb." data-src="ActiveCampaign (The Tailor deals)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="tailorCanvas"></canvas></div>
         </div>
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
-            <h3>Speaker Bureaus — enquiries vs bookings <span class="head-info" data-info="One bar per month for the Speaker Bureaus: enquiries (deals created that month) with the won bookings stacked on top, for the selected period. Bookings are counted in the month the enquiry came in." data-src="ActiveCampaign — Speaker bureaus (indirect deals)"></span></h3>
+            <h3>Speaker Bureaus — enquiries vs bookings <span class="head-info" data-info="Each month for the speaker bureaus: enquiries with won bookings stacked on top." data-src="ActiveCampaign (Speaker Bureau deals)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="bureauCanvas"></canvas></div>
         </div>
@@ -257,7 +257,7 @@
         <div class="card-head block-head">
           <div style="display:flex; flex-wrap:wrap; justify-content:space-between; align-items:center; gap:12px;">
             <div>
-              <h3 id="indirectDealsHeading">Indirect Deals<span class="head-info" data-info="Every individual bureau and tailor deal from ActiveCampaign — one row per deal — for the selected period. Sort, search and filter by column." data-src="ActiveCampaign (a booking is a won deal)"></span></h3>
+              <h3 id="indirectDealsHeading">Indirect Deals<span class="head-info" data-info="Every bureau and The Tailor deal from ActiveCampaign, one per row. Sort, search and filter." data-src="ActiveCampaign (bureau + Tailor deals)"></span></h3>
               <div class="muted" style="font-size:12px;margin-top:4px" id="indirectDealsCount"></div>
             </div>
           </div>
@@ -481,13 +481,13 @@
 
       grid.innerHTML = [
         kpiCard('Contacts', num(cur.contacts), sc.html, sc.cls,
-          infoTip('Distinct Speaker Bureaus and The Tailor contacts with an indirect deal in the selected period.', EP_SRC)),
+          infoTip('How many different bureau and The Tailor contacts had a deal this period.', 'ActiveCampaign (indirect / bureau + Tailor deals)')),
         kpiCard('Enquiries', num(cur.enquiries), se.html, se.cls,
-          infoTip('Every indirect (bureau + The Tailor) deal created in the selected period, in any status.', EP_SRC)),
+          infoTip('Every bureau + The Tailor deal created this period, any status.', 'ActiveCampaign (indirect deals)')),
         kpiCard('Bookings', num(cur.bookings), sb.html, sb.cls,
-          infoTip('Indirect deals won in the selected period — a booking is a won deal.', EP_SRC)),
+          infoTip('Bureau + Tailor deals won this period (a booking = a won deal).', 'ActiveCampaign (indirect deals, won)')),
         kpiCard('Won revenue', money(cur.wonRev), sr.html, sr.cls,
-          infoTip('Engagement-fee total of the won indirect deals — the Xero engagement fee where invoiced, otherwise the AC deal value.', EP_SRC)),
+          infoTip('Total fee from the won bureau/Tailor deals — the Xero fee where invoiced, otherwise the deal value.', 'ActiveCampaign deal value / Xero fee where invoiced')),
       ].join('');
     }
 

@@ -181,7 +181,11 @@
         b.classList.toggle('active', b.getAttribute('data-src') === src);
       });
       var s = (DATA && DATA[src]) || { rows: [], meta: {} };
-      document.getElementById('apChips').innerHTML = metaChips(s.meta);
+      // GA4 view uses the plain-MAG-language tooltip (sheet row 90); Google/Bing keep the source-only ⓘ.
+      document.getElementById('apChips').innerHTML = (src === 'ga4')
+        ? infoTip('Raw GA4 website events by source, medium, campaign and page — an operational drill-down.', 'GA4 website events (data cache)') +
+          metaChips(Object.assign({}, s.meta, { source: null }))
+        : metaChips(s.meta);
       document.getElementById('apNote').textContent = NOTE[src] || '';
 
       renderSortableTable('apTable', s.rows, colsFor(src), {

@@ -167,14 +167,14 @@
       var host = document.getElementById('pgKpis');
       host.innerHTML =
         kpi('Won Revenue', money(wonRev), won.length + (won.length === 1 ? ' won deal' : ' won deals'), wonRev ? 'pos' : '',
-            'Total AUD value of won Paid – Google deals in the current view. AC deal value is CRM-contracted, not billed revenue.') +
+            'Total value of won paid-Google deals in view (CRM-contracted, not billed).\nSource: ActiveCampaign deal value (reconciled Paid-Google)') +
         kpi('Open Pipeline', money(openPipe), open.length + (open.length === 1 ? ' open deal' : ' open deals'), openPipe ? 'partial' : '',
-            'Total AUD value of still-open Paid – Google deals in the current view.') +
+            'Value of still-open paid-Google deals.\nSource: ActiveCampaign deal value (reconciled Paid-Google)') +
         kpi('Total Enquiries', total, 'Paid – Google', '',
-            'Inbound enquiries reconciled as Paid – Google (contact created in the selected range).') +
-        kpi('Won', won.length, 'closed-won', won.length ? 'pos' : '', 'Paid – Google deals marked won.') +
-        kpi('Lost', lost.length, 'closed-lost', lost.length ? 'neg' : '', 'Paid – Google deals marked lost.') +
-        kpi('Win Rate', winRate + '%', 'of closed deals', '', 'Won ÷ (Won + Lost) for Paid – Google deals in the current view.');
+            'Enquiries reconciled as paid-Google in the selected dates.\nSource: ActiveCampaign (reconciled Paid-Google contacts)') +
+        kpi('Won', won.length, 'closed-won', won.length ? 'pos' : '', 'Paid-Google deals won.\nSource: ActiveCampaign (Paid-Google deals)') +
+        kpi('Lost', lost.length, 'closed-lost', lost.length ? 'neg' : '', 'Paid-Google deals lost.\nSource: ActiveCampaign (Paid-Google deals)') +
+        kpi('Win Rate', winRate + '%', 'of closed deals', '', 'Won ÷ (won + lost) for paid-Google deals.\nSource: Calculated — won ÷ (won + lost)');
     }
 
     // ---- table ----
@@ -268,7 +268,9 @@
       host.innerHTML = '<div class="muted" style="padding:14px">Loading paid Google enquiries…</div>';
       fetchJSON('/api/operations/paid-google-enquiries').then(function (data) {
         ALL_ROWS = (data.rows && data.rows.data) || [];
-        setChips('pgChips', data.rows && data.rows.meta);
+        document.getElementById('pgChips').innerHTML =
+          infoTip('Every paid-Google enquiry, reconciled from ActiveCampaign, with confidence and outcome.', 'ActiveCampaign mirror (data cache), reconciled Paid-Google') +
+          metaChips(Object.assign({}, data.rows && data.rows.meta, { source: null }));
         apply();
       }).catch(function (err) {
         console.error(err);

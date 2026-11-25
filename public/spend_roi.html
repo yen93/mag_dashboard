@@ -346,14 +346,14 @@
       var html = '';
       // 1 — Marketing revenue (highlighted first card)
       html += kpiCard('Marketing revenue',
-        'Won revenue from marketing-sourced deals for the selected period. Same figure as the ROI tab’s "Marketing revenue".',
-        'Marketing-sourced deals and the Executive X report',
+        'Money won from deals marketing can take credit for — paid ads, organic search, bureau/The Tailor and Exec X — for the period selected. (Same figure as the ROI page.)',
+        'Xero + ActiveCampaign',
         fmtCur(mRev),
         deltaHtml(mRev, pMRev, 'up-good', prevFyEnd));
       // 2 — Marketing spend
       html += kpiCard('Marketing spend',
-        'Total marketing spend for the selected period — advertising, website, software, printing and team costs. Same figure as the ROI tab.',
-        'Live from Xero (marketing accounts)',
+        'What we spent on marketing this period: ads, website, software, printing and the marketing team.',
+        'Xero (marketing accounts)',
         fmtCur(spend),
         deltaHtml(spend, pSpend, 'neutral', prevFyEnd));
       // 3 — Net return (marketing revenue − marketing spend)
@@ -364,8 +364,8 @@
         deltaHtml(netReturn, pNetReturn, 'up-good', prevFyEnd));
       // 4 — Marketing ROI (net ROI %)
       html += kpiCard('Marketing ROI',
-        'Net return on marketing spend: how much revenue is earned for each dollar spent. Same as the ROI tab’s "Net ROI".',
-        'Marketing revenue and spend',
+        'What each $1 of marketing spend returned. +74% means we got $1.74 back for every $1 spent.',
+        'Calculated — marketing revenue ÷ marketing spend',
         (marketingRoi != null ? (marketingRoi > 0 ? '+' : '') + marketingRoi + '%' : '<span class="muted">—</span>'),
         ros != null ? '<div class="sub">Return on spend ' + ros.toFixed(2) + '×</div>' : '');
       // 5 — Marketing CAC

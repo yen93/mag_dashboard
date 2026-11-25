@@ -423,12 +423,12 @@
       rows.push(mkRow('Marketing revenue', 'currency',
         revFy(2025), revFy(2026), revFy(2027),
         cySum(ROIS.byMon, 2025, 'marketingRevenue'), cySum(ROIS.byMon, 2026, 'marketingRevenue'),
-        'Won revenue from marketing-sourced deals. Same source as the Overview "Marketing revenue" card.',
+        'Money won from deals marketing can take credit for — paid ads, organic search, bureau/The Tailor and Exec X — for the period selected. (Same figure as the ROI page.) Source: Xero + ActiveCampaign',
         rRev));
       rows.push(mkRow('Marketing spend', 'currency',
         spendFy(2025), spendFy(2026), spendFy(2027),
         cySum(ROIS.byMon, 2025, 'spend'), cySum(ROIS.byMon, 2026, 'spend'),
-        'Marketing spend — advertising, website, software, printing and team costs. Same source as the Overview "Marketing spend" card.',
+        'What we spent on marketing this period: ads, website, software, printing and the marketing team. Source: Xero (marketing accounts)',
         rSpend));
       var roi25 = roiFrom(revFy(2025), spendFy(2025));
       var roi26 = roiFrom(revFy(2026), spendFy(2026));
@@ -436,7 +436,7 @@
       var roiCy25 = roiFrom(cySum(ROIS.byMon, 2025, 'marketingRevenue'), cySum(ROIS.byMon, 2025, 'spend'));
       var roiCy26 = roiFrom(cySum(ROIS.byMon, 2026, 'marketingRevenue'), cySum(ROIS.byMon, 2026, 'spend'));
       rows.push(mkRow('Marketing ROI', 'roi', roi25, roi26, roi27, roiCy25, roiCy26,
-        'Net return on marketing spend: how much revenue is earned for each dollar spent. Same as the Spend & ROI tab "Marketing ROI" card.',
+        'What each $1 of marketing spend returned. +74% means we got $1.74 back for every $1 spent. Source: Calculated — marketing revenue ÷ marketing spend',
         CUSTOM ? roiFrom(rRev, rSpend) : null));
       rows.push({ measure: 'Cadence delivered', pending: true });
       return rows;

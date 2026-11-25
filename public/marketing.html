@@ -206,8 +206,8 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Spend vs revenue by channel <span class="head-info"
-              data-info="What each channel cost against the revenue it won, for the selected year. Paid Ads and Executive X carry a tracked spend; Bureau and Tailor have no tracked spend (revenue only)."
-              data-src="ROAS metric, Executive X revenue and Leads &amp; Bookings"></span></h3>
+              data-info="What each channel cost vs the revenue it won. Paid Ads and Exec X have tracked spend; Bureau and The Tailor are revenue only (we don't pay ad spend for them)."
+              data-src="ROAS metric + Executive X revenue + Leads &amp; Bookings"></span></h3>
           </div>
           <div class="chart-box"><canvas id="roasChCanvas"></canvas></div>
           <p class="yrly-note">Annual data provided by other teams</p>
@@ -217,7 +217,7 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Revenue vs spend by month <span class="head-info"
-              data-info="Marketing spend and marketing revenue by month for the selected period. Company-wide revenue is shown as well, for context."
+              data-info="Marketing spend and marketing revenue month by month. The grey line is whole-company revenue, shown just for context."
               data-src="Xero (revenue and marketing spend)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="spendRevCanvas"></canvas></div>
@@ -227,8 +227,8 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Enquiries vs bookings <span class="head-info"
-              data-info="Enquiries (all deals created) and bookings (won deals) by month for the selected period."
-              data-src="ActiveCampaign deals and GA4 / Ads leads"></span></h3>
+              data-info="New enquiries and won bookings each month."
+              data-src="ActiveCampaign deals + GA4/Ads leads"></span></h3>
           </div>
           <div class="chart-box"><canvas id="enqBookCanvas"></canvas></div>
         </div>
@@ -237,8 +237,8 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Where revenue comes from <span class="head-info"
-              data-info="Marketing-sourced won revenue split by source — paid ads, organic search, bureau/tailor and Executive X — for the selected year."
-              data-src="Spend &amp; ROI (marketing-attributed deals)"></span></h3>
+              data-info="Won marketing revenue split by where it came from — ads, organic search, bureau/The Tailor and Exec X."
+              data-src="marketing-attributed deals"></span></h3>
           </div>
           <div class="chart-box"><canvas id="revSrcCanvas"></canvas></div>
           <p class="yrly-note">Annual data provided by other teams</p>
@@ -248,8 +248,8 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>EDM engagement trend <span class="head-info"
-              data-info="Email open rate and click rate by month, send-weighted across every campaign sent that month (unique opens ÷ sends, unique clicks ÷ sends). Apple Mail privacy can inflate opens, so treat open rate as a soft signal."
-              data-src="ActiveCampaign all-campaigns performance report (same source as the EDM tab)"></span></h3>
+              data-info="Email open and click rates by month. Heads-up: Apple Mail auto-opens inflate open rate, so trust click rate more."
+              data-src="ActiveCampaign all-campaigns performance report"></span></h3>
           </div>
           <div class="chart-box"><canvas id="edmTrendCanvas"></canvas></div>
         </div>
@@ -258,8 +258,8 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Website visits &amp; AI <span class="head-info"
-              data-info="Website sessions (bars, left axis) and visits referred from AI tools like ChatGPT, Gemini, Perplexity and Claude (line, right axis) by financial year. The selected FY is spotlighted."
-              data-src="GA4 website analytics (weekly per-FY snapshot — same source as the Website &amp; Search tab)"></span></h3>
+              data-info="Website visits (bars) and visits sent from AI tools like ChatGPT and Gemini (line), by year. The selected year is highlighted."
+              data-src="GA4 website analytics"></span></h3>
           </div>
           <div class="chart-box"><canvas id="webAiCanvas"></canvas></div>
         </div>
@@ -268,7 +268,7 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Followers by platform <span class="head-info"
-              data-info="Current followers on each social platform for the selected year. James’s personal LinkedIn carries the authority audience."
+              data-info="Current followers on each social channel. James' personal LinkedIn is the big authority audience."
               data-src="Social Platforms (Apify snapshot)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="followersCanvas"></canvas></div>
@@ -278,7 +278,7 @@
         <div class="card col-6">
           <div class="card-head" style="display:block;margin-bottom:10px">
             <h3>Lead source mix <span class="head-info"
-              data-info="Share of enquiries by source for the selected period — paid ads, organic search and bureau/partner."
+              data-info="Share of enquiries by where they came from — ads, organic search, and bureau/partners."
               data-src="Leads &amp; Bookings (enquiries by source)"></span></h3>
           </div>
           <div class="chart-box"><canvas id="leadSrcCanvas"></canvas></div>
@@ -484,17 +484,17 @@
       var cls = d >= 0 ? 'pos' : 'neg', arrow = d > 0 ? '▲' : d < 0 ? '▼' : '■';
       return '<div class="delta ' + cls + '">' + arrow + ' ' + absFmt(Math.abs(d)) + ' ' + cmpLabel() + '</div>';
     }
-    function kpiHtml(label, val, info, deltaHtml, href) {
+    function kpiHtml(label, val, info, deltaHtml, href, src) {
       var tag = href ? 'a' : 'div';
       var hrefAttr = href ? ' href="' + esc(href) + '"' : '';
-      return '<' + tag + ' class="kpi"' + hrefAttr + '><div class="label">' + esc(label) + infoSpan(info) + '</div>' +
+      return '<' + tag + ' class="kpi"' + hrefAttr + '><div class="label">' + esc(label) + infoSpan(info, src) + '</div>' +
         '<div class="value">' + esc(val) + '</div>' + (deltaHtml || '') + '</' + tag + '>';
     }
     // ONE info tool per KPI card (DESIGN_GUIDE §6) — the styled infoTip hover card,
     // not a native-title ⓘ. The passed text already states what the card is AND names
     // its source (table/endpoint), so it goes in as the description.
-    function infoSpan(text) {
-      return infoTip(text, '');
+    function infoSpan(text, src) {
+      return infoTip(text, src || '');
     }
     function selFyKey() {
       var b = document.querySelector('#fySeg button.active');
@@ -523,20 +523,17 @@
       }
       var tag = cfg.href ? 'a' : 'div';
       var hrefAttr = cfg.href ? ' href="' + esc(cfg.href) + '"' : '';
-      return '<' + tag + ' class="kpi"' + hrefAttr + '><div class="label">' + cfg.title + infoSpan(info) + '</div>' +
+      return '<' + tag + ' class="kpi"' + hrefAttr + '><div class="label">' + cfg.title + infoSpan(info, cfg.src) +'</div>' +
         '<div class="value">' + esc(val) + '</div>' + deltaHtml + '</' + tag + '>';
     }
     function enqCard() {
       return liveCard({
         state: ENQ, title: 'Inbound enquiries',
         href: 'leads_bookings.html#all-leads',
-        unloadedInfo: 'All enquiries — deals and leads created in the selected period — ' +
-          'across paid ads, organic search and bureau/partner sources. ' +
-          'Matches the total on the Leads & Bookings page.',
+        src: 'Leads & Bookings (ActiveCampaign deals + GA4/Ads leads)',
+        unloadedInfo: 'Every new enquiry this period, from all sources — ads, search, bureau and The Tailor.',
         loadedInfo: function (fyName, r) {
-          return 'All enquiries — deals and leads created in the selected period — ' +
-            'across paid ads, organic search and bureau/partner sources. ' +
-            'Matches the total on the Leads & Bookings page.';
+          return 'Every new enquiry this period, from all sources — ads, search, bureau and The Tailor.';
         },
       });
     }
@@ -544,13 +541,10 @@
       return liveCard({
         state: BOOKINGS, title: 'Inbound bookings',
         href: 'leads_bookings.html#all-leads',
-        unloadedInfo: 'Bookings — won deals and leads created in the selected period — ' +
-          'across paid ads, organic search and bureau/partner sources. ' +
-          'Matches the total on the Leads & Bookings page.',
+        src: 'ActiveCampaign deals + GA4/Ads leads',
+        unloadedInfo: 'Enquiries that turned into won deals this period, across all sources.',
         loadedInfo: function (fyName, r) {
-          return 'Bookings — won deals and leads created in the selected period — ' +
-            'across paid ads, organic search and bureau/partner sources. ' +
-            'Matches the total on the Leads & Bookings page.';
+          return 'Enquiries that turned into won deals this period, across all sources.';
         },
       });
     }
@@ -560,8 +554,7 @@
       var key = selFyKey();
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
-      var info = 'The share of enquiries that turned into bookings ' +
-        '(bookings divided by enquiries) for the selected period.';
+      var info = 'Of our enquiries, the share that became bookings.';
       function rateOf(k) {
         var e = rowFor(ENQ, k), b = rowFor(BOOKINGS, k);
         var enq = e ? e.total : 0, book = b ? b.total : 0;
@@ -576,7 +569,7 @@
           if (rd !== null) deltaHtml = deltaLine(Math.round(rd), function (x) { return x + '%'; });
         }
       }
-      return kpiHtml('Enquiry → booking rate', val, info, deltaHtml, 'leads_bookings.html#all-leads');
+      return kpiHtml('Enquiry → booking rate', val, info, deltaHtml, 'leads_bookings.html#all-leads', 'Calculated — bookings ÷ enquiries');
     }
     // Marketing revenue = marketing-attributed WON revenue per FY (ROAS-paid + organic
     // search + bureau/tailor + Exec X, deduped by deal) — row.marketingRevenue from the
@@ -585,9 +578,8 @@
       var key = selFyKey();
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
-      var info = 'Won revenue from marketing-sourced deals in the selected period — ' +
-        'across paid ads, organic search, bureau/tailor and Executive X. ' +
-        'Matches the Spend & ROI page.';
+      var info = 'Money won from deals marketing can take credit for — paid ads, organic search, ' +
+        'bureau/The Tailor and Exec X — for the period selected. (Same figure as the ROI page.)';
       if (MROI.loaded) {
         var r = mroiRow(key);
         var mRev = (r && r.marketingRevenue != null) ? r.marketingRevenue : null;
@@ -597,7 +589,7 @@
           if (sd) deltaHtml = deltaLine(sd.d, function (x) { return fmt(x, 'currency'); });
         }
       }
-      return kpiHtml('Marketing revenue', val, info, deltaHtml, 'spend_roi.html');
+      return kpiHtml('Marketing revenue', val, info, deltaHtml, 'spend_roi.html', 'Xero + ActiveCampaign');
     }
     // Marketing spend = Xero marketing accounts only (Advertising, Website, Software,
     // Printing, WrkPod), ex-GST — row.totalSpend from the ROI payload (same as the ROI tab).
@@ -605,8 +597,7 @@
       var key = selFyKey();
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
-      var info = 'Marketing spend for the selected period — advertising, website, ' +
-        'software, printing and team costs. Matches the Spend & ROI page.';
+      var info = 'What we spent on marketing this period: ads, website, software, printing and the marketing team.';
       if (MROI.loaded) {
         var r = mroiRow(key);
         var spend = (r && r.hasSpend) ? r.totalSpend : null;
@@ -616,7 +607,7 @@
           if (sd2) deltaHtml = deltaLine(sd2.d, function (x) { return fmt(x, 'currency'); });
         }
       }
-      return kpiHtml('Marketing spend', val, info, deltaHtml, 'spend_roi.html');
+      return kpiHtml('Marketing spend', val, info, deltaHtml, 'spend_roi.html', 'Xero (marketing accounts)');
     }
     // Marketing ROI = NET return on marketing spend = (marketing revenue ÷ marketing spend − 1)
     // × 100, computed from the two live $ cards above (same MROI source as the ROI tab's
@@ -625,8 +616,7 @@
       var key = selFyKey();
       var fyName = CUSTOM ? 'the selected range' : (key === 'all' ? 'all years' : key.toUpperCase());
       var val = '…', deltaHtml = '';
-      var info = 'Net return on marketing spend: how much marketing revenue is earned ' +
-        'for each dollar spent, shown as a percentage above or below breaking even.';
+      var info = 'What each $1 of marketing spend returned. +74% means we got $1.74 back for every $1 spent.';
       function netRoiOf(k) {
         var r = mroiRow(k);
         var rev = (r && r.marketingRevenue != null) ? r.marketingRevenue : null;
@@ -641,7 +631,7 @@
           if (rd !== null) deltaHtml = deltaLine(Math.round(rd), function (x) { return x + '%'; });
         }
       }
-      return kpiHtml('Marketing ROI', val, info, deltaHtml, 'spend_roi.html');
+      return kpiHtml('Marketing ROI', val, info, deltaHtml, 'spend_roi.html', 'Calculated — marketing revenue ÷ marketing spend');
     }
     function renderMktKpis() {
       var rest = KPIS.map(function (k) {
