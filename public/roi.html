@@ -306,9 +306,49 @@
       'Marketing spend': { desc: 'Only marketing costs from Xero — ads, website, software, printing and the work-pod team — before GST.', source: 'Xero marketing accounts (Advertising, Website, Software, Printing, WrkPod)' },
       'Return on spend': { desc: 'Marketing revenue ÷ marketing spend. Above 1× means marketing paid for itself.', source: 'Calculated — marketing revenue ÷ marketing spend' },
       'Net ROI': { desc: 'Return on spend minus 1, shown as a %. +74% = $1.74 back for every $1.', source: 'Calculated — return on spend − 1' },
+      'Inbound bookings': { desc: 'Enquiries that turned into won deals this period, across all sources.', source: 'ActiveCampaign deals + GA4/Ads leads (Leads & Bookings)' },
       'Cost per client (CAC)': { desc: 'What we spent on marketing to win each client (spend ÷ clients won).', source: 'Calculated — marketing spend ÷ clients won' },
       'Avg revenue / client': { desc: 'Average revenue per client won (marketing revenue ÷ clients won).', source: 'Calculated — marketing revenue ÷ clients won' }
     };
+    // Inbound bookings = won enquiries across all sources — the SAME rows as marketing.html's
+    // "Inbound bookings" card and leads_bookings.html (GET /api/marketing/leads-by-source).
+    var BK = { rows: [], byMonth: [], loaded: false };
+    function loadBookings() {
+      fetchJSON('/api/marketing/leads-by-source').then(function (d) {
+        var by = {};
+        ((d && d.data) || []).forEach(function (r) {
+          var o = by[r.month] || (by[r.month] = { month: r.month, fyEnd: r.fyEnd, total: 0 });
+          o.total += Number(r.bookings) || 0;
+        });
+        BK.byMonth = Object.keys(by).sort().map(function (k) { return by[k]; });
+        BK.loaded = true;
+        if (ROI) render();
+      }).catch(function (err) { console.error('bookings', err); });
+    }
+    function inboundBookings() {
+      if (!BK.loaded) return null;
+      return BK.byMonth.reduce(function (a, m) {
+        var ok = CUSTOM ? monthInRange(m.month) : (SEL === 'all' || SEL == null || m.fyEnd === SEL);
+        return a + (ok ? m.total : 0);
+      }, 0);
+    }
+    // Make the Inbound bookings card a link to the Leads & Bookings "All leads" table.
+    function linkBookingsCard() {
+      document.querySelectorAll('#kpis .kpi').forEach(function (card) {
+        var l = card.querySelector('.label');
+        if (!l || l.textContent.trim() !== 'Inbound bookings') return;
+        card.style.cursor = 'pointer';
+        card.setAttribute('role', 'link');
+        card.setAttribute('tabindex', '0');
+        card.addEventListener('click', function (e) {
+          if (e.target.closest && e.target.closest('.src-info')) return;
+          location.href = 'leads_bookings.html#all-leads';
+        });
+        card.addEventListener('keydown', function (e) {
+          if (e.key === 'Enter') location.href = 'leads_bookings.html#all-leads';
+        });
+      });
+    }
     function tuckKpiSubs() {
       document.querySelectorAll('#kpis .kpi').forEach(function (card) {
         var sub = card.querySelector(':scope > .muted');
@@ -577,7 +617,7 @@
         ? ratioWindowPair(byMonth, byMonth, function (m) { return m.marketingRevenue; }, byMonth, function (m) { return m.spend; })
         : null;
       var netP   = roiP ? { cur: (roiP.cur - 1) * 100, prev: (roiP.prev - 1) * 100 } : null;
-      var wonP   = seriesWindowPair(pipeMonths, function (m) { return m.won; });
+      var wonP   = BK.loaded ? seriesWindowPair(BK.byMonth, function (m) { return m.total; }) : null;   // Inbound bookings
       var cacP   = (cur.hasSpend && cur.dealsWon)
         ? ratioWindowPair(byMonth, byMonth, function (m) { return m.spend; }, pipeMonths, function (m) { return m.won; })
         : null;
@@ -691,9 +731,9 @@
         { label: 'Net ROI',
           metric: { value: netRoi != null ? (netRoi > 0 ? '+' : '') + netRoi + '%' : null, unit: 'text' },
           sub: netRoi != null ? '(Return on spend − 1)' : null },
-        { label: 'Clients won',
-          metric: { value: row.dealsWon, unit: 'count' },
-          sub: row.dealsOpen + ' open · ' + row.dealsLost + ' lost' },
+        { label: 'Inbound bookings',
+          metric: { value: inboundBookings(), unit: 'count' },
+          sub: 'Enquiries that turned into won deals this period, across all sources.' },
         { label: 'Cost per client (CAC)',
           metric: { value: cac, unit: 'currency' },
           sub: cac != null ? 'Marketing spend ÷ clients won' : null },
@@ -702,6 +742,7 @@
           sub: avgRev != null ? 'Marketing revenue ÷ clients won' : null },
       ]);
       tuckKpiSubs();   // hide each card's description behind an ⓘ next to its label
+      linkBookingsCard();
       applyKpiDeltas(row);   // Compare delta chip under each card's value (#cmpSeg basis)
 
       // Revenue vs spend by month — spend as green bars (left $ axis), revenue as a
@@ -1087,7 +1128,7 @@
               { label: 'Marketing spend', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Return on spend', metric: { value: null, unit: 'text', meta: data.rows.meta } },
               { label: 'Net ROI', metric: { value: null, unit: 'text', meta: data.rows.meta } },
-              { label: 'Clients won', metric: { value: null, unit: 'count', meta: data.rows.meta } },
+              { label: 'Inbound bookings', metric: { value: null, unit: 'count', meta: data.rows.meta } },
               { label: 'Cost per client (CAC)', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
               { label: 'Avg revenue / client', metric: { value: null, unit: 'currency', meta: data.rows.meta } },
             ]);
@@ -1139,7 +1180,7 @@
       });
     });
     window.onThemeChange = function () { if (ROI) render(); renderChannelChart(); };
-    if (currentUser()) { loadRoi(); loadChannelSummary(); }
+    if (currentUser()) { loadRoi(); loadChannelSummary(); loadBookings(); }
   </script>
 
   <!-- ROI read-only chat assistant (bottom-right). Answers from the ROI tab data
