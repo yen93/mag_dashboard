@@ -219,9 +219,9 @@
         </div>
 
         <div class="card sp-card wide">
-          <div class="sp-card-head"><h3>Top posts <span class="chip warn">pending</span> <span class="head-info" data-info="Recent posts ranked by reach — what topics and formats land best. Post reach is SAMPLE until connected." data-src="SAMPLE post reach — wire to platform insights"></span></h3></div>
-          <div class="cap">By reach</div>
-          <div class="sp-table-wrap" tabindex="0" role="region" aria-label="Top posts by reach">
+          <div class="sp-card-head"><h3>Top posts <span class="chip warn" id="postsPending">pending</span> <span class="head-info" data-info="Recent Instagram posts ranked by engagement (likes + comments), each with its real per-post reach. LIVE from the Meta Graph API. Instagram only — Facebook per-post counts need Page Public Content Access (app review), and LinkedIn posts come from a separate Apify sync." data-src="Live — Instagram (Meta Graph API) · recent posts by engagement"></span></h3></div>
+          <div class="cap">By engagement · Instagram</div>
+          <div class="sp-table-wrap" tabindex="0" role="region" aria-label="Top Instagram posts by engagement">
             <table class="sp-table">
               <thead>
                 <tr><th>Post</th><th>Platform</th><th>Date</th><th>Reach</th><th>Interactions</th></tr>
@@ -464,12 +464,13 @@
     }
 
     function renderPosts() {
-      document.getElementById('postsBody').innerHTML = POSTS.slice().sort(function (a, b) { return b.reach - a.reach; }).map(function (p) {
+      document.getElementById('postsBody').innerHTML = POSTS.slice().sort(function (a, b) { return b.interactions - a.interactions; }).map(function (p) {
+        var title = p.url ? '<a href="' + esc(p.url) + '" target="_blank" rel="noopener">' + esc(p.post) + '</a>' : esc(p.post);
         return '<tr>' +
-          '<td>' + esc(p.post) + '</td>' +
+          '<td>' + title + '</td>' +
           '<td class="sp-plat-chip">' + esc(p.platform) + '</td>' +
           '<td>' + esc(p.date) + '</td>' +
-          '<td>' + fmt(p.reach, 'count') + '</td>' +
+          '<td>' + (p.reach == null ? '—' : fmt(p.reach, 'count')) + '</td>' +
           '<td>' + fmt(p.interactions, 'count') + '</td>' +
         '</tr>';
       }).join('');
@@ -592,6 +593,19 @@
       }).catch(function () { /* keep sample on error */ });
     }
 
+    // ── LIVE Top posts (real Meta Graph API — Instagram recent posts by engagement) ──
+    // Replaces the sample POSTS with real recent IG posts (engagement + real per-post reach),
+    // re-renders the table, and drops the pending chip. Keeps sample on any error.
+    function loadTopPosts() {
+      fetchJSON('/api/marketing/meta-top-posts').then(function (res) {
+        var d = res && res.data;
+        if (!d || !d.length) return;
+        POSTS = d;
+        renderPosts();
+        var chip = document.getElementById('postsPending'); if (chip) chip.remove();
+      }).catch(function () { /* keep sample on error */ });
+    }
+
     function wireSeg(id, onChange) {
       var seg = document.getElementById(id);
       if (!seg) return;
@@ -613,6 +627,7 @@
     loadIgTrend();                     // overlay the REAL Instagram monthly reach + interactions trend
     loadFbTrend();                     // overlay the REAL Facebook monthly net-follower-growth trend
     loadIgDemographics();              // overlay the REAL Instagram age/gender + top-locations demographics
+    loadTopPosts();                    // overlay the REAL Instagram top posts (by engagement, with reach)
     wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
     wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
     window.onThemeChange = drawCharts; // redraw charts on light/dark switch

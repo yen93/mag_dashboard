@@ -31,6 +31,7 @@ import { getMetaFbInsights } from './metrics/meta-fb-insights.js';
 import { getMetaIgTrend } from './metrics/meta-ig-trend.js';
 import { getMetaFbTrend } from './metrics/meta-fb-trend.js';
 import { getMetaIgDemographics } from './metrics/meta-ig-demographics.js';
+import { getMetaTopPosts } from './metrics/meta-top-posts.js';
 import { getEdmReport } from './metrics/edm-report.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
@@ -712,6 +713,19 @@ marketing.get('/meta-ig-demographics', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:meta-ig-demographics]', err);
     res.status(502).json({ error: 'Failed to load Instagram demographics.', detail: err.message });
+  }
+});
+// Top posts — recent Facebook + Instagram posts ranked by engagement (IG rows carry real per-post
+// reach; FB post reach is deprecated). Request-time fetch from the Meta Graph API. Backs the "Top
+// posts" table on social_platforms.html. LinkedIn posts not included (Apify-only). See
+// server/metrics/meta-top-posts.js. Cached briefly.
+marketing.get('/meta-top-posts', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:meta-top-posts', getMetaTopPosts, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:meta-top-posts]', err);
+    res.status(502).json({ error: 'Failed to load top posts.', detail: err.message });
   }
 });
 // EDM — the ActiveCampaign Contact Performance + All Campaigns Performance reports for
