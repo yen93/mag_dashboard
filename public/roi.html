@@ -736,8 +736,8 @@
       renderTable('roiFyTable', fyRows, [
         { key: 'fy', label: 'FY',
           render: function (v, r) { return r.fyEnd == null ? '<strong>All years</strong>' : esc(v); } },
-        { key: 'revenue', label: 'Revenue (Xero)', unit: 'currency',
-          render: function (v, r) { return r.hasRevenue ? fmt(v, 'currency') : '<span class="muted">—</span>'; } },
+        { key: 'marketingRevenue', label: 'Marketing revenue', unit: 'currency',
+          render: function (v, r) { return r.marketingRevenue != null ? fmt(r.marketingRevenue, 'currency') : '<span class="muted">—</span>'; } },
         { key: 'totalSpend', label: 'Total spend', unit: 'currency',
           render: function (v, r) { return r.hasSpend ? fmt(effSpend(r), 'currency') : '<span class="muted">—</span>'; } },
         { key: 'dealsWon', label: 'Deals won', unit: 'count' },
