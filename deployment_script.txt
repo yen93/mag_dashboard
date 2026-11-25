@@ -1,0 +1,1 @@
+& "C:\Users\Cloverly\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd" run deploy dashboard --source C:\Users\Cloverly\claude_code\dashboard --region australia-southeast1

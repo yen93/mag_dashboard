@@ -1,0 +1,13 @@
+**roi_tab_fix:**
+Fix ROI.html custom date range. when we select custom date range "Last 90D" the date label still says "Showing 1 Aug – 30 Nov 2026 · vs 1 Aug – 30 Nov 2025"
+
+**other_tabs:**
+1. marketing.html
+2. roas.html
+3. email_partners.html
+4. website_search.html
+5. social_platforms.html
+6. edm.html
+
+## main task:
+also fix the other_tabs. see roi_tab_fix as reference.

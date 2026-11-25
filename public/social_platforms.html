@@ -108,10 +108,11 @@
       border-left: 3px solid var(--pos); border-radius: 12px;
       padding: 12px 16px; box-shadow: var(--mkt-shadow);
     }
+    .fbl-inner + .fbl-inner { margin-top: 8px; }
     .fbl-badge { font-size: 12px; font-weight: 700; color: var(--pos); text-transform: uppercase; letter-spacing: .04em; }
     .fbl-stat { font-size: 13px; color: var(--text-muted); }
     .fbl-stat b { color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums; margin-right: 3px; }
-    .fbl-note { font-size: 12px; color: var(--text-muted); flex-basis: 100%; line-height: 1.5; }
+    .fbl-note { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 8px 2px 0; }
   </style>
 </head>
 <body>
@@ -488,32 +489,55 @@
 
     function renderAll() { renderKpis(); drawCharts(); renderPosts(); }
 
-    // ── LIVE Facebook (real Meta Graph API) ───────────────────────────────────
-    // Patches the FB entries in the per-platform charts and shows a live banner with
-    // the real figures. Everything else on the page stays sample: Instagram isn't
-    // linked yet, and reach/impressions are deprecated by Meta's Page Insights API.
-    function loadFacebookLive() {
+    // ── LIVE Meta (real Facebook + Instagram, Meta Graph API) ─────────────────
+    // Patches the Facebook and Instagram entries in the two per-platform charts and shows a
+    // live banner with the real figures. LinkedIn (×2) stays sample. Degrades silently to
+    // the sample numbers if the token is unset or Meta returns nothing.
+    function loadMetaLive() {
       fetchJSON('/api/marketing/meta-fb').then(function (res) {
-        var fb = res && res.facebook;
-        if (!fb) return;                              // token unset / no data → keep sample
-        var f = FOLLOWERS.find(function (r) { return /facebook/i.test(r.platform); });
-        if (f && fb.followers != null) f.followers = fb.followers;
-        var e = ENGAGEMENT.find(function (r) { return /facebook/i.test(r.platform); });
-        if (e && fb.postEngagements28d != null) e.engagement = fb.postEngagements28d;
-        drawCharts();                                 // redraw with the live FB bars
+        var fb = res && res.facebook, ig = res && res.instagram;
+        if (!fb && !ig) return;                       // token unset / no data → keep sample
+        function patch(arr, re, key, val) {
+          var r = arr.find(function (x) { return re.test(x.platform); });
+          if (r && val != null) r[key] = val;
+        }
+        if (fb) {
+          patch(FOLLOWERS, /facebook/i, 'followers', fb.followers);
+          patch(ENGAGEMENT, /facebook/i, 'engagement', fb.postEngagements28d);
+        }
+        if (ig) {
+          patch(FOLLOWERS, /instagram/i, 'followers', ig.followers);
+          patch(ENGAGEMENT, /instagram/i, 'engagement', ig.recentEngagement);
+        }
+        drawCharts();                                 // redraw with the live FB + IG bars
 
         var el = document.getElementById('fbLive'); if (!el) return;
         function stat(label, v) { return v == null ? '' : '<span class="fbl-stat"><b>' + fmt(v, 'count') + '</b>' + esc(label) + '</span>'; }
-        el.innerHTML =
-          '<div class="fbl-inner">' +
+        var html = '';
+        if (fb) {
+          html += '<div class="fbl-inner">' +
             '<span class="fbl-badge">● Facebook — live</span>' +
             stat('followers', fb.followers) +
             stat('views · 28d', fb.views28d) +
             stat('new follows · 28d', fb.newFollows28d) +
             stat('post engagements · 28d', fb.postEngagements28d) +
-            '<span class="fbl-note">Real figures from the Meta Graph API (MAG Facebook Page) as of ' + esc(fb.asOf) +
-            '. Instagram and reach stay sample — IG isn’t linked as a Business account yet, and reach/impressions are deprecated by Meta’s Page Insights API.</span>' +
           '</div>';
+        }
+        if (ig) {
+          html += '<div class="fbl-inner">' +
+            '<span class="fbl-badge">● Instagram — live</span>' +
+            stat('followers', ig.followers) +
+            stat('reach · 28d', ig.reach28d) +
+            stat('posts', ig.mediaCount) +
+            stat('engagement · last ' + (ig.recentPosts || 0) + ' posts', ig.recentEngagement) +
+          '</div>';
+        }
+        html += '<div class="fbl-note">Real figures from the Meta Graph API as of ' +
+          esc((fb && fb.asOf) || (ig && ig.asOf)) +
+          '. Facebook &amp; Instagram followers/engagement are patched into the two per-platform charts above; ' +
+          'LinkedIn stays sample. Facebook reach is deprecated by Meta (views shown instead); Instagram reach is ' +
+          'the real 28-day figure. IG engagement = likes + comments on recent posts.</div>';
+        el.innerHTML = html;
         el.style.display = 'block';
       }).catch(function () { /* keep sample on any error */ });
     }
@@ -535,7 +559,7 @@
     renderMarketingSidebar('social-platforms');
     fillHeadInfo();                    // fill the static card/chart ⓘ info tools (DESIGN_GUIDE §6)
     renderAll();
-    loadFacebookLive();                // overlay the REAL Facebook figures (Meta Graph API)
+    loadMetaLive();                    // overlay the REAL Facebook + Instagram figures (Meta Graph API)
     wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
     wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
     window.onThemeChange = drawCharts; // redraw charts on light/dark switch

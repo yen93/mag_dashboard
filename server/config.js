@@ -76,13 +76,14 @@ export const config = {
     supabaseProjectId: env.N8N_SUPABASE_PROJECT_ID || 'uwsncuowtzydylfabikj',
   },
   meta: {
-    // Facebook Page (Meta Graph API) — the Social Platforms tab's LIVE Facebook figures
-    // (server/metrics/meta-fb-insights.js) are fetched at request time with a non-expiring
-    // Page access token (a Page token derived from a long-lived user token; stays valid
-    // while the admin's login does). Server-side only — set META_PAGE_TOKEN via Secret
-    // Manager + --update-secrets, never in the client. Instagram needs a Business/Creator
-    // account linked to the Page + instagram_* scopes before it can be added here. Reach /
-    // impressions are deprecated by Meta's Page Insights API and are not available.
+    // Meta Graph API — the Social Platforms tab's LIVE Facebook Page + Instagram Business
+    // figures (server/metrics/meta-fb-insights.js) are fetched at request time with a
+    // non-expiring Page access token (a Page token derived from a long-lived user token,
+    // carrying instagram_basic / instagram_manage_insights; stays valid while the admin's
+    // login does). The linked Instagram account is discovered from the Page at runtime —
+    // no IG id needed here. Server-side only — set META_PAGE_TOKEN via Secret Manager +
+    // --update-secrets, never in the client. NB Facebook page reach/impressions are
+    // deprecated by Meta (views only); Instagram reach IS available.
     pageToken: env.META_PAGE_TOKEN || '',
     pageId: env.META_PAGE_ID || '1421118044806726',
   },

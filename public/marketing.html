@@ -433,7 +433,28 @@
       var end = lastDay + ' ' + MONTH_ABBR[bm] + ' ' + by;
       return start + ' – ' + end;
     }
+    // Exact-day label for a custom range (KPIs sum whole months, but the label shows the picked dates).
+    function dayParts(s) { var p = String(s).split('-'); return Date.UTC(+p[0], +p[1] - 1, +p[2]); }
+    function dayFmt(t, withYear) { var d = new Date(t); return d.getUTCDate() + ' ' + MONTH_ABBR[d.getUTCMonth() + 1] + (withYear ? ' ' + d.getUTCFullYear() : ''); }
+    function daySpan(a, b) {
+      var sameYear = new Date(a).getUTCFullYear() === new Date(b).getUTCFullYear();
+      return dayFmt(a, !sameYear) + ' – ' + dayFmt(b, true);
+    }
+    function customRangeLabel() {
+      var r = getDateRange();
+      if (!r || !r.from || !r.to) return null;
+      var a = dayParts(r.from), b = dayParts(r.to), DAY = 86400000, base;
+      if (selCmp() === 'prev') {
+        var len = Math.round((b - a) / DAY) + 1;
+        base = [a - len * DAY, a - DAY];
+      } else {
+        var f = new Date(a), t = new Date(b);
+        base = [Date.UTC(f.getUTCFullYear() - 1, f.getUTCMonth(), f.getUTCDate()), Date.UTC(t.getUTCFullYear() - 1, t.getUTCMonth(), t.getUTCDate())];
+      }
+      return 'Showing ' + daySpan(a, b) + ' · vs ' + daySpan(base[0], base[1]);
+    }
     function compareRangeLabel() {
+      if (CUSTOM) { var cl = customRangeLabel(); if (cl) return cl; }
       var cur = canonMonths();
       if (cur === null) return 'All financial years';   // "all years" — no period comparison
       if (!cur.length) return '';                        // data still loading

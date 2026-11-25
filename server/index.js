@@ -653,12 +653,13 @@ marketing.get('/platforms', async (_req, res) => {
     res.status(502).json({ error: 'Failed to load platform stats from data source.', detail: err.message });
   }
 });
-// Facebook LIVE insights — real MAG Facebook Page metrics (followers + 28-day views / new
-// follows / post engagements) fetched at request time from the Meta Graph API with a
-// non-expiring Page token (META_PAGE_TOKEN, server-side only). Feeds the live Facebook
-// figures on public/social_platforms.html; everything else on that page stays sample (IG
-// not linked yet; reach/impressions deprecated by Meta). Degrades to {facebook:null,
-// status:pending} when the token is unset or Meta returns nothing. See
+// Meta LIVE insights — real MAG Facebook Page + linked Instagram Business metrics
+// (FB: followers / 28-day views / new follows / post engagements; IG: followers / 28-day
+// reach / posts / recent-media engagement) fetched at request time from the Meta Graph API
+// with a non-expiring Page token (META_PAGE_TOKEN, server-side only; the token carries the
+// instagram_* scopes). Feeds the live Facebook + Instagram figures on
+// public/social_platforms.html; LinkedIn stays sample. Degrades to {facebook:null,
+// instagram:null, status:pending} when the token is unset or Meta returns nothing. See
 // server/metrics/meta-fb-insights.js. Cached briefly.
 marketing.get('/meta-fb', async (_req, res) => {
   try {

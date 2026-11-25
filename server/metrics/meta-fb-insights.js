@@ -1,33 +1,38 @@
-// Marketing — Facebook LIVE insights (Social Platforms tab).
+// Marketing — Meta (Facebook + Instagram) LIVE insights (Social Platforms tab).
 //
-// Pulls REAL Facebook Page metrics at request time from the Meta Graph API using a
-// non-expiring Page access token (a Page token derived from a long-lived user token).
-// Server-side ONLY — the token is a Cloud Run secret (META_PAGE_TOKEN) and is never sent
-// to the browser (same pattern as OPENAI_API_KEY / GEMINI_API_KEY). The route caches the
-// result ~10 min so page views don't hammer Graph.
+// Pulls REAL Facebook Page + linked Instagram Business account metrics at request time
+// from the Meta Graph API using a non-expiring Page access token (a Page token derived
+// from a long-lived user token, with the instagram_basic / instagram_manage_insights
+// scopes). Server-side ONLY — the token is a Cloud Run secret (META_PAGE_TOKEN) and is
+// never sent to the browser (same pattern as OPENAI_API_KEY / GEMINI_API_KEY). The route
+// caches the result ~10 min so page views don't hammer Graph.
 //
-// Scope (what's actually available, verified against the live API 2026-11-25):
-//   - Followers (followers_count), 28-day page views (page_views_total), 28-day new
-//     follows (page_daily_follows_unique), 28-day post engagements (page_post_engagements).
-//   - FACEBOOK ONLY. Instagram needs a Business/Creator account linked to the Page +
-//     instagram_basic / instagram_manage_insights scopes (not granted yet) — so IG stays
-//     sample on the page.
-//   - REACH / IMPRESSIONS are deprecated by Meta's Page Insights API (every reach metric
-//     name is now rejected), so the page leaves its reach tiles as sample/pending.
+// Scope (verified against the live API 2026-11-25):
+//   FACEBOOK Page: followers (followers_count), 28-day page views (page_views_total),
+//     28-day new follows (page_daily_follows_unique), 28-day post engagements
+//     (page_post_engagements). NB Facebook page REACH / IMPRESSIONS are deprecated (every
+//     reach metric name is rejected) — only views are available.
+//   INSTAGRAM Business account (linked to the Page): followers_count, media_count, 28-day
+//     REACH (the real reach figure Facebook can't give), and recent-media engagement
+//     (sum of like_count + comments_count over the latest posts). The IG user id is
+//     discovered at request time via the Page's instagram_business_account edge — no extra
+//     config. IG account-level engagement metrics only support period=day (not days_28),
+//     so a comparable window uses recent media instead.
 //
-// Degrades gracefully: any sub-call that fails leaves its field null; if nothing comes
-// back (token missing/expired) the whole payload is {facebook:null|zeros, status:pending}
-// and the page keeps its sample figures rather than breaking.
+// Degrades gracefully: any sub-call that fails leaves its field null; a platform with no
+// data comes back null and the page keeps that platform's sample figures rather than
+// breaking.
 
 import { config, hasSource } from '../config.js';
 
 const GRAPH = 'https://graph.facebook.com/v21.0';
+const IG_MEDIA_LIMIT = 25;   // recent posts summed for the IG engagement figure
 
 const SRC =
-  'Live (Meta Graph API): Facebook Page Insights for the MAG Page, fetched at request ' +
-  'time with a non-expiring Page token. Followers = followers_count; 28-day views / new ' +
-  'follows / post engagements from Page Insights. Reach & impressions are deprecated by ' +
-  'Meta and not available via the API.';
+  'Live (Meta Graph API): Facebook Page Insights + the linked Instagram Business account, ' +
+  'fetched at request time with a non-expiring Page token. FB: followers, 28-day views / ' +
+  'new follows / post engagements (FB reach/impressions are deprecated by Meta). IG: ' +
+  'followers, 28-day reach, post count, and recent-media engagement (likes + comments).';
 
 async function graphGet(path, params) {
   const url = new URL(GRAPH + path);
@@ -82,15 +87,72 @@ export async function getMetaFbInsights() {
     console.error('[meta-fb] insights fetch failed:', err.message);
   }
 
-  const live = fb.followers != null || fb.views28d != null || fb.postEngagements28d != null;
+  const fbLive = fb.followers != null || fb.views28d != null || fb.postEngagements28d != null;
+
+  // ── Instagram (the Business account linked to the Page) ──────────────────────
+  const ig = {
+    username: null,
+    followers: null,
+    mediaCount: null,
+    reach28d: null,
+    recentEngagement: null,
+    recentPosts: null,
+    asOf: fb.asOf,
+  };
+  let igId = null;
+  try {
+    const link = await graphGet(`/${pageId}`, {
+      fields: 'instagram_business_account{id,username,followers_count,media_count}',
+      access_token: token,
+    });
+    const iba = link.instagram_business_account;
+    if (iba && iba.id) {
+      igId = iba.id;
+      ig.username = iba.username || null;
+      if (iba.followers_count != null) ig.followers = Number(iba.followers_count);
+      if (iba.media_count != null) ig.mediaCount = Number(iba.media_count);
+    }
+  } catch (err) {
+    console.error('[meta-ig] link/profile fetch failed:', err.message);
+  }
+  if (igId) {
+    // 28-day account reach — the real reach figure (FB's is deprecated).
+    try {
+      const ins = await graphGet(`/${igId}/insights`, { metric: 'reach', period: 'days_28', access_token: token });
+      const vs = (ins.data && ins.data[0] && ins.data[0].values) || [];
+      if (vs.length) ig.reach28d = Number(vs[vs.length - 1].value);
+    } catch (err) {
+      console.error('[meta-ig] reach fetch failed:', err.message);
+    }
+    // Recent-media engagement (likes + comments) — IG account engagement metrics only
+    // support period=day, so we sum the latest posts for a comparable figure.
+    try {
+      const media = await graphGet(`/${igId}/media`, {
+        fields: 'like_count,comments_count',
+        limit: String(IG_MEDIA_LIMIT),
+        access_token: token,
+      });
+      const arr = media.data || [];
+      if (arr.length) {
+        ig.recentPosts = arr.length;
+        ig.recentEngagement = arr.reduce(
+          (s, m) => s + (Number(m.like_count) || 0) + (Number(m.comments_count) || 0), 0);
+      }
+    } catch (err) {
+      console.error('[meta-ig] media fetch failed:', err.message);
+    }
+  }
+  const igLive = ig.followers != null || ig.reach28d != null;
+
   return {
-    facebook: live ? fb : null,
+    facebook: fbLive ? fb : null,
+    instagram: igLive ? ig : null,
     meta: {
-      status: live ? 'live' : 'pending',
+      status: fbLive || igLive ? 'live' : 'pending',
       source: SRC,
-      note: live
-        ? `Facebook live as of ${fb.asOf}.`
-        : 'Meta Graph API returned no Facebook data — the Page token may be invalid or revoked.',
+      note: fbLive || igLive
+        ? `Meta live as of ${fb.asOf} (Facebook: ${fbLive ? 'yes' : 'no'}, Instagram: ${igLive ? 'yes' : 'no'}).`
+        : 'Meta Graph API returned no data — the Page token may be invalid or revoked.',
     },
   };
 }
