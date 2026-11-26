@@ -54,7 +54,11 @@ export async function getMetaFbInsights() {
   const fb = {
     pageName: null,
     followers: null,
-    views28d: null,
+    views28d: null,          // back-compat (page_views_total)
+    mediaViews28d: null,     // page_media_view (content views across posts/reels)
+    pageVisits28d: null,     // page_views_total (Page visits)
+    viewers28d: null,        // unique viewers if exposed by Meta
+    linkClicks28d: null,     // link clicks / total actions if exposed by Meta
     newFollows28d: null,
     postEngagements28d: null,
     asOf: new Date().toISOString().slice(0, 10),
@@ -70,7 +74,7 @@ export async function getMetaFbInsights() {
     console.error('[meta-fb] profile fetch failed:', err.message);
   }
 
-  // 28-day Page Insights (views / new follows / post engagements).
+  // Core 28-day Page Insights (proven working on this Page token).
   try {
     const ins = await graphGet(`/${pageId}/insights`, {
       metric: 'page_views_total,page_daily_follows_unique,page_post_engagements',
@@ -82,14 +86,51 @@ export async function getMetaFbInsights() {
       const vs = m.values || [];
       latest[m.name] = vs.length ? Number(vs[vs.length - 1].value) : null;
     });
-    if (latest.page_views_total != null) fb.views28d = latest.page_views_total;
+    if (latest.page_views_total != null) {
+      fb.views28d = latest.page_views_total;
+      fb.pageVisits28d = latest.page_views_total;
+    }
     if (latest.page_daily_follows_unique != null) fb.newFollows28d = latest.page_daily_follows_unique;
     if (latest.page_post_engagements != null) fb.postEngagements28d = latest.page_post_engagements;
   } catch (err) {
     console.error('[meta-fb] insights fetch failed:', err.message);
   }
 
-  const fbLive = fb.followers != null || fb.views28d != null || fb.postEngagements28d != null;
+  // Additional 28-day Facebook Page Insights (each isolated so Meta deprecations never fail the core call).
+  async function tryFbMetric(metric) {
+    try {
+      const ins = await graphGet(`/${pageId}/insights`, { metric, period: 'days_28', access_token: token });
+      const vs = (ins.data && ins.data[0] && ins.data[0].values) || [];
+      return vs.length ? vs[vs.length - 1].value : null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Content views (Meta v21+ replacement for page_impressions)
+  const mediaView = await tryFbMetric('page_media_view');
+  if (mediaView != null && !Number.isNaN(Number(mediaView))) {
+    fb.mediaViews28d = Number(mediaView);
+  }
+
+  // Link clicks / CTA actions (try consumptions breakdown, then page_total_actions)
+  const cons = await tryFbMetric('page_consumptions_by_consumption_type');
+  if (cons && typeof cons === 'object') {
+    const lc = cons['link clicks'] ?? cons.link_clicks;
+    if (lc != null && !Number.isNaN(Number(lc))) fb.linkClicks28d = Number(lc);
+  }
+  if (fb.linkClicks28d == null) {
+    const acts = await tryFbMetric('page_total_actions');
+    if (acts != null && !Number.isNaN(Number(acts))) fb.linkClicks28d = Number(acts);
+  }
+
+  // Unique viewers (try page_impressions_unique — null when deprecated)
+  const uniqViewers = await tryFbMetric('page_impressions_unique');
+  if (uniqViewers != null && !Number.isNaN(Number(uniqViewers))) {
+    fb.viewers28d = Number(uniqViewers);
+  }
+
+  const fbLive = fb.followers != null || fb.views28d != null || fb.mediaViews28d != null || fb.postEngagements28d != null;
 
   // ── Instagram (the Business account linked to the Page) ──────────────────────
   const ig = {

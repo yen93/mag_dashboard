@@ -1,0 +1,88 @@
+================================================================================
+UPDATE DOCUMENTATION: SOCIAL PLATFORMS FIXES & FACEBOOK META GRAPH API UPDATES
+Timestamp: 26/11/26 15:30 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. EXPRESS BODY LIMIT & JSON API ERROR HANDLER (413 HTML FIX)
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Importing the 4 MAG LinkedIn .xls/.xlsx files (~600 KB base64 JSON) failed in
+  the browser with `Unexpected token '<', "<!DOCTYPE "... is not valid JSON`
+  because global `app.use(express.json())` had a 100 KB default limit and ran
+  before the `/linkedin-analytics/import` route, returning an HTML 413 page.
+
+* Technical Changes:
+  - Updated `server/index.js`:
+    - Raised global JSON body limit to `app.use(express.json({ limit: '20mb' }))`
+      and removed the shadowed route-level `express.json()` middleware.
+    - Added an `/api` Express error handler returning `{ error }` JSON instead
+      of HTML for unhandled or body-parser errors.
+
+2. LINKEDIN TAB REFINEMENTS & TOP POSTS TABLE BUGFIX
+--------------------------------------------------------------------------------
+* Problem / Context:
+  - Top posts tables on JC's LinkedIn, MAG LinkedIn, Instagram, and All accounts
+    were rendering empty because `mountTopPostsTable()` passed `(hostId, columns,
+    rows, ...)` instead of `renderSortableTable(containerId, rows, columns, opts)`
+    (with `sortKey` / `sortDir` instead of `defaultSort`).
+  - "What works best, by type" was not needed on JC's LinkedIn (personal export
+    has no content type column).
+  - User requested renaming "Personal LinkedIn" to "JC's LinkedIn".
+  - MAG LinkedIn exports have 275 post clicks (`Metrics` / `All posts`) rather
+    than Company Page "Custom button clicks".
+
+* Technical Changes:
+  - Updated `public/social_platforms.html`:
+    - Fixed `mountTopPostsTable()` to call `renderSortableTable(hostId, rows,
+      columns, { sortKey: 'eng', sortDir: 'desc', pageSize: 15 })`.
+    - Removed the "What works best, by type" card from `renderJamesLinkedin()`
+      only (leaving MAG LinkedIn, Facebook, and Instagram intact).
+    - Renamed "Personal LinkedIn" to "JC's LinkedIn" across tab buttons, import
+      modal, All accounts table, Top posts chips, headers, and banners.
+    - Replaced MAG LinkedIn "Custom button clicks" mini-box with "Post clicks"
+      showing FY-aware `li.clicks` and CTR (`clicks ÷ impressions`), removing
+      the duplicate subtitle under Comments.
+  - Updated `server/metrics/linkedin-analytics.js` comments/source string to
+    reference "JC's LinkedIn".
+
+3. FACEBOOK TAB META GRAPH API EXPANSION
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Multiple tiles and cards on the Facebook tab (Views/Visits, Link clicks,
+  Followers over time, What works best by type, Top posts) were showing pending
+  chips even though Meta Graph API provides Page/post insights via `read_insights`.
+
+* Technical Changes:
+  - Updated `server/metrics/meta-fb-insights.js`:
+    - Added isolated 28-day Facebook Page insight fetches (graceful null on
+      deprecation): `mediaViews28d` (`page_media_view`), `pageVisits28d`
+      (`page_views_total`), `linkClicks28d` (`page_consumptions_by_consumption_type`
+      fallback to `page_total_actions`), and `viewers28d` (`page_impressions_unique`).
+  - Updated `server/metrics/meta-top-posts.js`:
+    - Added `/{pageId}/published_posts` + per-post `read_insights` enrichment
+      (`post_media_view`, `post_reactions_by_type_total`, `post_clicks`) and
+      format detection (`Video`, `Photo`, `Carousel / Album`, `Link`, `Status`),
+      returned in `fbPosts` alongside Instagram `data`.
+  - Updated `public/social_platforms.html`:
+    - Wired `LIVE.fbTopPosts` from `/api/marketing/meta-top-posts` into both
+      `renderFacebook()` and `renderAllAccounts()`.
+    - Populated Facebook Meta Business Suite strip: Views, Visits, Link clicks
+      (falling back to sum of recent post clicks), and Viewers.
+    - Reconstructed 13-month `Followers over time — Facebook` curve from live
+      `fb.followers` + `LIVE.fbTrend` (`follows - unfollows`) when weekly
+      snapshots have fewer than 2 points.
+    - Added live "What works best, by type — Facebook" horizontal bar chart and
+      live sortable Facebook "Top posts" table.
+    - Kept Facebook Audience demographics and Reached beyond followers as
+      pending (deprecated by Meta's New Pages Experience API).
+
+4. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Syntax Checks:
+  - `node --check server/index.js` — passed
+  - `node --check server/metrics/meta-fb-insights.js` — passed
+  - `node --check server/metrics/meta-top-posts.js` — passed
+  - `node --check server/metrics/linkedin-analytics.js` — passed
+  - `public/social_platforms.html` inline script syntax check — passed (109,249 chars)
+================================================================================

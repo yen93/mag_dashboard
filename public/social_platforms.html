@@ -620,7 +620,8 @@
         igTrend: [],         // /api/marketing/meta-ig-trend
         fbTrend: [],         // /api/marketing/meta-fb-trend
         igDemo: null,        // { ageGender, locations }
-        topPosts: [],        // /api/marketing/meta-top-posts
+        topPosts: [],        // /api/marketing/meta-top-posts (IG)
+        fbTopPosts: [],      // /api/marketing/meta-top-posts (FB)
         linkedin: {}         // { james_linkedin, mag_linkedin } from /api/marketing/linkedin-analytics
       };
 
@@ -1409,12 +1410,14 @@
         var allSnaps = (aud && aud.snaps) || [];
 
         var allTopPosts = (isLiveWindowFy() ? LIVE.topPosts : []).slice();
+        if (isLiveWindowFy() && LIVE.fbTopPosts && LIVE.fbTopPosts.length) allTopPosts = allTopPosts.concat(LIVE.fbTopPosts);
         var jlLi = liDataForFy('james_linkedin');
         var mlLi = liDataForFy('mag_linkedin');
         if (jlLi && jlLi.topPosts && jlLi.topPosts.length) allTopPosts = allTopPosts.concat(jlLi.topPosts);
         if (mlLi && mlLi.topPosts && mlLi.topPosts.length) allTopPosts = allTopPosts.concat(mlLi.topPosts);
         var topSources = [];
         if (isLiveWindowFy() && LIVE.topPosts.length) topSources.push('Instagram');
+        if (isLiveWindowFy() && LIVE.fbTopPosts && LIVE.fbTopPosts.length) topSources.push('Facebook');
         if (jlLi && jlLi.topPosts && jlLi.topPosts.length) topSources.push("JC's LinkedIn");
         if (mlLi && mlLi.topPosts && mlLi.topPosts.length) topSources.push('MAG LinkedIn');
 
@@ -1834,9 +1837,7 @@
                 '<div class="sp-mini-box"><div class="m-label">' + (hasLi && li.reactions != null ? 'Reactions' : 'Engagements') + '</div><div class="m-val">' + (hasLi && li.reactions != null ? fmt(li.reactions, 'count') : (hasLi && li.engagements != null ? fmt(li.engagements, 'count') : PENDING_CHIP)) + '</div>' +
                   (hasLi && li.monthlyEngagement.length >= 2 ? '<div class="sp-spark"><canvas id="mlEngSpark"></canvas></div>' : '') +
                 '</div>' +
-                '<div class="sp-mini-box"><div class="m-label">' + (hasLi && li.comments != null ? 'Comments' : 'Impressions · 7 days') + '</div><div class="m-val">' + (hasLi && li.comments != null ? fmt(li.comments, 'count') : (hasLi && li.impressions7d != null ? fmt(li.impressions7d, 'count') : PENDING_CHIP)) + '</div>' +
-                  (hasLi && li.clicks != null ? '<div class="m-sub">' + fmt(li.clicks, 'count') + ' post clicks</div>' : '') +
-                '</div>' +
+                '<div class="sp-mini-box"><div class="m-label">' + (hasLi && li.comments != null ? 'Comments' : 'Impressions · 7 days') + '</div><div class="m-val">' + (hasLi && li.comments != null ? fmt(li.comments, 'count') : (hasLi && li.impressions7d != null ? fmt(li.impressions7d, 'count') : PENDING_CHIP)) + '</div></div>' +
                 '<div class="sp-mini-box"><div class="m-label">' + (hasLi && li.reposts != null ? 'Reposts' : 'Members reached') + '</div><div class="m-val">' + (hasLi && li.reposts != null ? fmt(li.reposts, 'count') : (hasLi && li.membersReached != null ? fmt(li.membersReached, 'count') : PENDING_CHIP)) + '</div>' +
                   (hasLi && li.impressions7d != null ? '<div class="m-sub">' + fmt(li.impressions7d, 'count') + ' impressions (last 7d)</div>' : '') +
                 '</div>' +
@@ -1846,7 +1847,9 @@
               '<div class="sp-mini-grid cols-3">' +
                 '<div class="sp-mini-box"><div class="m-label">Page views</div><div class="m-val">' + (hasLi && li.pageViews != null ? fmt(li.pageViews, 'count') : PENDING_CHIP) + '</div></div>' +
                 '<div class="sp-mini-box"><div class="m-label">Unique visitors</div><div class="m-val">' + (hasLi && li.uniqueVisitors != null ? fmt(li.uniqueVisitors, 'count') : PENDING_CHIP) + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Custom button clicks</div><div class="m-val">' + (hasLi && li.customButtonClicks != null ? fmt(li.customButtonClicks, 'count') : PENDING_CHIP) + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Post clicks ' + infoTip('Total clicks on MAG LinkedIn posts (links, media, see more, company name) from imported content analytics.', 'Imported MAG LinkedIn content (.xls)') + '</div><div class="m-val">' + (hasLi && li.clicks != null ? fmt(li.clicks, 'count') : PENDING_CHIP) + '</div>' +
+                  (hasLi && li.clicks != null && li.impressions > 0 ? '<div class="m-sub">' + ((li.clicks / li.impressions) * 100).toFixed(1) + '% CTR</div>' : '') +
+                '</div>' +
               '</div>' +
               deviceSplitHtml +
 
@@ -1915,6 +1918,61 @@
         var fb = isLiveWindowFy() && LIVE.metaFb && LIVE.metaFb.facebook;
         var fbTrend = LIVE.fbTrend || [];
         var latestFbMonth = fbTrend.length ? fbTrend[fbTrend.length - 1] : null;
+        var fbPosts = isLiveWindowFy() ? (LIVE.fbTopPosts || []) : [];
+
+        // Reconstruct 13-month follower curve from live followers + Meta monthly follows/unfollows
+        // when weekly Apify snapshots have < 2 points.
+        var fbSnaps = st.snaps || [];
+        if (fbSnaps.length < 2 && st.followers != null && fbTrend.length >= 2) {
+          var reconstructed = [];
+          var running = st.followers;
+          for (var fi = fbTrend.length - 1; fi >= 0; fi--) {
+            reconstructed.push({ d: fbTrend[fi].month, followers: running });
+            var netMo = (fbTrend[fi].follows || 0) - (fbTrend[fi].unfollows || 0);
+            running = Math.max(0, running - netMo);
+          }
+          reconstructed.reverse();
+          fbSnaps = reconstructed;
+        }
+
+        // Views / Visits / Link clicks / Viewers from Meta Graph API
+        var fbViewsVal = fb ? (fb.mediaViews28d != null ? fb.mediaViews28d : fb.views28d) : null;
+        var fbVisitsVal = fb ? (fb.pageVisits28d != null ? fb.pageVisits28d : fb.views28d) : null;
+        var fbViewersVal = fb && fb.viewers28d != null ? fb.viewers28d : null;
+        var fbClicksVal = fb && fb.linkClicks28d != null ? fb.linkClicks28d : null;
+        if (fbClicksVal == null && fbPosts.some(function (p) { return p.linkClicks != null; })) {
+          fbClicksVal = fbPosts.reduce(function (s, p) { return s + (p.linkClicks || 0); }, 0);
+        }
+
+        // What works best, by type — Facebook (from live FB published posts)
+        var fbTypeBuckets = {};
+        fbPosts.forEach(function (p) {
+          var t = p.type || 'Post';
+          if (!fbTypeBuckets[t]) fbTypeBuckets[t] = { type: t, count: 0, views: 0, hasViews: false, eng: 0 };
+          fbTypeBuckets[t].count += 1;
+          if (p.reach != null) { fbTypeBuckets[t].views += p.reach; fbTypeBuckets[t].hasViews = true; }
+          fbTypeBuckets[t].eng += p.interactions || 0;
+        });
+        var fbByType = Object.keys(fbTypeBuckets).map(function (t) {
+          var b = fbTypeBuckets[t];
+          return {
+            type: b.type,
+            count: b.count,
+            metric: b.hasViews ? Math.round(b.views / b.count) : Math.round((b.eng / b.count) * 10) / 10,
+            useViews: b.hasViews
+          };
+        }).sort(function (a, b) { return b.metric - a.metric; });
+        var hasFbByType = fbByType.length > 0 && fbByType.some(function (b) { return b.metric > 0; });
+        var fbByTypeCardHtml = hasFbByType
+          ? '<div class="sp-card">' +
+              '<div class="sp-card-head">' +
+                '<h3>What works best, by type — Facebook ' + infoTip('Average ' + (fbByType[0].useViews ? 'views' : 'engagements') + ' per recent Facebook post grouped by post format.', 'Facebook Page Insights (Meta)') + '</h3>' +
+                '<span class="sp-live-pill"><span class="dot"></span>Live · Meta</span>' +
+              '</div>' +
+              '<div class="cap">Average ' + (fbByType[0].useViews ? 'views' : 'engagements') + ' per post by format</div>' +
+              '<div class="sp-chart-box h-md"><canvas id="fbByTypeChart"></canvas></div>' +
+            '</div>'
+          : whatWorksBestCard('What works best, by type — Facebook', 'Facebook');
 
         var kpisHtml = '<div class="sp-kpi-grid">' +
           kpiTile(
@@ -1990,19 +2048,19 @@
                 (fb ? '<span class="sp-live-pill"><span class="dot"></span>Live · last 28 days</span>' : PENDING_CHIP) +
               '</div>' +
               '<div class="sp-mini-grid cols-6">' +
-                '<div class="sp-mini-box"><div class="m-label">Views ' + infoTip('Total Facebook Page views in the last 28 days.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fb && fb.views28d != null ? fmtCompact(fb.views28d) : PENDING_CHIP) + '</div><div class="m-sub">Last 28 days</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Viewers ' + infoTip('Unique viewers / page reach is deprecated by Meta\'s Page API.', 'Facebook Page Insights (unavailable)') + '</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Views ' + infoTip('Total Facebook content/page views in the last 28 days.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fbViewsVal != null ? fmtCompact(fbViewsVal) : PENDING_CHIP) + '</div><div class="m-sub">Last 28 days</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Viewers ' + infoTip('Unique Facebook viewers / page reach (deprecated by Meta on most New Pages).', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fbViewersVal != null ? fmtCompact(fbViewersVal) : PENDING_CHIP) + '</div>' + (fbViewersVal != null ? '<div class="m-sub">Last 28 days</div>' : '') + '</div>' +
                 '<div class="sp-mini-box"><div class="m-label">Content interactions ' + infoTip('Post engagements (reactions, comments, shares, clicks) over the last 28 days.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fb && fb.postEngagements28d != null ? fmt(fb.postEngagements28d, 'count') : PENDING_CHIP) + '</div><div class="m-sub">Last 28 days</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Link clicks ' + infoTip('Outbound link clicks from Facebook posts. Not currently connected.', 'Meta Business Suite (pending)') + '</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Visits ' + infoTip('Separate Facebook Page visits breakdown. Not currently connected.', 'Meta Business Suite (pending)') + '</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Link clicks ' + infoTip('Outbound / post clicks from Facebook Page insights or recent posts.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fbClicksVal != null ? fmt(fbClicksVal, 'count') : PENDING_CHIP) + '</div>' + (fbClicksVal != null ? '<div class="m-sub">' + (fb && fb.linkClicks28d != null ? 'Last 28 days' : 'Recent posts') + '</div>' : '') + '</div>' +
+                '<div class="sp-mini-box"><div class="m-label">Visits ' + infoTip('Total Facebook Page visits (page_views_total) over the last 28 days.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fbVisitsVal != null ? fmtCompact(fbVisitsVal) : PENDING_CHIP) + '</div>' + (fbVisitsVal != null ? '<div class="m-sub">Last 28 days</div>' : '') + '</div>' +
                 '<div class="sp-mini-box"><div class="m-label">Follows ' + infoTip('Unique new Facebook Page follows in the last 28 days, with monthly trend sparkline.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fb && fb.newFollows28d != null ? fmt(fb.newFollows28d, 'count') : PENDING_CHIP) + '</div>' +
                   (fbTrend.length >= 2 ? '<div class="sp-spark"><canvas id="fbFollowsSpark"></canvas></div>' : '<div class="m-sub">Last 28 days</div>') +
                 '</div>' +
               '</div>' +
             '</div>' +
 
-            followersOverTimeCard('Followers over time — Facebook', 'fbFollowersChart', st.snaps, 'Facebook') +
-            whatWorksBestCard('What works best, by type — Facebook', 'Facebook') +
+            followersOverTimeCard('Followers over time — Facebook', 'fbFollowersChart', fbSnaps, 'Facebook') +
+            fbByTypeCardHtml +
 
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
@@ -2014,10 +2072,10 @@
 
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>Top posts ' + infoTip('Individual Facebook posts ranked by engagement. Requires Meta Page Public Content Access app review.', 'Facebook Page Insights (pending app review)') + '</h3>' +
-                PENDING_CHIP +
+                '<h3>Top posts ' + infoTip('Recent Facebook Page posts ranked by engagement (reactions + clicks + shares) via Meta read_insights.', 'Facebook Page Insights (Meta)') + '</h3>' +
+                (fbPosts.length ? '<span class="sp-live-pill"><span class="dot"></span>Live · Meta</span>' : PENDING_CHIP) +
               '</div>' +
-              pendingBox('Facebook per-post engagement pending', 'Meta requires Page Public Content Access approval before per-post like and comment counts can be pulled for Facebook.') +
+              '<div id="fbTopPostsHost"></div>' +
             '</div>' +
 
             '<div class="sp-card wide">' +
@@ -2033,13 +2091,22 @@
             '</div>' +
           '</div>';
 
-        drawFollowersLine('fbFollowersChart', st.snaps);
+        drawFollowersLine('fbFollowersChart', fbSnaps);
+        if (hasFbByType) {
+          drawHbar(
+            'fbByTypeChart',
+            fbByType.map(function (b) { return b.type + ' (' + b.count + ')'; }),
+            fbByType.map(function (b) { return b.metric; }),
+            { color: PAL[0], pct: false }
+          );
+        }
         if (fbTrend.length >= 2) {
           drawSparkline('fbFollowsSpark', fbTrend.map(function (r) { return monthLbl(r.month); }), fbTrend.map(function (r) { return r.follows; }), PAL[0]);
         }
         if (fbTrend.length) {
           drawFbMonthlyFollows('fbFollowsUnfollowsChart', fbTrend);
         }
+        mountTopPostsTable('fbTopPostsHost', fbPosts, { seenLabel: 'Views' });
       }
 
       // ── 5. INSTAGRAM VIEW (ig.pdf) ──────────────────────────────────────────
@@ -2451,7 +2518,10 @@
         safeFetch('/api/marketing/meta-ig-trend', function (res) { LIVE.igTrend = (res && res.data) || []; });
         safeFetch('/api/marketing/meta-fb-trend', function (res) { LIVE.fbTrend = (res && res.data) || []; });
         safeFetch('/api/marketing/meta-ig-demographics', function (res) { LIVE.igDemo = res; });
-        safeFetch('/api/marketing/meta-top-posts', function (res) { LIVE.topPosts = (res && res.data) || []; });
+        safeFetch('/api/marketing/meta-top-posts', function (res) {
+          LIVE.topPosts = (res && res.data) || [];
+          LIVE.fbTopPosts = (res && res.fbPosts) || [];
+        });
         safeFetch('/api/marketing/linkedin-analytics', function (res) { LIVE.linkedin = (res && res.byPlatform) || {}; });
       }
 

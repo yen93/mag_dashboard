@@ -51,12 +51,23 @@ function mediaLabel(t) {
   return t;
 }
 
+function fbAttachmentType(p) {
+  const att = p && p.attachments && p.attachments.data && p.attachments.data[0];
+  const mt = String((att && (att.media_type || att.type)) || '').toLowerCase();
+  if (mt.includes('video') || mt.includes('reel')) return 'Video';
+  if (mt.includes('album') || mt.includes('carousel')) return 'Carousel / Album';
+  if (mt.includes('photo') || mt.includes('image')) return 'Photo';
+  if (mt.includes('link') || mt.includes('share')) return 'Link';
+  return 'Status';
+}
+
 export async function getMetaTopPosts() {
   if (!hasSource('meta')) {
-    return { data: [], meta: { status: 'pending', source: SRC, note: 'META_PAGE_TOKEN not set.' } };
+    return { data: [], fbPosts: [], meta: { status: 'pending', source: SRC, note: 'META_PAGE_TOKEN not set.' } };
   }
   const token = config.meta.pageToken;
   const igId = config.meta.igId;
+  const pageId = config.meta.pageId;
   let posts = [];
 
   // Instagram media (engagement = likes + comments).
@@ -84,7 +95,7 @@ export async function getMetaTopPosts() {
   posts.sort((a, b) => b.interactions - a.interactions);
   const top = posts.slice(0, TOP_N);
 
-  // Enrich each with its real per-post reach (bounded: <= TOP_N calls).
+  // Enrich each IG post with its real per-post reach (bounded: <= TOP_N calls).
   for (const p of top) {
     if (p.mediaId) {
       try {
@@ -106,12 +117,74 @@ export async function getMetaTopPosts() {
     reach: p.reach,
     interactions: p.interactions,
   }));
+
+  // Facebook published posts enriched via read_insights (post_media_view,
+  // post_reactions_by_type_total, post_clicks) — does not require Page Public Content Access.
+  let fbPosts = [];
+  if (pageId) {
+    try {
+      const fj = await graphGet(`/${pageId}/published_posts`, {
+        fields: 'id,message,created_time,permalink_url,shares,attachments{media_type,type}',
+        limit: '12',
+        access_token: token,
+      });
+      const rawFb = fj.data || [];
+      for (const m of rawFb) {
+        const type = fbAttachmentType(m);
+        const shares = (m.shares && Number(m.shares.count)) || 0;
+        let reactions = null;
+        let clicks = null;
+        let views = null;
+
+        async function tryPostInsight(metric) {
+          try {
+            const ij = await graphGet(`/${m.id}/insights`, { metric, access_token: token });
+            const v = ij.data && ij.data[0] && ij.data[0].values && ij.data[0].values[0];
+            return v ? v.value : null;
+          } catch {
+            return null;
+          }
+        }
+
+        const [rxObj, clkVal, mvVal] = await Promise.all([
+          tryPostInsight('post_reactions_by_type_total'),
+          tryPostInsight('post_clicks'),
+          tryPostInsight('post_media_view'),
+        ]);
+
+        if (rxObj && typeof rxObj === 'object') {
+          reactions = Object.values(rxObj).reduce((s, n) => s + (Number(n) || 0), 0);
+        }
+        if (clkVal != null && !Number.isNaN(Number(clkVal))) clicks = Number(clkVal);
+        if (mvVal != null && !Number.isNaN(Number(mvVal))) views = Number(mvVal);
+
+        const interactions = (reactions || 0) + (clicks || 0) + shares;
+        fbPosts.push({
+          post: clip(m.message) || `(${type} post)`,
+          platform: 'Facebook',
+          type,
+          date: ymd(m.created_time),
+          url: m.permalink_url || null,
+          reach: views,
+          interactions: (reactions != null || clicks != null || shares > 0) ? interactions : null,
+          linkClicks: clicks,
+        });
+      }
+      fbPosts.sort((a, b) => (b.interactions || 0) - (a.interactions || 0) || (b.reach || 0) - (a.reach || 0));
+    } catch (err) {
+      console.error('[meta-top-posts] FB published_posts failed:', err.message);
+    }
+  }
+
   return {
     data,
+    fbPosts,
     meta: {
-      status: data.length ? 'live' : 'pending',
+      status: (data.length || fbPosts.length) ? 'live' : 'pending',
       source: SRC,
-      note: data.length ? `Top ${data.length} Instagram posts by engagement.` : 'No posts returned by Meta.',
+      note: (data.length || fbPosts.length)
+        ? `Top ${data.length} Instagram posts and ${fbPosts.length} Facebook posts.`
+        : 'No posts returned by Meta.',
     },
   };
 }
