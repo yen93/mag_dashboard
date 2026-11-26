@@ -530,7 +530,7 @@
           <span class="ctl-label">Platform</span>
           <div class="segmented" id="platformSeg" aria-label="Social platform">
             <button type="button" class="active" data-platform="all">All accounts</button>
-            <button type="button" data-platform="james-linkedin">Personal LinkedIn</button>
+            <button type="button" data-platform="james-linkedin">JC's LinkedIn</button>
             <button type="button" data-platform="mag-linkedin">MAG LinkedIn</button>
             <button type="button" data-platform="facebook">Facebook</button>
             <button type="button" data-platform="instagram">Instagram</button>
@@ -576,7 +576,7 @@
         <div class="sp-field">
           <label for="liImportAccount">LinkedIn account</label>
           <select id="liImportAccount">
-            <option value="james_linkedin">Personal LinkedIn</option>
+            <option value="james_linkedin">JC's LinkedIn</option>
             <option value="mag_linkedin">MAG LinkedIn</option>
           </select>
         </div>
@@ -584,7 +584,7 @@
           <label>LinkedIn export file(s)</label>
           <div class="sp-dropzone" id="liDropzone" tabindex="0" role="button" aria-label="Choose LinkedIn Analytics Excel files">
             <div class="dz-title">Drop LinkedIn .xlsx or .xls export(s) here, or click to browse</div>
-            <div class="dz-sub">Supports Personal LinkedIn (<code>AggregateAnalytics_*.xlsx</code>) and MAG LinkedIn Page exports (<code>followers.xls</code>, <code>visitors.xls</code>, <code>content.xls</code>, <code>competitor_analytics.xlsx</code>). Select one or multiple files to merge.</div>
+            <div class="dz-sub">Supports JC's LinkedIn (<code>AggregateAnalytics_*.xlsx</code>) and MAG LinkedIn Page exports (<code>followers.xls</code>, <code>visitors.xls</code>, <code>content.xls</code>, <code>competitor_analytics.xlsx</code>). Select one or multiple files to merge.</div>
             <input type="file" id="liFileInput" accept=".xlsx,.xls" multiple hidden />
           </div>
         </div>
@@ -814,7 +814,7 @@
           : null;
 
         // Top posts filtered by publishDate (keep undated posts when FY === 'all')
-        var label = key === 'james_linkedin' ? 'Personal LinkedIn' : 'MAG LinkedIn';
+        var label = key === 'james_linkedin' ? "JC's LinkedIn" : 'MAG LinkedIn';
         var filteredRawPosts = (raw.topPosts || []).filter(function (p) {
           return p.publishDate ? inSelectedFy(p.publishDate) : (CURRENT_FY === 'all');
         });
@@ -1260,7 +1260,7 @@
             linkClicks: p.linkClicks != null ? p.linkClicks : null
           };
         });
-        renderSortableTable(hostId, [
+        renderSortableTable(hostId, rows, [
           {
             key: 'post',
             label: 'Post',
@@ -1278,7 +1278,7 @@
           { key: 'eng', label: 'Eng.', unit: 'count', render: function (v) { return v == null ? '—' : fmt(v, 'count'); } },
           { key: 'engRate', label: 'Eng. rate', unit: 'percent', render: function (v) { return v == null ? '—' : v.toFixed(1) + '%'; } },
           { key: 'linkClicks', label: 'Link clicks', unit: 'count', render: function (v) { return v == null ? '—' : fmt(v, 'count'); } }
-        ], rows, { search: false, defaultSort: { key: 'eng', dir: 'desc' } });
+        ], { sortKey: 'eng', sortDir: 'desc', pageSize: 15 });
       }
 
       // Reusable "Followers over time" card
@@ -1318,7 +1318,7 @@
         var fb = accountStats('mag_facebook');
         var ig = accountStats('mag_instagram');
         var accounts = [
-          { id: 'james-linkedin', label: 'Personal LinkedIn', st: jl },
+          { id: 'james-linkedin', label: "JC's LinkedIn", st: jl },
           { id: 'mag-linkedin',   label: 'MAG LinkedIn',     st: ml },
           { id: 'facebook',       label: 'Facebook',         st: fb },
           { id: 'instagram',      label: 'Instagram',        st: ig }
@@ -1344,7 +1344,7 @@
             'Followers',
             totFollowers == null ? PENDING_CHIP : fmt(totFollowers, 'count'),
             deltaHtmlFromPair(pair.latest && pair.latest.followers, pair.base && pair.base.followers),
-            'Combined followers across Personal LinkedIn, MAG LinkedIn, Facebook and Instagram.',
+            'Combined followers across JC\'s LinkedIn, MAG LinkedIn, Facebook and Instagram.',
             'Meta Insights (Facebook & Instagram) + weekly LinkedIn snapshots'
           ) +
           kpiTile(
@@ -1415,7 +1415,7 @@
         if (mlLi && mlLi.topPosts && mlLi.topPosts.length) allTopPosts = allTopPosts.concat(mlLi.topPosts);
         var topSources = [];
         if (isLiveWindowFy() && LIVE.topPosts.length) topSources.push('Instagram');
-        if (jlLi && jlLi.topPosts && jlLi.topPosts.length) topSources.push('Personal LinkedIn');
+        if (jlLi && jlLi.topPosts && jlLi.topPosts.length) topSources.push("JC's LinkedIn");
         if (mlLi && mlLi.topPosts && mlLi.topPosts.length) topSources.push('MAG LinkedIn');
 
         root.innerHTML =
@@ -1622,12 +1622,12 @@
           : pendingBox('LinkedIn post discovery pending', 'Import LinkedIn Analytics (.xlsx) to view impressions, members reached and engagement breakdown.');
 
         root.innerHTML =
-          '<p class="sp-context-line">Showing <strong>Personal LinkedIn</strong> — its own metrics (LinkedIn Analytics). Shared metrics re-slice to this account; cross-account cards are hidden.</p>' +
+          '<p class="sp-context-line">Showing <strong>JC\'s LinkedIn</strong> — its own metrics (LinkedIn Analytics). Shared metrics re-slice to this account; cross-account cards are hidden.</p>' +
           kpisHtml +
           '<div class="sp-grid">' +
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>Personal LinkedIn — LinkedIn Analytics ' + infoTip('LinkedIn personal profile analytics covering 7-day & period post impressions, members reached, engagements and total followers.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn Analytics (import .xlsx to populate)') + '</h3>' +
+                '<h3>JC\'s LinkedIn — LinkedIn Analytics ' + infoTip('LinkedIn personal profile analytics covering 7-day & period post impressions, members reached, engagements and total followers.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn Analytics (import .xlsx to populate)') + '</h3>' +
                 liImportBadgeHtml(li, 'james_linkedin') +
               '</div>' +
               '<div class="sp-mini-grid cols-4">' +
@@ -1648,12 +1648,11 @@
               discoveryHtml +
             '</div>' +
 
-            followersOverTimeCard('Followers over time — Personal LinkedIn', 'jlFollowersChart', st.snaps, 'Personal LinkedIn') +
-            whatWorksBestCard('What works best, by type — Personal LinkedIn', 'Personal LinkedIn') +
+            followersOverTimeCard("Followers over time — JC's LinkedIn", 'jlFollowersChart', st.snaps, "JC's LinkedIn") +
 
             '<div class="sp-card">' +
               '<div class="sp-card-head">' +
-                '<h3>Follows vs unfollows — Personal LinkedIn ' + infoTip('LinkedIn reports net new followers only (unfollows are not exposed separately).', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn follower snapshots') + '</h3>' +
+                '<h3>Follows vs unfollows — JC\'s LinkedIn ' + infoTip('LinkedIn reports net new followers only (unfollows are not exposed separately).', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn follower snapshots') + '</h3>' +
                 (hasLi && li.monthlyFollowers.length ? '<span class="sp-live-pill"><span class="dot"></span>Imported · monthly</span>' : (st.netNew != null ? '<span class="sp-live-pill"><span class="dot"></span>Live</span>' : PENDING_CHIP)) +
               '</div>' +
               '<div class="cap">LinkedIn reports net new followers only</div>' +
@@ -1668,7 +1667,7 @@
               '<div id="jlTopPostsHost"></div>' +
             '</div>' +
 
-            liAudienceCardHtml('jl', 'Personal LinkedIn', li && li.demographics) +
+            liAudienceCardHtml('jl', "JC's LinkedIn", li && li.demographics) +
           '</div>';
 
         wireInlineImportButtons(root);
@@ -2350,7 +2349,7 @@
                 if (res && res.imported) {
                   LIVE.linkedin[platformKey] = res.imported;
                   var sum = res.imported.summary || {};
-                  var acctName = platformKey === 'james_linkedin' ? 'Personal LinkedIn' : 'MAG LinkedIn';
+                  var acctName = platformKey === 'james_linkedin' ? "JC's LinkedIn" : 'MAG LinkedIn';
                   closeLiImportDialog();
                   // Switch to the imported account if not already on it
                   var targetTab = platformKey === 'james_linkedin' ? 'james-linkedin' : 'mag-linkedin';

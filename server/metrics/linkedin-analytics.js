@@ -1,7 +1,7 @@
-// Marketing — LinkedIn Analytics manual .xlsx / .xls import (Personal LinkedIn & MAG LinkedIn).
+// Marketing — LinkedIn Analytics manual .xlsx / .xls import (JC's LinkedIn & MAG LinkedIn).
 //
 // Parses:
-//   - Personal LinkedIn AggregateAnalytics_*.xlsx (DISCOVERY, ENGAGEMENT, TOP POSTS, FOLLOWERS, DEMOGRAPHICS)
+//   - JC's LinkedIn AggregateAnalytics_*.xlsx (DISCOVERY, ENGAGEMENT, TOP POSTS, FOLLOWERS, DEMOGRAPHICS)
 //   - MAG LinkedIn Company Page exports (.xls BIFF8 & .xlsx):
 //       * followers (.xls): New followers + follower Location / Job function / Seniority / Industry / Company size
 //       * visitors (.xls): Visitor metrics (desktop/mobile page views & unique visitors) + visitor demographics
@@ -23,7 +23,7 @@ export const ALLOWED_LINKEDIN_PLATFORMS = ['james_linkedin', 'mag_linkedin'];
 const SRC =
   'Imported LinkedIn Analytics (.xlsx / .xls) stored in public.linkedin_analytics_imports — ' +
   'covers impressions, members reached, daily engagement, daily new followers, visitor page views, ' +
-  'top posts, competitor benchmarks, and audience demographics for Personal LinkedIn and MAG LinkedIn.';
+  'top posts, competitor benchmarks, and audience demographics for JC\'s LinkedIn and MAG LinkedIn.';
 
 // ── Value parsing helpers ────────────────────────────────────────────────────
 
