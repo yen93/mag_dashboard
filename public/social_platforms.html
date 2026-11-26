@@ -113,6 +113,77 @@
     .fbl-stat { font-size: 13px; color: var(--text-muted); }
     .fbl-stat b { color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums; margin-right: 3px; }
     .fbl-note { font-size: 12px; color: var(--text-muted); line-height: 1.5; margin: 8px 2px 0; }
+
+    /* James's LinkedIn tab scoped styles */
+    .jl-section-heading {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .08em;
+      color: var(--text-muted);
+      margin: 22px 2px 8px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .jl-section-heading:first-of-type { margin-top: 10px; }
+    .jl-kpi-row {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
+      gap: 14px;
+      margin-bottom: 12px;
+    }
+    .jl-split-card {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 20px;
+      padding: 16px 0 6px;
+    }
+    .jl-split-item {
+      flex: 1;
+      min-width: 140px;
+    }
+    .jl-split-item .val {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -.02em;
+    }
+    .jl-split-item .desc {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      line-height: 1.4;
+    }
+    .jl-decision-bar {
+      margin-top: 14px;
+      padding: 10px 14px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      font-size: 12.5px;
+    }
+    .jl-decision-bar span { font-weight: 600; color: var(--text); }
+    .jl-decision-btns { display: flex; gap: 6px; }
+    .jl-btn {
+      padding: 4px 10px;
+      font-size: 11.5px;
+      font-weight: 600;
+      border-radius: 6px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      transition: background .16s ease, border-color .16s ease;
+    }
+    .jl-btn:hover { background: var(--surface-2); border-color: var(--text-muted); }
+    .jl-btn.active { background: var(--mkt-accent); color: #fff; border-color: var(--mkt-accent); }
+    .jl-btn.warn { color: var(--neg); }
   </style>
 </head>
 <body>
@@ -242,8 +313,341 @@
       </div>
     </div>
 
-    <!-- Individual platform views — blank for now -->
-    <div id="view-james-linkedin" class="sp-platform-view" style="display:none"></div>
+    <!-- Individual platform views -->
+    <div id="view-james-linkedin" class="sp-platform-view" style="display:none">
+      <!-- 1. IS IT GROWING? -->
+      <div class="jl-section-heading">Is it growing?</div>
+      <div class="jl-kpi-row">
+        <div class="sp-kpi">
+          <div class="label">Followers <span class="head-info" data-info="Total follower base on James's personal LinkedIn profile (~69% of MAG's total audience). Wire to weekly Apify snapshot." data-src="Apify · James's LinkedIn (weekly)"></span></div>
+          <div class="value">6,930</div>
+          <div class="delta pos">▲ net new: 15 in the last 7 days (0.2%)</div>
+        </div>
+        <div class="sp-kpi">
+          <div class="label">Newsletter subscribers <span class="head-info" data-info="Subscribers to James's LinkedIn newsletter ('Define your summit'). Wire to LinkedIn cookie fetch." data-src="content_social_metrics · LinkedIn"></span></div>
+          <div class="value">923</div>
+          <div class="delta">James's LinkedIn newsletter</div>
+        </div>
+      </div>
+
+      <!-- 2. ARE WE POSTING? -->
+      <div class="jl-section-heading">Are we posting?</div>
+      <div class="jl-kpi-row">
+        <div class="sp-kpi">
+          <div class="label">Posts delivered <span class="head-info" data-info="Posts published on James's LinkedIn profile in the period vs agreed editorial plan." data-src="Apify · post count"></span></div>
+          <div class="value">—</div>
+          <div class="delta">planned: — · Compared with plan and last year</div>
+        </div>
+        <div class="sp-kpi">
+          <div class="label">Video hours <span class="head-info" data-info="Hours of video content published on James's profile. Reels &amp; short video vs text-only posts." data-src="Video production log"></span></div>
+          <div class="value">—</div>
+          <div class="delta">Reels/short video vs text-only</div>
+        </div>
+      </div>
+
+      <!-- 3. IS IT EARNING REAL ATTENTION? -->
+      <div class="jl-section-heading">Is it earning real attention?</div>
+      <div class="jl-kpi-row">
+        <div class="sp-kpi">
+          <div class="label">Engagements <span class="head-info" data-info="Reactions, comments and reposts across posts on James's profile in the selected period." data-src="Apify · James's LinkedIn (24 posts)"></span></div>
+          <div class="value">10</div>
+          <div class="delta">reactions, comments, reposts</div>
+        </div>
+        <div class="sp-kpi">
+          <div class="label">Engagement rate <span class="head-info" data-info="Engagement rate: total engagements divided by impressions (times content was seen). Benchmarked against industry standards." data-src="Apify / LinkedIn analytics"></span></div>
+          <div class="value">6.3%</div>
+          <div class="delta pos">63 engagements out of 1,000 times seen</div>
+        </div>
+        <div class="sp-kpi">
+          <div class="label">Reached beyond our followers <span class="head-info" data-info="Share of views from people who do not follow James. Indicates content discovery outside existing network." data-src="LinkedIn analytics (7d window)"></span></div>
+          <div class="value">18%</div>
+          <div class="delta pos">of impressions were out of network, last 7 days</div>
+        </div>
+      </div>
+
+      <!-- 4. WHAT DID IT DELIVER? -->
+      <div class="jl-section-heading">What did it deliver?</div>
+      <div class="jl-kpi-row">
+        <div class="sp-kpi">
+          <div class="label">Engagements per video hour <span class="head-info" data-info="Total engagements divided by video production hours across accounts. High ratio confirms video ROI." data-src="Video production log + platform engagement"></span></div>
+          <div class="value">—</div>
+          <div class="delta">Shown for all accounts together (video cross-posted)</div>
+        </div>
+        <div class="sp-kpi">
+          <div class="label">Enquiries we can trace to social <span class="head-info" data-info="Keynote and corporate workshop enquiries quoting LinkedIn or coming from tracked UTM links." data-src="Enquiry form &amp; 'How did you hear' logs"></span></div>
+          <div class="value">—</div>
+          <div class="delta">Tracked links and 'How did you hear' answers</div>
+        </div>
+      </div>
+
+      <!-- Charts Row 1: Followers over time (line) + Video hours against engagement (bar) -->
+      <div class="sp-grid">
+        <div class="card sp-card">
+          <div class="sp-card-head">
+            <h3>Followers over time <span class="head-info" data-info="James's profile follower trajectory month-by-month (current period vs same dates last year)." data-src="Apify weekly snapshots"></span></h3>
+            <div class="cap">James's LinkedIn · line chart</div>
+          </div>
+          <div class="sp-chart-box h-md"><canvas id="jlFollowersTrend"></canvas></div>
+        </div>
+
+        <div class="card sp-card">
+          <div class="sp-card-head">
+            <h3>Video hours against engagement <span class="head-info" data-info="Production hours invested vs engagements generated. Helps determine whether to continue, refine, or redirect video efforts." data-src="Video log + platform engagement"></span></h3>
+            <div class="cap">All accounts together · bar chart</div>
+          </div>
+          <div class="sp-chart-box h-md"><canvas id="jlVideoEngagement"></canvas></div>
+          <div class="jl-decision-bar">
+            <span>Decision: hours up, engagement flat means change or redirect</span>
+            <div class="jl-decision-btns">
+              <button type="button" class="jl-btn">Keep</button>
+              <button type="button" class="jl-btn">Change content</button>
+              <button type="button" class="jl-btn warn">Redirect time</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Wide Chart: Engagement rate by month -->
+        <div class="card sp-card wide">
+          <div class="sp-card-head">
+            <h3>Engagement rate by month <span class="head-info" data-info="Monthly engagement rate trend showing whether James's content resonance is rising, holding, or slipping." data-src="LinkedIn analytics / Apify"></span></h3>
+            <div class="cap">James's LinkedIn · line chart</div>
+          </div>
+          <div class="sp-chart-box h-md"><canvas id="jlEngagementRate"></canvas></div>
+        </div>
+
+        <!-- Wide Table: Each video: hours against results -->
+        <div class="card sp-card wide">
+          <div class="sp-card-head">
+            <h3>Each video: hours against results <span class="head-info" data-info="Log of each published video asset, platforms distributed to, production time, and engagement yields." data-src="Video production tracker &amp; Meta/Apify API"></span></h3>
+            <div class="cap">All accounts together · from the video log</div>
+          </div>
+          <div class="sp-table-wrap" tabindex="0" role="region" aria-label="Each video: hours against results">
+            <table class="sp-table">
+              <thead>
+                <tr>
+                  <th>Video</th>
+                  <th>Posted</th>
+                  <th>Posted on</th>
+                  <th>Video hours</th>
+                  <th>Engagements (all accounts)</th>
+                  <th>Per video hour</th>
+                  <th>Watch time (avg)</th>
+                  <th>Hook rate</th>
+                  <th>Shares and sends</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Leadership under pressure — keynote clip</td>
+                  <td>18 Nov 2026</td>
+                  <td><span class="sp-plat-chip">Instagram, Facebook, LinkedIn</span></td>
+                  <td>1.5h</td>
+                  <td>142</td>
+                  <td>95</td>
+                  <td>0:42</td>
+                  <td>64%</td>
+                  <td>18</td>
+                </tr>
+                <tr>
+                  <td>Define your summit — team culture reel</td>
+                  <td>11 Nov 2026</td>
+                  <td><span class="sp-plat-chip">Instagram, Facebook</span></td>
+                  <td>2.0h</td>
+                  <td>85</td>
+                  <td>42</td>
+                  <td>0:28</td>
+                  <td>52%</td>
+                  <td>9</td>
+                </tr>
+                <tr>
+                  <td>Antarctica grit — raw preparation</td>
+                  <td>04 Nov 2026</td>
+                  <td><span class="sp-plat-chip">Instagram, LinkedIn</span></td>
+                  <td>1.2h</td>
+                  <td>210</td>
+                  <td>175</td>
+                  <td>0:55</td>
+                  <td>71%</td>
+                  <td>34</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Wide Table: By account -->
+        <div class="card sp-card wide">
+          <div class="sp-card-head">
+            <h3>By account <span class="head-info" data-info="Summary across all 4 channels: audience size, net weekly follower growth, engagement rate, and inbound enquiries." data-src="Meta Graph API &amp; Apify snapshot"></span></h3>
+            <div class="cap">Cross-platform summary · James's LinkedIn highlighted</div>
+          </div>
+          <div class="sp-table-wrap" tabindex="0" role="region" aria-label="By account summary">
+            <table class="sp-table">
+              <thead>
+                <tr>
+                  <th>Account</th>
+                  <th>Followers</th>
+                  <th>Net new followers</th>
+                  <th>Engagements</th>
+                  <th>Times our content was seen</th>
+                  <th>Engagement rate (engagements ÷ times seen)</th>
+                  <th>Enquiries</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="background:color-mix(in srgb, var(--mkt-accent) 10%, transparent); font-weight:600;">
+                  <td><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:var(--mkt-accent); margin-right:6px;"></span>James's LinkedIn</td>
+                  <td>6,930</td>
+                  <td class="pos">+15 (0.2%)</td>
+                  <td>10</td>
+                  <td>100</td>
+                  <td>6.3%</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>MAG LinkedIn</td>
+                  <td>459</td>
+                  <td class="pos">+7 (1.5%)</td>
+                  <td>13</td>
+                  <td>920</td>
+                  <td>1.4%</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>Facebook</td>
+                  <td>1,440</td>
+                  <td class="pos">+2 (0.1%)</td>
+                  <td>32</td>
+                  <td>1,010</td>
+                  <td>0.8%</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>Instagram</td>
+                  <td>1,908</td>
+                  <td class="pos">+2 (0.1%)</td>
+                  <td>99</td>
+                  <td>7,207</td>
+                  <td>&gt;1.4%</td>
+                  <td>—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Side-by-side: What works best + Net follower growth -->
+        <div class="card sp-card">
+          <div class="sp-card-head">
+            <h3>What works best: average times seen per post, by type <span class="head-info" data-info="Average views/impressions achieved by content format on James's LinkedIn." data-src="LinkedIn analytics / Apify"></span></h3>
+            <div class="cap">Average impressions by post type · James's LinkedIn</div>
+          </div>
+          <div class="sp-chart-box h-md"><canvas id="jlFormats"></canvas></div>
+        </div>
+
+        <div class="card sp-card">
+          <div class="sp-card-head">
+            <h3>Net follower growth <span class="head-info" data-info="Weekly velocity of new followers connecting with James on LinkedIn." data-src="Apify · weekly follower delta"></span></h3>
+            <div class="cap">Follower growth · James's LinkedIn</div>
+          </div>
+          <div class="jl-split-card">
+            <div class="jl-split-item">
+              <div class="val">15</div>
+              <div class="desc">Net new followers (last 7 days)</div>
+            </div>
+            <div class="jl-split-item">
+              <div class="val">6,930</div>
+              <div class="desc">Total follower base</div>
+            </div>
+          </div>
+          <div class="sp-note" style="margin-top:14px; font-size:12px; color:var(--text-muted);">
+            LinkedIn reports net growth only (unfollows not exposed via public API).
+          </div>
+        </div>
+
+        <!-- Wide Table: Top posts -->
+        <div class="card sp-card wide">
+          <div class="sp-card-head">
+            <h3>Top posts <span class="head-info" data-info="Recent posts on James's profile ranked by engagements and true engagement rate." data-src="LinkedIn post scrape"></span></h3>
+            <div class="cap">Recent posts · James's LinkedIn</div>
+          </div>
+          <div class="sp-table-wrap" tabindex="0" role="region" aria-label="Top posts James's LinkedIn">
+            <table class="sp-table">
+              <thead>
+                <tr>
+                  <th>Post</th>
+                  <th>Account</th>
+                  <th>Type</th>
+                  <th>Date</th>
+                  <th>Times seen</th>
+                  <th>Engagements</th>
+                  <th>Engagement rate</th>
+                  <th>Link clicks</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td>Active listening is the first leadership skill to disappear under pressure...</td>
+                  <td>James's LinkedIn</td>
+                  <td><span class="sp-plat-chip">Document</span></td>
+                  <td>18 Nov 2026</td>
+                  <td>131</td>
+                  <td>10</td>
+                  <td>7.6%</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>What's the first sign someone on your team has checked out?</td>
+                  <td>James's LinkedIn</td>
+                  <td><span class="sp-plat-chip">Poll</span></td>
+                  <td>12 Nov 2026</td>
+                  <td>9</td>
+                  <td>0</td>
+                  <td>0.0%</td>
+                  <td>—</td>
+                </tr>
+                <tr>
+                  <td>Incoming call: A few people are about to find out...</td>
+                  <td>James's LinkedIn</td>
+                  <td><span class="sp-plat-chip">Post</span></td>
+                  <td>05 Nov 2026</td>
+                  <td>6</td>
+                  <td>0</td>
+                  <td>0.0%</td>
+                  <td>—</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- Context section: Checked quarterly -->
+        <div class="card sp-card" style="grid-column: span 1;">
+          <div class="sp-card-head">
+            <h3>Followers who fit our target (optional) <span class="head-info" data-info="Share of James's followers who match ideal keynote decision-maker seniority and industry criteria." data-src="Audience target definition"></span></h3>
+            <div class="cap">Quarterly audience quality check</div>
+          </div>
+          <div class="jl-split-card">
+            <div class="jl-split-item">
+              <div class="val">—%</div>
+              <div class="desc">followers who fit our target<br><span class="chip warn" style="margin-top:4px;">Target to be defined by James</span></div>
+            </div>
+            <div class="jl-split-item">
+              <div class="val">32%, 31%</div>
+              <div class="desc">Senior seniority · Greater Sydney</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="card sp-card" style="grid-column: span 1;">
+          <div class="sp-card-head">
+            <h3>Who follows James on LinkedIn <span class="head-info" data-info="Seniority, location, company size and industry distribution among James's 6,930 followers." data-src="LinkedIn audience demographics"></span></h3>
+            <div class="cap">Audience breakdown · James's LinkedIn</div>
+          </div>
+          <div class="sp-chart-box h-md"><canvas id="jlAudienceProfile"></canvas></div>
+        </div>
+      </div>
+    </div>
     <div id="view-mag-linkedin" class="sp-platform-view" style="display:none"></div>
     <div id="view-facebook" class="sp-platform-view" style="display:none"></div>
     <div id="view-instagram" class="sp-platform-view" style="display:none"></div>
@@ -763,6 +1167,105 @@
     // ── Platform toggle state & view switching ──────────────────────────────
     var CURRENT_PLATFORM = 'all';
 
+    // ── James's LinkedIn Tab rendering ──────────────────────────────────────
+    function renderJamesLinkedin() {
+      if (_charts.jlFollowersTrend) { _charts.jlFollowersTrend.destroy(); _charts.jlFollowersTrend = null; }
+      if (_charts.jlVideoEngagement) { _charts.jlVideoEngagement.destroy(); _charts.jlVideoEngagement = null; }
+      if (_charts.jlEngagementRate) { _charts.jlEngagementRate.destroy(); _charts.jlEngagementRate = null; }
+      if (_charts.jlFormats) { _charts.jlFormats.destroy(); _charts.jlFormats = null; }
+      if (_charts.jlAudienceProfile) { _charts.jlAudienceProfile.destroy(); _charts.jlAudienceProfile = null; }
+
+      var tc = themeColors();
+      var months = ['Jul', 'Aug', 'Sep', 'Oct', 'Nov'];
+
+      // 1. Followers over time (line: this year solid, last year dashed)
+      var elFollowers = document.getElementById('jlFollowersTrend');
+      if (elFollowers) {
+        _charts.jlFollowersTrend = new Chart(elFollowers.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: months,
+            datasets: [
+              { label: 'This year', data: [6600, 6720, 6800, 6880, 6930], borderColor: PAL[0], backgroundColor: PAL[0], borderWidth: 2.5, tension: 0.35, pointRadius: 4 },
+              { label: 'Last year', data: [5800, 5950, 6100, 6250, 6400], borderColor: PAL[1], backgroundColor: PAL[1], borderWidth: 2, borderDash: [4, 4], tension: 0.35, pointRadius: 3 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
+              y: { beginAtZero: false, min: 5000, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, callback: function (v) { return fmt(v, 'count'); } } }
+            },
+            plugins: {
+              legend: { display: true, position: 'bottom', labels: { color: tc.muted, font: { size: 11 }, boxWidth: 12, usePointStyle: true } },
+              tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + fmt(c.parsed.y, 'count') + ' followers'; } } }
+            }
+          }
+        });
+      }
+
+      // 2. Video hours against engagement (grouped bars)
+      var elVideo = document.getElementById('jlVideoEngagement');
+      if (elVideo) {
+        _charts.jlVideoEngagement = new Chart(elVideo.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: months,
+            datasets: [
+              { label: 'Video hours', data: [1.8, 2.4, 2.0, 3.1, 2.4], backgroundColor: PAL[0], borderRadius: 4, maxBarThickness: 24, yAxisID: 'y' },
+              { label: 'Engagements', data: [35, 48, 42, 60, 52], backgroundColor: PAL[1], borderRadius: 4, maxBarThickness: 24, yAxisID: 'y1' }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
+              y: { beginAtZero: true, position: 'left', grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, callback: function (v) { return v + 'h'; } } },
+              y1: { beginAtZero: true, position: 'right', grid: { display: false }, ticks: { color: PAL[1], font: { size: 11 }, callback: function (v) { return fmt(v, 'count'); } } }
+            },
+            plugins: {
+              legend: { display: true, position: 'bottom', labels: { color: tc.muted, font: { size: 11 }, boxWidth: 12, usePointStyle: true } }
+            }
+          }
+        });
+      }
+
+      // 3. Engagement rate by month (line)
+      var elRate = document.getElementById('jlEngagementRate');
+      if (elRate) {
+        _charts.jlEngagementRate = new Chart(elRate.getContext('2d'), {
+          type: 'line',
+          data: {
+            labels: months,
+            datasets: [
+              { label: 'This year', data: [5.8, 6.1, 6.5, 6.0, 6.3], borderColor: PAL[2], backgroundColor: PAL[2], borderWidth: 2.5, tension: 0.35, pointRadius: 4 },
+              { label: 'Last year', data: [4.9, 5.2, 5.5, 5.1, 5.4], borderColor: PAL[3], backgroundColor: PAL[3], borderWidth: 2, borderDash: [4, 4], tension: 0.35, pointRadius: 3 }
+            ]
+          },
+          options: {
+            responsive: true, maintainAspectRatio: false,
+            scales: {
+              x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 11 } } },
+              y: { beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 }, callback: function (v) { return v + '%'; } } }
+            },
+            plugins: {
+              legend: { display: true, position: 'bottom', labels: { color: tc.muted, font: { size: 11 }, boxWidth: 12, usePointStyle: true } },
+              tooltip: { callbacks: { label: function (c) { return c.dataset.label + ': ' + c.parsed.y + '%'; } } }
+            }
+          }
+        });
+      }
+
+      // 4. Formats: What works best (horizontal bar)
+      hbar('jlFormats', ['Document', 'Poll', 'Video', 'Post: incoming call'], [720, 310, 240, 180], { colors: PAL[0] });
+
+      // 5. Audience profile: Who follows James (horizontal bar)
+      hbar('jlAudienceProfile', ['Seniority: Senior', 'Location: Greater Sydney', 'Company size: 11–50', 'Industry: Insurance', 'Job title: Founder'], [32, 31, 15, 9, 6], { colors: PAL[1], pct: true });
+
+      // Fill tooltips inside James's LinkedIn view
+      fillHeadInfo(document.getElementById('view-james-linkedin'));
+    }
+
     function setPlatform(platform) {
       CURRENT_PLATFORM = platform;
       var seg = document.getElementById('platformSeg');
@@ -785,10 +1288,12 @@
         if (views[k]) views[k].style.display = (k === platform) ? 'block' : 'none';
       });
 
-      if (fyCtl) fyCtl.style.display = (platform === 'all') ? 'flex' : 'none';
+      if (fyCtl) fyCtl.style.display = (platform === 'all' || platform === 'james-linkedin') ? 'flex' : 'none';
 
       if (platform === 'all') {
         renderAll();
+      } else if (platform === 'james-linkedin') {
+        renderJamesLinkedin();
       }
     }
 
@@ -828,9 +1333,18 @@
     loadLinkedinLive();                // overlay the REAL LinkedIn followers + engagement (Apify scrape)
     loadKpis();                        // fill the 6 KPI cards with real cross-platform figures
     wirePlatformSeg();                 // Platform toggles: All Accounts / James' LinkedIn / MAG LinkedIn / Facebook / Instagram
-    wireSeg('fySeg', function () { if (CURRENT_PLATFORM === 'all') renderAll(); });       // snapshot mockup — the toggle re-renders the same sample figures
-    wireSeg('cmpSeg', function () { if (CURRENT_PLATFORM === 'all') renderKpis(); });     // Compare basis relabels the KPI delta chips
-    window.onThemeChange = function () { if (CURRENT_PLATFORM === 'all') drawCharts(); }; // redraw charts on light/dark switch
+    wireSeg('fySeg', function () {
+      if (CURRENT_PLATFORM === 'all') renderAll();
+      else if (CURRENT_PLATFORM === 'james-linkedin') renderJamesLinkedin();
+    });
+    wireSeg('cmpSeg', function () { if (CURRENT_PLATFORM === 'all') renderKpis(); });
+    window.onThemeChange = function () {
+      if (CURRENT_PLATFORM === 'all') {
+        drawCharts();
+      } else if (CURRENT_PLATFORM === 'james-linkedin') {
+        renderJamesLinkedin();
+      }
+    };
   </script>
 </body>
 </html>
