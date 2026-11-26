@@ -742,9 +742,9 @@ marketing.get('/social-audience', async (_req, res) => {
   }
 });
 // EDM — the ActiveCampaign Contact Performance + All Campaigns Performance reports for
-// public/edm.html. Latest weekly snapshot (public.edm_report_metrics, filled by the
-// edm-sync routine via the AC MCP) + a live "new contacts by month" series from the
-// activecampaign_contacts mirror. See server/metrics/edm-report.js. Cached briefly.
+// public/edm.html. Latest daily snapshot (public.edm_report_metrics, filled by the
+// edm-sync routine via the AC MCP, with per-window campaign data). See
+// server/metrics/edm-report.js. Cached briefly.
 marketing.get('/edm', async (_req, res) => {
   try {
     const payload = await cached('marketing:edm', getEdmReport, 10 * 60 * 1000);

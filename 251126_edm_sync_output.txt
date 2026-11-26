@@ -1,0 +1,25 @@
+I did not insert a snapshot today (2026-11-25), so public.edm_report_metrics still holds the 2026-11-23 row and the EDM page is showing that. I've sent a push notification explaining this.
+
+I held off because the table is append-only. A partial row would become the latest one and couldn't be removed afterwards.
+
+Two things blocked a complete snapshot:
+
+Engagement tags: list_tags ignores every filter, limit and offset and always returns the first 20 of 192 tags. I couldn't reach the three [MARKETING] engagement: tags, so I have no current segmentation counts.
+Per-window campaign reports: run_campaign_performance_report returned these as inline text, not saved files, so I can't feed them into the SQL insert. I got fy22, fy23, fy24 and fy27. Together they hold roughly 250 campaign rows, and the all-time report (310 rows) was too large to return inline. Retyping them into SQL by hand would risk wrong numbers.
+
+I did not run fy25, fy26, 30d, 90d or 12m.
+
+What I did get from ActiveCampaign today:
+
+Contacts: 15,698 total, which matches the last stored row.
+Lists: 24 lists. The top 5 by total are:
+List id	Total	Active
+6	7,468	3,887
+10	5,137	76
+14	3,458	1,452
+1	2,154	726
+8	617	320
+All-time report (summary): 310 campaigns, 598,191 sends, 35.43% open rate, 4.66% click rate.
+Last stored segmentation: Engaged 3,443, Quiet 0, Dormant 0.
+
+This routine needs a way to save the report output to files and feed it into the insert, or a working list_tags filter. Until then it can't complete its insert.

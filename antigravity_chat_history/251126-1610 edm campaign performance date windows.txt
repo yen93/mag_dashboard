@@ -1,0 +1,77 @@
+================================================================================
+UPDATE DOCUMENTATION: EDM CAMPAIGNS PERFORMANCE DATE WINDOW ARCHITECTURE & ROUTINE AUDIT
+Timestamp: 25/11/26 16:10 (Asia/Manila)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. INVESTIGATION: CAMPAIGNS PERFORMANCE MISMATCH (EDM.HTML VS ACTIVECAMPAIGN)
+--------------------------------------------------------------------------------
+* Problem / Context:
+  - User reported that the "Campaigns Performance" data in edm.html for date range
+    26/10/2026 - 25/11/2026 did not match ActiveCampaign UI metrics.
+  - ActiveCampaign reported: 20 campaigns, 530 emails sent, 63.4% open rate,
+    9.81% click rate, 15.48% click-to-open, 0.19% bounce rate, 1.51% unsubscribe rate.
+  - edm.html displayed: 18 campaigns, 26,012 emails sent, 48.62% open rate,
+    11.28% click rate, 1.08% bounce rate, 1.37% unsubscribe rate.
+
+* Root Causes Identified:
+  1. Lifetime vs In-Window Aggregation:
+     - The legacy `edm-sync` routine pulled `run_campaign_performance_report`
+       all-time (with no date filter).
+     - `edm.html` filtered rows by `lastSent` matching the selected date window,
+       but summed the campaigns' ALL-TIME lifetime metrics (`campSummaryOf()`).
+     - 11 of the 18 matching campaigns were `single_automated` (recurring automations)
+       whose lifetime multi-year sends (e.g. 6,815, 6,574, 6,066) inflated the
+       in-window sends from 530 to 26,012.
+  2. Snapshot Staleness:
+     - The snapshot in `public.edm_report_metrics` was captured on 2026-11-23.
+     - Recent sends from 24-25 Nov 2026 were not included in the weekly cache.
+
+2. TECHNICAL IMPLEMENTATION (FIX 1: PRECOMPUTED CAMPAIGN WINDOWS)
+--------------------------------------------------------------------------------
+* Database Migration SQL:
+  - Created migration file:
+    `supabase/migrations/20261125150000_edm_campaign_windows.sql`
+  - Added JSONB column `campaign_windows DEFAULT '{}'::jsonb` to `public.edm_report_metrics`
+    to store AC date-bounded metrics keyed by window (`all`, `fy22`-`fy27`, `30d`, `90d`, `12m`).
+
+* Server Metric Endpoint (`/api/marketing/edm`):
+  - Updated `server/metrics/edm-report.js` to select `campaign_windows` and include
+    `campaignWindows` in the returned payload.
+  - Updated `server/index.js` documentation and cache annotations.
+
+* Frontend Changes (`public/edm.html`):
+  - Added `windowKey()`, `windowData(key)`, and `resolvedCampaignData()` to map the
+    active UI selection (FY buttons or quick date buttons: 30d, 90d, 12m) directly
+    to precomputed window datasets.
+  - Updated `renderCampaignKpis()` and `renderCampTable()` to display AC's exact
+    in-window `summaryData` without summing lifetime totals.
+  - Retained graceful backward compatibility with previous snapshot formats.
+
+* Routine Documentation (`routines/edm-sync.md`):
+  - Updated schedule to daily (`0 22 * * *` UTC = 06:00 Manila).
+  - Documented Step 1b using AC MCP `run_campaign_performance_report` with parameters
+    `view_distinct_campaigns_event_date_start` and `view_distinct_campaigns_event_date_end`.
+  - Updated Step 2 SQL INSERT statement to populate `campaign_windows`.
+
+3. ROUTINE EXECUTION AUDIT & BLOCKERS (25/11/26 RUN)
+--------------------------------------------------------------------------------
+* Review of `251126_edm_sync_output.txt`:
+  - Routine safely withheld inserting a partial record into append-only
+    `public.edm_report_metrics`.
+  - Identified two specific ActiveCampaign MCP limitations in cloud routine runs:
+    1. `list_tags` ignores pagination/filters and only returns the first 20 of 192 tags,
+       preventing discovery of `[MARKETING] engagement:` tags.
+    2. `run_campaign_performance_report` returned per-window data inline rather than
+       as files/variables, making large payloads (300+ campaigns across multiple windows)
+       challenging to assemble into a single SQL INSERT query within prompt context limits.
+
+4. NEXT STEPS / ACTION ITEMS
+--------------------------------------------------------------------------------
+* Address AC MCP payload size in `routines/edm-sync.md`:
+  - In windowed reports (`30d`, `90d`, `12m`, FYs), pass `limit: 50` or fetch summaryData
+    with minimal columns, or store only the top active campaigns per window.
+* Address `list_tags` tag lookup:
+  - Cache known tag IDs or fall back to previous snapshot segmentation counts when
+    `list_tags` fails to page beyond 20 records.
+================================================================================

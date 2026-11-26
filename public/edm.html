@@ -206,7 +206,7 @@
 
             <div class="card edm-chart-card">
               <div class="card-head block-head">
-                <h3 id="segHeading">Contact segmentation <span class="head-info" data-info="Contacts split by engagement: Active = opened/clicked in the last 90 days (reliable audience); Quiet = nothing for 90–180 days (re-engage); Dormant = nothing for 180+ days (re-engage or remove); Not tagged = not yet classified — too new (under 180 days) to fall into a band. Total is real." data-src="ActiveCampaign contact count"></span></h3>
+                <h3 id="segHeading">Contact segmentation <span class="head-info" data-info="Current ActiveCampaign snapshot of all contacts. Engaged = subscribed and opened/clicked ≤90 days; Quiet = no open 91–180 days; Dormant = no open 180 days+; Subscribed = subscribed with no engagement band. Those four = the Active contacts card. Not tagged = non-active (unsubscribed, bounced or unconfirmed); all five = Total. It has no history, so it can't be scoped to a date range or a past financial year." data-src="ActiveCampaign contact count + engagement tags"></span></h3>
                 <div class="chart-cap" id="segCap"></div>
               </div>
               <div class="seg-donut-wrap">
@@ -251,11 +251,12 @@
   <script src="app.js?v=30"></script>
   <script>
     /* EDM — LIVE. Contact KPIs / list health / engagement segmentation / campaign report
-       come from the weekly snapshot (public.edm_report_metrics, filled by the edm-sync
+       come from the daily snapshot (public.edm_report_metrics, filled by the edm-sync
        routine via the ActiveCampaign MCP). Served by /api/marketing/edm.
-       The FY toggle + custom date range filter the Campaigns section by each campaign's
-       last-send date (KPIs recomputed from the filtered rows). The Contact section is a
-       current snapshot, so it greys out for a past FY or a custom date range. */
+       The Campaigns section uses precomputed per-window data from campaign_windows (each
+       FY + 30d/90d/12m + all-time, with AC's own date-scoped summaryData). Falls back to
+       legacy lastSent filtering when no precomputed window exists. The Contact section is
+       a current snapshot, so it greys out for a past FY or a custom date range. */
 
     var EDM = null;
     var CAMP_TABLE_STATE = {};
@@ -267,6 +268,7 @@
     function fyWindow(k) { var e = fyEndOf(k); return e ? { from: (e - 1) + '-07-01', to: e + '-06-30' } : null; }
 
     // A campaign is "in" the active period by its last-send date (YYYY-MM-DD).
+    // Used ONLY as a fallback when no precomputed campaign_windows data exists.
     function campInPeriod(row) {
       var k = selFyKey();
       if (!dateRangeActive() && k === 'all') return true;   // all-time: everything
@@ -287,6 +289,7 @@
     }
     // Account-level summary recomputed from a set of campaign rows (send-weighted rates,
     // matching how ActiveCampaign derives its summary totals).
+    // ONLY used as a fallback when no precomputed window exists.
     function campSummaryOf(rows) {
       var t = { sends: 0, uOpens: 0, uClicks: 0, bounces: 0, unsubs: 0 };
       rows.forEach(function (c) {
@@ -300,6 +303,76 @@
         openRate: r(t.uOpens, t.sends), clickRate: r(t.uClicks, t.sends),
         clickToOpenRate: r(t.uClicks, t.uOpens), bounceRate: r(t.bounces, t.sends), unsubscribeRate: r(t.unsubs, t.sends)
       };
+    }
+
+    /* ---- Precomputed campaign windows (campaign_windows JSONB) ----
+       The edm-sync routine now calls run_campaign_performance_report with
+       date params for each FY, 30d, 90d, 12m, and all-time, storing AC's
+       own windowed summaryData + data[] rows. When a matching window key
+       exists, we use it directly — no client-side lifetime-sum filtering.
+       Fallback: if the key is missing (old snapshot), use the legacy
+       lastSent filter + lifetime-sum approach. */
+
+    // Map the current UI selection to a campaign_windows key, or null.
+    function windowKey() {
+      if (dateRangeActive()) {
+        var quick = document.querySelector('#drQuick button.active');
+        if (quick) {
+          var days = quick.getAttribute('data-days');
+          if (days === '30') return '30d';
+          if (days === '90') return '90d';
+          if (days === '365') return '12m';
+        }
+        // Typed/picked dates clear the quick button — still match a precomputed
+        // window if the range lines up with one (±1 day, e.g. 27/10 vs 26/10).
+        var r = getDateRange(), cw = (EDM && EDM.campaignWindows) || {};
+        var near = function (a, b) {
+          return !!a && !!b && Math.abs(new Date(a) - new Date(b)) <= 864e5;
+        };
+        for (var wk in cw) {
+          if (cw[wk] && cw[wk].summary && cw[wk].from && near(r.from, cw[wk].from) && near(r.to, cw[wk].to)) return wk;
+        }
+        return null;   // arbitrary custom range — no precomputed window
+      }
+      return selFyKey();   // 'all', 'fy22', 'fy23', …
+    }
+
+    // Look up the precomputed window; returns { summary, campaigns, from, to }
+    // or null if not available.
+    function windowData(key) {
+      if (!key || !EDM || !EDM.campaignWindows) return null;
+      var w = EDM.campaignWindows[key];
+      return (w && w.summary) ? w : null;
+    }
+
+    // Get the summary + rows for the current selection.
+    // Prefers precomputed window data; falls back to legacy filtering.
+    function resolvedCampaignData() {
+      var key = windowKey();
+      var w = windowData(key);
+      if (w) return { summary: w.summary, rows: w.campaigns || [], windowed: true, key: key, from: w.from, to: w.to };
+      // Fallback: legacy lastSent filter + lifetime-sum (inaccurate for date-bounded views)
+      var rows = filteredCampaigns();
+      return { summary: campSummaryOf(rows), rows: rows, windowed: false, key: key, from: null, to: null };
+    }
+
+    // Get the comparison summary for the current selection (for delta chips).
+    // Returns the precomputed window summary if both current and comparison
+    // windows are available, otherwise null (graceful skip).
+    function resolvedComparisonSummary() {
+      var key = windowKey();
+      if (!key) return null;
+      // For FY mode "vs last year": comparison is the prior FY
+      if (!dateRangeActive() && key !== 'all') {
+        var fyEnd = fyEndOf(key);
+        if (!fyEnd) return null;
+        var cmpKey = CMP === 'yoy' ? 'fy' + String(fyEnd - 1).slice(-2) : null;
+        // "vs previous period" on a partial FY can't be precomputed — skip
+        if (!cmpKey) return null;
+        var cmpW = windowData(cmpKey);
+        return cmpW ? cmpW.summary : null;
+      }
+      return null;   // rolling/custom/all — no precomputed comparison
     }
     function periodLabel() {
       if (dateRangeActive()) { var r = getDateRange(); return (r.from || '…') + ' → ' + (r.to || '…'); }
@@ -478,11 +551,24 @@
 
     function renderCampaignKpis() {
       renderCmpRange();
-      var s = campSummaryOf(filteredCampaigns());
+      var d = resolvedCampaignData();
+      if (!d.windowed && dateRangeActive()) {
+        // No AC-exact numbers for this custom range — don't show misleading lifetime sums.
+        document.getElementById('campaignKpis').innerHTML =
+          '<div class="range-na" style="grid-column:1/-1">Not available for this custom range — pick FY, 30d, 90d, 12m or 1 Oct (this quarter).</div>';
+        var pc0 = document.getElementById('campPeriodCap'); if (pc0) pc0.textContent = '';
+        return;
+      }
+      var s = d.summary;
       var pc = document.getElementById('campPeriodCap');
-      if (pc) pc.textContent = periodLabel() + ' · by campaign last-send date · ' + num(s.count) + ' campaign' + (s.count === 1 ? '' : 's');
-      // Compare deltas (prior FY, or the shifted custom-range window). null = no comparison.
-      var cc = comparisonCampaigns(), ps = cc ? campSummaryOf(cc) : null, lab = cmpLabel();
+      var pLabel = periodLabel();
+      if (d.windowed && d.from && d.to) {
+        pLabel += ' · ' + d.from + ' → ' + d.to;
+      }
+      if (pc) pc.textContent = pLabel + ' · ' + num(s.count) + ' campaign' + (s.count === 1 ? '' : 's') +
+        (d.windowed ? '' : ' · ⚠ approximate (old snapshot — run edm-sync for accurate data)');
+      // Compare deltas — use precomputed comparison window when available.
+      var ps = resolvedComparisonSummary(), lab = cmpLabel();
       var dl = function (cur, prev, opts) { return ps ? deltaChip(cur, prev, lab, opts) : ''; };
       document.getElementById('campaignKpis').innerHTML = [
         kpiCard('Campaigns sent', num(s.count), periodLabel(),
@@ -540,15 +626,9 @@
     }
 
     // Contact segmentation — a single donut. The total in the centre is the real
-    // ActiveCampaign contact count; the band split (Quiet / Active / Dormant) is a
-    // sample until 3 saved AC segments are wired in.
+    // ActiveCampaign contact count. The split reconciles with the contact cards:
+    // Engaged + Subscribed = the "Active contacts" card; + Non-active = Total.
     var _segChart = null;
-    var SEG_SAMPLE = [
-      { label: 'Active (opened/clicked ≤90d)', pct: 30, color: '#12a884', desc: 'Opened or clicked in the last 90 days — your reliable audience' },
-      { label: 'Quiet (91–180d)', pct: 35, color: '#3b82f6', desc: 'No open for 90–180 days — the re-engagement audience' },
-      { label: 'Dormant (no engagement 180d+)', pct: 25, color: '#e8742e', desc: 'No open for 180+ days — re-engage or sunset' },
-      { label: 'Not tagged', pct: 10, color: '#ef4444', desc: 'Contacts without an engagement tag — not yet classified' }
-    ];
 
     // Draws the big total + "contacts" label in the hole of the donut.
     var segCenterText = {
@@ -572,27 +652,52 @@
 
     function renderSegmentation() {
       var c = (EDM && EDM.contact) || {};
-      var total = (c.total != null && c.total > 0) ? c.total : 15698;
       var cap = document.getElementById('segCap');
       var legend = document.getElementById('segLegend');
       var note = document.getElementById('segNote');
+      var el = document.getElementById('segCanvas');
+      var box = el ? el.parentNode : null;   // .seg-donut-box
       if (_segChart) { _segChart.destroy(); _segChart = null; }
 
-      // LIVE: counts of the AC engagement tags (edm_report_metrics.segmentation);
-      // "Not tagged" = total − the three tagged bands.
-      var live = {};
-      ((c.segmentation) || []).forEach(function (s) { live[s.key] = Number(s.count) || 0; });
-      var hasLive = c.segmentation && c.segmentation.length > 0;
-      var tagged = (live.active || 0) + (live.quiet || 0) + (live.dormant || 0);
-      var counts = hasLive
-        ? [live.active || 0, live.quiet || 0, live.dormant || 0, Math.max(total - tagged, 0)]
-        : SEG_SAMPLE.map(function (s) { return Math.round(total * s.pct / 100); });
+      // Segmentation is a CURRENT ActiveCampaign snapshot — it has no history,
+      // so it can't be scoped to a date range or a past FY. Mirror the contact
+      // KPIs: show the "not available" note instead of a misleading split.
+      if (!contactLive()) {
+        if (box) box.style.display = 'none';
+        if (cap) cap.textContent = '';
+        if (legend) legend.innerHTML = '<div class="range-na">' + esc(contactNaMsg()) + '</div>';
+        if (note) note.textContent = '';
+        return;
+      }
+      if (box) box.style.display = '';
+
+      // Reconciles with the contact cards. The engagement tags (Engaged/Quiet/
+      // Dormant) are bands WITHIN the subscribed audience; Subscribed = the rest
+      // of the Active-contacts card with no engagement band. So:
+      //   Engaged + Subscribed + Quiet + Dormant = the "Active contacts" card,
+      //   and + Not tagged (the non-active contacts) = Total contacts.
+      var total = Number(c.total) || 0;
+      var activeCard = Number(c.active) || 0;   // "Active contacts" card = Subscribed status
+      var seg = {};
+      ((c.segmentation) || []).forEach(function (s) { seg[s.key] = Number(s.count) || 0; });
+      var engaged = seg.active || 0;            // opened/clicked ≤90d
+      var quiet = seg.quiet || 0;               // no open 91–180d
+      var dormant = seg.dormant || 0;           // no open 180d+
+      var subscribed = Math.max(activeCard - engaged - quiet - dormant, 0);   // subscribed, no engagement band
+      var notTagged = Math.max(total - activeCard, 0);   // non-active (unsubscribed/bounced/unconfirmed)
+
+      var SEG = [
+        { label: 'Engaged',                      count: engaged,    color: '#12a884', desc: 'Subscribed and opened or clicked in the last 90 days — your reliable audience' },
+        { label: 'Subscribed',                   count: subscribed, color: '#8b5cf6', desc: 'Subscribed but not in an engagement band (no recent open/click tagged)' },
+        { label: 'Quiet (91–180d)',              count: quiet,      color: '#3b82f6', desc: 'No open for 90–180 days — the re-engagement audience' },
+        { label: 'Dormant (no engagement 180d+)', count: dormant,   color: '#e8742e', desc: 'No open for 180+ days — re-engage or sunset' },
+        { label: 'Not tagged',                   count: notTagged,  color: '#ef4444', desc: 'Non-active — unsubscribed, bounced or unconfirmed (not a sendable audience)' }
+      ];
+      var counts = SEG.map(function (s) { return s.count; });
       var sum = counts.reduce(function (a, b) { return a + b; }, 0) || 1;
-      var SEG = SEG_SAMPLE.map(function (s, i) {
-        return { label: s.label, color: s.color, desc: s.desc, count: counts[i], pct: Math.round(counts[i] / sum * 1000) / 10 };
-      });
-      if (cap) cap.textContent = (hasLive ? 'Live split of ' : 'Sample split on ') + total.toLocaleString('en-AU') +
-        ' total contacts';
+      SEG.forEach(function (s) { s.pct = Math.round(s.count / sum * 1000) / 10; });
+
+      if (cap) cap.textContent = 'Current ActiveCampaign snapshot · ' + total.toLocaleString('en-AU') + ' total contacts';
 
       if (legend) {
         legend.innerHTML = SEG.map(function (s) {
@@ -601,11 +706,10 @@
         }).join('');
       }
       if (note) {
-        note.textContent = 'Active → your reliable audience · Quiet → nurture harder · ' +
-          'Dormant → re-engage or sunset · Not tagged → no engagement tag yet.';
+        note.textContent = 'Engaged + Subscribed + Quiet + Dormant = ' + activeCard.toLocaleString('en-AU') +
+          ' Active contacts. Not tagged = non-active (unsubscribed, bounced or unconfirmed).';
       }
 
-      var el = document.getElementById('segCanvas');
       if (!el) return;
       var tc = themeColors();
       _segChart = new Chart(el.getContext('2d'), {
@@ -614,7 +718,7 @@
           labels: SEG.map(function (s) { return s.label; }),
           datasets: [{
             data: counts,
-            backgroundColor: SEG_SAMPLE.map(function (s) { return s.color; }),
+            backgroundColor: SEG.map(function (s) { return s.color; }),
             borderColor: tc.surface || '#fff', borderWidth: 3
           }]
         },
@@ -643,7 +747,8 @@
     function campType(t) { return CAMP_TYPE[t] || (t ? esc(t) : '—'); }
 
     function renderCampTable() {
-      var rows = filteredCampaigns();
+      var d = resolvedCampaignData();
+      var rows = d.rows;
       var cnt = document.getElementById('campTableCount');
       var cols = [
         { key: 'name', label: 'Campaign', render: function (v) { return esc(v || '—'); } },
@@ -677,7 +782,7 @@
       if (!el) return;
       if (EDM && EDM.capturedAt) {
         var dt = new Date(EDM.capturedAt);
-        el.textContent = 'Weekly snapshot · ' + dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+        el.textContent = 'Daily snapshot · ' + dt.toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
       } else {
         el.textContent = 'Live from ActiveCampaign';
       }

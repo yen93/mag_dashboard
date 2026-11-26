@@ -1,7 +1,7 @@
 // Marketing — EDM (ActiveCampaign Contact Performance + All Campaigns Performance).
 //
 // Backs public/edm.html (/api/marketing/edm). Plain SELECT of the latest row of
-// public.edm_report_metrics — a weekly snapshot cache filled by the Claude Code
+// public.edm_report_metrics — a daily snapshot cache filled by the Claude Code
 // routine `edm-sync` (routines/edm-sync.md), which pulls the contact KPIs, list
 // health (per-list active/total), the engagement segmentation and the account-level
 // campaign summary + per-campaign rows from the ActiveCampaign MCP. The server only
@@ -10,16 +10,16 @@
 import { q, supabaseConfigured } from '../providers/supabase.js';
 
 const SRC =
-  'Live: ActiveCampaign, via a weekly Supabase snapshot (edm_report_metrics, filled by ' +
+  'Live: ActiveCampaign, via a daily Supabase snapshot (edm_report_metrics, filled by ' +
   'the edm-sync routine using the AC MCP). Contact totals, list health, engagement ' +
-  'segmentation and the campaign report are all from ActiveCampaign.';
+  'segmentation and per-window campaign reports are all from ActiveCampaign.';
 
 // Latest snapshot row (most recent captured_at wins).
 const LATEST_SQL = `
   SELECT total_contacts, active_contacts, nonactive_contacts, top_lists, segmentation,
          camp_count, camp_total_sends, camp_open_rate, camp_click_rate, camp_click_to_open_rate,
          camp_bounce_rate, camp_unsubscribe_rate, camp_total_unique_opens, camp_total_unique_clicks,
-         camp_total_bounces, camp_total_unsubscribes, campaigns, captured_at
+         camp_total_bounces, camp_total_unsubscribes, campaigns, campaign_windows, captured_at
   FROM public.edm_report_metrics
   ORDER BY captured_at DESC
   LIMIT 1`;
@@ -96,6 +96,11 @@ export async function getEdmReport() {
       },
       rows: r.campaigns || [],
     },
+    // Per-window precomputed campaign data (fy22–fy27, 30d, 90d, 12m, all).
+    // Each key maps to { summary, campaigns, from, to }. When present, the
+    // frontend reads the matching window directly instead of filtering the
+    // all-time rows by lastSent.
+    campaignWindows: r.campaign_windows || {},
     capturedAt: r.captured_at,
     meta: { status: 'live', source: SRC, note: null },
   };
