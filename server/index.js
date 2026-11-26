@@ -62,7 +62,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-app.use(express.json());
+app.use(express.json({ limit: '20mb' }));
 
 // Health check (useful for Cloud Run / uptime checks).
 app.get('/api/health', (_req, res) => res.json({ status: 'ok' }));
@@ -754,7 +754,7 @@ marketing.get('/linkedin-analytics', async (_req, res) => {
     res.status(502).json({ error: 'Failed to load LinkedIn analytics.', detail: err.message });
   }
 });
-marketing.post('/linkedin-analytics/import', express.json({ limit: '15mb' }), async (req, res) => {
+marketing.post('/linkedin-analytics/import', async (req, res) => {
   const platformKey = String((req.body && req.body.platformKey) || '').trim();
   const files = req.body && req.body.files;
   try {
@@ -975,6 +975,13 @@ app.post('/api/checkin', requireAuth, requireFullAccess, async (req, res) => {
     console.error('[checkin:create]', err);
     res.status(502).json({ error: 'Failed to log the check-in.', detail: err.message });
   }
+});
+
+// Return JSON (not HTML) for any unhandled /api error (e.g., 413 payload too large, malformed JSON).
+app.use('/api', (err, _req, res, _next) => {
+  const status = err.status || err.statusCode || 500;
+  console.error('[api:error]', err.message || err);
+  res.status(status).json({ error: err.message || 'Server error.' });
 });
 
 // Serve the plain HTML/CSS/JS pages from public/.
