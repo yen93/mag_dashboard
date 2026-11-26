@@ -42,6 +42,15 @@ function clip(s, n = 90) {
 }
 const ymd = (iso) => (iso ? String(iso).slice(0, 10) : '');
 
+function mediaLabel(t) {
+  if (!t) return null;
+  const u = String(t).toUpperCase();
+  if (u === 'VIDEO' || u === 'REELS') return 'Reel / Video';
+  if (u === 'CAROUSEL_ALBUM') return 'Carousel';
+  if (u === 'IMAGE') return 'Image';
+  return t;
+}
+
 export async function getMetaTopPosts() {
   if (!hasSource('meta')) {
     return { data: [], meta: { status: 'pending', source: SRC, note: 'META_PAGE_TOKEN not set.' } };
@@ -60,6 +69,7 @@ export async function getMetaTopPosts() {
     posts = (j.data || []).map((m) => ({
       mediaId: m.id,
       platform: 'Instagram',
+      type: mediaLabel(m.media_type),
       post: clip(m.caption) || `(${(m.media_type || 'post').toLowerCase()})`,
       date: ymd(m.timestamp),
       url: m.permalink || null,
@@ -90,6 +100,7 @@ export async function getMetaTopPosts() {
   const data = top.map((p) => ({
     post: p.post,
     platform: p.platform,
+    type: p.type,
     date: p.date,
     url: p.url,
     reach: p.reach,

@@ -1,0 +1,12 @@
+**toggle_list:**
+All Accounts: "C:\Users\Cloverly\claude_code\dashboard\socials_mockup\pdf_per_platform_toggle_version_2\all_accounts.pdf"
+James' LinkedIn: "C:\Users\Cloverly\claude_code\dashboard\socials_mockup\pdf_per_platform_toggle_version_2\jc_linkedin.pdf"
+MAG LinkedIn: "C:\Users\Cloverly\claude_code\dashboard\socials_mockup\pdf_per_platform_toggle_version_2\mag_linkedin.pdf"
+Facebook: "C:\Users\Cloverly\claude_code\dashboard\socials_mockup\pdf_per_platform_toggle_version_2\fb.pdf"
+Instagram: "C:\Users\Cloverly\claude_code\dashboard\socials_mockup\pdf_per_platform_toggle_version_2\ig.pdf"
+
+## main task:
+- update each social_platforms.html Platform toggle
+- implement the designs shown in the pdf files in toggle_list
+- remove the "Sample data — layout only" chip for each
+- display the real live data in everything. for those figures that do not have a connection to the main data source, put a pending chip for now as indicated in design md

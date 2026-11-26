@@ -23,6 +23,16 @@ const SQL = `
   group by snapshot_date
   order by snapshot_date asc`;
 
+const SQL_BY_PLATFORM = `
+  select platform_key,
+         to_char(snapshot_date, 'YYYY-MM-DD') as d,
+         followers::int             as followers,
+         total_engagement::int      as engagement,
+         posts::int                 as posts,
+         engagement_rate::float8    as engagement_rate
+  from public.social_platform_stats
+  order by platform_key asc, snapshot_date asc`;
+
 const DAY = 86400000;
 const t = (d) => Date.parse(d + 'T00:00:00Z');
 
@@ -46,6 +56,30 @@ export async function getSocialAudience() {
     engagement: r.engagement == null ? null : Number(r.engagement),
     posts: r.posts == null ? null : Number(r.posts),
   }));
+  const platRows = await q(SQL_BY_PLATFORM);
+  const byPlatform = {};
+  for (const r of platRows) {
+    if (!byPlatform[r.platform_key]) byPlatform[r.platform_key] = { snaps: [] };
+    byPlatform[r.platform_key].snaps.push({
+      d: r.d,
+      followers: r.followers == null ? null : Number(r.followers),
+      engagement: r.engagement == null ? null : Number(r.engagement),
+      posts: r.posts == null ? null : Number(r.posts),
+      engagementRate: r.engagement_rate == null ? null : Number(r.engagement_rate),
+    });
+  }
+  for (const key of Object.keys(byPlatform)) {
+    const list = byPlatform[key].snaps;
+    const pLatest = list.length ? list[list.length - 1] : null;
+    const pPrior = pickPrior(list, pLatest);
+    const pNetNew = pLatest && pPrior && pLatest.followers != null && pPrior.followers != null
+      ? pLatest.followers - pPrior.followers
+      : null;
+    const pRate = pNetNew != null && pPrior && pPrior.followers > 0
+      ? Math.round((pNetNew / pPrior.followers) * 1000) / 10
+      : null;
+    byPlatform[key] = { latest: pLatest, prior: pPrior, netNew: pNetNew, netNewRate: pRate, snaps: list };
+  }
   const latest = snaps.length ? snaps[snaps.length - 1] : null;
   const prior = pickPrior(snaps, latest);
   const prior2 = pickPrior(snaps, prior);
@@ -54,6 +88,7 @@ export async function getSocialAudience() {
   return {
     latest, prior, prior2,
     snaps,   // every snapshot (small), so the client can pick a year-ago comparison when one exists
+    byPlatform,
     // back-compat fields
     totalFollowers: latest ? latest.followers : null,
     netNew,

@@ -1,0 +1,96 @@
+================================================================================
+UPDATE DOCUMENTATION: SOCIAL PLATFORMS LIVE TOGGLE VIEWS
+Timestamp: 26/11/26 12:44 (UTC+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. SOCIAL PLATFORMS V2 TOGGLE DESIGNS & LIVE DATA WIRING
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Needed to update all five Platform toggles on public/social_platforms.html
+  (All Accounts, James's LinkedIn, MAG LinkedIn, Facebook, Instagram) to match
+  the version 2 PDF designs in socials_mockup/pdf_per_platform_toggle_version_2/,
+  remove all "Sample data — layout only" chips/banners, display real live data
+  wherever connected, and show red "pending" chips (<span class="chip warn">
+  pending</span> per DESIGN_GUIDE.md §8) for figures without a live data source.
+
+* Technical Changes:
+  - File modified: public/social_platforms.html
+  - Removed #mktSampleBadge injection and all .jl-sample-banner notices;
+    renderMarketingHead(true) renders without any sample-data pill across all
+    five toggles.
+  - Replaced static sample HTML with a unified, data-driven view renderer
+    backed by live API fetches:
+    /api/marketing/social-audience, /api/marketing/platforms,
+    /api/marketing/content-metrics, /api/marketing/meta-fb,
+    /api/marketing/meta-ig-trend, /api/marketing/meta-fb-trend,
+    /api/marketing/meta-ig-demographics, and /api/marketing/meta-top-posts.
+  - Made #spControls sticky below the top bar (DESIGN_GUIDE.md §4) with hover
+    z-index lift on .sp-kpi tiles so ⓘ tooltips never clip.
+  - Implemented all 5 PDF toggle layouts:
+    * All accounts (all_accounts.pdf): 6-KPI row (Followers, Posts delivered,
+      Engagements live; Engagement rate, Enquiries traced to social, Video hours
+      pending), clickable By account summary table with All accounts total row,
+      Followers over time (live weekly snapshot line chart when >=2 snapshots
+      exist), Video hours vs engagement (pending), and sortable Top posts table
+      (live Instagram posts via Meta).
+    * James's LinkedIn (jc_linkedin.pdf): 7-KPI row (Followers, Posts delivered,
+      Engagements, Engagement rate, Newsletter subscribers live; Enquiries &
+      Reached beyond followers pending), LinkedIn Analytics card (Total
+      followers live; private 7d/90d/discovery metrics pending), Followers over
+      time, What works best by type (pending), Follows vs unfollows (live net
+      delta), Top posts (pending), and Audience — who follows us (pending).
+    * MAG LinkedIn (mag_linkedin.pdf): 6-KPI row (Followers, Posts delivered,
+      Engagements, Engagement rate live; Enquiries & Reached beyond followers
+      pending), Page Analytics card (Content, Visitors, Followers [live], Page
+      appearances), Followers over time, What works best by type (pending),
+      Follows vs unfollows (live net delta), Top posts (pending), and Audience
+      (pending).
+    * Facebook (fb.pdf): 6-KPI row (Followers, Posts delivered, Engagements,
+      Engagement rate live; Enquiries & Reached beyond followers pending),
+      Facebook — Meta Business Suite 6-tile strip (Views, Content interactions,
+      Follows + monthly sparkline live; Viewers, Link clicks, Visits pending),
+      Followers over time, What works best by type (pending), Follows vs
+      unfollows — Facebook (live latest-month horizontal bar breakdown + 12-mo
+      grouped bar chart), Top posts (pending), and Audience (pending).
+    * Instagram (ig.pdf): 6-KPI row (Followers, Posts delivered, Engagements,
+      Engagement rate live; Enquiries & Reached beyond followers pending),
+      Instagram — Meta Business Suite 6-tile strip (Reach + sparkline, Content
+      interactions + sparkline live; Views, Link clicks, Visits, Follows
+      pending), Followers over time, What works best by type (pending), Follows
+      vs unfollows (pending), sortable Top posts (live Instagram posts with
+      reach, engagement, rate, and media type), and Audience — who follows us
+      (live Age & gender pyramid + Top locations horizontal bar chart).
+
+2. READ-ONLY BACKEND METRIC PAYLOAD ENHANCEMENTS
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Individual platform toggles and the By account table needed per-account weekly
+  follower snapshot history and net-new deltas, and Top posts needed each
+  Instagram post's media type (Reel/Video, Carousel, Image).
+
+* Technical Changes:
+  - File modified: server/metrics/social-audience.js
+    Added a read-only SELECT grouped by platform_key and returned backward-
+    compatible byPlatform ({ latest, prior, netNew, netNewRate, snaps }) along
+    with all existing aggregate fields.
+  - File modified: server/metrics/meta-top-posts.js
+    Added mediaLabel() mapping media_type (VIDEO/REELS -> Reel / Video,
+    CAROUSEL_ALBUM -> Carousel, IMAGE -> Image) and included type in each
+    returned post object.
+
+3. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* None. Local frontend and read-only Express metric updates only; no database
+  migrations, Edge Functions, deployments, or git mutations were performed.
+
+4. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Backend syntax check:
+  - node --check server/metrics/social-audience.js -> OK
+  - node --check server/metrics/meta-top-posts.js -> OK
+* Frontend HTML & JS verification on public/social_platforms.html:
+  - <div> open/close balance: 243 vs 243 (balanced).
+  - Inline <script> blocks (0 and 1) parsed cleanly via Node new Function(...).
+  - Confirmed zero active "Sample data — layout only" chips or sample banners.
+================================================================================
