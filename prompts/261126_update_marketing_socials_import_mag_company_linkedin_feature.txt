@@ -1,0 +1,12 @@
+**import_files:**
+"C:\Users\Cloverly\Downloads\myadventure-group_followers_1795672185314.xls"
+"C:\Users\Cloverly\Downloads\myadventure-group_visitors_1795672177130.xls"
+"C:\Users\Cloverly\Downloads\myadventure-group_content_1795672163338.xls"
+"C:\Users\Cloverly\Downloads\MyAdventure Group_competitor_analytics_1795672199555.xlsx"
+
+**socials_to_update:**
+social_platforms.html > Platform: MAG LinkedIn
+
+## main_task:
+1. update socials_to_update. there should be an option to import import_files
+2. these data data imported should then reflect in the page after the import

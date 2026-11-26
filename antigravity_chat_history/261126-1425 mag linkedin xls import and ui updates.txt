@@ -1,0 +1,97 @@
+================================================================================
+UPDATE DOCUMENTATION: MAG LINKEDIN XLS/XLSX IMPORT & UI REFINEMENTS
+Timestamp: 26/11/26 14:25 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. IMPORT BANNER SCOPING & PERSONAL LINKEDIN RENAME
+--------------------------------------------------------------------------------
+* Problem / Context:
+  The "Import complete" banner was persisting across other platform tabs after
+  importing into a single LinkedIn account, and "James's LinkedIn" needed to be
+  renamed to "Personal LinkedIn" in the UI.
+
+* Technical Changes:
+  - Updated `public/social_platforms.html`:
+    - Scoped `_liImportBanner` to `{ platform, msg }` and added
+      `renderImportBanner()` inside `renderActiveView()` so the banner only
+      renders on the imported platform tab and clears on all other tabs.
+    - Renamed all visible "James's LinkedIn" labels (platform tab button,
+      import modal option, All Accounts table, Top Posts source chip, card
+      headers, context line, and import banner) to "Personal LinkedIn" while
+      preserving the underlying `james_linkedin` database/API key.
+
+2. ZERO-DEPENDENCY BIFF8 .XLS PARSER FOR MAG LINKEDIN EXPORTS
+--------------------------------------------------------------------------------
+* Problem / Context:
+  MAG LinkedIn Company Page exports (`myadventure-group_followers_*.xls`,
+  `myadventure-group_visitors_*.xls`, `myadventure-group_content_*.xls`) are
+  genuine OLE2 / BIFF8 binary `.xls` files (magic `d0cf11e0a1b11ae1`), while
+  `MyAdventure Group_competitor_analytics_*.xlsx` is OOXML `.xlsx`.
+
+* Technical Changes:
+  - Created `server/lib/xls-parser.js`:
+    Pure-Node OLE2 Compound File Binary + BIFF8 reader (FAT/DIFAT/MiniFAT,
+    BOUNDSHEET, SST/CONTINUE, LABELSST, LABEL, NUMBER, RK, MULRK, FORMULA/STRING,
+    BOOLERR) returning `{ sheetNames, sheets }` with zero external dependencies.
+
+3. MAG LINKEDIN 4-FILE PARSER & INCREMENTAL MERGE
+--------------------------------------------------------------------------------
+* Technical Changes:
+  - Updated `server/metrics/linkedin-analytics.js`:
+    - Auto-detects `.xls` (OLE2) vs `.xlsx` (ZIP/OOXML) by magic bytes.
+    - Parses all 4 MAG LinkedIn export formats:
+      * Followers (`New followers` + follower `Location`, `Job function`,
+        `Seniority`, `Industry`, `Company size` — strictly separated from
+        visitor demographics by checking the 2nd column header `Total followers`
+        vs `Total views`).
+      * Visitors (`Visitor metrics`: daily `pageViews`, `uniqueVisitors`,
+        `desktopViews`, `mobileViews` stored in `pageMetrics.dailyVisitors`).
+      * Content (`Metrics`: daily `impressions`, `uniqueImpressions`,
+        `reactions`, `comments`, `reposts`, `clicks`; `All posts`: post title,
+        link, publish date, impressions, engagements, link clicks, `contentType`).
+      * Competitors (`COMPETITORS`: date range + `page`, `newFollowers`,
+        `posts`, `reactions`, `comments`, `commentsPerDay`).
+    - Updated `saveLinkedInImport()` to read any existing `platform_key` row
+      and merge it with newly uploaded files via `mergeLinkedInWorkbooks()`,
+      allowing users to upload all 4 files together or one-by-one without
+      losing prior sheets.
+
+4. MAG LINKEDIN UI UPDATES
+--------------------------------------------------------------------------------
+* Technical Changes:
+  - Updated `public/social_platforms.html`:
+    - Updated file input (`accept=".xlsx,.xls"`) and dropzone validation/copy.
+    - Extended `liDataForFy()` with FY-aware `reactions`, `comments`, `reposts`,
+      `clicks`, `uniqueImpressions`, `pageViews`, `uniqueVisitors`,
+      `desktopViews`, `mobileViews`, `byType` (grouped by `Content Type`), and
+      `competitors`, plus Apify `followers` fallback anchor for reconstructing
+      MAG LinkedIn's 12-month `Followers over time` curve.
+    - Updated `renderMagLinkedin()` to display:
+      * Content breakdown (Impressions, Reactions, Comments + clicks, Reposts
+        + 7d impressions) with monthly sparklines.
+      * Visitors · page views by device (Page views, Unique visitors, Desktop
+        vs Mobile split bars).
+      * What works best, by type — MAG LinkedIn (live horizontal bar chart of
+        average impressions per post by `Content Type`, e.g. Video vs Post).
+      * Competitor analytics benchmark table.
+      * Top posts sortable table with `Type / Published` and `Link clicks`.
+      * Audience — who follows us horizontal bar charts (Seniority, Industry,
+        Top locations, Job function).
+
+5. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* End-to-End 4-File Merge Test (MAG LinkedIn Downloads exports):
+  - Date range: 2025-11-25 to 2026-11-24
+  - Engagement: 365 daily rows (3,408 impressions, 331 engagements, 44 reactions,
+    11 comments, 1 repost, 275 clicks, 1,308 unique impressions)
+  - Followers: 365 daily rows + 48 follower demographic rows
+  - Visitors: 365 daily rows (272 page views, 176 unique visitors, 183 desktop,
+    89 mobile)
+  - Top Posts: 27 posts (10 Video, 17 Post)
+  - Competitors: 1 benchmark row (MyAdventure Group)
+* Syntax Checks:
+  - `node --check server/lib/xls-parser.js` — passed
+  - `node --check server/metrics/linkedin-analytics.js` — passed
+  - `public/social_platforms.html` inline script syntax check — passed (104,926 chars)
+================================================================================

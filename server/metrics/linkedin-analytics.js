@@ -1,9 +1,14 @@
-// Marketing — LinkedIn Analytics manual .xlsx import (James's LinkedIn & MAG LinkedIn).
+// Marketing — LinkedIn Analytics manual .xlsx / .xls import (Personal LinkedIn & MAG LinkedIn).
 //
-// Parses LinkedIn Analytics .xlsx exports (both the standard 5-sheet AggregateAnalytics_*.xlsx
-// containing DISCOVERY, ENGAGEMENT, TOP POSTS, FOLLOWERS, DEMOGRAPHICS and LinkedIn Company
-// Page .xlsx exports) and persists the normalized result per platform_key in
-// public.linkedin_analytics_imports.
+// Parses:
+//   - Personal LinkedIn AggregateAnalytics_*.xlsx (DISCOVERY, ENGAGEMENT, TOP POSTS, FOLLOWERS, DEMOGRAPHICS)
+//   - MAG LinkedIn Company Page exports (.xls BIFF8 & .xlsx):
+//       * followers (.xls): New followers + follower Location / Job function / Seniority / Industry / Company size
+//       * visitors (.xls): Visitor metrics (desktop/mobile page views & unique visitors) + visitor demographics
+//       * content (.xls): Metrics (daily impressions, unique impressions, clicks, reactions, comments, reposts) + All posts
+//       * competitor_analytics (.xlsx): COMPETITORS sheet
+//
+// Persists the merged normalized state per platform_key in public.linkedin_analytics_imports.
 //
 // Backs:
 //   GET  /api/marketing/linkedin-analytics
@@ -11,13 +16,14 @@
 
 import { q, supabaseConfigured } from '../providers/supabase.js';
 import { parseXlsxBuffer } from '../lib/xlsx-parser.js';
+import { parseXlsBuffer } from '../lib/xls-parser.js';
 
 export const ALLOWED_LINKEDIN_PLATFORMS = ['james_linkedin', 'mag_linkedin'];
 
 const SRC =
-  'Imported LinkedIn Analytics (.xlsx) stored in public.linkedin_analytics_imports — ' +
-  'covers impressions, members reached, daily engagement, daily new followers, top posts, ' +
-  'and audience demographics for James\'s LinkedIn and MAG LinkedIn.';
+  'Imported LinkedIn Analytics (.xlsx / .xls) stored in public.linkedin_analytics_imports — ' +
+  'covers impressions, members reached, daily engagement, daily new followers, visitor page views, ' +
+  'top posts, competitor benchmarks, and audience demographics for Personal LinkedIn and MAG LinkedIn.';
 
 // ── Value parsing helpers ────────────────────────────────────────────────────
 
@@ -41,13 +47,11 @@ function parseNumSafe(v) {
   return Number.isFinite(n) ? n : null;
 }
 
-// Parse LinkedIn date strings ("10/23/2025", "7/1/2026", "2026-11-26", or Excel serial date) -> 'YYYY-MM-DD'
 function parseDateToIso(v) {
   if (v == null || v === '') return null;
   const s = String(v).trim();
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
-  // M/D/YYYY or MM/DD/YYYY (LinkedIn US export format)
   const mdy = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
   if (mdy) {
     const m = parseInt(mdy[1], 10);
@@ -58,13 +62,11 @@ function parseDateToIso(v) {
     }
   }
 
-  // Excel serial date number (days since 1899-12-30)
   if (/^\d+(\.\d+)?$/.test(s)) {
     const serial = Number(s);
     if (serial > 30000 && serial < 70000) {
       const ms = Date.UTC(1899, 11, 30) + Math.floor(serial) * 86400000;
-      const dt = new Date(ms);
-      return dt.toISOString().slice(0, 10);
+      return new Date(ms).toISOString().slice(0, 10);
     }
   }
 
@@ -81,27 +83,28 @@ function parsePctValue(raw) {
   if (/^<\s*1\s*%?$/i.test(s)) return { pct: 0.5, rawPct: '< 1%' };
   const n = parseNumSafe(s);
   if (n == null) return { pct: null, rawPct: s };
-  // Excel sometimes stores percentages as 0.31 instead of "31%"
   const pct = !s.includes('%') && n > 0 && n <= 1 ? Math.round(n * 1000) / 10 : Math.round(n * 10) / 10;
   return { pct, rawPct: s.includes('%') ? s : `${pct}%` };
 }
 
-// Extract a readable title from a LinkedIn post URL slug
-// e.g. https://www.linkedin.com/posts/james-castrission_resilience-leadership-mindset-share-7477... -> "Resilience leadership mindset"
 function titleFromPostUrl(url) {
   const u = cleanStr(url);
   if (!u) return 'LinkedIn post';
   const m = u.match(/linkedin\.com\/(?:posts|feed\/update)\/([^/?#]+)/i);
   if (!m) return u;
   let slug = decodeURIComponent(m[1]);
-  // Strip leading author handle before first underscore
   const usIdx = slug.indexOf('_');
   if (usIdx !== -1) slug = slug.slice(usIdx + 1);
-  // Strip trailing LinkedIn activity/ugcPost/share ID
   slug = slug.replace(/-(?:ugcPost|share|activity)-\d+.*$/i, '');
   slug = slug.replace(/[-_]+/g, ' ').trim();
   if (!slug) return 'LinkedIn post';
   return slug.charAt(0).toUpperCase() + slug.slice(1);
+}
+
+function cleanPostTitle(raw, fallbackUrl) {
+  const s = cleanStr(raw).replace(/\s+/g, ' ');
+  if (!s) return titleFromPostUrl(fallbackUrl);
+  return s.length > 110 ? s.slice(0, 107).trimEnd() + '…' : s;
 }
 
 function findSheet(sheets, candidates) {
@@ -117,10 +120,25 @@ function findSheet(sheets, candidates) {
   return null;
 }
 
+function parseSpreadsheetBuffer(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length < 8) {
+    throw new Error('Uploaded file is empty or too small.');
+  }
+  // OLE2 BIFF8 (.xls): D0 CF 11 E0 A1 B1 1A E1
+  if (buffer.readUInt32BE(0) === 0xd0cf11e0 && buffer.readUInt32BE(4) === 0xa1b11ae1) {
+    return parseXlsBuffer(buffer);
+  }
+  // ZIP / OOXML (.xlsx): PK\x03\x04
+  if (buffer[0] === 0x50 && buffer[1] === 0x4b) {
+    return parseXlsxBuffer(buffer);
+  }
+  throw new Error('Unsupported file format. Please upload LinkedIn .xlsx or .xls export files.');
+}
+
 // ── Workbook parser ──────────────────────────────────────────────────────────
 
 export function parseLinkedInWorkbook(buffer, fileName = '') {
-  const { sheetNames, sheets } = parseXlsxBuffer(buffer);
+  const { sheetNames, sheets } = parseSpreadsheetBuffer(buffer);
 
   let dateStart = null;
   let dateEnd = null;
@@ -128,9 +146,10 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
   let totalFollowers = null;
   let totalFollowersDate = null;
   const discovery = {};
-  const dailyEngagementMap = new Map(); // date -> { date, impressions, engagements }
-  const dailyFollowersMap = new Map();  // date -> { date, newFollowers }
-  const topPostsMap = new Map();        // url -> { url, post, publishDate, impressions, engagements }
+  const dailyEngagementMap = new Map();
+  const dailyFollowersMap = new Map();
+  const dailyVisitorsMap = new Map();
+  const topPostsMap = new Map();
   const demographics = {
     seniority: [],
     industry: [],
@@ -141,7 +160,7 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
   };
   const pageMetrics = {};
 
-  // 1. DISCOVERY sheet (AggregateAnalytics format)
+  // 1. DISCOVERY sheet (Personal AggregateAnalytics format)
   const discoveryRows = findSheet(sheets, ['DISCOVERY']);
   if (discoveryRows) {
     for (const row of discoveryRows) {
@@ -163,7 +182,7 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
     }
   }
 
-  // 2. ENGAGEMENT sheet (AggregateAnalytics) or Metrics sheet (Company Page Content export)
+  // 2. ENGAGEMENT sheet (Personal) or Metrics sheet (Company Page Content .xls)
   const engagementRows = findSheet(sheets, ['ENGAGEMENT', 'Metrics']);
   if (engagementRows) {
     let headerIdx = -1;
@@ -178,14 +197,15 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
     }
     if (headerIdx >= 0) {
       const dateCol = headers.findIndex((h) => h === 'date');
-      const impCol = headers.findIndex((h) => h === 'impressions' || h.includes('impressions (total)') || h.includes('impressions (organic)'));
-      const engCol = headers.findIndex((h) => h === 'engagements' || h.includes('engagements (total)'));
-      const reactCol = headers.findIndex((h) => h.includes('reactions (total)') || h === 'reactions');
-      const commCol = headers.findIndex((h) => h.includes('comments (total)') || h === 'comments');
-      const repCol = headers.findIndex((h) => h.includes('reposts (total)') || h === 'reposts');
-      const clickCol = headers.findIndex((h) => h.includes('clicks (total)') || h === 'clicks');
+      const impCol = headers.findIndex((h) => h === 'impressions (total)' || h === 'impressions' || h === 'impressions (organic)');
+      const uniqImpCol = headers.findIndex((h) => h.includes('unique impressions'));
+      const engCol = headers.findIndex((h) => h === 'engagements' || h === 'engagements (total)');
+      const reactCol = headers.findIndex((h) => h === 'reactions (total)' || h === 'reactions');
+      const commCol = headers.findIndex((h) => h === 'comments (total)' || h === 'comments');
+      const repCol = headers.findIndex((h) => h === 'reposts (total)' || h === 'reposts');
+      const clickCol = headers.findIndex((h) => h === 'clicks (total)' || h === 'clicks');
 
-      let sumReact = 0, sumComm = 0, sumRep = 0, sumClicks = 0;
+      let sumReact = 0, sumComm = 0, sumRep = 0, sumClicks = 0, sumUniq = 0;
       let hasPageBreakdown = false;
 
       for (let i = headerIdx + 1; i < engagementRows.length; i++) {
@@ -195,21 +215,29 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
         if (!iso) continue;
         const imp = impCol >= 0 ? (parseIntSafe(r[impCol]) || 0) : 0;
         let eng = engCol >= 0 ? (parseIntSafe(r[engCol]) || 0) : 0;
+        const rowObj = { date: iso, impressions: imp, engagements: eng };
 
-        if (reactCol >= 0 || commCol >= 0 || repCol >= 0) {
+        if (reactCol >= 0 || commCol >= 0 || repCol >= 0 || clickCol >= 0) {
           hasPageBreakdown = true;
           const re = reactCol >= 0 ? (parseIntSafe(r[reactCol]) || 0) : 0;
           const co = commCol >= 0 ? (parseIntSafe(r[commCol]) || 0) : 0;
           const rp = repCol >= 0 ? (parseIntSafe(r[repCol]) || 0) : 0;
           const cl = clickCol >= 0 ? (parseIntSafe(r[clickCol]) || 0) : 0;
+          const uq = uniqImpCol >= 0 ? (parseIntSafe(r[uniqImpCol]) || 0) : 0;
           sumReact += re;
           sumComm += co;
           sumRep += rp;
           sumClicks += cl;
-          if (engCol < 0) eng = re + co + rp + cl;
+          sumUniq += uq;
+          rowObj.reactions = re;
+          rowObj.comments = co;
+          rowObj.reposts = rp;
+          rowObj.clicks = cl;
+          if (uniqImpCol >= 0) rowObj.uniqueImpressions = uq;
+          if (engCol < 0) rowObj.engagements = re + co + rp + cl;
         }
 
-        dailyEngagementMap.set(iso, { date: iso, impressions: imp, engagements: eng });
+        dailyEngagementMap.set(iso, rowObj);
       }
 
       if (hasPageBreakdown) {
@@ -217,15 +245,14 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
         pageMetrics.comments = sumComm;
         pageMetrics.reposts = sumRep;
         if (clickCol >= 0) pageMetrics.clicks = sumClicks;
+        if (uniqImpCol >= 0) pageMetrics.uniqueImpressions = sumUniq;
       }
     }
   }
 
-  // 3. TOP POSTS sheet (AggregateAnalytics dual-table) or All posts sheet (Company Page Content export)
+  // 3. TOP POSTS (Personal dual-table) or All posts (Company Page Content .xls)
   const topPostsRows = findSheet(sheets, ['TOP POSTS', 'All posts']);
   if (topPostsRows) {
-    // Check for AggregateAnalytics dual-table header:
-    // ['Post URL', 'Post Publish Date', 'Engagements', '', 'Post URL', 'Post Publish Date', 'Impressions']
     let dualHeaderIdx = -1;
     let singleHeaderIdx = -1;
     let singleHeaders = [];
@@ -248,7 +275,6 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
         const r = topPostsRows[i];
         if (!r || !r.length) continue;
 
-        // Left table: Post URL, Post Publish Date, Engagements
         const leftUrl = cleanStr(r[0]);
         if (leftUrl && leftUrl.startsWith('http')) {
           const existing = topPostsMap.get(leftUrl) || {
@@ -263,7 +289,6 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
           topPostsMap.set(leftUrl, existing);
         }
 
-        // Right table: Post URL, Post Publish Date, Impressions
         const rightUrl = cleanStr(r[4]);
         if (rightUrl && rightUrl.startsWith('http')) {
           const existing = topPostsMap.get(rightUrl) || {
@@ -288,34 +313,42 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
       const repCol = singleHeaders.findIndex((h) => h === 'reposts');
       const clicksCol = singleHeaders.findIndex((h) => h === 'clicks');
       const engCol = singleHeaders.findIndex((h) => h === 'engagements');
+      const contentTypeCol = singleHeaders.findIndex((h) => h === 'content type');
 
       for (let i = singleHeaderIdx + 1; i < topPostsRows.length; i++) {
         const r = topPostsRows[i];
         if (!r || !r.length) continue;
         const url = urlCol >= 0 ? cleanStr(r[urlCol]) : '';
         if (!url) continue;
-        const title = titleCol >= 0 && cleanStr(r[titleCol]) ? cleanStr(r[titleCol]).slice(0, 120) : titleFromPostUrl(url);
+        const title = cleanPostTitle(titleCol >= 0 ? r[titleCol] : '', url);
         const imp = impCol >= 0 ? parseIntSafe(r[impCol]) : null;
-        let eng = engCol >= 0 ? parseIntSafe(r[engCol]) : null;
-        if (eng == null && (likesCol >= 0 || commCol >= 0 || repCol >= 0)) {
-          eng = (likesCol >= 0 ? (parseIntSafe(r[likesCol]) || 0) : 0) +
-                (commCol >= 0 ? (parseIntSafe(r[commCol]) || 0) : 0) +
-                (repCol >= 0 ? (parseIntSafe(r[repCol]) || 0) : 0);
-        }
+        const likes = likesCol >= 0 ? (parseIntSafe(r[likesCol]) || 0) : 0;
+        const comments = commCol >= 0 ? (parseIntSafe(r[commCol]) || 0) : 0;
+        const reposts = repCol >= 0 ? (parseIntSafe(r[repCol]) || 0) : 0;
         const clicks = clicksCol >= 0 ? parseIntSafe(r[clicksCol]) : null;
+        let eng = engCol >= 0 ? parseIntSafe(r[engCol]) : null;
+        if (eng == null) {
+          eng = likes + comments + reposts + (clicks || 0);
+        }
+        const rawCt = contentTypeCol >= 0 ? cleanStr(r[contentTypeCol]) : '';
+        const contentType = rawCt || 'Post';
         topPostsMap.set(url, {
           url,
           post: title,
           publishDate: dateCol >= 0 ? parseDateToIso(r[dateCol]) : null,
           impressions: imp,
           engagements: eng,
+          likes,
+          comments,
+          reposts,
           linkClicks: clicks,
+          contentType,
         });
       }
     }
   }
 
-  // 4. FOLLOWERS sheet (AggregateAnalytics) or New followers sheet (Company Page Followers export)
+  // 4. FOLLOWERS (Personal) or New followers (Company Page Followers .xls)
   const followersRows = findSheet(sheets, ['FOLLOWERS', 'New followers']);
   if (followersRows) {
     let headerIdx = -1;
@@ -323,7 +356,6 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
     for (let i = 0; i < Math.min(followersRows.length, 10); i++) {
       const r = followersRows[i] || [];
       const first = cleanStr(r[0]);
-      // Row 1: ['Total followers on 11/26/2026', '6930']
       const totMatch = first.match(/total followers(?:\s+on\s+(.+))?/i);
       if (totMatch && r[1] != null) {
         totalFollowers = parseIntSafe(r[1]);
@@ -338,19 +370,24 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
     }
     if (headerIdx >= 0) {
       const dateCol = headers.findIndex((h) => h === 'date');
-      const newCol = headers.findIndex((h) => h === 'new followers' || h.includes('total followers') || h.includes('organic followers'));
+      const newCol = headers.findIndex((h) => h === 'new followers' || h === 'total followers' || h.includes('organic followers'));
+      const orgCol = headers.findIndex((h) => h.includes('organic followers'));
+      const sponCol = headers.findIndex((h) => h.includes('sponsored followers'));
       for (let i = headerIdx + 1; i < followersRows.length; i++) {
         const r = followersRows[i];
         if (!r || !r.length) continue;
         const iso = parseDateToIso(r[dateCol]);
         if (!iso) continue;
         const nf = newCol >= 0 ? (parseIntSafe(r[newCol]) || 0) : 0;
-        dailyFollowersMap.set(iso, { date: iso, newFollowers: nf });
+        const obj = { date: iso, newFollowers: nf };
+        if (orgCol >= 0) obj.organicFollowers = parseIntSafe(r[orgCol]) || 0;
+        if (sponCol >= 0) obj.sponsoredFollowers = parseIntSafe(r[sponCol]) || 0;
+        dailyFollowersMap.set(iso, obj);
       }
     }
   }
 
-  // 5. DEMOGRAPHICS sheet (AggregateAnalytics)
+  // 5. DEMOGRAPHICS (Personal single sheet OR Company Page separate sheets)
   const demoRows = findSheet(sheets, ['DEMOGRAPHICS']);
   if (demoRows) {
     const catMap = {
@@ -374,7 +411,8 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
       demographics[targetKey].push({ label, pct, rawPct });
     }
   } else {
-    // Company Page Followers export has separate sheets: Location, Seniority, Industry, Company size, Job function
+    // Company Page exports have separate sheets: Location, Seniority, Industry, Company size, Job function.
+    // Distinguish FOLLOWER demographics ("Total followers") from VISITOR demographics ("Total views").
     const pageDemoSheets = [
       ['Seniority', 'seniority'],
       ['Industry', 'industry'],
@@ -382,68 +420,159 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
       ['Job function', 'jobTitle'],
       ['Company size', 'companySize'],
     ];
+    const visitorDemo = {};
     for (const [sheetKey, targetKey] of pageDemoSheets) {
       const rows = findSheet(sheets, [sheetKey]);
       if (!rows || rows.length < 2) continue;
+      const metricHeader = cleanStr(rows[0] && rows[0][1]).toLowerCase();
+      const isVisitorDemo = metricHeader.includes('view');
       const rawItems = [];
       let totalCount = 0;
       for (let i = 1; i < rows.length; i++) {
         const r = rows[i];
         if (!r || !cleanStr(r[0])) continue;
         const count = parseNumSafe(r[1]);
-        if (count == null) continue;
+        if (count == null || count <= 0) continue;
         rawItems.push({ label: cleanStr(r[0]), count });
         totalCount += count;
       }
       if (totalCount > 0) {
-        demographics[targetKey] = rawItems.slice(0, 10).map((it) => {
+        rawItems.sort((a, b) => b.count - a.count);
+        const topItems = rawItems.slice(0, 10).map((it) => {
           const pct = Math.round((it.count / totalCount) * 1000) / 10;
           return { label: it.label, pct, rawPct: `${pct}%`, count: Math.round(it.count) };
         });
+        if (isVisitorDemo) visitorDemo[targetKey] = topItems;
+        else demographics[targetKey] = topItems;
       }
+    }
+    if (Object.keys(visitorDemo).length) {
+      pageMetrics.visitorDemographics = visitorDemo;
     }
   }
 
-  // 6. Optional Visitor metrics sheet (Company Page Visitors export)
+  // 6. Visitor metrics sheet (Company Page Visitors .xls)
   const visitorRows = findSheet(sheets, ['Visitor metrics']);
   if (visitorRows && visitorRows.length > 1) {
     const h = (visitorRows[0] || []).map((c) => cleanStr(c).toLowerCase());
-    const pvCol = h.findIndex((x) => x.includes('total page views (total)') || x.includes('overview page views (total)'));
-    const uvCol = h.findIndex((x) => x.includes('total unique visitors (total)') || x.includes('overview unique visitors (total)'));
+    const dateCol = h.findIndex((x) => x === 'date');
+    const pvCol = h.findIndex((x) => x === 'total page views (total)' || x === 'overview page views (total)');
+    const pvDeskCol = h.findIndex((x) => x === 'total page views (desktop)' || x === 'overview page views (desktop)');
+    const pvMobCol = h.findIndex((x) => x === 'total page views (mobile)' || x === 'overview page views (mobile)');
+    const uvCol = h.findIndex((x) => x === 'total unique visitors (total)' || x === 'overview unique visitors (total)');
     const btnCol = h.findIndex((x) => x.includes('custom button clicks'));
-    let pv = 0, uv = 0, btn = 0;
+
+    let pv = 0, pvDesk = 0, pvMob = 0, uv = 0, btn = 0;
     for (let i = 1; i < visitorRows.length; i++) {
       const r = visitorRows[i];
-      if (!r) continue;
-      if (pvCol >= 0) pv += parseIntSafe(r[pvCol]) || 0;
-      if (uvCol >= 0) uv += parseIntSafe(r[uvCol]) || 0;
-      if (btnCol >= 0) btn += parseIntSafe(r[btnCol]) || 0;
+      if (!r || !r.length) continue;
+      const iso = dateCol >= 0 ? parseDateToIso(r[dateCol]) : null;
+      const dPv = pvCol >= 0 ? (parseIntSafe(r[pvCol]) || 0) : 0;
+      const dDesk = pvDeskCol >= 0 ? (parseIntSafe(r[pvDeskCol]) || 0) : 0;
+      const dMob = pvMobCol >= 0 ? (parseIntSafe(r[pvMobCol]) || 0) : 0;
+      const dUv = uvCol >= 0 ? (parseIntSafe(r[uvCol]) || 0) : 0;
+      const dBtn = btnCol >= 0 ? (parseIntSafe(r[btnCol]) || 0) : 0;
+      pv += dPv;
+      pvDesk += dDesk;
+      pvMob += dMob;
+      uv += dUv;
+      btn += dBtn;
+      if (iso) {
+        dailyVisitorsMap.set(iso, {
+          date: iso,
+          pageViews: dPv,
+          uniqueVisitors: dUv,
+          desktopViews: dDesk,
+          mobileViews: dMob,
+          customButtonClicks: btnCol >= 0 ? dBtn : null,
+        });
+      }
     }
     if (pvCol >= 0) pageMetrics.pageViews = pv;
+    if (pvDeskCol >= 0) pageMetrics.desktopViews = pvDesk;
+    if (pvMobCol >= 0) pageMetrics.mobileViews = pvMob;
     if (uvCol >= 0) pageMetrics.uniqueVisitors = uv;
     if (btnCol >= 0) pageMetrics.customButtonClicks = btn;
+    if (dailyVisitorsMap.size) {
+      pageMetrics.dailyVisitors = Array.from(dailyVisitorsMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    }
+  }
+
+  // 7. COMPETITORS sheet (Company Page competitor_analytics .xlsx)
+  const compRows = findSheet(sheets, ['COMPETITORS']);
+  if (compRows && compRows.length >= 2) {
+    let compStart = null;
+    let compEnd = null;
+    let headerIdx = -1;
+    let headers = [];
+
+    for (let i = 0; i < Math.min(compRows.length, 6); i++) {
+      const r = compRows[i] || [];
+      const lower = r.map((c) => cleanStr(c).toLowerCase());
+      if (lower.includes('page') && (lower.includes('new followers') || lower.includes('posts'))) {
+        headerIdx = i;
+        headers = lower;
+        break;
+      }
+      if (i === 0 && parseDateToIso(r[0]) && parseDateToIso(r[1])) {
+        compStart = parseDateToIso(r[0]);
+        compEnd = parseDateToIso(r[1]);
+      }
+    }
+
+    if (headerIdx >= 0) {
+      const pageCol = headers.findIndex((h) => h === 'page');
+      const nfCol = headers.findIndex((h) => h.includes('new followers'));
+      const postsCol = headers.findIndex((h) => h === 'posts');
+      const commCol = headers.findIndex((h) => h === 'comments');
+      const cpdCol = headers.findIndex((h) => h.includes('comments per day'));
+      const reactCol = headers.findIndex((h) => h === 'reactions');
+
+      const rows = [];
+      for (let i = headerIdx + 1; i < compRows.length; i++) {
+        const r = compRows[i];
+        if (!r || !cleanStr(r[pageCol])) continue;
+        rows.push({
+          page: cleanStr(r[pageCol]),
+          newFollowers: nfCol >= 0 ? parseIntSafe(r[nfCol]) : null,
+          posts: postsCol >= 0 ? parseIntSafe(r[postsCol]) : null,
+          comments: commCol >= 0 ? parseIntSafe(r[commCol]) : null,
+          commentsPerDay: cpdCol >= 0 ? parseNumSafe(r[cpdCol]) : null,
+          reactions: reactCol >= 0 ? parseIntSafe(r[reactCol]) : null,
+        });
+      }
+      if (rows.length) {
+        pageMetrics.competitors = {
+          dateStart: compStart,
+          dateEnd: compEnd,
+          rows,
+        };
+        if (!dateStart && compStart) dateStart = compStart;
+        if (!dateEnd && compEnd) dateEnd = compEnd;
+      }
+    }
   }
 
   // Sort daily series ascending
   const dailyEngagement = Array.from(dailyEngagementMap.values()).sort((a, b) => a.date.localeCompare(b.date));
   const dailyFollowers = Array.from(dailyFollowersMap.values()).sort((a, b) => a.date.localeCompare(b.date));
 
-  // Derive dateStart / dateEnd if not set by DISCOVERY
   const allDates = [
     ...dailyEngagement.map((d) => d.date),
     ...dailyFollowers.map((d) => d.date),
+    ...(pageMetrics.dailyVisitors || []).map((d) => d.date),
   ].sort();
   if (!dateStart && allDates.length) dateStart = allDates[0];
   if (!dateEnd && allDates.length) dateEnd = allDates[allDates.length - 1];
   if (!dateRangeLabel && dateStart && dateEnd) dateRangeLabel = `${dateStart} – ${dateEnd}`;
 
-  // Derive discovery.impressions if absent
   if (discovery.impressions == null && dailyEngagement.length) {
     discovery.impressions = dailyEngagement.reduce((s, d) => s + (d.impressions || 0), 0);
   }
-  discovery.engagements = dailyEngagement.reduce((s, d) => s + (d.engagements || 0), 0);
+  if (dailyEngagement.length) {
+    discovery.engagements = dailyEngagement.reduce((s, d) => s + (d.engagements || 0), 0);
+  }
 
-  // Finalize top posts with computed engagement rate, sorted by engagements desc then impressions desc
   const topPosts = Array.from(topPostsMap.values()).map((p) => {
     const engRate = p.impressions && p.impressions > 0 && p.engagements != null
       ? Math.round((p.engagements / p.impressions) * 1000) / 10
@@ -453,8 +582,15 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
 
   const demoCount = Object.values(demographics).reduce((s, arr) => s + arr.length, 0);
 
-  if (!dailyEngagement.length && !dailyFollowers.length && !topPosts.length && !demoCount && totalFollowers == null && !Object.keys(pageMetrics).length) {
-    throw new Error('Could not find recognizable LinkedIn Analytics sheets (DISCOVERY, ENGAGEMENT, TOP POSTS, FOLLOWERS, DEMOGRAPHICS, or LinkedIn Page Analytics sheets) in this workbook.');
+  if (
+    !dailyEngagement.length &&
+    !dailyFollowers.length &&
+    !topPosts.length &&
+    !demoCount &&
+    totalFollowers == null &&
+    !Object.keys(pageMetrics).length
+  ) {
+    throw new Error('Could not find recognizable LinkedIn Analytics sheets in this workbook.');
   }
 
   return {
@@ -474,17 +610,22 @@ export function parseLinkedInWorkbook(buffer, fileName = '') {
       sheets: sheetNames,
       engagementDays: dailyEngagement.length,
       followerDays: dailyFollowers.length,
+      visitorDays: (pageMetrics.dailyVisitors || []).length,
       topPostsCount: topPosts.length,
       demographicsCount: demoCount,
+      competitorsCount: (pageMetrics.competitors && pageMetrics.competitors.rows) ? pageMetrics.competitors.rows.length : 0,
     },
   };
 }
 
-// Merge multiple parsed workbooks (e.g. if user uploads both Content Analytics and Audience Analytics at once)
+// Merge multiple parsed workbooks (and/or existing DB state) so uploading followers,
+// visitors, content, and competitor exports together OR one-by-one combines cleanly.
 export function mergeLinkedInWorkbooks(parsedList) {
-  if (parsedList.length === 1) return parsedList[0];
+  const valid = (parsedList || []).filter(Boolean);
+  if (valid.length === 1) return valid[0];
+
   const base = {
-    fileName: parsedList.map((p) => p.fileName).filter(Boolean).join(', '),
+    fileName: '',
     dateStart: null,
     dateEnd: null,
     dateRangeLabel: null,
@@ -496,15 +637,23 @@ export function mergeLinkedInWorkbooks(parsedList) {
     topPosts: [],
     demographics: { seniority: [], industry: [], location: [], jobTitle: [], companySize: [], company: [] },
     pageMetrics: {},
-    summary: { sheets: [], engagementDays: 0, followerDays: 0, topPostsCount: 0, demographicsCount: 0 },
+    summary: { sheets: [], engagementDays: 0, followerDays: 0, visitorDays: 0, topPostsCount: 0, demographicsCount: 0, competitorsCount: 0 },
   };
 
+  const fileNames = new Set();
   const engMap = new Map();
   const folMap = new Map();
+  const visMap = new Map();
   const postMap = new Map();
   const sheetSet = new Set();
 
-  for (const p of parsedList) {
+  for (const p of valid) {
+    if (p.fileName) {
+      for (const fn of String(p.fileName).split(',')) {
+        const clean = fn.trim();
+        if (clean) fileNames.add(clean);
+      }
+    }
     if (p.dateStart && (!base.dateStart || p.dateStart < base.dateStart)) base.dateStart = p.dateStart;
     if (p.dateEnd && (!base.dateEnd || p.dateEnd > base.dateEnd)) base.dateEnd = p.dateEnd;
     if (p.dateRangeLabel) base.dateRangeLabel = p.dateRangeLabel;
@@ -514,8 +663,20 @@ export function mergeLinkedInWorkbooks(parsedList) {
         base.totalFollowersDate = p.totalFollowersDate;
       }
     }
-    Object.assign(base.discovery, p.discovery);
-    Object.assign(base.pageMetrics, p.pageMetrics);
+    if (p.discovery) {
+      for (const [k, v] of Object.entries(p.discovery)) {
+        if (v != null) base.discovery[k] = v;
+      }
+    }
+    if (p.pageMetrics) {
+      for (const [k, v] of Object.entries(p.pageMetrics)) {
+        if (k === 'dailyVisitors' && Array.isArray(v)) {
+          for (const dv of v) visMap.set(dv.date, dv);
+        } else if (v != null) {
+          base.pageMetrics[k] = v;
+        }
+      }
+    }
     for (const d of p.dailyEngagement || []) engMap.set(d.date, d);
     for (const d of p.dailyFollowers || []) folMap.set(d.date, d);
     for (const post of p.topPosts || []) {
@@ -528,15 +689,31 @@ export function mergeLinkedInWorkbooks(parsedList) {
       });
     }
     for (const cat of Object.keys(base.demographics)) {
-      if (p.demographics && p.demographics[cat] && p.demographics[cat].length) {
+      if (p.demographics && Array.isArray(p.demographics[cat]) && p.demographics[cat].length) {
         base.demographics[cat] = p.demographics[cat];
       }
     }
     for (const s of (p.summary && p.summary.sheets) || []) sheetSet.add(s);
   }
 
+  base.fileName = Array.from(fileNames).join(', ');
   base.dailyEngagement = Array.from(engMap.values()).sort((a, b) => a.date.localeCompare(b.date));
   base.dailyFollowers = Array.from(folMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+  if (visMap.size) {
+    base.pageMetrics.dailyVisitors = Array.from(visMap.values()).sort((a, b) => a.date.localeCompare(b.date));
+    base.pageMetrics.pageViews = base.pageMetrics.dailyVisitors.reduce((s, d) => s + (d.pageViews || 0), 0);
+    base.pageMetrics.uniqueVisitors = base.pageMetrics.dailyVisitors.reduce((s, d) => s + (d.uniqueVisitors || 0), 0);
+    base.pageMetrics.desktopViews = base.pageMetrics.dailyVisitors.reduce((s, d) => s + (d.desktopViews || 0), 0);
+    base.pageMetrics.mobileViews = base.pageMetrics.dailyVisitors.reduce((s, d) => s + (d.mobileViews || 0), 0);
+  }
+  if (base.dailyEngagement.length) {
+    base.discovery.impressions = base.dailyEngagement.reduce((s, d) => s + (d.impressions || 0), 0);
+    base.discovery.engagements = base.dailyEngagement.reduce((s, d) => s + (d.engagements || 0), 0);
+  }
+  if (base.dateStart && base.dateEnd) {
+    base.dateRangeLabel = `${base.dateStart} – ${base.dateEnd}`;
+  }
+
   base.topPosts = Array.from(postMap.values()).map((p) => ({
     ...p,
     engRate: p.impressions && p.impressions > 0 && p.engagements != null
@@ -548,8 +725,10 @@ export function mergeLinkedInWorkbooks(parsedList) {
     sheets: Array.from(sheetSet),
     engagementDays: base.dailyEngagement.length,
     followerDays: base.dailyFollowers.length,
+    visitorDays: (base.pageMetrics.dailyVisitors || []).length,
     topPostsCount: base.topPosts.length,
     demographicsCount: Object.values(base.demographics).reduce((s, arr) => s + arr.length, 0),
+    competitorsCount: (base.pageMetrics.competitors && base.pageMetrics.competitors.rows) ? base.pageMetrics.competitors.rows.length : 0,
   };
 
   return base;
@@ -611,7 +790,6 @@ export async function getLinkedInAnalytics() {
       },
     };
   } catch (err) {
-    // Gracefully degrade if the migration hasn't been applied yet
     if (err && err.code === '42P01') {
       return {
         byPlatform: {},
@@ -633,7 +811,7 @@ export async function saveLinkedInImport(platformKey, files, userEmail) {
     throw err;
   }
   if (!Array.isArray(files) || !files.length) {
-    const err = new Error('At least one .xlsx file is required.');
+    const err = new Error('At least one .xlsx or .xls file is required.');
     err.status = 400;
     throw err;
   }
@@ -660,8 +838,6 @@ export async function saveLinkedInImport(platformKey, files, userEmail) {
     }
   }
 
-  const merged = mergeLinkedInWorkbooks(parsedList);
-
   if (!supabaseConfigured()) {
     const err = new Error('Supabase is not configured on this server.');
     err.status = 503;
@@ -669,6 +845,23 @@ export async function saveLinkedInImport(platformKey, files, userEmail) {
   }
 
   try {
+    // Merge with existing record for this platform_key so uploading followers,
+    // visitors, content, and competitors in separate steps preserves prior sheets.
+    const existingRows = await q(
+      `select platform_key, file_name,
+              to_char(date_start, 'YYYY-MM-DD') as date_start,
+              to_char(date_end, 'YYYY-MM-DD') as date_end,
+              date_range_label, total_followers,
+              to_char(total_followers_date, 'YYYY-MM-DD') as total_followers_date,
+              discovery, daily_engagement, daily_followers, top_posts,
+              demographics, page_metrics, summary, uploaded_by, uploaded_at
+         from public.linkedin_analytics_imports
+        where platform_key = $1`,
+      [platformKey]
+    );
+    const existing = existingRows.length ? rowToApi(existingRows[0]) : null;
+    const merged = mergeLinkedInWorkbooks(existing ? [existing, ...parsedList] : parsedList);
+
     const rows = await q(
       `insert into public.linkedin_analytics_imports (
          platform_key, file_name, date_start, date_end, date_range_label,
@@ -730,7 +923,7 @@ export async function saveLinkedInImport(platformKey, files, userEmail) {
        values ($1, $2, $3, $4, $5::jsonb, $6)`,
       [
         platformKey,
-        merged.fileName,
+        parsedList.map((p) => p.fileName).join(', '),
         merged.dateStart,
         merged.dateEnd,
         JSON.stringify(merged.summary),

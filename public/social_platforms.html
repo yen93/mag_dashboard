@@ -568,7 +568,7 @@
   <!-- Import LinkedIn Analytics Modal -->
   <dialog class="sp-dialog" id="liImportDialog" aria-labelledby="liImportTitle">
     <div class="sp-dialog-head">
-      <h2 id="liImportTitle">Import LinkedIn Analytics (.xlsx)</h2>
+      <h2 id="liImportTitle">Import LinkedIn Analytics (.xlsx / .xls)</h2>
       <button type="button" class="sp-dialog-close" id="liImportCloseBtn" aria-label="Close">×</button>
     </div>
     <form id="liImportForm">
@@ -583,9 +583,9 @@
         <div class="sp-field">
           <label>LinkedIn export file(s)</label>
           <div class="sp-dropzone" id="liDropzone" tabindex="0" role="button" aria-label="Choose LinkedIn Analytics Excel files">
-            <div class="dz-title">Drop LinkedIn .xlsx export(s) here, or click to browse</div>
-            <div class="dz-sub">Supports LinkedIn Audience &amp; Content Analytics (<code>AggregateAnalytics_*.xlsx</code>) and LinkedIn Company Page Analytics exports. You can select one or multiple files to merge.</div>
-            <input type="file" id="liFileInput" accept=".xlsx" multiple hidden />
+            <div class="dz-title">Drop LinkedIn .xlsx or .xls export(s) here, or click to browse</div>
+            <div class="dz-sub">Supports Personal LinkedIn (<code>AggregateAnalytics_*.xlsx</code>) and MAG LinkedIn Page exports (<code>followers.xls</code>, <code>visitors.xls</code>, <code>content.xls</code>, <code>competitor_analytics.xlsx</code>). Select one or multiple files to merge.</div>
+            <input type="file" id="liFileInput" accept=".xlsx,.xls" multiple hidden />
           </div>
         </div>
         <div class="sp-file-list" id="liFileList"></div>
@@ -705,13 +705,20 @@
 
         var dailyEngAll = raw.dailyEngagement || [];
         var dailyFolAll = raw.dailyFollowers || [];
+        var dailyVisAll = (raw.pageMetrics && raw.pageMetrics.dailyVisitors) || [];
         var dailyEng = dailyEngAll.filter(function (d) { return inSelectedFy(d.date); });
         var dailyFol = dailyFolAll.filter(function (d) { return inSelectedFy(d.date); });
+        var dailyVis = dailyVisAll.filter(function (d) { return inSelectedFy(d.date); });
 
         // Reconstruct daily cumulative followers by walking backward from totalFollowers
+        // (falls back to Apify platformRow follower count when the export only has daily new followers)
+        var pRowFallback = platformRow(key);
+        var anchorFollowers = raw.totalFollowers != null
+          ? raw.totalFollowers
+          : (pRowFallback && pRowFallback.followers != null ? pRowFallback.followers : null);
         var cumAll = [];
-        if (raw.totalFollowers != null && dailyFolAll.length) {
-          var running = raw.totalFollowers;
+        if (anchorFollowers != null && dailyFolAll.length) {
+          var running = anchorFollowers;
           for (var i = dailyFolAll.length - 1; i >= 0; i--) {
             cumAll.push({ d: dailyFolAll[i].date, followers: running, newFollowers: dailyFolAll[i].newFollowers || 0 });
             running = Math.max(0, running - (dailyFolAll[i].newFollowers || 0));
@@ -730,12 +737,22 @@
           }
         }
 
-        // Engagement aggregates
+        // Engagement & Content breakdown aggregates
         var impressions = null;
         var engagements = null;
+        var reactions = null, comments = null, reposts = null, clicks = null, uniqueImpressions = null;
         if (dailyEng.length) {
           impressions = dailyEng.reduce(function (s, d) { return s + (d.impressions || 0); }, 0);
           engagements = dailyEng.reduce(function (s, d) { return s + (d.engagements || 0); }, 0);
+          if (dailyEng.some(function (d) { return d.reactions != null; })) {
+            reactions = dailyEng.reduce(function (s, d) { return s + (d.reactions || 0); }, 0);
+            comments = dailyEng.reduce(function (s, d) { return s + (d.comments || 0); }, 0);
+            reposts = dailyEng.reduce(function (s, d) { return s + (d.reposts || 0); }, 0);
+            clicks = dailyEng.reduce(function (s, d) { return s + (d.clicks || 0); }, 0);
+          }
+          if (dailyEng.some(function (d) { return d.uniqueImpressions != null; })) {
+            uniqueImpressions = dailyEng.reduce(function (s, d) { return s + (d.uniqueImpressions || 0); }, 0);
+          }
         } else if (CURRENT_FY === 'all' && raw.discovery && raw.discovery.impressions != null) {
           impressions = raw.discovery.impressions;
           engagements = raw.discovery.engagements != null ? raw.discovery.engagements : null;
@@ -743,6 +760,24 @@
         var engRate = (impressions && impressions > 0 && engagements != null)
           ? Math.round((engagements / impressions) * 1000) / 10
           : null;
+
+        // Visitor aggregates (FY-aware)
+        var pageViews = null, uniqueVisitors = null, desktopViews = null, mobileViews = null, customButtonClicks = null;
+        if (dailyVis.length) {
+          pageViews = dailyVis.reduce(function (s, d) { return s + (d.pageViews || 0); }, 0);
+          uniqueVisitors = dailyVis.reduce(function (s, d) { return s + (d.uniqueVisitors || 0); }, 0);
+          desktopViews = dailyVis.reduce(function (s, d) { return s + (d.desktopViews || 0); }, 0);
+          mobileViews = dailyVis.reduce(function (s, d) { return s + (d.mobileViews || 0); }, 0);
+          if (dailyVis.some(function (d) { return d.customButtonClicks != null; })) {
+            customButtonClicks = dailyVis.reduce(function (s, d) { return s + (d.customButtonClicks || 0); }, 0);
+          }
+        } else if (CURRENT_FY === 'all' && raw.pageMetrics) {
+          if (raw.pageMetrics.pageViews != null) pageViews = raw.pageMetrics.pageViews;
+          if (raw.pageMetrics.uniqueVisitors != null) uniqueVisitors = raw.pageMetrics.uniqueVisitors;
+          if (raw.pageMetrics.desktopViews != null) desktopViews = raw.pageMetrics.desktopViews;
+          if (raw.pageMetrics.mobileViews != null) mobileViews = raw.pageMetrics.mobileViews;
+          if (raw.pageMetrics.customButtonClicks != null) customButtonClicks = raw.pageMetrics.customButtonClicks;
+        }
 
         // Last 7 days of engagement (within filtered range)
         var last7 = dailyEng.slice(-7);
@@ -771,7 +806,7 @@
         // Follower totals & net new in selected FY
         var endFollowers = cumFiltered.length
           ? cumFiltered[cumFiltered.length - 1].followers
-          : (isLiveWindowFy() ? raw.totalFollowers : null);
+          : (isLiveWindowFy() ? anchorFollowers : null);
         var startFollowers = cumFiltered.length ? cumFiltered[0].followers : null;
         var netNew = dailyFol.length ? dailyFol.reduce(function (s, d) { return s + (d.newFollowers || 0); }, 0) : null;
         var netNewRate = (netNew != null && startFollowers && startFollowers > 0)
@@ -780,23 +815,50 @@
 
         // Top posts filtered by publishDate (keep undated posts when FY === 'all')
         var label = key === 'james_linkedin' ? 'Personal LinkedIn' : 'MAG LinkedIn';
-        var topPosts = (raw.topPosts || []).filter(function (p) {
+        var filteredRawPosts = (raw.topPosts || []).filter(function (p) {
           return p.publishDate ? inSelectedFy(p.publishDate) : (CURRENT_FY === 'all');
-        }).map(function (p) {
+        });
+        var topPosts = filteredRawPosts.map(function (p) {
+          var typeDisplay = p.contentType
+            ? (p.contentType + (p.publishDate ? ' · ' + snapFmt(p.publishDate) : ''))
+            : (p.publishDate ? snapFmt(p.publishDate) : 'Post');
           return {
             post: p.post,
             url: p.url,
             platform: label,
-            type: p.publishDate ? snapFmt(p.publishDate) : 'Post',
+            type: typeDisplay,
+            contentType: p.contentType || null,
             reach: p.impressions,
             interactions: p.engagements,
             linkClicks: p.linkClicks != null ? p.linkClicks : null
           };
         });
 
-        var hasPeriodData = dailyEng.length > 0 || dailyFol.length > 0 || topPosts.length > 0 || CURRENT_FY === 'all';
-        var rangeStart = dailyEng.length ? dailyEng[0].date : (dailyFol.length ? dailyFol[0].date : raw.dateStart);
-        var rangeEnd = dailyEng.length ? dailyEng[dailyEng.length - 1].date : (dailyFol.length ? dailyFol[dailyFol.length - 1].date : raw.dateEnd);
+        // What works best, by type (grouped by contentType when posts carry contentType)
+        var typeBuckets = {};
+        filteredRawPosts.forEach(function (p) {
+          if (!p.contentType || p.impressions == null) return;
+          if (!typeBuckets[p.contentType]) typeBuckets[p.contentType] = { type: p.contentType, count: 0, impressions: 0, engagements: 0 };
+          typeBuckets[p.contentType].count += 1;
+          typeBuckets[p.contentType].impressions += p.impressions || 0;
+          typeBuckets[p.contentType].engagements += p.engagements || 0;
+        });
+        var byType = Object.keys(typeBuckets).map(function (t) {
+          var b = typeBuckets[t];
+          return {
+            type: b.type,
+            count: b.count,
+            avgImpressions: Math.round(b.impressions / b.count),
+            avgEngagements: Math.round((b.engagements / b.count) * 10) / 10
+          };
+        }).sort(function (a, b) { return b.avgImpressions - a.avgImpressions; });
+
+        var hasPeriodData = dailyEng.length > 0 || dailyFol.length > 0 || dailyVis.length > 0 || topPosts.length > 0 || CURRENT_FY === 'all';
+        var rangeStart = dailyEng.length ? dailyEng[0].date : (dailyFol.length ? dailyFol[0].date : (dailyVis.length ? dailyVis[0].date : raw.dateStart));
+        var rangeEnd = dailyEng.length ? dailyEng[dailyEng.length - 1].date : (dailyFol.length ? dailyFol[dailyFol.length - 1].date : (dailyVis.length ? dailyVis[dailyVis.length - 1].date : raw.dateEnd));
+        var membersReached = (raw.discovery && raw.discovery.membersReached != null)
+          ? raw.discovery.membersReached
+          : uniqueImpressions;
 
         return {
           raw: raw,
@@ -808,7 +870,16 @@
           engagements: engagements,
           engagements7d: engagements7d,
           engRate: engRate,
-          membersReached: (raw.discovery && raw.discovery.membersReached != null) ? raw.discovery.membersReached : null,
+          membersReached: membersReached,
+          reactions: reactions,
+          comments: comments,
+          reposts: reposts,
+          clicks: clicks,
+          pageViews: pageViews,
+          uniqueVisitors: uniqueVisitors,
+          desktopViews: desktopViews,
+          mobileViews: mobileViews,
+          customButtonClicks: customButtonClicks,
           followers: endFollowers,
           netNew: netNew,
           netNewRate: netNewRate,
@@ -816,6 +887,8 @@
           monthlyEngagement: monthlyEngagement,
           monthlyFollowers: monthlyFollowers,
           topPosts: topPosts,
+          byType: byType,
+          competitors: (raw.pageMetrics && raw.pageMetrics.competitors) || null,
           demographics: raw.demographics || {},
           pageMetrics: raw.pageMetrics || {}
         };
@@ -1392,7 +1465,7 @@
 
       // Shared LinkedIn helpers (Audience demographics + Follows card + Import pill)
       function liImportBadgeHtml(li, platformKey) {
-        var btn = '<button type="button" class="sp-import-btn secondary" data-li-import="' + platformKey + '" style="padding:4px 10px;font-size:11.5px">↑ Import .xlsx</button>';
+        var btn = '<button type="button" class="sp-import-btn secondary" data-li-import="' + platformKey + '" style="padding:4px 10px;font-size:11.5px">↑ Import .xlsx / .xls</button>';
         if (!li || !li.raw) return '<span class="chip partial">partial</span><div class="spacer"></div>' + btn;
         var rangeTxt = li.rangeStart && li.rangeEnd ? snapFmt(li.rangeStart) + ' – ' + snapFmt(li.rangeEnd) : (li.raw.dateRangeLabel || 'Imported');
         return '<span class="sp-live-pill" title="File: ' + esc(li.raw.fileName || '') + '"><span class="dot"></span>Imported · ' + esc(rangeTxt) + '</span><div class="spacer"></div>' + btn;
@@ -1690,13 +1763,67 @@
           netHtml = PENDING_CHIP;
         }
 
+        var deviceSplitHtml = '';
+        if (hasLi && (li.desktopViews != null || li.mobileViews != null)) {
+          var dViews = li.desktopViews || 0;
+          var mViews = li.mobileViews || 0;
+          var totDev = Math.max(dViews + mViews, 1);
+          var dPct = Math.round((dViews / totDev) * 100);
+          var mPct = 100 - dPct;
+          deviceSplitHtml =
+            '<div class="sp-bar-list" style="margin-top:12px">' +
+              '<div class="sp-bar-row"><span class="b-lbl">Desktop views</span><div class="b-track"><div class="b-fill accent" style="width:' + dPct + '%"></div></div><span class="b-val">' + fmt(dViews, 'count') + ' (' + dPct + '%)</span></div>' +
+              '<div class="sp-bar-row"><span class="b-lbl">Mobile views</span><div class="b-track"><div class="b-fill muted" style="width:' + mPct + '%"></div></div><span class="b-val">' + fmt(mViews, 'count') + ' (' + mPct + '%)</span></div>' +
+            '</div>';
+        }
+
+        var hasByType = !!(hasLi && li.byType && li.byType.length);
+        var byTypeCardHtml = hasByType
+          ? '<div class="sp-card">' +
+              '<div class="sp-card-head">' +
+                '<h3>What works best, by type — MAG LinkedIn ' + infoTip('Average impressions per post grouped by LinkedIn Content Type from imported MAG LinkedIn content analytics.', 'Imported MAG LinkedIn content (.xls)') + '</h3>' +
+                '<span class="sp-live-pill"><span class="dot"></span>Imported · ' + fmt(li.topPosts.length, 'count') + ' posts</span>' +
+              '</div>' +
+              '<div class="cap">Average impressions per post by format</div>' +
+              '<div class="sp-chart-box h-md"><canvas id="mlByTypeChart"></canvas></div>' +
+            '</div>'
+          : whatWorksBestCard('What works best, by type — MAG LinkedIn', 'MAG LinkedIn');
+
+        var compCardHtml = '';
+        if (li && li.competitors && li.competitors.rows && li.competitors.rows.length) {
+          var compRange = (li.competitors.dateStart && li.competitors.dateEnd)
+            ? snapFmt(li.competitors.dateStart) + ' – ' + snapFmt(li.competitors.dateEnd)
+            : 'Imported';
+          var compRowsHtml = li.competitors.rows.map(function (c) {
+            return '<tr>' +
+              '<td>' + esc(c.page) + '</td>' +
+              '<td>' + (c.newFollowers == null ? '—' : fmt(c.newFollowers, 'count')) + '</td>' +
+              '<td>' + (c.posts == null ? '—' : fmt(c.posts, 'count')) + '</td>' +
+              '<td>' + (c.reactions == null ? '—' : fmt(c.reactions, 'count')) + '</td>' +
+              '<td>' + (c.comments == null ? '—' : fmt(c.comments, 'count')) + '</td>' +
+              '<td>' + (c.commentsPerDay == null ? '—' : Number(c.commentsPerDay).toFixed(1)) + '</td>' +
+            '</tr>';
+          }).join('');
+          compCardHtml =
+            '<div class="sp-card wide">' +
+              '<div class="sp-card-head">' +
+                '<h3>Competitor analytics ' + infoTip('LinkedIn Company Page competitor benchmark table from imported competitor_analytics.xlsx.', 'Imported MAG LinkedIn competitor analytics (.xlsx)') + '</h3>' +
+                '<span class="sp-live-pill"><span class="dot"></span>Imported · ' + esc(compRange) + '</span>' +
+              '</div>' +
+              '<div class="sp-table-wrap"><table class="sp-table">' +
+                '<thead><tr><th>Page</th><th>New followers</th><th>Posts</th><th>Reactions</th><th>Comments</th><th>Comments / day</th></tr></thead>' +
+                '<tbody>' + compRowsHtml + '</tbody>' +
+              '</table></div>' +
+            '</div>';
+        }
+
         root.innerHTML =
           '<p class="sp-context-line">Showing <strong>MAG LinkedIn</strong> — its own metrics (LinkedIn Analytics). Shared metrics re-slice to this account; cross-account cards are hidden.</p>' +
           kpisHtml +
           '<div class="sp-grid">' +
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>MAG LinkedIn — Page Analytics ' + infoTip('LinkedIn Company Page analytics covering content impressions/interactions, page visitors, follower growth and appearances.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn Page Analytics (import .xlsx to populate)') + '</h3>' +
+                '<h3>MAG LinkedIn — Page Analytics ' + infoTip('LinkedIn Company Page analytics covering content impressions/interactions, page visitors by device, and follower growth.', hasLi ? 'Imported LinkedIn Analytics (.xls / .xlsx)' : 'LinkedIn Page Analytics (import .xls / .xlsx to populate)') + '</h3>' +
                 liImportBadgeHtml(li, 'mag_linkedin') +
               '</div>' +
 
@@ -1705,19 +1832,24 @@
                 '<div class="sp-mini-box"><div class="m-label">Impressions</div><div class="m-val">' + (hasLi && li.impressions != null ? fmt(li.impressions, 'count') : PENDING_CHIP) + '</div>' +
                   (hasLi && li.monthlyEngagement.length >= 2 ? '<div class="sp-spark"><canvas id="mlImpSpark"></canvas></div>' : '') +
                 '</div>' +
-                '<div class="sp-mini-box"><div class="m-label">' + (pm.reactions != null ? 'Reactions' : 'Engagements') + '</div><div class="m-val">' + (pm.reactions != null ? fmt(pm.reactions, 'count') : (hasLi && li.engagements != null ? fmt(li.engagements, 'count') : PENDING_CHIP)) + '</div>' +
+                '<div class="sp-mini-box"><div class="m-label">' + (hasLi && li.reactions != null ? 'Reactions' : 'Engagements') + '</div><div class="m-val">' + (hasLi && li.reactions != null ? fmt(li.reactions, 'count') : (hasLi && li.engagements != null ? fmt(li.engagements, 'count') : PENDING_CHIP)) + '</div>' +
                   (hasLi && li.monthlyEngagement.length >= 2 ? '<div class="sp-spark"><canvas id="mlEngSpark"></canvas></div>' : '') +
                 '</div>' +
-                '<div class="sp-mini-box"><div class="m-label">' + (pm.comments != null ? 'Comments' : 'Impressions · 7 days') + '</div><div class="m-val">' + (pm.comments != null ? fmt(pm.comments, 'count') : (hasLi && li.impressions7d != null ? fmt(li.impressions7d, 'count') : PENDING_CHIP)) + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">' + (pm.reposts != null ? 'Reposts' : 'Members reached') + '</div><div class="m-val">' + (pm.reposts != null ? fmt(pm.reposts, 'count') : (hasLi && li.membersReached != null ? fmt(li.membersReached, 'count') : PENDING_CHIP)) + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">' + (hasLi && li.comments != null ? 'Comments' : 'Impressions · 7 days') + '</div><div class="m-val">' + (hasLi && li.comments != null ? fmt(li.comments, 'count') : (hasLi && li.impressions7d != null ? fmt(li.impressions7d, 'count') : PENDING_CHIP)) + '</div>' +
+                  (hasLi && li.clicks != null ? '<div class="m-sub">' + fmt(li.clicks, 'count') + ' post clicks</div>' : '') +
+                '</div>' +
+                '<div class="sp-mini-box"><div class="m-label">' + (hasLi && li.reposts != null ? 'Reposts' : 'Members reached') + '</div><div class="m-val">' + (hasLi && li.reposts != null ? fmt(li.reposts, 'count') : (hasLi && li.membersReached != null ? fmt(li.membersReached, 'count') : PENDING_CHIP)) + '</div>' +
+                  (hasLi && li.impressions7d != null ? '<div class="m-sub">' + fmt(li.impressions7d, 'count') + ' impressions (last 7d)</div>' : '') +
+                '</div>' +
               '</div>' +
 
-              '<div class="sp-subsec-title">Visitors · page views</div>' +
+              '<div class="sp-subsec-title">Visitors · page views by device</div>' +
               '<div class="sp-mini-grid cols-3">' +
-                '<div class="sp-mini-box"><div class="m-label">Page views</div><div class="m-val">' + (pm.pageViews != null ? fmt(pm.pageViews, 'count') : PENDING_CHIP) + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Unique visitors</div><div class="m-val">' + (pm.uniqueVisitors != null ? fmt(pm.uniqueVisitors, 'count') : PENDING_CHIP) + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Custom button clicks</div><div class="m-val">' + (pm.customButtonClicks != null ? fmt(pm.customButtonClicks, 'count') : PENDING_CHIP) + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Page views</div><div class="m-val">' + (hasLi && li.pageViews != null ? fmt(li.pageViews, 'count') : PENDING_CHIP) + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Unique visitors</div><div class="m-val">' + (hasLi && li.uniqueVisitors != null ? fmt(li.uniqueVisitors, 'count') : PENDING_CHIP) + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Custom button clicks</div><div class="m-val">' + (hasLi && li.customButtonClicks != null ? fmt(li.customButtonClicks, 'count') : PENDING_CHIP) + '</div></div>' +
               '</div>' +
+              deviceSplitHtml +
 
               '<div class="sp-subsec-title">Followers</div>' +
               '<div class="sp-mini-grid cols-2">' +
@@ -1729,20 +1861,22 @@
             '</div>' +
 
             followersOverTimeCard('Followers over time — MAG LinkedIn', 'mlFollowersChart', st.snaps, 'MAG LinkedIn') +
-            whatWorksBestCard('What works best, by type — MAG LinkedIn', 'MAG LinkedIn') +
+            byTypeCardHtml +
 
             '<div class="sp-card">' +
               '<div class="sp-card-head">' +
-                '<h3>Follows vs unfollows — MAG LinkedIn ' + infoTip('LinkedIn reports net new followers only.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn follower snapshots') + '</h3>' +
+                '<h3>Follows vs unfollows — MAG LinkedIn ' + infoTip('LinkedIn reports net new followers only.', hasLi ? 'Imported LinkedIn Analytics (.xls / .xlsx)' : 'Weekly LinkedIn follower snapshots') + '</h3>' +
                 (hasLi && li.monthlyFollowers.length ? '<span class="sp-live-pill"><span class="dot"></span>Imported · monthly</span>' : (st.netNew != null ? '<span class="sp-live-pill"><span class="dot"></span>Live</span>' : PENDING_CHIP)) +
               '</div>' +
               '<div class="cap">LinkedIn reports net new followers only</div>' +
               netHtml +
             '</div>' +
 
+            compCardHtml +
+
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>Top posts ' + infoTip('Individual MAG LinkedIn posts ranked by engagements and impressions from imported LinkedIn Analytics.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn Page Analytics (pending import)') + '</h3>' +
+                '<h3>Top posts ' + infoTip('Individual MAG LinkedIn posts ranked by engagements and impressions from imported LinkedIn Analytics.', hasLi ? 'Imported LinkedIn Analytics (.xls / .xlsx)' : 'LinkedIn Page Analytics (pending import)') + '</h3>' +
                 (hasLi && li.topPosts.length ? '<span class="sp-live-pill"><span class="dot"></span>Imported · ' + fmt(li.topPosts.length, 'count') + ' posts</span>' : PENDING_CHIP) +
               '</div>' +
               '<div id="mlTopPostsHost"></div>' +
@@ -1753,6 +1887,14 @@
 
         wireInlineImportButtons(root);
         drawFollowersLine('mlFollowersChart', st.snaps);
+        if (hasByType) {
+          drawHbar(
+            'mlByTypeChart',
+            li.byType.map(function (b) { return b.type + ' (' + b.count + ')'; }),
+            li.byType.map(function (b) { return b.avgImpressions; }),
+            { color: PAL[0], pct: false }
+          );
+        }
         if (hasLi && li.monthlyEngagement.length >= 2) {
           var mLabels = li.monthlyEngagement.map(function (r) { return monthLbl(r.month); });
           drawSparkline('mlImpSpark', mLabels, li.monthlyEngagement.map(function (r) { return r.impressions; }), PAL[0]);
@@ -1761,7 +1903,7 @@
         if (hasLi && li.monthlyFollowers.length) {
           drawMonthlyNewFollowers('mlMonthlyFollowsChart', li.monthlyFollowers);
         }
-        mountTopPostsTable('mlTopPostsHost', hasLi ? li.topPosts : [], { typeLabel: 'Published', seenLabel: 'Impressions' });
+        mountTopPostsTable('mlTopPostsHost', hasLi ? li.topPosts : [], { typeLabel: 'Type / Published', seenLabel: 'Impressions' });
         drawLiDemographics('ml', li && li.demographics);
       }
 
@@ -2145,8 +2287,8 @@
         setImportError('');
         var arr = Array.prototype.slice.call(fileList || []);
         arr.forEach(function (f) {
-          if (!/\.xlsx$/i.test(f.name)) {
-            setImportError('Only .xlsx LinkedIn Analytics export files are supported.');
+          if (!/\.(xlsx|xls)$/i.test(f.name)) {
+            setImportError('Only .xlsx and .xls LinkedIn Analytics export files are supported.');
             return;
           }
           if (!_liSelectedFiles.some(function (x) { return x.name === f.name && x.size === f.size; })) {
