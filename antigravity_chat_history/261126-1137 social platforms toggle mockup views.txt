@@ -1,0 +1,98 @@
+================================================================================
+UPDATE DOCUMENTATION: SOCIAL PLATFORMS TOGGLE MOCKUP VIEWS
+Timestamp: 26/11/26 11:37 (UTC+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. PLATFORM TOGGLE CONTROLS & SAMPLE DATA INDICATORS
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Needed platform-level toggle views on the Marketing > Social Platforms page
+  (public/social_platforms.html) for All Accounts, James' LinkedIn, MAG LinkedIn,
+  Facebook, and Instagram, with clear sample-data indicators per DESIGN_GUIDE.md
+  and minimal on-page text (explanations placed inside interactive tooltips).
+
+* Technical Changes:
+  - File modified: public/social_platforms.html
+  - Added platform segmented control (#platformSeg) above the FY controls:
+    All Accounts, James' LinkedIn, MAG LinkedIn, Facebook, and Instagram.
+  - Added dynamic #mktSampleBadge in #marketingHead so the "Sample data —
+    layout only" pill automatically displays whenever viewing an individual
+    sample platform tab and hides on All Accounts (where live Meta/Apify data
+    overlays are active).
+  - Added per-tab .jl-sample-banner notices with .mkt-sample badges at the top
+    of each sample platform view.
+  - Populated all metric definitions, caveats, and data sources inside
+    .head-info[data-info][data-src] tooltips via fillHeadInfo().
+
+2. INDIVIDUAL PLATFORM MOCKUP VIEWS
+--------------------------------------------------------------------------------
+* James' LinkedIn (#view-james-linkedin):
+  - Built from socials_mockup/James' LinkedIn.png.
+  - Sections: Is it growing? (Followers, Newsletter subscribers), Are we
+    posting? (Posts delivered, Video hours), Is it earning real attention?
+    (Engagements, Engagement rate, Reached beyond our followers), What did it
+    deliver? (Engagements per video hour, Enquiries we can trace to social).
+  - Charts (renderJamesLinkedin): jlFollowersTrend, jlVideoEngagement (with
+    Keep / Change content / Redirect time decision bar), jlEngagementRate,
+    jlFormats, jlAudienceProfile.
+  - Tables: Each video: hours against results, By account (James's LinkedIn
+    highlighted), Top posts, plus quarterly target-fit context card.
+
+* MAG LinkedIn (#view-mag-linkedin):
+  - Built from socials_mockup/MAG LinkedIn.png using James' LinkedIn as layout
+    reference.
+  - Charts (renderMagLinkedin): mlFollowersTrend, mlVideoEngagement,
+    mlEngagementRate, mlFormats, mlLocations, mlSeniorityIndustry.
+  - Tables: Each video: hours against results, By account (MAG LinkedIn
+    highlighted), Top posts, plus quarterly target-fit context card (37.5%
+    Greater Sydney audience).
+
+* Facebook (#view-facebook):
+  - Built from socials_mockup/Facebook.png using James' LinkedIn as layout
+    reference.
+  - KPIs: Followers (1,440), Newsletter (n/a), Posts (17 + 73 stories),
+    Engagements (22), Engagement rate (0.6%), Reached beyond followers (36%).
+  - Charts (renderFacebook): fbFollowersTrend, fbVideoEngagement,
+    fbEngagementRate, fbFormats (Reels/Photos/Stories), fbFollowsUnfollows,
+    fbAgeGender (Women 50.6% / Men 49.4%), fbLocations.
+  - Tables: Each video: hours against results, By account (Facebook
+    highlighted), Top posts, plus quarterly target-fit context card (83%
+    Followers in Australia).
+
+* Instagram (#view-instagram):
+  - Built from socials_mockup/Instagram.png using James' LinkedIn as layout
+    reference.
+  - KPIs: Followers (1,898; +2 net new, 33 follows / 31 unfollows), Newsletter
+    (n/a), Posts (19 + 65 stories), Engagements (99), Engagement rate (~1.4%,
+    99 / 7,207 times seen).
+  - Charts (renderInstagram): igFollowersTrend, igVideoEngagement,
+    igEngagementRate, igFormats (Reels/Posts/Stories), igFollowsUnfollows
+    (paired with 33 / 31 / +2 summary stats), igAgeGender (grouped horizontal
+    bars across 18-24 to 65+ for Women 50.3% / Men 49.7%), igLocations (Sydney
+    29.2%, Melbourne 10.3%, Brisbane 4.2%, Perth 3.4%, Gold Coast 2.5%,
+    Canberra 2.4%, Adelaide 2.3%, Blackheath 1.9%).
+  - Tables: Each video: hours against results, By account (Instagram
+    highlighted), Top posts, plus quarterly target-fit context card (83.4%
+    Followers in Australia).
+
+* Controller & Theme Wiring:
+  - Updated setPlatform(), wireSeg('fySeg'), and window.onThemeChange to
+    manage chart cleanup and re-rendering across all 5 views (All Accounts,
+    James' LinkedIn, MAG LinkedIn, Facebook, Instagram).
+
+3. EDGE FUNCTIONS & CRON SCHEDULES (IF APPLICABLE)
+--------------------------------------------------------------------------------
+* None. Frontend layout and Chart.js updates only; no database, Edge Function,
+  or external API mutations were performed.
+
+4. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Verified HTML tag balance in public/social_platforms.html via Node:
+  - <div> open/close balance: 482 vs 482 (balanced).
+* Verified inline JavaScript syntax via Node new Function(...):
+  - All 4 <script> blocks parsed with zero syntax errors.
+* Verified all Instagram canvas IDs exist in DOM:
+  - igFollowersTrend, igVideoEngagement, igEngagementRate, igFormats,
+    igFollowsUnfollows, igAgeGender, igLocations: all OK.
+================================================================================

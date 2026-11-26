@@ -1,0 +1,14 @@
+**toggle_page:**
+social_platforms.html > Platform toggle: Instagram
+
+
+**mockup_pic:**
+"C:\Users\Cloverly\claude_code\dashboard\socials_mockup\Instagram.png"
+
+**ref_page:**
+social_platforms.html > Platform toggle: James' LinkedIn
+
+## main task: update toggle_page
+- add a sample only page. base it on mockup_pic. dont just copy and paste what is in there. just display the cards, graphs, and tables. there shouldn't be a lot of texts written on the actual toggle page. any necessary texts should be inside tooltips.
+- see design md and indicate that page shows sample data only.
+- see ref_page for reference only
