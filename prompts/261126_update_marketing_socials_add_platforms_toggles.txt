@@ -1,0 +1,9 @@
+**toggle_list:**
+1. "All Accounts" - display everything in the social_platforms.html
+2. "James' LinkedIn" - blank for now
+3. "MAG LinkedIn" - blank for now
+4. "Facebook" - blank for now
+5. "Instagram" - blank for now
+
+## main task:
+update social_platforms.html. create toggles above the fy toggles. see toggle_list

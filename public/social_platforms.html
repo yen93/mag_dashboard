@@ -136,9 +136,19 @@
     <nav class="subtabs" id="marketingNav"></nav>
 
     <main class="content">
-      <!-- Controls bar (same per-FY top toggle as the sibling Marketing pages) -->
+      <!-- Controls bar -->
       <div class="card" style="margin-bottom:16px">
-        <div class="mkt-controls">
+        <div class="mkt-controls" id="platformControls">
+          <span class="ctl-label">Platform</span>
+          <div class="segmented" id="platformSeg" aria-label="Social platform">
+            <button type="button" class="active" data-platform="all">All Accounts</button>
+            <button type="button" data-platform="james-linkedin">James' LinkedIn</button>
+            <button type="button" data-platform="mag-linkedin">MAG LinkedIn</button>
+            <button type="button" data-platform="facebook">Facebook</button>
+            <button type="button" data-platform="instagram">Instagram</button>
+          </div>
+        </div>
+        <div class="mkt-controls" id="fyControls" style="margin-top:12px; padding-top:12px; border-top:1px solid var(--border)">
           <span class="ctl-label">Financial year</span>
           <div class="segmented" id="fySeg">
             <button data-fy="all">All years</button>
@@ -159,17 +169,16 @@
         </div>
       </div>
 
-      <!-- <p class="sp-lead">Is James's authority audience growing, who is it, and is social earning real attention?</p>
-      <p class="sp-note">Meta Business Suite–style layout, across <b>all four channels</b> — Facebook, Instagram, James's &amp; MAG LinkedIn. Audience is shown the way each platform actually reports it: LinkedIn (≈69% of the audience) gives <b>seniority &amp; industry</b> — the keynote decision-maker view; Facebook/Instagram give <b>age &amp; gender</b>. <b>Live on the production page:</b> total audience, followers &amp; engagement by platform, newsletter. <b>Sample (wire to each platform's own insights):</b> reach, net-follower growth, seniority, industry, age/gender, locations, post-level reach.</p> -->
+      <!-- All Accounts View: display everything originally in social_platforms.html -->
+      <div id="allAccountsView">
+        <!-- 6 headline KPI cards -->
+        <div class="sp-kpi-grid" id="spKpis"></div>
 
-      <!-- 6 headline KPI cards -->
-      <div class="sp-kpi-grid" id="spKpis"></div>
+        <!-- Live Facebook figures (real Meta Graph API) — populated async; hidden until loaded -->
+        <div id="fbLive" style="display:none"></div>
 
-      <!-- Live Facebook figures (real Meta Graph API) — populated async; hidden until loaded -->
-      <div id="fbLive" style="display:none"></div>
-
-      <!-- Card grid -->
-      <div class="sp-grid">
+        <!-- Card grid -->
+        <div class="sp-grid">
         <div class="card sp-card wide">
           <div class="sp-card-head"><h3>Instagram — reach &amp; content interactions · trend <span class="chip warn" id="trendPending">pending</span> <span class="head-info" data-info="Instagram monthly reach (unique accounts reached, bars) and content interactions (likes, comments, saves, shares; line), last 12 months. LIVE from the Meta Graph API — true de-duplicated monthly reach per calendar month. Facebook has no reach via the API, so this trend is Instagram only." data-src="Live — Instagram (Meta Graph API) · monthly total_value"></span></h3></div>
           <div class="cap">Bars = reach · line = interactions · Instagram</div>
@@ -231,7 +240,14 @@
           </div>
         </div>
       </div>
-    </main>
+    </div>
+
+    <!-- Individual platform views — blank for now -->
+    <div id="view-james-linkedin" class="sp-platform-view" style="display:none"></div>
+    <div id="view-mag-linkedin" class="sp-platform-view" style="display:none"></div>
+    <div id="view-facebook" class="sp-platform-view" style="display:none"></div>
+    <div id="view-instagram" class="sp-platform-view" style="display:none"></div>
+  </main>
   </div>
 
   <script src="vendor/chart.umd.min.js"></script>
@@ -744,6 +760,49 @@
       }).catch(function () { /* leave pending chips on failure */ });
     }
 
+    // ── Platform toggle state & view switching ──────────────────────────────
+    var CURRENT_PLATFORM = 'all';
+
+    function setPlatform(platform) {
+      CURRENT_PLATFORM = platform;
+      var seg = document.getElementById('platformSeg');
+      if (seg) {
+        seg.querySelectorAll('button').forEach(function (b) {
+          b.classList.toggle('active', b.getAttribute('data-platform') === platform);
+        });
+      }
+      var fyCtl = document.getElementById('fyControls');
+      var allView = document.getElementById('allAccountsView');
+      var views = {
+        'all': allView,
+        'james-linkedin': document.getElementById('view-james-linkedin'),
+        'mag-linkedin': document.getElementById('view-mag-linkedin'),
+        'facebook': document.getElementById('view-facebook'),
+        'instagram': document.getElementById('view-instagram')
+      };
+
+      Object.keys(views).forEach(function (k) {
+        if (views[k]) views[k].style.display = (k === platform) ? 'block' : 'none';
+      });
+
+      if (fyCtl) fyCtl.style.display = (platform === 'all') ? 'flex' : 'none';
+
+      if (platform === 'all') {
+        renderAll();
+      }
+    }
+
+    function wirePlatformSeg() {
+      var seg = document.getElementById('platformSeg');
+      if (!seg) return;
+      seg.querySelectorAll('button').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var p = b.getAttribute('data-platform');
+          setPlatform(p);
+        });
+      });
+    }
+
     function wireSeg(id, onChange) {
       var seg = document.getElementById(id);
       if (!seg) return;
@@ -768,9 +827,10 @@
     loadTopPosts();                    // overlay the REAL Instagram top posts (by engagement, with reach)
     loadLinkedinLive();                // overlay the REAL LinkedIn followers + engagement (Apify scrape)
     loadKpis();                        // fill the 6 KPI cards with real cross-platform figures
-    wireSeg('fySeg', renderAll);       // snapshot mockup — the toggle re-renders the same sample figures
-    wireSeg('cmpSeg', renderKpis);     // Compare basis relabels the KPI delta chips
-    window.onThemeChange = drawCharts; // redraw charts on light/dark switch
+    wirePlatformSeg();                 // Platform toggles: All Accounts / James' LinkedIn / MAG LinkedIn / Facebook / Instagram
+    wireSeg('fySeg', function () { if (CURRENT_PLATFORM === 'all') renderAll(); });       // snapshot mockup — the toggle re-renders the same sample figures
+    wireSeg('cmpSeg', function () { if (CURRENT_PLATFORM === 'all') renderKpis(); });     // Compare basis relabels the KPI delta chips
+    window.onThemeChange = function () { if (CURRENT_PLATFORM === 'all') drawCharts(); }; // redraw charts on light/dark switch
   </script>
 </body>
 </html>
