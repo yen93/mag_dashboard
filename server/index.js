@@ -33,6 +33,7 @@ import { getMetaFbTrend } from './metrics/meta-fb-trend.js';
 import { getMetaIgDemographics } from './metrics/meta-ig-demographics.js';
 import { getMetaTopPosts } from './metrics/meta-top-posts.js';
 import { getSocialAudience } from './metrics/social-audience.js';
+import { getLinkedInAnalytics, saveLinkedInImport } from './metrics/linkedin-analytics.js';
 import { getEdmReport } from './metrics/edm-report.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
 import { getMarketingInsight } from './marketingInsight.js';
@@ -739,6 +740,33 @@ marketing.get('/social-audience', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:social-audience]', err);
     res.status(502).json({ error: 'Failed to load social audience.', detail: err.message });
+  }
+});
+// LinkedIn Analytics manual .xlsx imports (James's LinkedIn & MAG LinkedIn).
+// Reads/writes public.linkedin_analytics_imports. Backs the Import LinkedIn Analytics
+// flow and live LinkedIn views on public/social_platforms.html.
+marketing.get('/linkedin-analytics', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:linkedin-analytics', getLinkedInAnalytics, 5 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:linkedin-analytics]', err);
+    res.status(502).json({ error: 'Failed to load LinkedIn analytics.', detail: err.message });
+  }
+});
+marketing.post('/linkedin-analytics/import', express.json({ limit: '15mb' }), async (req, res) => {
+  const platformKey = String((req.body && req.body.platformKey) || '').trim();
+  const files = req.body && req.body.files;
+  try {
+    const imported = await saveLinkedInImport(platformKey, files, req.user && req.user.email);
+    clearCache();
+    res.status(201).json({ imported });
+  } catch (err) {
+    if (err.status === 400 || err.status === 503) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    console.error('[marketing:linkedin-analytics:import]', err);
+    res.status(502).json({ error: 'Failed to import LinkedIn analytics.', detail: err.message });
   }
 });
 // EDM — the ActiveCampaign Contact Performance + All Campaigns Performance reports for

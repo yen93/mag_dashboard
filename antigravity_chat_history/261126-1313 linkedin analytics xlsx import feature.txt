@@ -1,0 +1,108 @@
+================================================================================
+UPDATE DOCUMENTATION: LINKEDIN ANALYTICS XLSX IMPORT FOR SOCIAL PLATFORMS
+Timestamp: 26/11/26 13:13 (+08:00)
+Workspace: dashboard (C:\Users\Cloverly\claude_code\dashboard)
+================================================================================
+
+1. LINKEDIN ANALYTICS DATABASE SCHEMA (MIGRATION)
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Private LinkedIn analytics (impressions, members reached, daily engagement,
+  daily new followers, post-level impressions/engagements, and audience
+  demographics) are not available via anonymous Apify scraping. Both
+  James's LinkedIn (`james_linkedin`) and MAG LinkedIn (`mag_linkedin`) on
+  Marketing > Social Platforms needed a manual `.xlsx` import option whose
+  imported data persists and immediately reflects on the page.
+
+* Technical Changes:
+  - Created migration file:
+    supabase/migrations/20261126130000_create_linkedin_analytics_imports.sql
+  - Defined `public.linkedin_analytics_imports` (PK: `platform_key`):
+    stores `file_name`, `date_start`, `date_end`, `date_range_label`,
+    `total_followers`, `total_followers_date`, `discovery` (jsonb),
+    `daily_engagement` (jsonb), `daily_followers` (jsonb), `top_posts` (jsonb),
+    `demographics` (jsonb), `page_metrics` (jsonb), `summary` (jsonb),
+    `uploaded_by`, `uploaded_at`, `updated_at` with RLS enabled.
+  - Defined `public.linkedin_analytics_import_log` (audit log per import)
+    with index `linkedin_analytics_import_log_key_idx` and RLS enabled.
+  - Note: Migration written locally only (read-only DB rule); user must run
+    the SQL manually in Supabase SQL Editor.
+
+2. ZERO-DEPENDENCY XLSX PARSER & LINKEDIN ANALYTICS BACKEND MODULE
+--------------------------------------------------------------------------------
+* Problem / Context:
+  Sample LinkedIn exports (`AggregateAnalytics_James Castrission_2025-10-23_2026-11-26.xlsx`
+  and `... (1).xlsx`) are Office Open XML `.xlsx` workbooks with 5 sheets:
+  `DISCOVERY`, `ENGAGEMENT`, `TOP POSTS` (dual side-by-side tables for top
+  engagements and top impressions), `FOLLOWERS`, and `DEMOGRAPHICS`. MAG
+  LinkedIn may upload either the same 5-sheet format or LinkedIn Company Page
+  Analytics `.xlsx` exports.
+
+* Technical Changes:
+  - Created `server/lib/xlsx-parser.js`:
+    Pure-Node `.xlsx` reader using `node:zlib` (parses ZIP central directory,
+    `xl/workbook.xml`, `xl/_rels/workbook.xml.rels`, `xl/sharedStrings.xml`,
+    and worksheet XMLs without adding npm dependencies).
+  - Created `server/metrics/linkedin-analytics.js`:
+    - `parseLinkedInWorkbook(buffer, fileName)`: parses `DISCOVERY`,
+      `ENGAGEMENT`/`Metrics`, `TOP POSTS` (merging left Engagements + right
+      Impressions tables by Post URL and deriving readable titles from slugs)
+      or `All posts`, `FOLLOWERS`/`New followers`, `DEMOGRAPHICS` (or Company
+      Page demographic sheets), and optional `Visitor metrics`.
+    - `mergeLinkedInWorkbooks(parsedList)`: merges multiple uploaded `.xlsx`
+      files cleanly into one normalized payload.
+    - `getLinkedInAnalytics()`: reads `public.linkedin_analytics_imports` and
+      gracefully degrades to `pending` on Postgres error `42P01` if the table
+      has not been migrated yet.
+    - `saveLinkedInImport(platformKey, files, userEmail)`: validates platform
+      (`james_linkedin` | `mag_linkedin`), parses/merges files (12 MB limit
+      per file), upserts into `public.linkedin_analytics_imports`, and logs
+      the import to `public.linkedin_analytics_import_log`.
+  - Updated `server/index.js`:
+    - Added `GET /api/marketing/linkedin-analytics` (5-minute cache).
+    - Added `POST /api/marketing/linkedin-analytics/import` (15 MB JSON body
+      limit, clears server cache on success).
+
+3. SOCIAL PLATFORMS FRONTEND UI & IMPORT WORKFLOW
+--------------------------------------------------------------------------------
+* Technical Changes:
+  - Updated `public/social_platforms.html`:
+    - Added "↑ Import LinkedIn Analytics" button in the top controls bar (shown
+      when `James's LinkedIn` or `MAG LinkedIn` is active) and inline
+      "↑ Import .xlsx" buttons inside both LinkedIn Analytics card headers.
+    - Added native `<dialog>` import modal (`#liImportDialog`) with account
+      selector, drag-and-drop / click multi-file `.xlsx` picker, base64
+      encoding, validation/error feedback, and post-import success banner.
+    - Added FY-aware slicing helper `liDataForFy(key)` that filters daily
+      engagement, daily followers, and top posts by the active Australian
+      Financial Year (`All` / `FY22`–`FY27`), reconstructs cumulative follower
+      snapshots by walking backward from `totalFollowers`, and computes 7-day
+      impressions, monthly engagement sparklines, and monthly new followers.
+    - Updated `accountStats()`, `renderAllAccounts()`, `renderJamesLinkedin()`,
+      and `renderMagLinkedin()` so imported data immediately populates:
+      - KPI tiles (Followers, Posts delivered, Engagements, Engagement rate,
+        Members reached)
+      - LinkedIn Analytics / Page Analytics cards + sparklines + discovery bars
+      - Followers over time line chart
+      - Follows vs unfollows card + monthly new followers bar chart
+      - Top posts sortable table (including All accounts merged Top posts)
+      - Audience — who follows us horizontal bar charts (By seniority,
+        By industry, Top locations, Top job titles).
+
+4. VERIFICATION & RESULTS
+--------------------------------------------------------------------------------
+* Sample Workbook Parser Test (Node.js against both Downloads .xlsx files):
+  - Date range parsed: 2025-10-23 to 2026-11-26 (`10/23/2025 - 11/26/2026`)
+  - Followers: 6,930 as of 2026-11-26 (400 daily rows)
+  - Discovery: 28,222 impressions, 6,597 members reached, 469 engagements
+  - Engagement: 400 daily rows
+  - Top Posts: 50 merged posts with impressions, engagements, and computed
+    engagement rates
+  - Demographics: 58 rows (seniority: 9, industry: 10, location: 10,
+    jobTitle: 10, companySize: 9, company: 10)
+* Syntax Checks:
+  - `node --check server/lib/xlsx-parser.js` — passed
+  - `node --check server/metrics/linkedin-analytics.js` — passed
+  - `node --check server/index.js` — passed
+  - `public/social_platforms.html` inline script syntax check — passed (95,489 chars)
+================================================================================

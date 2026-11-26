@@ -348,6 +348,159 @@
       line-height: 1.5;
     }
     .sp-pending-box strong { color: var(--text); font-size: 13px; }
+
+    /* Import LinkedIn Analytics button & native <dialog> modal */
+    .sp-import-btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 14px;
+      border-radius: 9px;
+      border: 1px solid color-mix(in srgb, var(--sp-accent) 45%, transparent);
+      background: linear-gradient(135deg, var(--sp-accent), var(--sp-accent-2));
+      color: #fff;
+      font-size: 12.5px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: transform .14s ease, box-shadow .14s ease, opacity .14s ease;
+      box-shadow: 0 4px 12px -4px color-mix(in srgb, var(--sp-accent) 55%, transparent);
+    }
+    .sp-import-btn:hover { transform: translateY(-1px); opacity: .96; }
+    .sp-import-btn.secondary {
+      background: var(--surface-2);
+      color: var(--text);
+      border-color: var(--border);
+      box-shadow: none;
+    }
+    .sp-import-btn.secondary:hover { border-color: var(--sp-accent); color: var(--sp-accent); }
+    .sp-import-btn[hidden] { display: none; }
+
+    .sp-import-banner {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 14px;
+      margin-bottom: 14px;
+      border-radius: 12px;
+      background: color-mix(in srgb, var(--pos) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--pos) 32%, transparent);
+      color: var(--text);
+      font-size: 13px;
+    }
+    .sp-import-banner strong { color: var(--pos); }
+    .sp-import-banner button {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px 6px;
+    }
+
+    dialog.sp-dialog {
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      background: var(--surface);
+      color: var(--text);
+      padding: 0;
+      width: min(540px, calc(100vw - 32px));
+      box-shadow: 0 24px 64px -16px rgba(10, 20, 40, .45);
+    }
+    dialog.sp-dialog::backdrop {
+      background: rgba(10, 16, 30, .55);
+      backdrop-filter: blur(4px);
+    }
+    .sp-dialog-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 22px 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .sp-dialog-head h2 { margin: 0; font-size: 16px; font-weight: 800; letter-spacing: -.01em; }
+    .sp-dialog-close {
+      background: transparent;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text-muted);
+      width: 30px;
+      height: 30px;
+      cursor: pointer;
+      font-size: 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .sp-dialog-close:hover { color: var(--text); border-color: var(--text-muted); }
+    .sp-dialog-body { padding: 18px 22px; display: flex; flex-direction: column; gap: 14px; }
+    .sp-field label {
+      display: block;
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+      color: var(--text-muted);
+      margin-bottom: 6px;
+    }
+    .sp-field select {
+      width: 100%;
+      padding: 9px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--border);
+      background: var(--surface-2);
+      color: var(--text);
+      font-size: 13.5px;
+      font-weight: 600;
+    }
+    .sp-dropzone {
+      border: 2px dashed var(--border);
+      border-radius: 14px;
+      padding: 24px 18px;
+      text-align: center;
+      background: var(--surface-2);
+      cursor: pointer;
+      transition: border-color .15s ease, background .15s ease;
+    }
+    .sp-dropzone:hover, .sp-dropzone.dragover {
+      border-color: var(--sp-accent);
+      background: color-mix(in srgb, var(--sp-accent) 7%, var(--surface-2));
+    }
+    .sp-dropzone .dz-title { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .sp-dropzone .dz-sub { font-size: 12px; color: var(--text-muted); line-height: 1.45; }
+    .sp-file-list { display: flex; flex-direction: column; gap: 6px; }
+    .sp-file-item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      font-size: 12.5px;
+    }
+    .sp-file-item .f-name { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sp-file-item .f-meta { color: var(--text-muted); font-size: 11.5px; flex-shrink: 0; }
+    .sp-dialog-err {
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: color-mix(in srgb, var(--neg) 12%, transparent);
+      border: 1px solid color-mix(in srgb, var(--neg) 35%, transparent);
+      color: var(--neg);
+      font-size: 12.5px;
+      line-height: 1.45;
+    }
+    .sp-dialog-err[hidden] { display: none; }
+    .sp-dialog-foot {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+      padding: 14px 22px 18px;
+      border-top: 1px solid var(--border);
+    }
   </style>
 </head>
 <body>
@@ -382,6 +535,8 @@
             <button type="button" data-platform="facebook">Facebook</button>
             <button type="button" data-platform="instagram">Instagram</button>
           </div>
+          <div class="spacer" style="flex:1"></div>
+          <button type="button" class="sp-import-btn" id="openLiImportBtn" hidden>↑ Import LinkedIn Analytics</button>
         </div>
         <div class="mkt-controls" id="fyControls" style="margin-top:10px; padding-top:10px; border-top:1px solid var(--border)">
           <span class="ctl-label">Financial year</span>
@@ -405,9 +560,43 @@
       </div>
 
       <!-- Dynamic active platform view -->
+      <div id="spImportBannerHost"></div>
       <div id="spViewRoot"></div>
     </main>
   </div>
+
+  <!-- Import LinkedIn Analytics Modal -->
+  <dialog class="sp-dialog" id="liImportDialog" aria-labelledby="liImportTitle">
+    <div class="sp-dialog-head">
+      <h2 id="liImportTitle">Import LinkedIn Analytics (.xlsx)</h2>
+      <button type="button" class="sp-dialog-close" id="liImportCloseBtn" aria-label="Close">×</button>
+    </div>
+    <form id="liImportForm">
+      <div class="sp-dialog-body">
+        <div class="sp-field">
+          <label for="liImportAccount">LinkedIn account</label>
+          <select id="liImportAccount">
+            <option value="james_linkedin">James's LinkedIn</option>
+            <option value="mag_linkedin">MAG LinkedIn</option>
+          </select>
+        </div>
+        <div class="sp-field">
+          <label>LinkedIn export file(s)</label>
+          <div class="sp-dropzone" id="liDropzone" tabindex="0" role="button" aria-label="Choose LinkedIn Analytics Excel files">
+            <div class="dz-title">Drop LinkedIn .xlsx export(s) here, or click to browse</div>
+            <div class="dz-sub">Supports LinkedIn Audience &amp; Content Analytics (<code>AggregateAnalytics_*.xlsx</code>) and LinkedIn Company Page Analytics exports. You can select one or multiple files to merge.</div>
+            <input type="file" id="liFileInput" accept=".xlsx" multiple hidden />
+          </div>
+        </div>
+        <div class="sp-file-list" id="liFileList"></div>
+        <div class="sp-dialog-err" id="liImportErr" hidden></div>
+      </div>
+      <div class="sp-dialog-foot">
+        <button type="button" class="sp-import-btn secondary" id="liImportCancelBtn">Cancel</button>
+        <button type="submit" class="sp-import-btn" id="liImportSubmitBtn" disabled>Import data</button>
+      </div>
+    </form>
+  </dialog>
 
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=30"></script>
@@ -431,7 +620,8 @@
         igTrend: [],         // /api/marketing/meta-ig-trend
         fbTrend: [],         // /api/marketing/meta-fb-trend
         igDemo: null,        // { ageGender, locations }
-        topPosts: []         // /api/marketing/meta-top-posts
+        topPosts: [],        // /api/marketing/meta-top-posts
+        linkedin: {}         // { james_linkedin, mag_linkedin } from /api/marketing/linkedin-analytics
       };
 
       var PENDING_CHIP = '<span class="chip warn">pending</span>';
@@ -498,6 +688,139 @@
         return CURRENT_FY === 'all' || CURRENT_FY === 'fy27';
       }
 
+      // Check if an ISO date ('YYYY-MM-DD') falls inside the selected Australian Financial Year
+      function inSelectedFy(isoDate) {
+        var fy = selectedFyEnd();
+        if (fy == null || !isoDate) return true;
+        var start = (fy - 1) + '-07-01';
+        var end = fy + '-06-30';
+        return isoDate >= start && isoDate <= end;
+      }
+
+      // Slice imported LinkedIn Analytics for a platform_key ('james_linkedin' | 'mag_linkedin')
+      // according to the active Financial Year toggle.
+      function liDataForFy(key) {
+        var raw = LIVE.linkedin && LIVE.linkedin[key];
+        if (!raw) return null;
+
+        var dailyEngAll = raw.dailyEngagement || [];
+        var dailyFolAll = raw.dailyFollowers || [];
+        var dailyEng = dailyEngAll.filter(function (d) { return inSelectedFy(d.date); });
+        var dailyFol = dailyFolAll.filter(function (d) { return inSelectedFy(d.date); });
+
+        // Reconstruct daily cumulative followers by walking backward from totalFollowers
+        var cumAll = [];
+        if (raw.totalFollowers != null && dailyFolAll.length) {
+          var running = raw.totalFollowers;
+          for (var i = dailyFolAll.length - 1; i >= 0; i--) {
+            cumAll.push({ d: dailyFolAll[i].date, followers: running, newFollowers: dailyFolAll[i].newFollowers || 0 });
+            running = Math.max(0, running - (dailyFolAll[i].newFollowers || 0));
+          }
+          cumAll.reverse();
+        }
+        var cumFiltered = cumAll.filter(function (pt) { return inSelectedFy(pt.d); });
+
+        // Sample weekly points (every 7 days + first & last) so the Followers over time line is clean
+        var snaps = [];
+        if (cumFiltered.length) {
+          for (var j = 0; j < cumFiltered.length; j++) {
+            if (j === 0 || j === cumFiltered.length - 1 || j % 7 === 0) {
+              snaps.push({ d: cumFiltered[j].d, followers: cumFiltered[j].followers });
+            }
+          }
+        }
+
+        // Engagement aggregates
+        var impressions = null;
+        var engagements = null;
+        if (dailyEng.length) {
+          impressions = dailyEng.reduce(function (s, d) { return s + (d.impressions || 0); }, 0);
+          engagements = dailyEng.reduce(function (s, d) { return s + (d.engagements || 0); }, 0);
+        } else if (CURRENT_FY === 'all' && raw.discovery && raw.discovery.impressions != null) {
+          impressions = raw.discovery.impressions;
+          engagements = raw.discovery.engagements != null ? raw.discovery.engagements : null;
+        }
+        var engRate = (impressions && impressions > 0 && engagements != null)
+          ? Math.round((engagements / impressions) * 1000) / 10
+          : null;
+
+        // Last 7 days of engagement (within filtered range)
+        var last7 = dailyEng.slice(-7);
+        var impressions7d = last7.length ? last7.reduce(function (s, d) { return s + (d.impressions || 0); }, 0) : null;
+        var engagements7d = last7.length ? last7.reduce(function (s, d) { return s + (d.engagements || 0); }, 0) : null;
+
+        // Monthly engagement trend
+        var mEngMap = {};
+        dailyEng.forEach(function (d) {
+          var ym = d.date.slice(0, 7);
+          if (!mEngMap[ym]) mEngMap[ym] = { month: ym, impressions: 0, engagements: 0 };
+          mEngMap[ym].impressions += d.impressions || 0;
+          mEngMap[ym].engagements += d.engagements || 0;
+        });
+        var monthlyEngagement = Object.keys(mEngMap).sort().map(function (k) { return mEngMap[k]; });
+
+        // Monthly new followers trend
+        var mFolMap = {};
+        dailyFol.forEach(function (d) {
+          var ym = d.date.slice(0, 7);
+          if (!mFolMap[ym]) mFolMap[ym] = { month: ym, newFollowers: 0 };
+          mFolMap[ym].newFollowers += d.newFollowers || 0;
+        });
+        var monthlyFollowers = Object.keys(mFolMap).sort().map(function (k) { return mFolMap[k]; });
+
+        // Follower totals & net new in selected FY
+        var endFollowers = cumFiltered.length
+          ? cumFiltered[cumFiltered.length - 1].followers
+          : (isLiveWindowFy() ? raw.totalFollowers : null);
+        var startFollowers = cumFiltered.length ? cumFiltered[0].followers : null;
+        var netNew = dailyFol.length ? dailyFol.reduce(function (s, d) { return s + (d.newFollowers || 0); }, 0) : null;
+        var netNewRate = (netNew != null && startFollowers && startFollowers > 0)
+          ? Math.round((netNew / startFollowers) * 1000) / 10
+          : null;
+
+        // Top posts filtered by publishDate (keep undated posts when FY === 'all')
+        var label = key === 'james_linkedin' ? "James's LinkedIn" : 'MAG LinkedIn';
+        var topPosts = (raw.topPosts || []).filter(function (p) {
+          return p.publishDate ? inSelectedFy(p.publishDate) : (CURRENT_FY === 'all');
+        }).map(function (p) {
+          return {
+            post: p.post,
+            url: p.url,
+            platform: label,
+            type: p.publishDate ? snapFmt(p.publishDate) : 'Post',
+            reach: p.impressions,
+            interactions: p.engagements,
+            linkClicks: p.linkClicks != null ? p.linkClicks : null
+          };
+        });
+
+        var hasPeriodData = dailyEng.length > 0 || dailyFol.length > 0 || topPosts.length > 0 || CURRENT_FY === 'all';
+        var rangeStart = dailyEng.length ? dailyEng[0].date : (dailyFol.length ? dailyFol[0].date : raw.dateStart);
+        var rangeEnd = dailyEng.length ? dailyEng[dailyEng.length - 1].date : (dailyFol.length ? dailyFol[dailyFol.length - 1].date : raw.dateEnd);
+
+        return {
+          raw: raw,
+          hasPeriodData: hasPeriodData,
+          rangeStart: rangeStart,
+          rangeEnd: rangeEnd,
+          impressions: impressions,
+          impressions7d: impressions7d,
+          engagements: engagements,
+          engagements7d: engagements7d,
+          engRate: engRate,
+          membersReached: (raw.discovery && raw.discovery.membersReached != null) ? raw.discovery.membersReached : null,
+          followers: endFollowers,
+          netNew: netNew,
+          netNewRate: netNewRate,
+          snaps: snaps,
+          monthlyEngagement: monthlyEngagement,
+          monthlyFollowers: monthlyFollowers,
+          topPosts: topPosts,
+          demographics: raw.demographics || {},
+          pageMetrics: raw.pageMetrics || {}
+        };
+      }
+
       // Live summary per account
       function accountStats(key) {
         var pRow = platformRow(key);
@@ -505,6 +828,7 @@
         var useMeta = isLiveWindowFy();
         var fb = useMeta && LIVE.metaFb && LIVE.metaFb.facebook;
         var ig = useMeta && LIVE.metaFb && LIVE.metaFb.instagram;
+        var li = (key === 'james_linkedin' || key === 'mag_linkedin') ? liDataForFy(key) : null;
 
         var followers = pRow ? pRow.followers : null;
         var posts = pRow ? pRow.posts : null;
@@ -513,8 +837,24 @@
         var engRate = pRow ? pRow.engagementRate : null;
         var netNew = hist ? hist.netNew : null;
         var netNewRate = hist ? hist.netNewRate : null;
+        var snaps = hist ? hist.snaps : [];
 
-        if (key === 'mag_facebook' && fb) {
+        if (li && li.hasPeriodData) {
+          if (li.followers != null) followers = li.followers;
+          if (li.impressions != null) seen = li.impressions;
+          if (li.engagements != null) engagements = li.engagements;
+          if (li.engRate != null) engRate = li.engRate;
+          if (li.netNew != null) {
+            netNew = li.netNew;
+            netNewRate = li.netNewRate;
+          }
+          if (li.topPosts && li.topPosts.length && (posts == null || li.topPosts.length > posts)) {
+            posts = li.topPosts.length;
+          }
+          if (li.snaps && li.snaps.length >= 2) {
+            snaps = li.snaps;
+          }
+        } else if (key === 'mag_facebook' && fb) {
           if (fb.followers != null) followers = fb.followers;
           if (fb.views28d != null) seen = fb.views28d;
           if (fb.postEngagements28d != null) engagements = fb.postEngagements28d;
@@ -544,8 +884,9 @@
           engRate: engRate,
           netNew: netNew,
           netNewRate: netNewRate,
-          snaps: hist ? hist.snaps : [],
-          snapshotDate: pRow ? pRow.snapshotDate : null
+          snaps: snaps,
+          snapshotDate: (li && li.rangeEnd) || (pRow ? pRow.snapshotDate : null),
+          imported: !!(li && li.hasPeriodData)
         };
       }
 
@@ -791,8 +1132,40 @@
         });
       }
 
+      function drawMonthlyNewFollowers(canvasId, rows) {
+        var el = document.getElementById(canvasId);
+        if (!el || !rows || !rows.length) return;
+        var tc = themeColors();
+        _charts[canvasId] = new Chart(el.getContext('2d'), {
+          type: 'bar',
+          data: {
+            labels: rows.map(function (r) { return monthLbl(r.month); }),
+            datasets: [{
+              label: 'New followers',
+              data: rows.map(function (r) { return r.newFollowers; }),
+              backgroundColor: PAL[0],
+              borderRadius: 4,
+              maxBarThickness: 22
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+              x: { grid: { display: false }, ticks: { color: tc.muted, font: { size: 10.5 } } },
+              y: { beginAtZero: true, grid: { color: tc.grid }, ticks: { color: tc.muted, font: { size: 11 } } }
+            },
+            plugins: {
+              legend: { display: false },
+              tooltip: { callbacks: { label: function (c) { return '+' + fmt(c.parsed.y, 'count') + ' new followers'; } } }
+            }
+          }
+        });
+      }
+
       // Reusable sortable Top Posts table (DESIGN_GUIDE §7)
-      function mountTopPostsTable(hostId, posts) {
+      function mountTopPostsTable(hostId, posts, opts) {
+        opts = opts || {};
         var host = document.getElementById(hostId);
         if (!host) return;
         if (!posts || !posts.length) {
@@ -811,7 +1184,7 @@
             seen: p.reach,
             eng: p.interactions,
             engRate: rate,
-            linkClicks: null
+            linkClicks: p.linkClicks != null ? p.linkClicks : null
           };
         });
         renderSortableTable(hostId, [
@@ -827,11 +1200,11 @@
             text: function (v) { return v || ''; }
           },
           { key: 'account', label: 'Account', unit: 'text' },
-          { key: 'type', label: 'Type', unit: 'text' },
-          { key: 'seen', label: 'Seen', unit: 'count', render: function (v) { return v == null ? PENDING_CHIP : fmt(v, 'count'); } },
-          { key: 'eng', label: 'Eng.', unit: 'count' },
+          { key: 'type', label: opts.typeLabel || 'Type', unit: 'text' },
+          { key: 'seen', label: opts.seenLabel || 'Seen', unit: 'count', render: function (v) { return v == null ? PENDING_CHIP : fmt(v, 'count'); } },
+          { key: 'eng', label: 'Eng.', unit: 'count', render: function (v) { return v == null ? '—' : fmt(v, 'count'); } },
           { key: 'engRate', label: 'Eng. rate', unit: 'percent', render: function (v) { return v == null ? '—' : v.toFixed(1) + '%'; } },
-          { key: 'linkClicks', label: 'Link clicks', unit: 'text', render: function () { return '—'; }, text: function () { return ''; } }
+          { key: 'linkClicks', label: 'Link clicks', unit: 'count', render: function (v) { return v == null ? '—' : fmt(v, 'count'); } }
         ], rows, { search: false, defaultSort: { key: 'eng', dir: 'desc' } });
       }
 
@@ -962,13 +1335,23 @@
 
         var allSnaps = (aud && aud.snaps) || [];
 
+        var allTopPosts = (isLiveWindowFy() ? LIVE.topPosts : []).slice();
+        var jlLi = liDataForFy('james_linkedin');
+        var mlLi = liDataForFy('mag_linkedin');
+        if (jlLi && jlLi.topPosts && jlLi.topPosts.length) allTopPosts = allTopPosts.concat(jlLi.topPosts);
+        if (mlLi && mlLi.topPosts && mlLi.topPosts.length) allTopPosts = allTopPosts.concat(mlLi.topPosts);
+        var topSources = [];
+        if (isLiveWindowFy() && LIVE.topPosts.length) topSources.push('Instagram');
+        if (jlLi && jlLi.topPosts && jlLi.topPosts.length) topSources.push("James's LinkedIn");
+        if (mlLi && mlLi.topPosts && mlLi.topPosts.length) topSources.push('MAG LinkedIn');
+
         root.innerHTML =
           '<p class="sp-context-line">Showing <strong>all accounts</strong> — only the metrics every account shares. Pick an account for its full, platform-specific set.</p>' +
           kpisHtml +
           '<div class="sp-grid">' +
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>By account ' + infoTip('Side-by-side summary of audience size, net follower change, times seen, engagements and engagement rate across all four accounts. Click any account row to open its dedicated view.', 'Meta Insights (Facebook & Instagram) + weekly LinkedIn snapshots') + '</h3>' +
+                '<h3>By account ' + infoTip('Side-by-side summary of audience size, net follower change, times seen, engagements and engagement rate across all four accounts. Click any account row to open its dedicated view.', 'Meta Insights (Facebook & Instagram) + LinkedIn Analytics') + '</h3>' +
               '</div>' +
               '<div class="sp-table-wrap"><table class="sp-table">' +
                 '<thead><tr><th>Account</th><th>Followers</th><th>Net new (rate)</th><th>Times seen</th><th>Engagements</th><th>Eng. rate</th></tr></thead>' +
@@ -991,8 +1374,8 @@
 
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>Top posts ' + infoTip('Recent posts ranked by engagement. Currently shows live Instagram posts; Facebook and LinkedIn post-level feeds will appear here once connected.', 'Instagram Business Insights (Meta)') + '</h3>' +
-                (LIVE.topPosts.length ? '<span class="sp-live-pill"><span class="dot"></span>Live · Instagram</span>' : PENDING_CHIP) +
+                '<h3>Top posts ' + infoTip('Recent posts ranked by engagement across connected platforms (Instagram live + imported LinkedIn Analytics).', 'Instagram Business Insights + LinkedIn Analytics import') + '</h3>' +
+                (allTopPosts.length ? '<span class="sp-live-pill"><span class="dot"></span>Live · ' + esc(topSources.join(' + ')) + '</span>' : PENDING_CHIP) +
               '</div>' +
               '<div id="allTopPostsHost"></div>' +
             '</div>' +
@@ -1004,46 +1387,116 @@
         });
 
         drawFollowersLine('allFollowersChart', allSnaps);
-        mountTopPostsTable('allTopPostsHost', isLiveWindowFy() ? LIVE.topPosts : []);
+        mountTopPostsTable('allTopPostsHost', allTopPosts);
+      }
+
+      // Shared LinkedIn helpers (Audience demographics + Follows card + Import pill)
+      function liImportBadgeHtml(li, platformKey) {
+        var btn = '<button type="button" class="sp-import-btn secondary" data-li-import="' + platformKey + '" style="padding:4px 10px;font-size:11.5px">↑ Import .xlsx</button>';
+        if (!li || !li.raw) return '<span class="chip partial">partial</span><div class="spacer"></div>' + btn;
+        var rangeTxt = li.rangeStart && li.rangeEnd ? snapFmt(li.rangeStart) + ' – ' + snapFmt(li.rangeEnd) : (li.raw.dateRangeLabel || 'Imported');
+        return '<span class="sp-live-pill" title="File: ' + esc(li.raw.fileName || '') + '"><span class="dot"></span>Imported · ' + esc(rangeTxt) + '</span><div class="spacer"></div>' + btn;
+      }
+
+      function liAudienceCardHtml(prefix, accountLabel, demo) {
+        demo = demo || {};
+        var hasSen = !!(demo.seniority && demo.seniority.length);
+        var hasInd = !!(demo.industry && demo.industry.length);
+        var hasLoc = !!(demo.location && demo.location.length);
+        var hasJob = !!(demo.jobTitle && demo.jobTitle.length);
+        var hasAny = hasSen || hasInd || hasLoc || hasJob;
+        return '<div class="sp-card wide">' +
+          '<div class="sp-card-head">' +
+            '<h3>Audience — who follows us ' + infoTip('Demographic breakdown of ' + accountLabel + ' followers by seniority, industry, top locations and job titles.', hasAny ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn audience demographics (pending import)') + '</h3>' +
+            '<span class="sp-tag-pill">Quarterly</span>' +
+            (hasAny ? '<span class="sp-live-pill"><span class="dot"></span>Imported · LinkedIn</span>' : PENDING_CHIP) +
+          '</div>' +
+          '<div class="sp-aud-grid">' +
+            '<div class="sp-subcard"><div class="sp-subcard-head">By seniority ' + infoTip('Seniority tiers of ' + accountLabel + ' followers (Senior, Director, CXO, VP, Manager, Owner).', 'LinkedIn Analytics demographics') + '</div>' +
+              (hasSen ? '<div class="sp-chart-box h-md"><canvas id="' + prefix + 'SenChart"></canvas></div>' : pendingBox('', 'Import LinkedIn Analytics (.xlsx) to view seniority demographics.')) +
+            '</div>' +
+            '<div class="sp-subcard"><div class="sp-subcard-head">By industry ' + infoTip('Top industries represented among ' + accountLabel + ' followers.', 'LinkedIn Analytics demographics') + '</div>' +
+              (hasInd ? '<div class="sp-chart-box h-md"><canvas id="' + prefix + 'IndChart"></canvas></div>' : pendingBox('', 'Import LinkedIn Analytics (.xlsx) to view industry demographics.')) +
+            '</div>' +
+            '<div class="sp-subcard"><div class="sp-subcard-head">Top locations ' + infoTip('Top cities and regions where ' + accountLabel + ' followers are based.', 'LinkedIn Analytics demographics') + '</div>' +
+              (hasLoc ? '<div class="sp-chart-box h-md"><canvas id="' + prefix + 'LocChart"></canvas></div>' : pendingBox('', 'Import LinkedIn Analytics (.xlsx) to view location demographics.')) +
+            '</div>' +
+            '<div class="sp-subcard"><div class="sp-subcard-head">Top job titles ' + infoTip('Most common job titles among ' + accountLabel + ' followers.', 'LinkedIn Analytics demographics') + '</div>' +
+              (hasJob ? '<div class="sp-chart-box h-md"><canvas id="' + prefix + 'JobChart"></canvas></div>' : pendingBox('', 'Import LinkedIn Analytics (.xlsx) to view job title demographics.')) +
+            '</div>' +
+          '</div>' +
+        '</div>';
+      }
+
+      function drawLiDemographics(prefix, demo) {
+        if (!demo) return;
+        function drawList(id, items, color) {
+          if (!items || !items.length) return;
+          var top = items.slice(0, 8);
+          drawHbar(
+            id,
+            top.map(function (r) { return r.label; }),
+            top.map(function (r) { return r.pct == null ? 0 : r.pct; }),
+            { color: color, pct: true }
+          );
+        }
+        drawList(prefix + 'SenChart', demo.seniority, PAL[0]);
+        drawList(prefix + 'IndChart', demo.industry, PAL[1]);
+        drawList(prefix + 'LocChart', demo.location, PAL[2]);
+        drawList(prefix + 'JobChart', demo.jobTitle, PAL[3]);
+      }
+
+      function wireInlineImportButtons(root) {
+        root.querySelectorAll('[data-li-import]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            openLiImportDialog(btn.getAttribute('data-li-import'));
+          });
+        });
       }
 
       // ── 2. JAMES'S LINKEDIN VIEW (jc_linkedin.pdf) ──────────────────────────
       function renderJamesLinkedin() {
         var root = document.getElementById('spViewRoot');
         var st = accountStats('james_linkedin');
+        var li = liDataForFy('james_linkedin');
+        var hasLi = !!(li && li.hasPeriodData);
         var hist = platformHistory('james_linkedin');
         var pair = hist ? snapPair(hist.snaps, hist.latest, hist.prior) : { latest: null, base: null };
         var nl = LIVE.content && LIVE.content.li_newsletter_subscribers_james;
         var nlVal = (nl && nl.value != null) ? nl.value : null;
 
+        var folDeltaHtml = (hasLi && li.netNew != null)
+          ? '<div class="delta ' + (li.netNew >= 0 ? 'pos' : 'neg') + '">' + (li.netNew >= 0 ? '▲ +' : '▼ ') + fmt(li.netNew, 'count') + (li.netNewRate != null ? ' (' + li.netNewRate.toFixed(1) + '%)' : '') + ' in period</div>'
+          : deltaHtmlFromPair(pair.latest && pair.latest.followers, pair.base && pair.base.followers);
+
         var kpisHtml = '<div class="sp-kpi-grid">' +
           kpiTile(
             'Followers',
             st.followers == null ? PENDING_CHIP : fmt(st.followers, 'count'),
-            deltaHtmlFromPair(pair.latest && pair.latest.followers, pair.base && pair.base.followers),
+            folDeltaHtml,
             'Total followers on James\'s personal LinkedIn profile.',
-            'Weekly LinkedIn profile snapshot'
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn profile snapshot'
           ) +
           kpiTile(
             'Posts delivered',
             st.posts == null ? PENDING_CHIP : fmt(st.posts, 'count'),
-            deltaHtmlFromPair(pair.latest && pair.latest.posts, pair.base && pair.base.posts),
-            'Recent posts captured on James\'s LinkedIn profile.',
-            'Weekly LinkedIn profile snapshot'
+            hasLi && li.topPosts.length ? '<div class="delta">' + fmt(li.topPosts.length, 'count') + ' top posts in period</div>' : deltaHtmlFromPair(pair.latest && pair.latest.posts, pair.base && pair.base.posts),
+            'Posts captured on James\'s LinkedIn profile in the selected period.',
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn profile snapshot'
           ) +
           kpiTile(
             'Engagements',
             st.engagements == null ? PENDING_CHIP : fmt(st.engagements, 'count'),
-            deltaHtmlFromPair(pair.latest && pair.latest.engagement, pair.base && pair.base.engagement),
-            'Reactions, comments and reposts across James\'s recent LinkedIn posts.',
-            'Weekly LinkedIn profile snapshot'
+            hasLi && li.impressions != null ? '<div class="delta">Across ' + fmt(li.impressions, 'count') + ' impressions</div>' : deltaHtmlFromPair(pair.latest && pair.latest.engagement, pair.base && pair.base.engagement),
+            'Total reactions, comments and reposts across James\'s LinkedIn posts.',
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn profile snapshot'
           ) +
           kpiTile(
             'Engagement rate',
             st.engRate == null ? PENDING_CHIP : fmtPct(st.engRate, 1),
-            '<div class="delta">Avg engagement per post vs followers</div>',
-            'Average per-post engagement as a share of James\'s LinkedIn follower base.',
-            'Weekly LinkedIn profile snapshot'
+            hasLi && li.impressions != null ? '<div class="delta">Engagements ÷ impressions</div>' : '<div class="delta">Avg engagement per post vs followers</div>',
+            hasLi ? 'Total engagements divided by total post impressions in the selected period.' : 'Average per-post engagement as a share of James\'s LinkedIn follower base.',
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn profile snapshot'
           ) +
           kpiTile(
             'Enquiries traced to social',
@@ -1060,21 +1513,40 @@
             'LinkedIn newsletter count'
           ) +
           kpiTile(
-            'Reached beyond followers',
-            PENDING_CHIP,
-            '<div class="delta">Out of network · last 7 days</div>',
-            'Share of post impressions coming from LinkedIn members outside James\'s existing followers and connections.',
-            'LinkedIn Creator Analytics (pending connection)'
+            'Members reached',
+            (hasLi && li.membersReached != null) ? fmt(li.membersReached, 'count') : PENDING_CHIP,
+            (hasLi && li.raw && li.raw.dateRangeLabel) ? '<div class="delta">' + esc(li.raw.dateRangeLabel) + '</div>' : '<div class="delta">Import LinkedIn Analytics</div>',
+            'Unique LinkedIn members reached by James\'s posts across the imported analytics window.',
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn Creator Analytics (pending import)'
           ) +
         '</div>';
 
-        var netHtml = st.netNew == null
-          ? PENDING_CHIP
-          : '<div class="sp-bar-list"><div class="sp-bar-row">' +
-              '<span class="b-lbl">Net</span>' +
+        var netHtml = '';
+        if (hasLi && li.monthlyFollowers && li.monthlyFollowers.length) {
+          netHtml =
+            '<div class="sp-bar-list" style="margin-bottom:14px"><div class="sp-bar-row">' +
+              '<span class="b-lbl">Net new</span>' +
               '<div class="b-track"><div class="b-fill accent" style="width:100%"></div></div>' +
-              '<span class="b-val ' + (st.netNew >= 0 ? 'pos' : 'neg') + '">' + (st.netNew > 0 ? '+' : '') + fmt(st.netNew, 'count') + '</span>' +
-            '</div></div>';
+              '<span class="b-val ' + (li.netNew >= 0 ? 'pos' : 'neg') + '">' + (li.netNew > 0 ? '+' : '') + fmt(li.netNew, 'count') + '</span>' +
+            '</div></div>' +
+            '<div class="sp-chart-box h-sm"><canvas id="jlMonthlyFollowsChart"></canvas></div>';
+        } else if (st.netNew != null) {
+          netHtml = '<div class="sp-bar-list"><div class="sp-bar-row">' +
+            '<span class="b-lbl">Net</span>' +
+            '<div class="b-track"><div class="b-fill accent" style="width:100%"></div></div>' +
+            '<span class="b-val ' + (st.netNew >= 0 ? 'pos' : 'neg') + '">' + (st.netNew > 0 ? '+' : '') + fmt(st.netNew, 'count') + '</span>' +
+          '</div></div>';
+        } else {
+          netHtml = PENDING_CHIP;
+        }
+
+        var discoveryHtml = (hasLi && (li.impressions != null || li.membersReached != null))
+          ? '<div class="sp-bar-list">' +
+              '<div class="sp-bar-row"><span class="b-lbl">Impressions</span><div class="b-track"><div class="b-fill accent" style="width:100%"></div></div><span class="b-val">' + fmt(li.impressions, 'count') + '</span></div>' +
+              (li.membersReached != null ? '<div class="sp-bar-row"><span class="b-lbl">Members reached</span><div class="b-track"><div class="b-fill" style="width:' + Math.min(100, Math.round((li.membersReached / Math.max(li.impressions || 1, 1)) * 100)) + '%"></div></div><span class="b-val">' + fmt(li.membersReached, 'count') + '</span></div>' : '') +
+              (li.engagements != null ? '<div class="sp-bar-row"><span class="b-lbl">Engagements</span><div class="b-track"><div class="b-fill muted" style="width:' + Math.min(100, Math.max(2, Math.round((li.engagements / Math.max(li.impressions || 1, 1)) * 100))) + '%"></div></div><span class="b-val">' + fmt(li.engagements, 'count') + '</span></div>' : '') +
+            '</div>'
+          : pendingBox('LinkedIn post discovery pending', 'Import LinkedIn Analytics (.xlsx) to view impressions, members reached and engagement breakdown.');
 
         root.innerHTML =
           '<p class="sp-context-line">Showing <strong>James\'s LinkedIn</strong> — its own metrics (LinkedIn Analytics). Shared metrics re-slice to this account; cross-account cards are hidden.</p>' +
@@ -1082,19 +1554,25 @@
           '<div class="sp-grid">' +
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>James\'s LinkedIn — LinkedIn Analytics ' + infoTip('LinkedIn personal profile analytics windows (7-day post impressions, total followers, 90-day profile viewers, weekly search appearances, and post discovery split).', 'LinkedIn Analytics (partial — followers live, private analytics pending)') + '</h3>' +
-                '<span class="chip partial">partial</span>' +
+                '<h3>James\'s LinkedIn — LinkedIn Analytics ' + infoTip('LinkedIn personal profile analytics covering 7-day & period post impressions, members reached, engagements and total followers.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn Analytics (import .xlsx to populate)') + '</h3>' +
+                liImportBadgeHtml(li, 'james_linkedin') +
               '</div>' +
               '<div class="sp-mini-grid cols-4">' +
-                '<div class="sp-mini-box"><div class="m-label">Post impressions · 7 days</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Total followers</div><div class="m-val">' + (st.followers == null ? PENDING_CHIP : fmt(st.followers, 'count')) + '</div>' +
-                  (st.netNew != null ? '<div class="m-sub ' + (st.netNew >= 0 ? 'pos' : 'neg') + '">' + (st.netNew >= 0 ? '▲ ' : '▼ ') + fmt(Math.abs(st.netNew), 'count') + ' vs prior snapshot</div>' : '') +
+                '<div class="sp-mini-box"><div class="m-label">Post impressions · 7 days</div><div class="m-val">' + (hasLi && li.impressions7d != null ? fmt(li.impressions7d, 'count') : PENDING_CHIP) + '</div>' +
+                  (hasLi && li.engagements7d != null ? '<div class="m-sub">' + fmt(li.engagements7d, 'count') + ' engagements (last 7d)</div>' : '') +
                 '</div>' +
-                '<div class="sp-mini-box"><div class="m-label">Profile viewers · 90 days</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Search appearances</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Period impressions</div><div class="m-val">' + (hasLi && li.impressions != null ? fmt(li.impressions, 'count') : PENDING_CHIP) + '</div>' +
+                  (hasLi && li.monthlyEngagement.length >= 2 ? '<div class="sp-spark"><canvas id="jlImpSpark"></canvas></div>' : '') +
+                '</div>' +
+                '<div class="sp-mini-box"><div class="m-label">Total followers</div><div class="m-val">' + (st.followers == null ? PENDING_CHIP : fmt(st.followers, 'count')) + '</div>' +
+                  (st.netNew != null ? '<div class="m-sub ' + (st.netNew >= 0 ? 'pos' : 'neg') + '">' + (st.netNew >= 0 ? '▲ +' : '▼ ') + fmt(Math.abs(st.netNew), 'count') + (hasLi ? ' in period' : ' vs prior snapshot') + '</div>' : '') +
+                '</div>' +
+                '<div class="sp-mini-box"><div class="m-label">Members reached</div><div class="m-val">' + (hasLi && li.membersReached != null ? fmt(li.membersReached, 'count') : PENDING_CHIP) + '</div>' +
+                  (hasLi && li.monthlyEngagement.length >= 2 ? '<div class="sp-spark"><canvas id="jlEngSpark"></canvas></div>' : '') +
+                '</div>' +
               '</div>' +
-              '<div class="sp-subsec-title">Discovery · how the latest post was found</div>' +
-              pendingBox('LinkedIn post discovery pending', 'In-network vs out-of-network impressions and members reached require private LinkedIn Creator Analytics access.') +
+              '<div class="sp-subsec-title">Discovery · overall performance</div>' +
+              discoveryHtml +
             '</div>' +
 
             followersOverTimeCard("Followers over time — James's LinkedIn", 'jlFollowersChart', st.snaps, "James's LinkedIn") +
@@ -1102,73 +1580,80 @@
 
             '<div class="sp-card">' +
               '<div class="sp-card-head">' +
-                '<h3>Follows vs unfollows — James\'s LinkedIn ' + infoTip('LinkedIn reports net follower change only (unfollows are not exposed separately). Derived from weekly follower snapshots.', 'Weekly LinkedIn follower snapshots') + '</h3>' +
-                (st.netNew != null ? '<span class="sp-live-pill"><span class="dot"></span>Live</span>' : PENDING_CHIP) +
+                '<h3>Follows vs unfollows — James\'s LinkedIn ' + infoTip('LinkedIn reports net new followers only (unfollows are not exposed separately).', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn follower snapshots') + '</h3>' +
+                (hasLi && li.monthlyFollowers.length ? '<span class="sp-live-pill"><span class="dot"></span>Imported · monthly</span>' : (st.netNew != null ? '<span class="sp-live-pill"><span class="dot"></span>Live</span>' : PENDING_CHIP)) +
               '</div>' +
-              '<div class="cap">LinkedIn reports net only</div>' +
+              '<div class="cap">LinkedIn reports net new followers only</div>' +
               netHtml +
             '</div>' +
 
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>Top posts ' + infoTip('Individual LinkedIn posts ranked by engagement. Pending a post-level LinkedIn sync.', 'LinkedIn post analytics (pending connection)') + '</h3>' +
-                PENDING_CHIP +
+                '<h3>Top posts ' + infoTip('Individual LinkedIn posts ranked by engagements and impressions from imported LinkedIn Analytics.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn post analytics (pending import)') + '</h3>' +
+                (hasLi && li.topPosts.length ? '<span class="sp-live-pill"><span class="dot"></span>Imported · ' + fmt(li.topPosts.length, 'count') + ' posts</span>' : PENDING_CHIP) +
               '</div>' +
-              pendingBox('LinkedIn post-level feed pending', 'Individual posts, impressions, engagement rates and link clicks for James\'s LinkedIn are not yet connected.') +
+              '<div id="jlTopPostsHost"></div>' +
             '</div>' +
 
-            '<div class="sp-card wide">' +
-              '<div class="sp-card-head">' +
-                '<h3>Audience — who follows us ' + infoTip('Demographic breakdown of James\'s LinkedIn followers by seniority, industry and top locations. Checked quarterly.', 'LinkedIn audience demographics (pending connection)') + '</h3>' +
-                '<span class="sp-tag-pill">Quarterly</span>' +
-                PENDING_CHIP +
-              '</div>' +
-              '<div class="sp-aud-grid">' +
-                '<div class="sp-subcard"><div class="sp-subcard-head">By seniority ' + infoTip('Seniority tiers of James\'s LinkedIn followers (Owner/C-suite, Director, Manager, Senior).', 'LinkedIn demographics (pending)') + '</div>' + pendingBox('', 'LinkedIn seniority demographics not connected yet.') + '</div>' +
-                '<div class="sp-subcard"><div class="sp-subcard-head">By industry ' + infoTip('Industries represented among James\'s LinkedIn followers.', 'LinkedIn demographics (pending)') + '</div>' + pendingBox('', 'LinkedIn industry demographics not connected yet.') + '</div>' +
-                '<div class="sp-subcard"><div class="sp-subcard-head">Top locations ' + infoTip('Top cities and regions where James\'s LinkedIn followers are based.', 'LinkedIn demographics (pending)') + '</div>' + pendingBox('', 'LinkedIn location demographics not connected yet.') + '</div>' +
-              '</div>' +
-            '</div>' +
+            liAudienceCardHtml('jl', "James's LinkedIn", li && li.demographics) +
           '</div>';
 
+        wireInlineImportButtons(root);
         drawFollowersLine('jlFollowersChart', st.snaps);
+        if (hasLi && li.monthlyEngagement.length >= 2) {
+          var mLabels = li.monthlyEngagement.map(function (r) { return monthLbl(r.month); });
+          drawSparkline('jlImpSpark', mLabels, li.monthlyEngagement.map(function (r) { return r.impressions; }), PAL[0]);
+          drawSparkline('jlEngSpark', mLabels, li.monthlyEngagement.map(function (r) { return r.engagements; }), PAL[2]);
+        }
+        if (hasLi && li.monthlyFollowers.length) {
+          drawMonthlyNewFollowers('jlMonthlyFollowsChart', li.monthlyFollowers);
+        }
+        mountTopPostsTable('jlTopPostsHost', hasLi ? li.topPosts : [], { typeLabel: 'Published', seenLabel: 'Impressions' });
+        drawLiDemographics('jl', li && li.demographics);
       }
 
       // ── 3. MAG LINKEDIN VIEW (mag_linkedin.pdf) ─────────────────────────────
       function renderMagLinkedin() {
         var root = document.getElementById('spViewRoot');
         var st = accountStats('mag_linkedin');
+        var li = liDataForFy('mag_linkedin');
+        var hasLi = !!(li && li.hasPeriodData);
+        var pm = (li && li.pageMetrics) || {};
         var hist = platformHistory('mag_linkedin');
         var pair = hist ? snapPair(hist.snaps, hist.latest, hist.prior) : { latest: null, base: null };
+
+        var folDeltaHtml = (hasLi && li.netNew != null)
+          ? '<div class="delta ' + (li.netNew >= 0 ? 'pos' : 'neg') + '">' + (li.netNew >= 0 ? '▲ +' : '▼ ') + fmt(li.netNew, 'count') + (li.netNewRate != null ? ' (' + li.netNewRate.toFixed(1) + '%)' : '') + ' in period</div>'
+          : deltaHtmlFromPair(pair.latest && pair.latest.followers, pair.base && pair.base.followers);
 
         var kpisHtml = '<div class="sp-kpi-grid">' +
           kpiTile(
             'Followers',
             st.followers == null ? PENDING_CHIP : fmt(st.followers, 'count'),
-            deltaHtmlFromPair(pair.latest && pair.latest.followers, pair.base && pair.base.followers),
+            folDeltaHtml,
             'Total followers on the MyAdventure Group LinkedIn company page.',
-            'Weekly LinkedIn company snapshot'
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn company snapshot'
           ) +
           kpiTile(
             'Posts delivered',
             st.posts == null ? PENDING_CHIP : fmt(st.posts, 'count'),
-            deltaHtmlFromPair(pair.latest && pair.latest.posts, pair.base && pair.base.posts),
-            'Recent posts captured on the MAG LinkedIn company page.',
-            'Weekly LinkedIn company snapshot'
+            hasLi && li.topPosts.length ? '<div class="delta">' + fmt(li.topPosts.length, 'count') + ' top posts in period</div>' : deltaHtmlFromPair(pair.latest && pair.latest.posts, pair.base && pair.base.posts),
+            'Posts captured on the MAG LinkedIn company page.',
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn company snapshot'
           ) +
           kpiTile(
             'Engagements',
             st.engagements == null ? PENDING_CHIP : fmt(st.engagements, 'count'),
-            deltaHtmlFromPair(pair.latest && pair.latest.engagement, pair.base && pair.base.engagement),
-            'Reactions, comments and reposts across recent MAG LinkedIn posts.',
-            'Weekly LinkedIn company snapshot'
+            hasLi && li.impressions != null ? '<div class="delta">Across ' + fmt(li.impressions, 'count') + ' impressions</div>' : deltaHtmlFromPair(pair.latest && pair.latest.engagement, pair.base && pair.base.engagement),
+            'Reactions, comments and reposts across MAG LinkedIn posts.',
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn company snapshot'
           ) +
           kpiTile(
             'Engagement rate',
             st.engRate == null ? PENDING_CHIP : fmtPct(st.engRate, 1),
-            '<div class="delta">Avg engagement per post vs followers</div>',
-            'Average per-post engagement as a share of the MAG LinkedIn follower base.',
-            'Weekly LinkedIn company snapshot'
+            hasLi && li.impressions != null ? '<div class="delta">Engagements ÷ impressions</div>' : '<div class="delta">Avg engagement per post vs followers</div>',
+            hasLi ? 'Total engagements divided by total post impressions in the selected period.' : 'Average per-post engagement as a share of the MAG LinkedIn follower base.',
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn company snapshot'
           ) +
           kpiTile(
             'Enquiries traced to social',
@@ -1178,21 +1663,32 @@
             'CRM attribution (pending setup)'
           ) +
           kpiTile(
-            'Reached beyond followers',
-            PENDING_CHIP,
-            '<div class="delta">LinkedIn figure to be pulled</div>',
-            'Share of impressions coming from non-followers of the MAG LinkedIn page.',
-            'LinkedIn Page Analytics (pending connection)'
+            'Members reached',
+            (hasLi && li.membersReached != null) ? fmt(li.membersReached, 'count') : PENDING_CHIP,
+            (hasLi && li.raw && li.raw.dateRangeLabel) ? '<div class="delta">' + esc(li.raw.dateRangeLabel) + '</div>' : '<div class="delta">Import LinkedIn Analytics</div>',
+            'Unique LinkedIn members reached by MAG LinkedIn content across the imported window.',
+            hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn Page Analytics (pending import)'
           ) +
         '</div>';
 
-        var netHtml = st.netNew == null
-          ? PENDING_CHIP
-          : '<div class="sp-bar-list"><div class="sp-bar-row">' +
-              '<span class="b-lbl">Net</span>' +
+        var netHtml = '';
+        if (hasLi && li.monthlyFollowers && li.monthlyFollowers.length) {
+          netHtml =
+            '<div class="sp-bar-list" style="margin-bottom:14px"><div class="sp-bar-row">' +
+              '<span class="b-lbl">Net new</span>' +
               '<div class="b-track"><div class="b-fill accent" style="width:100%"></div></div>' +
-              '<span class="b-val ' + (st.netNew >= 0 ? 'pos' : 'neg') + '">' + (st.netNew > 0 ? '+' : '') + fmt(st.netNew, 'count') + '</span>' +
-            '</div></div>';
+              '<span class="b-val ' + (li.netNew >= 0 ? 'pos' : 'neg') + '">' + (li.netNew > 0 ? '+' : '') + fmt(li.netNew, 'count') + '</span>' +
+            '</div></div>' +
+            '<div class="sp-chart-box h-sm"><canvas id="mlMonthlyFollowsChart"></canvas></div>';
+        } else if (st.netNew != null) {
+          netHtml = '<div class="sp-bar-list"><div class="sp-bar-row">' +
+            '<span class="b-lbl">Net</span>' +
+            '<div class="b-track"><div class="b-fill accent" style="width:100%"></div></div>' +
+            '<span class="b-val ' + (st.netNew >= 0 ? 'pos' : 'neg') + '">' + (st.netNew > 0 ? '+' : '') + fmt(st.netNew, 'count') + '</span>' +
+          '</div></div>';
+        } else {
+          netHtml = PENDING_CHIP;
+        }
 
         root.innerHTML =
           '<p class="sp-context-line">Showing <strong>MAG LinkedIn</strong> — its own metrics (LinkedIn Analytics). Shared metrics re-slice to this account; cross-account cards are hidden.</p>' +
@@ -1200,37 +1696,35 @@
           '<div class="sp-grid">' +
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>MAG LinkedIn — Page Analytics ' + infoTip('LinkedIn Company Page analytics covering content impressions/interactions, page visitors by device, follower growth and page appearances.', 'LinkedIn Page Analytics (partial — followers live, page analytics pending)') + '</h3>' +
-                '<span class="chip partial">partial</span>' +
+                '<h3>MAG LinkedIn — Page Analytics ' + infoTip('LinkedIn Company Page analytics covering content impressions/interactions, page visitors, follower growth and appearances.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn Page Analytics (import .xlsx to populate)') + '</h3>' +
+                liImportBadgeHtml(li, 'mag_linkedin') +
               '</div>' +
 
               '<div class="sp-subsec-title">Content</div>' +
               '<div class="sp-mini-grid cols-4">' +
-                '<div class="sp-mini-box"><div class="m-label">Impressions</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Reactions</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Comments</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Reposts</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Impressions</div><div class="m-val">' + (hasLi && li.impressions != null ? fmt(li.impressions, 'count') : PENDING_CHIP) + '</div>' +
+                  (hasLi && li.monthlyEngagement.length >= 2 ? '<div class="sp-spark"><canvas id="mlImpSpark"></canvas></div>' : '') +
+                '</div>' +
+                '<div class="sp-mini-box"><div class="m-label">' + (pm.reactions != null ? 'Reactions' : 'Engagements') + '</div><div class="m-val">' + (pm.reactions != null ? fmt(pm.reactions, 'count') : (hasLi && li.engagements != null ? fmt(li.engagements, 'count') : PENDING_CHIP)) + '</div>' +
+                  (hasLi && li.monthlyEngagement.length >= 2 ? '<div class="sp-spark"><canvas id="mlEngSpark"></canvas></div>' : '') +
+                '</div>' +
+                '<div class="sp-mini-box"><div class="m-label">' + (pm.comments != null ? 'Comments' : 'Impressions · 7 days') + '</div><div class="m-val">' + (pm.comments != null ? fmt(pm.comments, 'count') : (hasLi && li.impressions7d != null ? fmt(li.impressions7d, 'count') : PENDING_CHIP)) + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">' + (pm.reposts != null ? 'Reposts' : 'Members reached') + '</div><div class="m-val">' + (pm.reposts != null ? fmt(pm.reposts, 'count') : (hasLi && li.membersReached != null ? fmt(li.membersReached, 'count') : PENDING_CHIP)) + '</div></div>' +
               '</div>' +
 
-              '<div class="sp-subsec-title">Visitors · page views by device</div>' +
+              '<div class="sp-subsec-title">Visitors · page views</div>' +
               '<div class="sp-mini-grid cols-3">' +
-                '<div class="sp-mini-box"><div class="m-label">Page views</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Unique visitors</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Custom button clicks</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Page views</div><div class="m-val">' + (pm.pageViews != null ? fmt(pm.pageViews, 'count') : PENDING_CHIP) + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Unique visitors</div><div class="m-val">' + (pm.uniqueVisitors != null ? fmt(pm.uniqueVisitors, 'count') : PENDING_CHIP) + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Custom button clicks</div><div class="m-val">' + (pm.customButtonClicks != null ? fmt(pm.customButtonClicks, 'count') : PENDING_CHIP) + '</div></div>' +
               '</div>' +
 
               '<div class="sp-subsec-title">Followers</div>' +
               '<div class="sp-mini-grid cols-2">' +
                 '<div class="sp-mini-box"><div class="m-label">Total followers</div><div class="m-val">' + (st.followers == null ? PENDING_CHIP : fmt(st.followers, 'count')) + '</div></div>' +
                 '<div class="sp-mini-box"><div class="m-label">New followers</div><div class="m-val">' + (st.netNew == null ? PENDING_CHIP : (st.netNew > 0 ? '+' : '') + fmt(st.netNew, 'count')) + '</div>' +
-                  (st.netNewRate != null ? '<div class="m-sub ' + (st.netNew >= 0 ? 'pos' : 'neg') + '">' + st.netNewRate.toFixed(1) + '% vs prior snapshot</div>' : '') +
+                  (st.netNewRate != null ? '<div class="m-sub ' + (st.netNew >= 0 ? 'pos' : 'neg') + '">' + st.netNewRate.toFixed(1) + '% ' + (hasLi ? 'in period' : 'vs prior snapshot') + '</div>' : '') +
                 '</div>' +
-              '</div>' +
-
-              '<div class="sp-subsec-title">Page appearances</div>' +
-              '<div class="sp-mini-grid cols-2">' +
-                '<div class="sp-mini-box"><div class="m-label">All appearances · 7 days</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Search appearances</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
               '</div>' +
             '</div>' +
 
@@ -1239,36 +1733,36 @@
 
             '<div class="sp-card">' +
               '<div class="sp-card-head">' +
-                '<h3>Follows vs unfollows — MAG LinkedIn ' + infoTip('LinkedIn reports net follower change only. Derived from weekly follower snapshots.', 'Weekly LinkedIn follower snapshots') + '</h3>' +
-                (st.netNew != null ? '<span class="sp-live-pill"><span class="dot"></span>Live</span>' : PENDING_CHIP) +
+                '<h3>Follows vs unfollows — MAG LinkedIn ' + infoTip('LinkedIn reports net new followers only.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn follower snapshots') + '</h3>' +
+                (hasLi && li.monthlyFollowers.length ? '<span class="sp-live-pill"><span class="dot"></span>Imported · monthly</span>' : (st.netNew != null ? '<span class="sp-live-pill"><span class="dot"></span>Live</span>' : PENDING_CHIP)) +
               '</div>' +
-              '<div class="cap">LinkedIn reports net only</div>' +
+              '<div class="cap">LinkedIn reports net new followers only</div>' +
               netHtml +
             '</div>' +
 
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>Top posts ' + infoTip('Individual MAG LinkedIn posts ranked by engagement. Pending a post-level LinkedIn sync.', 'LinkedIn Page Analytics (pending connection)') + '</h3>' +
-                PENDING_CHIP +
+                '<h3>Top posts ' + infoTip('Individual MAG LinkedIn posts ranked by engagements and impressions from imported LinkedIn Analytics.', hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'LinkedIn Page Analytics (pending import)') + '</h3>' +
+                (hasLi && li.topPosts.length ? '<span class="sp-live-pill"><span class="dot"></span>Imported · ' + fmt(li.topPosts.length, 'count') + ' posts</span>' : PENDING_CHIP) +
               '</div>' +
-              pendingBox('MAG LinkedIn post-level feed pending', 'Individual company page posts, impressions, engagement rates and link clicks are not yet connected.') +
+              '<div id="mlTopPostsHost"></div>' +
             '</div>' +
 
-            '<div class="sp-card wide">' +
-              '<div class="sp-card-head">' +
-                '<h3>Audience — who follows us ' + infoTip('Demographic breakdown of MAG LinkedIn followers by seniority, industry and top locations. Checked quarterly.', 'LinkedIn Page Analytics (pending connection)') + '</h3>' +
-                '<span class="sp-tag-pill">Quarterly</span>' +
-                PENDING_CHIP +
-              '</div>' +
-              '<div class="sp-aud-grid">' +
-                '<div class="sp-subcard"><div class="sp-subcard-head">By seniority ' + infoTip('Seniority breakdown of MAG LinkedIn page followers.', 'LinkedIn demographics (pending)') + '</div>' + pendingBox('', 'LinkedIn seniority demographics not connected yet.') + '</div>' +
-                '<div class="sp-subcard"><div class="sp-subcard-head">By industry ' + infoTip('Industries represented among MAG LinkedIn followers.', 'LinkedIn demographics (pending)') + '</div>' + pendingBox('', 'LinkedIn industry demographics not connected yet.') + '</div>' +
-                '<div class="sp-subcard"><div class="sp-subcard-head">Top locations ' + infoTip('Top cities and regions where MAG LinkedIn followers are based.', 'LinkedIn demographics (pending)') + '</div>' + pendingBox('', 'LinkedIn location demographics not connected yet.') + '</div>' +
-              '</div>' +
-            '</div>' +
+            liAudienceCardHtml('ml', 'MAG LinkedIn', li && li.demographics) +
           '</div>';
 
+        wireInlineImportButtons(root);
         drawFollowersLine('mlFollowersChart', st.snaps);
+        if (hasLi && li.monthlyEngagement.length >= 2) {
+          var mLabels = li.monthlyEngagement.map(function (r) { return monthLbl(r.month); });
+          drawSparkline('mlImpSpark', mLabels, li.monthlyEngagement.map(function (r) { return r.impressions; }), PAL[0]);
+          drawSparkline('mlEngSpark', mLabels, li.monthlyEngagement.map(function (r) { return r.engagements; }), PAL[2]);
+        }
+        if (hasLi && li.monthlyFollowers.length) {
+          drawMonthlyNewFollowers('mlMonthlyFollowsChart', li.monthlyFollowers);
+        }
+        mountTopPostsTable('mlTopPostsHost', hasLi ? li.topPosts : [], { typeLabel: 'Published', seenLabel: 'Impressions' });
+        drawLiDemographics('ml', li && li.demographics);
       }
 
       // ── 4. FACEBOOK VIEW (fb.pdf) ───────────────────────────────────────────
@@ -1543,10 +2037,195 @@
         }
       }
 
+      // ── LinkedIn Analytics Import Modal Controller ──────────────────────────
+      var _liSelectedFiles = [];
+
+      function showImportBanner(msg) {
+        var host = document.getElementById('spImportBannerHost');
+        if (!host) return;
+        host.innerHTML = '<div class="sp-import-banner">' +
+          '<div><strong>Import complete</strong> — ' + esc(msg) + '</div>' +
+          '<button type="button" aria-label="Dismiss">×</button>' +
+        '</div>';
+        var closeBtn = host.querySelector('button');
+        if (closeBtn) closeBtn.addEventListener('click', function () { host.innerHTML = ''; });
+      }
+
+      function renderSelectedFiles() {
+        var list = document.getElementById('liFileList');
+        var submit = document.getElementById('liImportSubmitBtn');
+        if (!list || !submit) return;
+        if (!_liSelectedFiles.length) {
+          list.innerHTML = '';
+          submit.disabled = true;
+          return;
+        }
+        submit.disabled = false;
+        list.innerHTML = _liSelectedFiles.map(function (f, idx) {
+          var kb = Math.max(1, Math.round(f.size / 1024));
+          return '<div class="sp-file-item">' +
+            '<span class="f-name">' + esc(f.name) + '</span>' +
+            '<span class="f-meta">' + kb + ' KB · <button type="button" data-rm-file="' + idx + '" style="background:none;border:none;color:var(--neg);cursor:pointer;font-weight:700;padding:0">Remove</button></span>' +
+          '</div>';
+        }).join('');
+        list.querySelectorAll('[data-rm-file]').forEach(function (b) {
+          b.addEventListener('click', function () {
+            var idx = parseInt(b.getAttribute('data-rm-file'), 10);
+            _liSelectedFiles.splice(idx, 1);
+            renderSelectedFiles();
+          });
+        });
+      }
+
+      function setImportError(msg) {
+        var el = document.getElementById('liImportErr');
+        if (!el) return;
+        if (!msg) { el.hidden = true; el.textContent = ''; }
+        else { el.hidden = false; el.textContent = msg; }
+      }
+
+      function openLiImportDialog(defaultPlatformKey) {
+        var dlg = document.getElementById('liImportDialog');
+        var sel = document.getElementById('liImportAccount');
+        if (!dlg) return;
+        if (sel) {
+          if (defaultPlatformKey === 'james_linkedin' || defaultPlatformKey === 'mag_linkedin') {
+            sel.value = defaultPlatformKey;
+          } else if (CURRENT_PLATFORM === 'mag-linkedin') {
+            sel.value = 'mag_linkedin';
+          } else {
+            sel.value = 'james_linkedin';
+          }
+        }
+        _liSelectedFiles = [];
+        var fi = document.getElementById('liFileInput');
+        if (fi) fi.value = '';
+        renderSelectedFiles();
+        setImportError('');
+        if (typeof dlg.showModal === 'function') dlg.showModal();
+        else dlg.setAttribute('open', '');
+      }
+
+      function closeLiImportDialog() {
+        var dlg = document.getElementById('liImportDialog');
+        if (!dlg) return;
+        if (typeof dlg.close === 'function') dlg.close();
+        else dlg.removeAttribute('open');
+      }
+
+      function readFileAsBase64(file) {
+        return new Promise(function (resolve, reject) {
+          var reader = new FileReader();
+          reader.onload = function () {
+            var res = String(reader.result || '');
+            var comma = res.indexOf(',');
+            resolve({ fileName: file.name, base64: comma >= 0 ? res.slice(comma + 1) : res });
+          };
+          reader.onerror = function () { reject(new Error('Could not read ' + file.name)); };
+          reader.readAsDataURL(file);
+        });
+      }
+
+      function addFilesFromList(fileList) {
+        setImportError('');
+        var arr = Array.prototype.slice.call(fileList || []);
+        arr.forEach(function (f) {
+          if (!/\.xlsx$/i.test(f.name)) {
+            setImportError('Only .xlsx LinkedIn Analytics export files are supported.');
+            return;
+          }
+          if (!_liSelectedFiles.some(function (x) { return x.name === f.name && x.size === f.size; })) {
+            _liSelectedFiles.push(f);
+          }
+        });
+        renderSelectedFiles();
+      }
+
+      function wireImportModal() {
+        var openBtn = document.getElementById('openLiImportBtn');
+        var closeBtn = document.getElementById('liImportCloseBtn');
+        var cancelBtn = document.getElementById('liImportCancelBtn');
+        var dz = document.getElementById('liDropzone');
+        var fi = document.getElementById('liFileInput');
+        var form = document.getElementById('liImportForm');
+        var dlg = document.getElementById('liImportDialog');
+
+        if (openBtn) openBtn.addEventListener('click', function () { openLiImportDialog(); });
+        if (closeBtn) closeBtn.addEventListener('click', closeLiImportDialog);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeLiImportDialog);
+        if (dlg) {
+          dlg.addEventListener('click', function (e) {
+            if (e.target === dlg) closeLiImportDialog();
+          });
+        }
+        if (dz && fi) {
+          dz.addEventListener('click', function () { fi.click(); });
+          dz.addEventListener('keydown', function (e) {
+            if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fi.click(); }
+          });
+          dz.addEventListener('dragover', function (e) { e.preventDefault(); dz.classList.add('dragover'); });
+          dz.addEventListener('dragleave', function () { dz.classList.remove('dragover'); });
+          dz.addEventListener('drop', function (e) {
+            e.preventDefault();
+            dz.classList.remove('dragover');
+            addFilesFromList(e.dataTransfer && e.dataTransfer.files);
+          });
+          fi.addEventListener('change', function () { addFilesFromList(fi.files); });
+        }
+        if (form) {
+          form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (!_liSelectedFiles.length) return;
+            var sel = document.getElementById('liImportAccount');
+            var platformKey = sel ? sel.value : 'james_linkedin';
+            var submitBtn = document.getElementById('liImportSubmitBtn');
+            setImportError('');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Importing…'; }
+
+            Promise.all(_liSelectedFiles.map(readFileAsBase64))
+              .then(function (filesPayload) {
+                return postJSON('/api/marketing/linkedin-analytics/import', {
+                  platformKey: platformKey,
+                  files: filesPayload
+                });
+              })
+              .then(function (res) {
+                if (res && res.imported) {
+                  LIVE.linkedin[platformKey] = res.imported;
+                  var sum = res.imported.summary || {};
+                  var acctName = platformKey === 'james_linkedin' ? "James's LinkedIn" : 'MAG LinkedIn';
+                  closeLiImportDialog();
+                  // Switch to the imported account if not already on it
+                  var targetTab = platformKey === 'james_linkedin' ? 'james-linkedin' : 'mag-linkedin';
+                  if (CURRENT_PLATFORM !== targetTab) setPlatform(targetTab);
+                  else renderActiveView();
+                  showImportBanner(
+                    acctName + ': ' +
+                    (sum.engagementDays || 0) + ' days of engagement, ' +
+                    (sum.followerDays || 0) + ' days of followers, ' +
+                    (sum.topPostsCount || 0) + ' top posts, and ' +
+                    (sum.demographicsCount || 0) + ' demographic rows imported.'
+                  );
+                }
+              })
+              .catch(function (err) {
+                setImportError((err && err.message) || 'Import failed.');
+              })
+              .finally(function () {
+                if (submitBtn) { submitBtn.disabled = !_liSelectedFiles.length; submitBtn.textContent = 'Import data'; }
+              });
+          });
+        }
+      }
+
       // ── Router & Controls ───────────────────────────────────────────────────
       function renderActiveView() {
         destroyCharts();
         updateCmpRange();
+        var topImportBtn = document.getElementById('openLiImportBtn');
+        if (topImportBtn) {
+          topImportBtn.hidden = !(CURRENT_PLATFORM === 'james-linkedin' || CURRENT_PLATFORM === 'mag-linkedin');
+        }
         if (CURRENT_PLATFORM === 'all') renderAllAccounts();
         else if (CURRENT_PLATFORM === 'james-linkedin') renderJamesLinkedin();
         else if (CURRENT_PLATFORM === 'mag-linkedin') renderMagLinkedin();
@@ -1615,6 +2294,7 @@
         safeFetch('/api/marketing/meta-fb-trend', function (res) { LIVE.fbTrend = (res && res.data) || []; });
         safeFetch('/api/marketing/meta-ig-demographics', function (res) { LIVE.igDemo = res; });
         safeFetch('/api/marketing/meta-top-posts', function (res) { LIVE.topPosts = (res && res.data) || []; });
+        safeFetch('/api/marketing/linkedin-analytics', function (res) { LIVE.linkedin = (res && res.byPlatform) || {}; });
       }
 
       // ── Bootstrap ───────────────────────────────────────────────────────────
@@ -1622,6 +2302,7 @@
       renderMarketingHead(true);          // No "Sample data — layout only" chip on any toggle
       renderMarketingSidebar('social-platforms');
       wireControls();
+      wireImportModal();
       renderActiveView();                 // Initial render (shows pending chips cleanly until live calls resolve)
       loadAllLiveData();
       window.onThemeChange = renderActiveView;

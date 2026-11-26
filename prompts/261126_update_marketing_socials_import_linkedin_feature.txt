@@ -1,0 +1,14 @@
+**audience_analytics:**
+"C:\Users\Cloverly\Downloads\AggregateAnalytics_James Castrission_2025-10-23_2026-11-26.xlsx"
+
+**content_analytics:**
+"C:\Users\Cloverly\Downloads\AggregateAnalytics_James Castrission_2025-10-23_2026-11-26 (1).xlsx"
+
+**socials_to_update:**
+1. James's LinkedIn
+2. MAG LinkedIn
+
+## main_task:
+1. update socials_to_update. there should be an option to import linkedin_analytics data
+2. see audience_analytics and content_analytics for sample data to be imported
+3. these data data imported should then reflect in the page after the import
