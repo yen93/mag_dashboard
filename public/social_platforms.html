@@ -600,6 +600,31 @@
     </form>
   </dialog>
 
+  <dialog class="sp-dialog" id="fbAudImportDialog" aria-labelledby="fbAudImportTitle">
+    <div class="sp-dialog-head">
+      <h2 id="fbAudImportTitle">Import Facebook Audience (.csv)</h2>
+      <button type="button" class="sp-dialog-close" id="fbAudImportCloseBtn" aria-label="Close">×</button>
+    </div>
+    <form id="fbAudImportForm">
+      <div class="sp-dialog-body">
+        <div class="sp-field">
+          <label>Facebook Audience export file</label>
+          <div class="sp-dropzone" id="fbAudDropzone" tabindex="0" role="button" aria-label="Choose Facebook Audience CSV file">
+            <div class="dz-title">Drop the Meta Business Suite <code>Audience.csv</code> here, or click to browse</div>
+            <div class="dz-sub">In Meta Business Suite open <strong>Insights → Audience</strong> and export the CSV. It holds age &amp; gender, top cities and top countries for your Facebook Page followers.</div>
+            <input type="file" id="fbAudFileInput" accept=".csv" hidden />
+          </div>
+        </div>
+        <div class="sp-file-list" id="fbAudFileList"></div>
+        <div class="sp-dialog-err" id="fbAudImportErr" hidden></div>
+      </div>
+      <div class="sp-dialog-foot">
+        <button type="button" class="sp-import-btn secondary" id="fbAudImportCancelBtn">Cancel</button>
+        <button type="submit" class="sp-import-btn" id="fbAudImportSubmitBtn" disabled>Import data</button>
+      </div>
+    </form>
+  </dialog>
+
   <script src="vendor/chart.umd.min.js"></script>
   <script src="app.js?v=30"></script>
   <script>
@@ -625,6 +650,7 @@
         igByType: [],        // /api/marketing/meta-ig-by-type (IG "what works best by type", daily cache)
         topPosts: [],        // /api/marketing/meta-top-posts (IG)
         fbTopPosts: [],      // /api/marketing/meta-top-posts (FB)
+        fbAudience: null,    // /api/marketing/meta-fb-audience (imported FB Audience CSV)
         linkedin: {}         // { james_linkedin, mag_linkedin } from /api/marketing/linkedin-analytics
       };
 
@@ -1939,6 +1965,13 @@
         var latestFbMonth = fbTrend.length ? fbTrend[fbTrend.length - 1] : null;
         var fbPosts = isLiveWindowFy() ? (LIVE.fbTopPosts || []) : [];
 
+        // Imported Facebook Audience CSV (age & gender, top cities, top countries).
+        var fbAud = LIVE.fbAudience;
+        var hasFbAg = !!(fbAud && fbAud.ageGender && fbAud.ageGender.length);
+        var hasFbLoc = !!(fbAud && fbAud.locations && fbAud.locations.length);
+        var hasFbCtry = !!(fbAud && fbAud.countries && fbAud.countries.length);
+        var hasFbAud = hasFbAg || hasFbLoc || hasFbCtry;
+
         // Reconstruct 13-month follower curve from live followers + Meta monthly follows/unfollows
         // when weekly Apify snapshots have < 2 points.
         var fbSnaps = st.snaps || [];
@@ -2099,17 +2132,25 @@
 
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>Audience — who follows us ' + infoTip('Facebook follower age, gender and city demographics. Deprecated by Meta\'s New-Pages API.', 'Facebook Insights (deprecated by Meta)') + '</h3>' +
-                '<span class="sp-tag-pill">Quarterly</span>' +
-                PENDING_CHIP +
+                '<h3>Audience — who follows us ' + infoTip('Facebook follower age, gender, top cities and top countries. Facebook Page demographics are retired from Meta\'s Graph API, so this is imported from a Meta Business Suite Audience CSV export.', hasFbAud ? 'Imported Facebook Audience CSV (Meta Business Suite)' : 'Facebook Audience CSV (import to populate)') + '</h3>' +
+                (hasFbAud ? '<span class="sp-live-pill"><span class="dot"></span>Imported' + (fbAud && fbAud.uploadedAt ? ' · ' + snapFmt(fbAud.uploadedAt) : '') + '</span>' : PENDING_CHIP) +
+                '<div class="spacer"></div>' +
+                '<button type="button" class="sp-import-btn secondary" data-fbaud-import style="padding:4px 10px;font-size:11.5px">↑ Import audience CSV</button>' +
               '</div>' +
-              '<div class="sp-aud-grid">' +
-                '<div class="sp-subcard"><div class="sp-subcard-head">Age &amp; gender ' + infoTip('Facebook audience age and gender breakdown. Deprecated by Meta\'s API.', 'Facebook Insights (unavailable)') + '</div>' + pendingBox('', 'Facebook age & gender demographics are deprecated by Meta\'s API.') + '</div>' +
-                '<div class="sp-subcard"><div class="sp-subcard-head">Top locations ' + infoTip('Top cities where Facebook followers are based. Deprecated by Meta\'s API.', 'Facebook Insights (unavailable)') + '</div>' + pendingBox('', 'Facebook city demographics are deprecated by Meta\'s API.') + '</div>' +
-              '</div>' +
+              (hasFbAud
+                ? '<div class="sp-aud-grid">' +
+                    '<div class="sp-subcard"><div class="sp-subcard-head">Age &amp; gender ' + infoTip('Facebook audience by age bracket and gender (women left, men right), as a share of the audience.', 'Imported Facebook Audience CSV (Meta Business Suite)') + '</div>' +
+                      (hasFbAg ? '<div class="sp-chart-box h-md"><canvas id="fbAgeGenderChart"></canvas></div>' : pendingBox('', 'No age & gender rows in the imported CSV.')) + '</div>' +
+                    '<div class="sp-subcard"><div class="sp-subcard-head">Top cities ' + infoTip('Top cities where Facebook followers are based, as a share of the located audience.', 'Imported Facebook Audience CSV (Meta Business Suite)') + '</div>' +
+                      (hasFbLoc ? '<div class="sp-chart-box h-md"><canvas id="fbLocationsChart"></canvas></div>' : pendingBox('', 'No city rows in the imported CSV.')) + '</div>' +
+                    '<div class="sp-subcard"><div class="sp-subcard-head">Top countries ' + infoTip('Top countries where Facebook followers are based, as a share of the located audience.', 'Imported Facebook Audience CSV (Meta Business Suite)') + '</div>' +
+                      (hasFbCtry ? '<div class="sp-chart-box h-md"><canvas id="fbCountriesChart"></canvas></div>' : pendingBox('', 'No country rows in the imported CSV.')) + '</div>' +
+                  '</div>'
+                : pendingBox('Import the Facebook Audience CSV', 'Facebook Page follower demographics are retired from Meta\'s Graph API. Export the Audience CSV from Meta Business Suite (Insights → Audience) and use "Import audience CSV" above to populate age & gender, top cities and top countries.')) +
             '</div>' +
           '</div>';
 
+        wireFbAudImportButtons(root);
         drawFollowersLine('fbFollowersChart', fbSnaps);
         if (hasFbByType) {
           drawHbar(
@@ -2118,6 +2159,19 @@
             fbByType.map(function (b) { return b.metric; }),
             { color: PAL[0], pct: false }
           );
+        }
+        if (hasFbAg) drawAgeGenderPyramid('fbAgeGenderChart', fbAud.ageGender);
+        if (hasFbLoc) {
+          drawHbar('fbLocationsChart',
+            fbAud.locations.map(function (r) { return r.place; }),
+            fbAud.locations.map(function (r) { return r.share; }),
+            { color: PAL[0], pct: true });
+        }
+        if (hasFbCtry) {
+          drawHbar('fbCountriesChart',
+            fbAud.countries.map(function (r) { return r.place; }),
+            fbAud.countries.map(function (r) { return r.share; }),
+            { color: PAL[2], pct: true });
         }
         if (fbTrend.length >= 2) {
           drawSparkline('fbFollowsSpark', fbTrend.map(function (r) { return monthLbl(r.month); }), fbTrend.map(function (r) { return r.follows; }), PAL[0]);
@@ -2489,6 +2543,118 @@
         }
       }
 
+      // ── Facebook Audience CSV import ────────────────────────────────────────
+      var _fbAudFile = null;
+
+      function renderFbAudFile() {
+        var list = document.getElementById('fbAudFileList');
+        var submit = document.getElementById('fbAudImportSubmitBtn');
+        if (!list || !submit) return;
+        if (!_fbAudFile) { list.innerHTML = ''; submit.disabled = true; return; }
+        submit.disabled = false;
+        var kb = Math.max(1, Math.round(_fbAudFile.size / 1024));
+        list.innerHTML = '<div class="sp-file-item">' +
+          '<span class="f-name">' + esc(_fbAudFile.name) + '</span>' +
+          '<span class="f-meta">' + kb + ' KB · <button type="button" id="fbAudRmFile" style="background:none;border:none;color:var(--neg);cursor:pointer;font-weight:700;padding:0">Remove</button></span>' +
+        '</div>';
+        var rm = document.getElementById('fbAudRmFile');
+        if (rm) rm.addEventListener('click', function () { _fbAudFile = null; renderFbAudFile(); });
+      }
+
+      function setFbAudErr(msg) {
+        var el = document.getElementById('fbAudImportErr');
+        if (!el) return;
+        if (!msg) { el.hidden = true; el.textContent = ''; }
+        else { el.hidden = false; el.textContent = msg; }
+      }
+
+      function openFbAudImportDialog() {
+        var dlg = document.getElementById('fbAudImportDialog');
+        if (!dlg) return;
+        _fbAudFile = null;
+        var fi = document.getElementById('fbAudFileInput');
+        if (fi) fi.value = '';
+        renderFbAudFile();
+        setFbAudErr('');
+        if (typeof dlg.showModal === 'function') dlg.showModal();
+        else dlg.setAttribute('open', '');
+      }
+
+      function closeFbAudImportDialog() {
+        var dlg = document.getElementById('fbAudImportDialog');
+        if (!dlg) return;
+        if (typeof dlg.close === 'function') dlg.close();
+        else dlg.removeAttribute('open');
+      }
+
+      function addFbAudFile(fileList) {
+        setFbAudErr('');
+        var f = (fileList && fileList[0]) || null;
+        if (!f) return;
+        if (!/\.csv$/i.test(f.name)) {
+          setFbAudErr('Only the .csv Facebook Audience export is supported.');
+          return;
+        }
+        _fbAudFile = f;
+        renderFbAudFile();
+      }
+
+      function wireFbAudImportButtons(root) {
+        (root || document).querySelectorAll('[data-fbaud-import]').forEach(function (btn) {
+          btn.addEventListener('click', openFbAudImportDialog);
+        });
+      }
+
+      function wireFbAudImportModal() {
+        var closeBtn = document.getElementById('fbAudImportCloseBtn');
+        var cancelBtn = document.getElementById('fbAudImportCancelBtn');
+        var dz = document.getElementById('fbAudDropzone');
+        var fi = document.getElementById('fbAudFileInput');
+        var form = document.getElementById('fbAudImportForm');
+        var dlg = document.getElementById('fbAudImportDialog');
+
+        if (closeBtn) closeBtn.addEventListener('click', closeFbAudImportDialog);
+        if (cancelBtn) cancelBtn.addEventListener('click', closeFbAudImportDialog);
+        if (dlg) dlg.addEventListener('click', function (e) { if (e.target === dlg) closeFbAudImportDialog(); });
+        if (dz && fi) {
+          dz.addEventListener('click', function () { fi.click(); });
+          dz.addEventListener('keydown', function (e) { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); fi.click(); } });
+          dz.addEventListener('dragover', function (e) { e.preventDefault(); dz.classList.add('dragover'); });
+          dz.addEventListener('dragleave', function () { dz.classList.remove('dragover'); });
+          dz.addEventListener('drop', function (e) { e.preventDefault(); dz.classList.remove('dragover'); addFbAudFile(e.dataTransfer && e.dataTransfer.files); });
+          fi.addEventListener('change', function () { addFbAudFile(fi.files); });
+        }
+        if (form) {
+          form.addEventListener('submit', function (e) {
+            e.preventDefault();
+            if (!_fbAudFile) return;
+            var submitBtn = document.getElementById('fbAudImportSubmitBtn');
+            setFbAudErr('');
+            if (submitBtn) { submitBtn.disabled = true; submitBtn.textContent = 'Importing…'; }
+            readFileAsBase64(_fbAudFile)
+              .then(function (payload) {
+                return postJSON('/api/marketing/meta-fb-audience/import', { files: [payload] });
+              })
+              .then(function (res) {
+                if (res && res.imported) {
+                  LIVE.fbAudience = res.imported;
+                  var sum = res.imported.summary || {};
+                  closeFbAudImportDialog();
+                  if (CURRENT_PLATFORM !== 'facebook') setPlatform('facebook');
+                  else renderActiveView();
+                  showImportBanner('facebook',
+                    'Facebook audience: ' + (sum.ageGenderRows || 0) + ' age/gender rows, ' +
+                    (sum.cityRows || 0) + ' cities and ' + (sum.countryRows || 0) + ' countries imported.');
+                }
+              })
+              .catch(function (err) { setFbAudErr((err && err.message) || 'Import failed.'); })
+              .finally(function () {
+                if (submitBtn) { submitBtn.disabled = !_fbAudFile; submitBtn.textContent = 'Import data'; }
+              });
+          });
+        }
+      }
+
       // ── Router & Controls ───────────────────────────────────────────────────
       function renderActiveView() {
         destroyCharts();
@@ -2566,6 +2732,7 @@
         safeFetch('/api/marketing/meta-fb-trend', function (res) { LIVE.fbTrend = (res && res.data) || []; });
         safeFetch('/api/marketing/meta-ig-demographics', function (res) { LIVE.igDemo = res; });
         safeFetch('/api/marketing/meta-ig-by-type', function (res) { LIVE.igByType = (res && res.data) || []; });
+        safeFetch('/api/marketing/meta-fb-audience', function (res) { LIVE.fbAudience = res; });
         safeFetch('/api/marketing/meta-top-posts', function (res) {
           LIVE.topPosts = (res && res.data) || [];
           LIVE.fbTopPosts = (res && res.fbPosts) || [];
@@ -2579,6 +2746,7 @@
       renderMarketingSidebar('social-platforms');
       wireControls();
       wireImportModal();
+      wireFbAudImportModal();
       renderActiveView();                 // Initial render (shows pending chips cleanly until live calls resolve)
       loadAllLiveData();
       window.onThemeChange = renderActiveView;

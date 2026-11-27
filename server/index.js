@@ -32,6 +32,7 @@ import { getMetaIgTrend } from './metrics/meta-ig-trend.js';
 import { getMetaFbTrend } from './metrics/meta-fb-trend.js';
 import { getMetaIgDemographics } from './metrics/meta-ig-demographics.js';
 import { getMetaIgByType } from './metrics/meta-ig-by-type.js';
+import { getMetaFbAudience, saveMetaFbAudienceImport } from './metrics/meta-fb-audience.js';
 import { getMetaTopPosts } from './metrics/meta-top-posts.js';
 import { getSocialAudience } from './metrics/social-audience.js';
 import { getLinkedInAnalytics, saveLinkedInImport } from './metrics/linkedin-analytics.js';
@@ -730,6 +731,33 @@ marketing.get('/meta-ig-by-type', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:meta-ig-by-type]', err);
     res.status(502).json({ error: 'Failed to load Instagram by-type.', detail: err.message });
+  }
+});
+// Facebook Page audience demographics — manual CSV import (Meta Business Suite "Audience" export).
+// Facebook Page follower demographics are retired from Meta's Graph API, so the "Audience — who
+// follows us" card on the Facebook tab is fed by an uploaded CSV. Reads/writes
+// public.meta_fb_audience_import. See server/metrics/meta-fb-audience.js.
+marketing.get('/meta-fb-audience', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:meta-fb-audience', getMetaFbAudience, 5 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:meta-fb-audience]', err);
+    res.status(502).json({ error: 'Failed to load Facebook audience.', detail: err.message });
+  }
+});
+marketing.post('/meta-fb-audience/import', async (req, res) => {
+  const files = req.body && req.body.files;
+  try {
+    const imported = await saveMetaFbAudienceImport(files, req.user && req.user.email);
+    clearCache();
+    res.status(201).json({ imported });
+  } catch (err) {
+    if (err.status === 400 || err.status === 503) {
+      return res.status(err.status).json({ error: err.message });
+    }
+    console.error('[marketing:meta-fb-audience:import]', err);
+    res.status(502).json({ error: 'Failed to import Facebook audience.', detail: err.message });
   }
 });
 // Top posts — recent Facebook + Instagram posts ranked by engagement (IG rows carry real per-post
