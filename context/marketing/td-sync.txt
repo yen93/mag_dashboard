@@ -1,0 +1,49 @@
+# Time Doctor Sync (td_sync.html)
+
+Self-service page: each staff member pulls THEIR OWN Time Doctor activity + hours
+into Supabase. Lives under Marketing → "More" dropdown ('td-sync').
+
+## What it is
+- Dropdown of staff (from `public.organization_users.email`) + a Time Doctor password
+  field + "Sync my last 30 days". The signed-in user's email is pre-selected if present.
+- On submit it logs into Time Doctor as that user, pulls the last 30 days of worklog,
+  and UPSERTS every entry into `public.time_doctor_worklog`. Shows entries synced +
+  worked/break hours + the date range.
+
+## Backend — a Supabase EDGE FUNCTION, not the dashboard Express server
+- The page is pure frontend. It calls an edge function in MAGTestProject
+  (ref `aivitcomiywiysrfwqxt`), NOT a `/api/*` route — so `server/index.js` was NOT
+  touched. CORS is open (`*`) on the function; the page fetches it cross-origin.
+- Function: `supabase/functions/td-sync` (source of truth for the function lives in the
+  separate repo `time_doctor_sync`, under `supabase/functions/td-sync/index.ts`).
+  - GET  → `{ users: [{email,label}] }` from `organization_users` (for the dropdown).
+  - POST `{email,password}` → Time Doctor `/login` (password used once, never stored) →
+    `/authorization` (gets td user id, company id, timezone) →
+    `/activity/worklog?from=<30d>&to=<now>` → upsert rows.
+  - Deployed with **`verify_jwt=false`** (public; gated by Time Doctor credentials +
+    an `organization_users` email check). Time Doctor API base: `https://api2.timedoctor.com/api/1.0`.
+
+## Table — public.time_doctor_worklog (MAGTestProject)
+- One row per raw worklog entry. Natural key `entry_id` = `{td_user_id}|{start}|{mode}|{task_id}`.
+- Upsert via PostgREST `?on_conflict=entry_id` + `Prefer: resolution=merge-duplicates`.
+  **NEVER truncate / drop-reload** (global data-safety rule). Re-syncing updates in place.
+- Columns: entry_id, org_user_id (→organization_users.id), email, td_user_id, td_company_id,
+  start_at, work_date (date in the user's own TD timezone), duration_sec, duration_hours,
+  mode, is_break, task_id, project_id, shift_id, device_id, synced_at.
+- RLS is ENABLED with no policies → only the service role (the edge function) reads/writes.
+  Dashboard/admin reads go through SQL / MCP, not anon.
+
+## Gotchas / notes
+- 2FA is NOT handled — an account that requires a TOTP code will get a login error.
+  Add a `totpCode` field + pass-through if needed later.
+- `mode` values: `computer`, `mobile`, `paidBreak`, `unpaidBreak`, … `is_break` = /break/i.
+- task_id / project_id are Time Doctor IDs, not names (no name lookup yet).
+- Worklog `time` is SECONDS; `duration_hours` is the convenience conversion.
+- Possible future improvement: move the sync server-side into `/api/timedoctor/*` on the
+  dashboard Express server (same-origin, JWT-gated) instead of the public edge function.
+
+## Build history
+- 2026-11-27: created. New page + added 'td-sync' to the Marketing "More" list in
+  `app.js` (`renderMarketingSidebar`); all 18 marketing pages bumped `app.js?v=30 → v=31`.
+  Table + edge function created in MAGTestProject. Frontend-only change to the dashboard
+  → needs a manual Cloud Run redeploy (user deploys; Claude never does).

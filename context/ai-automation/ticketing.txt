@@ -1,0 +1,4 @@
+# AI & AUTOMATION / Ticketing (ticketing.html)
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+- **Ticketing tab (2026-11-17).** `ticketing.html` (AI & Automation sidebar key `ticketing`, now `app.js?v=21`) is a LIVE internal ticket board — the ONE table the server WRITES directly: `public.dashboard_tickets` (migration `20261117120000`, RLS on/no policies, no sync/edge fn/cron). `server/metrics/tickets.js` + a `tickets` router in `server/index.js` at `/api/tickets` (`requireAuth`+`requireFullAccess`, so restricted partners are blocked): `GET /` uncached, `POST /` any team member files (submitter from the JWT, never the body), `POST /:id/update` **admin-only** (`role==='admin'`) triage of status/priority/assignee/admin_notes. Types: issue/feedback/build_feedback/build_request/other. The page shows triage controls only for admins (`currentUser().role`). Needs a manual redeploy.

@@ -1,0 +1,160 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Time Doctor Sync — MAG Metrics</title>
+  <link rel="stylesheet" href="app.css" />
+  <script>try { var t = localStorage.getItem('mag_theme'); if (t) document.documentElement.setAttribute('data-theme', t); } catch (e) {}</script>
+  <style>
+    .td-form { display: flex; flex-direction: column; gap: 14px; max-width: 460px; }
+    .td-form label { font-size: 13px; font-weight: 600; color: var(--text); }
+    .td-form select, .td-form input {
+      width: 100%; padding: 11px 13px; border: 1px solid var(--border); border-radius: 10px;
+      background: var(--surface-2); color: var(--text); font-size: 14px; font-family: inherit;
+    }
+    .td-form select:focus, .td-form input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+    .td-form .btn { width: auto; align-self: flex-start; padding: 11px 20px; }
+    .td-note { font-size: 12px; color: var(--text-muted); }
+    .result-head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .result-head h3 { margin: 0; font-size: 15px; }
+    .status-pill { font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); color: var(--text-muted); }
+    .status-pill.working { background: var(--accent-soft); color: var(--accent); border-color: transparent; }
+    .status-pill.done { background: color-mix(in srgb, var(--pos) 14%, transparent); color: var(--pos); border-color: transparent; }
+    .status-pill.error { background: color-mix(in srgb, var(--neg) 14%, transparent); color: var(--neg); border-color: transparent; }
+    .td-stats { display: flex; gap: 22px; flex-wrap: wrap; margin-top: 4px; }
+    .td-stat .v { font-size: 22px; font-weight: 700; }
+    .td-stat .l { font-size: 12px; color: var(--text-muted); }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand"><span class="dot"></span> MAG Metrics</div>
+    <div class="spacer"></div>
+    <span class="user-chip" id="userName"></span>
+    <button class="icon-btn" id="themeBtn">☾ Dark</button>
+    <button class="icon-btn" id="logoutBtn">Sign out</button>
+  </header>
+
+  <nav class="tabbar">
+    <a class="tab" href="home.html">Home</a>
+    <a class="tab" href="sales_overview.html">Sales</a>
+    <a class="tab active" href="marketing.html">Marketing</a>
+    <a class="tab" href="operations.html">Operations</a>
+    <a class="tab" href="builds_monitoring.html">AI &amp; Automation</a>
+  </nav>
+
+  <div class="marketing-layout">
+    <aside class="subnav" id="marketingNav"></aside>
+  <main class="content">
+    <div class="toolbar">
+      <strong>Time Doctor Sync</strong>
+      <div class="spacer"></div>
+      <span class="muted" style="font-size:13px">Pull your own Time Doctor activity &amp; hours into Supabase · last 30 days</span>
+    </div>
+
+    <div class="card col-12">
+      <form class="td-form" id="f">
+        <div>
+          <label for="email">Your email</label>
+          <select id="email" required><option value="">Loading team…</option></select>
+        </div>
+        <div>
+          <label for="password">Time Doctor password</label>
+          <input id="password" type="password" autocomplete="current-password" placeholder="Your Time Doctor password" required />
+        </div>
+        <button class="btn" type="submit" id="syncBtn">⟳ Sync my last 30 days</button>
+        <span class="td-note">Your password is sent once to Time Doctor to log in, then discarded. It is never stored or logged. Only your own data is fetched.</span>
+      </form>
+    </div>
+
+    <div class="card col-12" id="resultCard" hidden style="margin-top:16px">
+      <div class="result-head">
+        <h3>Sync result</h3>
+        <span class="status-pill" id="statusPill">idle</span>
+        <div class="spacer" style="flex:1"></div>
+        <span class="muted" id="whoFor" style="font-size:12px"></span>
+      </div>
+      <div id="resultBody"></div>
+    </div>
+  </main>
+  </div>
+
+  <script src="app.js?v=31"></script>
+  <script>
+    initPage('timedoctor'); // login / top bar / theme only
+    renderMarketingSidebar('td-sync');
+
+    // The sync API (Supabase edge function in MAGTestProject). Serves the team list on
+    // GET and performs the Time Doctor login + worklog upsert on POST.
+    var API = 'https://aivitcomiywiysrfwqxt.supabase.co/functions/v1/td-sync';
+
+    var sel = document.getElementById('email');
+    var pw = document.getElementById('password');
+    var f = document.getElementById('f');
+    var btn = document.getElementById('syncBtn');
+    var card = document.getElementById('resultCard');
+    var pill = document.getElementById('statusPill');
+    var body = document.getElementById('resultBody');
+    var whoFor = document.getElementById('whoFor');
+
+    function setStatus(text, cls) { pill.textContent = text; pill.className = 'status-pill' + (cls ? ' ' + cls : ''); }
+
+    // Populate the dropdown from organization_users (via the API).
+    (function loadUsers() {
+      // default to the signed-in user's email if it's in the list
+      var meEmail = (currentUser() && currentUser().email || '').toLowerCase();
+      fetch(API)
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var users = (d && d.users) || [];
+          if (!users.length) { sel.innerHTML = '<option value="">No team members found</option>'; return; }
+          sel.innerHTML = users.map(function (u) {
+            var m = u.email.toLowerCase() === meEmail ? ' selected' : '';
+            return '<option value="' + esc(u.email) + '"' + m + '>' + esc(u.label) + ' — ' + esc(u.email) + '</option>';
+          }).join('');
+        })
+        .catch(function () { sel.innerHTML = '<option value="">Could not load team</option>'; });
+    })();
+
+    f.addEventListener('submit', function (e) {
+      e.preventDefault();
+      if (!sel.value || !pw.value) { return; }
+      btn.disabled = true;
+      card.hidden = false;
+      whoFor.textContent = sel.value;
+      setStatus('syncing…', 'working');
+      body.innerHTML = '<p class="muted" style="font-size:13px">Logging in to Time Doctor and pulling the last 30 days…</p>';
+
+      fetch(API, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: sel.value, password: pw.value })
+      })
+        .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, status: r.status, d: d }; }); })
+        .then(function (res) {
+          var d = res.d || {};
+          if (!res.ok || d.error) {
+            setStatus('error', 'error');
+            body.innerHTML = '<p style="color:var(--neg);font-size:14px">⚠ ' + esc(d.error || ('Error ' + res.status)) + '</p>';
+          } else {
+            setStatus('done', 'done');
+            body.innerHTML =
+              '<div class="td-stats">' +
+                '<div class="td-stat"><div class="v">' + esc(d.entries) + '</div><div class="l">entries synced</div></div>' +
+                '<div class="td-stat"><div class="v">' + esc(d.worked_hours) + ' h</div><div class="l">worked</div></div>' +
+                '<div class="td-stat"><div class="v">' + esc(d.break_hours) + ' h</div><div class="l">breaks</div></div>' +
+              '</div>' +
+              '<p class="muted" style="font-size:12px;margin-top:12px">Range ' + esc(d.from) + ' → ' + esc(d.to) +
+              ' · saved to <code>time_doctor_worklog</code> (upserted — re-syncing is safe).</p>';
+          }
+        })
+        .catch(function (err) {
+          setStatus('error', 'error');
+          body.innerHTML = '<p style="color:var(--neg);font-size:14px">⚠ ' + esc(err && err.message || 'Something went wrong.') + '</p>';
+        })
+        .then(function () { btn.disabled = false; pw.value = ''; });
+    });
+  </script>
+</body>
+</html>

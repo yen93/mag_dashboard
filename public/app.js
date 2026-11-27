@@ -361,6 +361,7 @@ function renderMarketingSidebar(active) {
     ['ga4-agent',      'GA4 Agent',             'ga4_agent.html'],
     ['historical',     'Historical Paid Leads', 'historical_paid_leads.html'],
     ['collab-leads',   'Collaboration Leads',   'collaboration_leads.html'],
+    ['td-sync',        'Time Doctor Sync',      'td_sync.html'],
   ].filter(function (it) { return !it[3]; });
   var moreActive = more.some(function (it) { return it[0] === active; });
   var mainHtml = main.map(function (it) {

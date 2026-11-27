@@ -1,0 +1,33 @@
+# MARKETING / Nurture & Events (nurture_events.html)
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+  **Nurture & Events page (`nurture_events.html` = Marketing sub-tab "Nurture & Events", now LIVE as of
+  2026-11-09):** self-rendering page (`initPage('marketing')` + `renderMarketingHead(true)` — **NO sample
+  badge**, so bumped to **`app.js?v=11`** + `renderMarketingSidebar('nurture-events')` + its own `fetchJSON`).
+  **Four FY-aware KPI cards** (standard `#fySeg` toggle, 'all' + FY22–FY27, default FY27) from a NEW endpoint
+  **`GET /api/marketing/nurture-events`** → **`server/metrics/marketing-nurture-events.js`**
+  (`getMarketingNurtureEvents`, requireAuth, cached 10 min): (1) **Past keynote clients in nurture** = WON
+  (status=1) deals in **pipeline 3** (Keynotes/Workshops/Immersive LIV), read straight from
+  `activecampaign_deals` (no cache); (2) **Offsite enquiries from past clients** = **ALL** deals (any status)
+  in **pipeline 17** (Trojan Horse: Post-Conf); (3) **Offsites booked by past clients** = **WON** pipeline-17
+  deals — both from the NEW cache **`public.post_conference_deals`**; (4) **Keynote → Offsite conversion** =
+  card 3 ÷ card 1, computed **client-side**. All FY by the deal `cdate` (AU END-year). Owner's call: card 2 =
+  ALL deals (enquiries), not won. Endpoint returns `{byFy:[{fyEnd,fy,keynoteClients,offsiteEnquiries,
+  offsiteBooked}], total, meta}`; the page's `neSel()` picks the selected FY ('all' → total). Validated totals:
+  keynote 388 · enq 100 · booked 21. **`public.post_conference_deals`** (migration `20261109170000`) = every
+  pipeline-17 deal; same shape as `ac_indirect_deals` minus deal_source/is_tailor. Rebuilt by
+  **`reload_post_conference_deals()`** — a **no-arg, UPSERT-ONLY** (never truncates) RPC reading the daily-synced
+  `activecampaign_deals` mirror `WHERE "group"='17'` (+ contacts/accounts; value_aud/fy/cal_yr via the shared
+  helpers). **NO AC REST call / edge fn needed** — pipeline membership is already mirrored — so a **pure pg_cron
+  job** `post-conference-deals-sync-daily` (`30 22 * * *` UTC = 06:30 PH daily, migration `20261109171000`) calls
+  the RPC **directly**. **Executive X table = REAL data** (no longer sample): the sample `MOCK_BY_FY` was replaced
+  with a hardcoded **`EXEC_X`** array of the 6 sessions from the **"Executive X ROI Report" Google Sheet**
+  (`1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg`, same sheet behind `exec_x_revenue`) — columns Session /
+  Internal cost / Attendees / Cost-per-attendee / Bookings / Revenue / Return (Rev÷Cost ×); the old "Orgs that
+  enquired" column was **DROPPED** (no sheet source). FY-filtered by **session date** (Spring=Sep–Nov, Autumn=Mar):
+  FY24 = Spring 2023 + Autumn 2024; FY25 = Spring 2024 + Autumn 2025; FY26 = Spring 2025 + Autumn 2026; no FY27
+  session yet (empty-state). **STATIC — re-seed `EXEC_X` in the page when the sheet changes** (no live Sheets
+  access). NB this table groups revenue by SESSION date, whereas `exec_x_revenue`/the ROI tab attribute by the
+  later booking/event date, so a session's revenue here can span later FYs (by design). Server + frontend + new
+  route/migrations → needs a **Cloud Run redeploy**; daily *data* refreshes thereafter need none (server only
+  SELECTs the cache/mirror).

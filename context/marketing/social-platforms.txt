@@ -1,0 +1,53 @@
+# MARKETING / Social Platforms (social_platforms.html)
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+- **Social Platforms tab — LIVE from Meta + Apify (2026-11-25).** `social_platforms.html` (Marketing sub-tab key
+  `social-platforms`) used to be a sample mockup; everything except "Audience by seniority"/"Audience by
+  industry" is now real, each loader falling back to sample/pending on error. **Facebook + Instagram = Meta
+  Graph API v21** via ONE non-expiring Page token (`config.meta.pageToken` ← `META_PAGE_TOKEN`; Page id
+  1421118044806726, IG business account 17841401738850546 discovered from the Page's
+  `instagram_business_account` edge). **LinkedIn (James + MAG) = the existing Apify cache** via
+  `GET /api/marketing/platforms` (`loadLinkedinLive`). Server modules in `server/metrics/` + routes under
+  `/api/marketing/`: `meta-fb-insights.js` → `/meta-fb` ({facebook, instagram}; IG engagement = likes+comments
+  over `IG_MEDIA_LIMIT=24` posts to match LinkedIn's 24), `meta-ig-trend.js` → `/meta-ig-trend`,
+  `meta-fb-trend.js` → `/meta-fb-trend`, `meta-ig-demographics.js` → `/meta-ig-demographics`,
+  `meta-top-posts.js` → `/meta-top-posts`, `social-audience.js` → `/social-audience` (follower history from
+  `social_platform_stats`). The two TREND charts read monthly caches **`public.meta_ig_monthly`** /
+  **`public.meta_fb_monthly`** (upsert-only, RLS on) that the **dashboard server itself self-refreshes** (current
+  + previous month on each cache-miss, via the pooled `pg` connection) — no edge fn, no cron, no second secret;
+  history was backfilled once. **Meta API traps (all verified live — don't re-litigate):** Facebook
+  reach/impressions are deprecated at page AND post level (every metric name rejected across v18–v23), FB audience
+  demographics (`page_fans_*`) deprecated, FB per-post like/comment counts fail with error #10 (need Page Public
+  Content Access / app review); only FB `page_views_total` / `page_daily_follows_unique` /
+  `page_daily_unfollows_unique` / `page_post_engagements` work. Instagram: **reach is NOT additive** (use
+  `metric_type=total_value` per calendar month; Graph rejects since→until spans >30 days, so 31-day months drop the
+  last day); account engagement metrics (`total_interactions`, `accounts_engaged`) only support `period=day`;
+  `follower_count` is last-30-days only; IG has no unfollows metric; `follower_demographics` supports
+  `breakdown=age,gender` and `city`. So reach/age-gender/locations/top-posts/trends are **Instagram-only** (cards
+  are labelled so) and net-follower growth is **Facebook-only**. Seniority/industry are LinkedIn-only concepts
+  (company analytics are admin/login-gated; no personal-profile API) → still `pending`. **Token provenance:** the
+  Facebook-Login route (IG linked to the Page in Business Suite; token needs `instagram_basic` +
+  `instagram_manage_insights`) was used — the Explorer on the `graph.instagram.com` domain shows a different
+  (Instagram-Login) scope list and issues `IGAA…` tokens; don't mix them. App "MAG Analytics Connector" is in
+  Development mode (Standard Access, no App Review). Needs a manual redeploy for changes; the plain
+  `deployment_script.txt` preserves `META_PAGE_TOKEN`. Known gap: LinkedIn **posts** aren't in Top posts (the
+  Apify sync only sums engagement; storing per-post rows needs an `apify-platforms-sync` extension).
+  **Platform-tab pending-card pass (2026-11-27):** `social_platforms.html` now has per-platform tabs (All
+  accounts / JC's LinkedIn / MAG LinkedIn / Facebook / Instagram; state in a `LIVE` object, each endpoint
+  loaded via `safeFetch`). Added, all verified live: IG `views` / `profile_views` (= visits) /
+  `website_clicks`+`profile_links_taps` (= link clicks) / `reach` with `breakdown=follow_type` (non-follower
+  %) / `follower_count` (daily NET series, **must be summed client-side — it rejects `metric_type=total_value`**)
+  in `meta-fb-insights.js`; FB `page_video_views`. **IG gross unfollows are not exposed**
+  (`follows_and_unfollows` only splits by `follow_type`; its FOLLOWER value == net) → the IG card is "Net
+  follower growth", don't re-attempt a follows-vs-unfollows split. **IG "What works best, by type"** =
+  `meta-ig-by-type.js` + cache `public.meta_ig_by_type`: per-post reach is one Graph call per post, so a
+  staleness gate (>20h) refreshes it at most daily on the first IG-tab view (no cron). **Facebook retired
+  reach everywhere** (page AND post level, unique/fan/non-fan, `page_fans*` demographics — all `(#100) not a
+  valid insights metric`, re-verified 2026-11-27), so FB "Viewers" became live **Video views**
+  (`page_video_views`), FB "Reached beyond followers" stays pending on purpose, and FB "Audience — who
+  follows us" is a **CSV import** (`meta-fb-audience.js`, `public.meta_fb_audience_import`, routes
+  `GET`/`POST /api/marketing/meta-fb-audience[/import]`; the Meta Business Suite export is **UTF-16LE** with
+  a `sep=,` line — decode the BOM, don't read as UTF-8). All accounts "Engagement rate" is pooled
+  (sum engagements ÷ sum times-seen over accounts reporting both). **Gotcha:** `snapFmt()` needs
+  `YYYY-MM-DD` — slice ISO timestamps (`uploadedAt`) to 10 chars first or you get `NaN`. Still pending by
+  design: Enquiries traced to social, Video hours (+ chart), seniority/industry. Needs a manual redeploy.

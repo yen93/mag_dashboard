@@ -1,0 +1,26 @@
+# MARKETING / Monthly Log (monthly_log.html)
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+  **Monthly Log page (`monthly_log.html` = Marketing sub-tab "Monthly Log", now PARTIALLY LIVE as of
+  2026-11-09):** FRONTEND-ONLY (no server/DB/route/migration/`app.js` change; stays **`app.js?v=10`**).
+  **The "Yearly summary" table is LIVE**, self-rendering from the SAME endpoints as the named Marketing cards
+  (per the owner's `measure_source`): **Keynote enquiries + Keynote bookings** ← `GET /api/marketing/overview`
+  (same as `marketing.html`; bookings = won only); **Marketing revenue + Marketing spend** ← `GET /api/marketing/roi`
+  (`row.marketingRevenue` / `row.totalSpend`, same as `marketing.html`); **Marketing ROI** =
+  `(marketingRevenue ÷ marketingSpend − 1) × 100` (**the same definition as `spend_roi.html`'s "Marketing ROI"
+  card**); **Cadence delivered** → red `pending` chip (no DB source). The table's **FY columns** (FY25/26/27) read
+  each source's per-FY totals; the **calendar-year columns** (CY2025/CY2026) sum each source's `byMonth` series by
+  calendar year (`cySum()`). Loaders `loadSummaryOverview()`/`loadSummaryRoi()` fetch at init; shows "Loading…"
+  until both resolve, degrades to "—" per-cell on error. The **FY26-vs-FY25** column = % change for counts/currency,
+  **points** change for ROI. The CSV "Download as Excel" button exports the LIVE rendered rows. **The "Update status"
+  table + "October notes" sections are NOT tracked live yet → both render a `pending` chip + "Not tracked yet"**
+  (the old `MOCK_BY_FY`/`selFyKey`/`currentData` mock machinery was removed). Because status/notes are still pending,
+  the page keeps `renderMarketingHead()` with **no `live` arg** (the "Sample data — layout only" badge still shows),
+  and the **`#fySeg` FY toggle now lives INSIDE the "Deals behind the summary" table** (it no longer touches the
+  Yearly summary; the top card keeps only a hidden `#drAnchor` + the freshness note). **"Deals behind the summary"**
+  (`#summaryDealsSection`, toggled by `#summaryDealsToggle`, lazy-loaded once) = per-deal rows from
+  `GET /api/marketing/leads-by-source` `leads` (the same source behind the Keynote enquiries/bookings rows),
+  rendered with `renderSortableTable`; `currentDealRows()` filters by FY (`fyEnd`) or, when a custom range is set,
+  by day. The custom date range is still rendered at the top via `renderDateRange({ after: 'drAnchor' })` and still
+  adds the "Selected range" column to the Yearly summary (month-level). Frontend-only → needs a
+  **Cloud Run redeploy**.

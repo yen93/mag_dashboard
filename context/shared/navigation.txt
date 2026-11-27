@@ -1,0 +1,120 @@
+# NAVIGATION — tab bar, sidebars, Marketing sub-tab bar, custom date range
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+- **Frontend = static files in `public/`, no build.** One HTML file per screen
+  Tab bar (in order, **5 top tabs as of 2026-11-11**): `home.html` ("Home"),
+  `sales_overview.html` ("Sales"), `marketing.html`, `operations.html`,
+  `builds_monitoring.html` ("AI & Automation" — its subtabs are blank placeholders for now:
+  Builds Monitoring + Ticketing, left sidebar via `renderAiAutomationSidebar()`); plus `login.html`.
+  **`home.html` is the overall dashboard homepage** — the default landing (`/` redirects to
+  it) with cross-area headline KPIs (pulled live from the Sales/Marketing/Operations
+  endpoints) + navigation cards into each area; "Home" is the active top tab only there.
+  **Naming gotcha:** the "Sales" tab is `sales_overview.html`;
+  `sales.html` is the **Conferences** page (legacy name) — **no longer a top tab**, it now
+  lives UNDER Sales via the Sales left sidebar (see below). The `<nav class="tabbar">`
+  block is duplicated in **all 16 pages** (the 14 originals + `home.html` + `roi.html`),
+  so reordering/adding a top tab = edit them all.
+  **Sales left sidebar (as of 2026-10-22):** `sales.html` ("Conferences") is reached via a
+  left sidebar (`<aside class="subnav" id="salesNav">`) shown on **2 pages** —
+  `sales_overview.html` (Overview) and `sales.html` (Conferences). Built by ONE helper
+  `renderSalesSidebar(active)` in `app.js` (same shape/single-source-of-truth as the
+  Marketing & Operations helpers — **don't hand-duplicate**); each page wraps its `<main>` in
+  `<div class="sales-layout">` + the aside, keeps **Sales** as the active top tab, and calls
+  `renderSalesSidebar('<key>')` right after `initPage`. Reuses the same `.subnav`/`.subnav-link`
+  CSS; `.sales-layout` is added alongside `.marketing-layout`/`.operations-layout` on the three
+  shared layout rules in `app.css`. `sales.html` keeps its `<title>`/heading "Conferences".
+  **Marketing nav RESTRUCTURED to a HORIZONTAL sub-tab bar (as of 2026-11-05; supersedes the
+  "Marketing left sidebar" description below for NAVIGATION — the backend/page details below still
+  apply).** `renderMarketingSidebar(active)` in `app.js` now renders a HORIZONTAL sub-tab bar into
+  `#marketingNav` (not a vertical list): **8 primary tabs inline** — `marketing.html` (Overview,
+  **rebuilt to a sample-data layout mockup**), plus **7 primary sub-tab pages**
+  `leads_bookings.html` (Leads & Bookings — **now LIVE, see its own paragraph below**), `spend_roi.html` (Spend & ROI — **now LIVE, see its own paragraph below**), `content_social.html`
+  (Content & Social — **its "Platforms" table is now LIVE, see its own paragraph below; rest of the page still sample**), `email_partners.html` (Email & Partners), `website_search.html`
+  (Website & Search), `nurture_events.html` (Nurture & Events), `monthly_log.html` (Monthly Log) —
+  followed by a **"More ▾" DROPDOWN** holding the 7 existing live tools (ROI, ROAS, Ad Platforms,
+  Lead Tracker `ac_contact_sources.html`, Calendly-AC Sync `new_paid_leads_tracking.html`, GA4 Agent,
+  Historical Paid Leads). Keys: `overview`/`leads-bookings`/`spend-roi`/`content-social`/
+  `email-partners`/`website-search`/`nurture-events`/`monthly-log` (primary) and
+  `roi`/`roas`/`adplatforms`/`leads`/`calendly`/`ga4-agent`/`historical` (More). The dropdown
+  toggles on click (click-away/Esc to close); the More button shows active when the current page is a
+  More item. **CSS (app.css):** a block overrides the shared `.subnav` sidebar styling for
+  `#marketingNav` **ONLY** (id beats class, so **Sales & Operations keep their left sidebars**) →
+  horizontal `.subtab` bar + `.more-wrap`/`.more-btn`/`.more-menu`; `.marketing-layout` set to
+  `display:block` so the nav stacks above content; added `.card.col-3`. **Shared head section:** a new
+  `renderMarketingHead(live)` in `app.js` is the single source of truth for the Marketing head
+  ("Marketing" h1 + the framing question; `.mkt-head` CSS now in `app.css`); it injects the head just
+  before `#marketingNav`. **As of 2026-11-05 it takes a `live` arg:** the h1 + framing question ALWAYS
+  render; the amber **"Sample data — layout only"** badge is emitted only when `live` is falsy (ternary).
+  It is now called on **ALL** primary sub-tabs: the Overview + the still-sample sub-tab
+  `monthly_log.html` call it with **no arg** (badge shows —
+  note `monthly_log.html` is now PARTIALLY LIVE as of 2026-11-09 (see its own paragraph below):
+  its Yearly summary table is live, but the badge stays because its Update-status + notes
+  sections are `pending`),
+  and the **LIVE pages** `leads_bookings.html` / `spend_roi.html` / `content_social.html` /
+  **`email_partners.html` (now LIVE as of 2026-11-06, see its own paragraph below)** /
+  **`website_search.html` (now PARTIALLY LIVE as of 2026-11-06, see its own paragraph below)** /
+  **`nurture_events.html` (now LIVE as of 2026-11-09, see its own paragraph below)** call it with
+  **`true`** (badge suppressed). Still **NOT** called on the live More tools (they keep their own
+  headers). **The Overview + the still-sample sub-tabs are LAYOUT-ONLY with hardcoded sample data**
+  (no API calls; `initPage('marketing')` with no renderFn; charts drawn inline with Chart.js) —
+  **EXCEPT `leads_bookings.html`, `spend_roi.html`, `content_social.html`, `email_partners.html`,
+  `website_search.html` (partially live) + `nurture_events.html`, now
+  LIVE (their own paragraphs below)**. The 15
+  Marketing pages were bumped to **`app.js?v=10`**, then **`leads_bookings.html`, `spend_roi.html`,
+  `content_social.html`, `email_partners.html`, `website_search.html` + `nurture_events.html` to
+  `?v=11`** when `renderMarketingHead` gained the `live` arg (the pages depending
+  on it; the backward-compatible no-arg call means the rest stay `?v=10`). Home/Sales/Operations and all
+  non-Marketing pages deliberately stay `?v=9`. Frontend-only → needs a Cloud Run redeploy. The paragraph
+  below still documents each live tool's backend.
+
+  **CUSTOM DATE RANGE filter — shared control on ALL 8 Marketing sub-tabs (as of 2026-11-09):** a From/To +
+  quick-range (**30d/90d/12m/All**) popover (modelled on the Lead Tracker's `.acs-daterange`) sits **beside the
+  `#fySeg` toggle** on every primary Marketing sub-tab. It is a **single source of truth in `app.js`** (same
+  ethos as `renderMarketingSidebar` — **don't hand-duplicate**): `renderDateRange()` injects the control right
+  **after `#fySeg`** (so no per-page control markup), `wireDateRange({onChange})` wires it, and
+  `getDateRange()` / `dateRangeActive()` / `dateRangeQS()` / `setFySegDisabled()` are the accessors. CSS is in
+  `app.css` (`.dr-*` + `.segmented.seg-disabled` to dim the FY toggle + `.range-na` for greyed widgets);
+  `ac_contact_sources.html` keeps its own inline `.acs-*` copy and is **untouched**. **Interaction:** while a
+  range is set it **OVERRIDES the FY toggle** (dimmed); clearing/Reset restores FY mode. Each page defines a
+  `CUSTOM` flag + an `applyRange` passed as the `onChange`. **Granularity is per widget — the data dictates it,
+  not the UI:** widgets with per-row dates filter at **day** level, month-aggregated widgets at **month** level,
+  and **snapshot / FY-aggregate-only widgets GREY OUT** (`.range-na` "Not available for custom ranges") rather
+  than show a misleading number. Per page: `leads_bookings` + `nurture_events` = day-level everywhere;
+  `marketing` = count cards day-level + $ cards/charts month-level (**AI insight greyed** — it's FY-keyed);
+  `spend_roi` = KPIs + spend-by-type month-level (**Channel results table greyed**); `website_search` =
+  enquiries/organic/reviews day-level (**Sessions / AI-visits / traffic chart+table greyed**); `monthly_log` =
+  adds a **"Selected range" column** to the Yearly summary (month-level; FY toggle is inert here either way);
+  `content_social` + `email_partners` = **all live widgets greyed** (weekly-snapshot / FY-aggregate only).
+  **Backend:** a `reqRange(req)` helper in `server/index.js` validates optional **`?from=&to=`** (YYYY-MM-DD)
+  and folds them into the cache key; it threads them into **4 producers** — `marketing-overview.js`,
+  `marketing-leads-by-source.js`, `marketing-nurture-events.js`, `marketing-website-search.js` — each of which
+  adds a day-level **`range`** payload section (filtered on `cdate` / `event_time` / `review_create_time`).
+  **`/roi` + `/channel-summary` are NOT changed** — those pages aggregate their already-returned `byMonth` /
+  `months` series client-side (ROI also uses `pipelineMonths` for range `dealsWon`). **No DB migration, no new
+  secrets** (producers only SELECT). **All 8 pages bumped to `app.js?v=14`.** Server + frontend → needs a
+  **Cloud Run redeploy**.
+
+  **Marketing left sidebar (as of 2026-10-22; +`roi.html` 2026-10-28):** five former top
+  tabs plus the new **ROI** page live UNDER Marketing, reached via a left sidebar
+  (`<aside class="subnav" id="marketingNav">`) shown on **8 pages** — `marketing.html`
+  (Overview), **`roi.html` (ROI, new 2026-10-28)**, `roas.html`, **`ad_platforms.html`
+  ("Ad Platforms", new 2026-11-03)**, `ac_contact_sources.html`,
+  `new_paid_leads_tracking.html`, `ga4_agent.html`, `historical_paid_leads.html`. The sidebar
+  link list is built by ONE helper `renderMarketingSidebar(active)` in `app.js` (single source
+  of truth — **don't hand-duplicate it**); each of the 8 pages wraps its `<main>` in
+  `<div class="marketing-layout">` + the aside, keeps **Marketing** as the active top tab, and
+  calls `renderMarketingSidebar('<key>')` right after `initPage`. CSS `.marketing-layout`/
+  `.subnav`/`.subnav-link` lives in `app.css` (sticky on desktop, horizontal scroll under 860px).
+  So those are **no longer (or never were) top tabs** — to re-point one, edit the helper, not the tabbar.
+
+  **Operations left sidebar (as of 2026-10-22):** `mag_buyer_sheet.html` (nav "Buyer Analysis" —
+  in-page `<h3>`/`<title>` still read "Buyer Sheet") and `invoice_tracking.html` ("Invoices")
+  are **no longer top tabs** either — they moved UNDER **Operations**, reached via an
+  identical left sidebar (`<aside class="subnav" id="operationsNav">`) shown on **3 pages** —
+  `operations.html` (Overview), `mag_buyer_sheet.html` (buyer), `invoice_tracking.html`
+  (invoices). Built by ONE helper `renderOperationsSidebar(active)` in `app.js` (same shape as
+  the Marketing one — **don't hand-duplicate**); each of the 3 pages wraps its `<main>` in
+  `<div class="operations-layout">` + the aside, keeps **Operations** as the active top tab, and
+  calls `renderOperationsSidebar('<key>')` right after `initPage`. Reuses the same `.subnav`/
+  `.subnav-link` CSS; `.operations-layout` is just added alongside `.marketing-layout` on the
+  three shared layout rules in `app.css`.

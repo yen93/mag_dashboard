@@ -1,0 +1,17 @@
+# SALES — Overview (top-line) + Conferences
+# (Signpost note. Sales is LIVE, queried at runtime from Supabase.)
+
+- **Top tab = `sales_overview.html`** ("Sales" / Overview). **Naming gotcha:** `sales.html` is the
+  **Conferences** page (legacy name), NO longer a top tab — it lives UNDER Sales via the Sales
+  left sidebar (`renderSalesSidebar(active)`; see `context/shared/navigation.txt`), which is shown
+  on `sales_overview.html` (Overview) + `sales.html` (Conferences). `sales.html` keeps its
+  `<title>`/heading "Conferences".
+- **Top-line KPIs** come from the cached sub-resource `server/metrics/sales-topline.js`
+  (`/api/sales/topline`) reading `public.sales_topline`, refreshed weekly (Mon 6am PH) by the
+  `sales-topline-sync` Claude routine (`routines/sales-topline-sync.md`). Live: total_income,
+  bureau, tailor. "needs setup" until mirrored: direct/indirect split, speaking_enquiries,
+  inbound/outbound. See `context/shared/architecture.txt` (Cached sub-resources) + memory note
+  `sales-topline-feature`.
+- **Sales sub-tabs with their own context files:** Education Outreach
+  (`context/sales/education-outreach.txt`), Education Leads (`context/sales/education-leads.txt`),
+  Alternate Leads (`context/sales/alternate-leads.txt`).

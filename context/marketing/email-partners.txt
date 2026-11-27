@@ -1,0 +1,29 @@
+# MARKETING / Email & Partners = Outreach Campaign (email_partners.html)
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+  **Email & Partners page (`email_partners.html` = Marketing sub-tab "Email & Partners", now LIVE as of
+  2026-11-06):** a self-rendering page (`initPage('marketing')` with no renderFn +
+  `renderMarketingHead(true)` + `renderMarketingSidebar('email-partners')` + its own `fetchJSON`) → the
+  shared Marketing head, **NO "Sample data" badge** (so it needs the `live` arg → bumped to **`app.js?v=11`**).
+  Standard `#fySeg` FY toggle (All years + FY22–FY27, default = current FY from the payload), plus an
+  **"All years" send-weighted aggregate** computed client-side. Backed by **`GET /api/marketing/email-partners`**
+  → **`server/metrics/email-partner-metrics.js`** (`getEmailPartnerMetrics`, requireAuth, cached 10 min) — a
+  plain `DISTINCT ON (fy_end) … ORDER BY fy_end, captured_at DESC` over the NEW cache
+  **`public.email_partner_metrics`** (migration `20261106160000`): the **latest snapshot row per FY**.
+  **The cache is APPEND-ONLY** (user requirement): the weekly routine INSERTs one row per FY per run under a
+  shared `run_id`; a trigger **`email_partner_metrics_append_only()` BLOCKS UPDATE/DELETE** so the table can
+  only ever grow (never upsert/truncate). RLS on, service-role only (read via the direct `pg` owner
+  connection). **5 KPI cards:** Subscribed contacts (AC active contacts), EDM sends (+ total sends; open-rate
+  on hover), Click rate (pts delta vs prior FY), **Replies (`pending` chip — NOT tracked in ActiveCampaign)**,
+  Unsubscribes (+ rate). **Partner table** (The Tailor / Speaker bureaus): Contacts / Enquiries / Bookings /
+  Revenue (won) / Prior-FY live from the snapshot; **"Sent on time" + "Replies" show a `pending` chip** (not
+  AC metrics). **Filled WEEKLY** by the NEW Claude Code cloud routine **`email-partners-sync`**
+  (`routines/email-partners-sync.md`; routine id `trig_01KHNc3jpp27VePeheDqk2FA`, cron `0 22 * * 0` = Mon
+  06:00 Manila; connectors **ActiveCampaign + Supabase**): email KPIs from the **AC MCP**
+  `run_campaign_performance_report` (`all_campaigns_performance` → per-FY account-level `summaryData` — the
+  sanctioned AC aggregate) + `list_contacts status=1` meta.total + SPEAKERS BUREAUS list (id 3)
+  `active_subscribers`; partner enquiries/bookings/won-revenue computed inline from
+  **`public.ac_indirect_deals`** (`is_tailor` split). **Seeded FY22–FY27 at build time.** Server + frontend +
+  new route/metrics module → needs a **Cloud Run redeploy**; weekly *data* refreshes thereafter need no
+  redeploy (the server only SELECTs the cache). **GOTCHA:** AC does **not** track email replies or send-cadence
+  — don't try to source "Replies"/"Sent on time" from AC; they stay `pending`.

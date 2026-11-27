@@ -1,0 +1,117 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-27
+Session: Got the instruction files back under the 150k-char limit, then
+restructured the monolithic CLAUDE.md into a slim index + a context/<dept>/<page>.txt
+documentation tree. Finally updated the GLOBAL dcp skill to adopt this architecture
+for all projects, and ran dcp. Documentation-only session — no code/DB/deploy changes.
+================================================================================
+
+NOTE ON REDACTIONS: none. No live secret, token, password, or connection string was
+pasted into this chat. The work referenced secret NAMES only (e.g. SUPABASE_DB_URL,
+META_PAGE_TOKEN) and .gitignore patterns, never secret values.
+
+--------------------------------------------------------------------------------
+USER:
+(/memory) "update and fix: 2 instruction files add up to 150.5k chars, over the
+150.0k-char total limit · largest: CLAUDE.md (150.0k), ~/.claude/CLAUDE.md (457)."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Measured both files: project CLAUDE.md = 151,264 chars, global ~/.claude/CLAUDE.md
+= 457. Read the full project CLAUDE.md (1,541 lines) — almost entirely accreted
+historical/superseded narrative in one giant "Frontend" bullet. Trimmed only content
+the file itself flagged as superseded, losing no current operational fact:
+  - Deleted the "HISTORY (superseded 2026-10-23)" + "Former TEMPORARY sheet load"
+    Bing/Simple-Digital block (lines 1022-1048) with `sed -i` (UTF-8-safe, per the
+    project's own PowerShell-corruption gotcha).
+  - Removed via Edit: the "(Build history 2026-11-09: v1…v4…)" parenthetical, the
+    "revision of the 2026-11-05 build / even-older four-group model" note, the
+    superseded FY27 44/9-vs-41/8 figure comparison (kept the reconcile fact), the
+    "jc removal 171→163 deals" row-math, an ENQ/ENQ_SERIES GOTCHA a later sentence
+    said "no longer applies", and the retired roas_year_on_year sheet-mirror clause.
+Result: project CLAUDE.md 151,264 → 146,887; total 147,344 — under the limit but
+only ~2.7k headroom. Reported this and offered a deeper prune, flagging that the
+file grows every /dcp and would hit the cap again soon.
+
+--------------------------------------------------------------------------------
+USER:
+(/ide connected to VS Code.) "we need to make the size of the claude md files even
+smaller. can you create like a new folder where each department context will live
+there instead of claude md? a subfolder for each dept and then a txt file for each
+tab/page. the claude md will then ref it not really contain each one."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Designed and built a context/ documentation tree. Steps:
+  1. Mapped every section boundary precisely with Grep (line numbers on the current
+     146,887-char file) — the tab bar/nav, each Marketing sub-tab page, ROI, ROAS,
+     Ad Platforms, the GA4 & Ads Leads tracker + rebuild tables + Calendly, the data
+     pipeline bullets, and the end-of-file dept bullets (Restricted role, Check-in,
+     Ticketing, Education Outreach/Leads, Social Platforms, Alternate Leads, Auth).
+  2. Checked .gitignore so no new filename would be accidentally ignored — the repo
+     blocks *secret*/*credential*/*token*/*cookie*/*password*/*apikey*/
+     *connection_string*; chose filenames that avoid all of them.
+  3. Wrote a reviewable bash script (split_claude.sh) that mkdir's
+     context/{marketing,sales,operations,ai-automation,shared}/ and slices each
+     page's lines BYTE-EXACT with `sed -n 'A,Bp'` into its own .txt (each with a
+     2-line header). Created 24 extracted files (145,967 chars moved out):
+       shared/: navigation, architecture, design-system, data-pipeline,
+                auth-access, deploy
+       marketing/: overview, leads-bookings, spend-roi, content-social,
+                   email-partners, website-search, monthly-log, nurture-events,
+                   social-platforms, roi, roas, ad-platforms, ga4-leads-tracker
+       sales/: education-outreach, education-leads, alternate-leads
+       ai-automation/: ticketing, checkin
+  4. Spot-checked every file's head/tail against the expected boundaries — all
+     correct.
+  5. Hand-wrote three small signpost files: operations/overview.txt, sales/
+     overview.txt, and context/README.txt (layout + "update the topic file, not
+     CLAUDE.md" rule).
+  6. Extracted the verbatim keep-sections (Data caveats 1362-1389, Gotchas+Signing-in
+     1464-1496) to scratchpad, wrote two hand-authored head blocks (intro +
+     architecture essentials + a full Context-map table + data-safety rule; and a
+     condensed Deploy block pointing to shared/deploy.txt), then concatenated
+     head1 + keepA + head2 + keepB into the new CLAUDE.md.
+  7. New CLAUDE.md = 11,199 chars (167 lines); total instruction files = 11,656
+     vs the 150,000 limit (~8%). Verified no loss by grepping 12 distinctive strings
+     (ga4cs_jc_manual_review, xero-ad-spend-sync, post_conference_deals,
+     RESTRICTED_DOMAINS, apify-platforms-sync, EXCLUDED_DEAL_IDS, etc.) — each landed
+     in its expected context file. Noted context/ is new/untracked for the user to
+     commit, and offered to prune superseded history inside the larger context files.
+
+--------------------------------------------------------------------------------
+USER:
+"update global dcp to adopt this arch doc file system or tree for all projects. then
+run dcp."
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the global dcp skill (~/.claude/skills/dcp/SKILL.md) and rewrote its Step 3
+("Create or update CLAUDE.md") into "Create or update CLAUDE.md + the context/
+architecture-doc tree", generalised for ANY project (uses <area>/<topic> rather than
+dept/page). It codifies: keep CLAUDE.md small (hard ~150k instruction-file limit);
+put deep per-topic detail in context/<area>/<topic>.txt (single source of truth);
+CLAUDE.md holds only intro + architecture essentials + a Context map + always-apply
+rules + secret NAMES; on each run update the topic file not CLAUDE.md; when to
+introduce the tree (new/small projects start without it, split out once CLAUDE.md
+passes ~400 lines or carries 3+ topics' detail); how to migrate a large monolith
+(sed byte-exact slices, slim index, README, verify no loss); filename hygiene vs
+.gitignore. Also updated the frontmatter description and the Step-4 report-back to
+mention context/ files.
+
+Then ran dcp on this project:
+  1. Chat transcript → chat_history/2711261203_chat_history.txt (this file). Security
+     scan of the whole session: no live secrets — no redactions.
+  2. as_built.txt → SKIPPED: this session changed only documentation structure
+     (CLAUDE.md + new context/ docs + the global skill), not the project's actual
+     built state (no scripts/integrations/data stores/automations changed).
+  3. CLAUDE.md → already updated this session (trimmed then restructured into the
+     slim index); no further edit needed.
+  4. .gitignore → left as-is; verified no context/ file is accidentally ignored
+     (filenames avoid all blocked patterns), and no new sensitive file entered the
+     working tree.
+Reminder given: did NOT commit or push — the user does that themselves.
+
+================================================================================
+END OF EXPORT
+================================================================================

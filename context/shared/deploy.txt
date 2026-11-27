@@ -1,0 +1,77 @@
+# DEPLOY & SECRETS — Cloud Run deploy + every service secret
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+## Deploy (Cloud Run)
+> **Claude NEVER deploys the dashboard to Cloud Run.** This is ALWAYS done manually by
+> the user — do not run `gcloud run deploy`, do not offer to, and do not ask whether to.
+> After code/DB changes, just state that a manual redeploy is needed; the commands below
+> are reference for the user, not an action for Claude.
+```
+gcloud run deploy dashboard --source . --region australia-southeast1 \
+  --set-secrets SUPABASE_DB_URL=SUPABASE_DB_URL:latest
+```
+(single-stage Dockerfile: `npm install --omit=dev`, copy `server/` + `public/`,
+run on Node 20 alpine.) `JWT_SECRET` is already set on the service from a prior
+deploy — omit it on redeploys or it'll be dropped (use `gcloud run services
+describe dashboard --region australia-southeast1` to check current env/secrets
+before changing them).
+- Project `claudegwscli-502400`. Live URL:
+  https://dashboard-659687081407.australia-southeast1.run.app
+- **gcloud is NOT on PATH by default** on this machine (installed via winget).
+  Full path: `C:\Users\Cloverly\AppData\Local\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd`.
+- `--allow-unauthenticated` (network layer) is intentional — the JWT login is
+  the actual gate.
+
+## Credentials (see as_built.txt "PENDING METRICS" for what each unlocks)
+- **`SUPABASE_DB_URL`** — LIVE. Stored only in **Google Secret Manager**
+  (secret name `SUPABASE_DB_URL`, project `claudegwscli-502400`), mounted via
+  `--set-secrets`. Only Cloud Run's runtime service account has
+  `secretAccessor`. **Never put this in the repo or a local file that isn't
+  gitignored** — `.gitignore` blocks `*connection_string*`, `*_secret*`,
+  `*credentials*`, `service-account*.json`, `scratch_*`.
+- **`GMAIL_USER` / `GMAIL_APP_PASSWORD`** — sends the login-code emails from
+  `julienne@myadventuregroup.com.au` via Gmail SMTP (`server/lib/mailer.js`).
+  `GMAIL_APP_PASSWORD` is a 16-char Google app password (requires 2-Step
+  Verification on that account). Store both in Secret Manager + `--set-secrets`,
+  same as Supabase. Without them the server still boots and logs codes to the
+  console (dev), but no real emails go out.
+- **`OPENAI_API_KEY`** (+ optional **`OPENAI_MODEL`**, default `gpt-4o-mini`) —
+  powers **TWO read-only chat assistants**, one per tab, built on the SAME pattern
+  and sharing this one key: the ROAS tab (`server/roasAssistant.js`,
+  `POST /api/roas-assistant`; widget bottom-right on `roas.html`) and the **ROI tab**
+  (`server/roiAssistant.js`, `POST /api/roi-assistant`; widget bottom-right on
+  `roi.html`, **added 2026-11-02**). Each endpoint context-stuffs its own tab's data +
+  a primer and makes ONE OpenAI Chat Completions call (system prompt = first message)
+  — **no DB, no tools, so it's read-only by construction**; the key stays server-side.
+  The ROI one snapshots `getMarketingRoi()` (per-FY rows with the **owner-wages-excluded**
+  headline spend/ROI + the incl-owner figures, CAC, avg-rev/client, deals, pipelines,
+  spend categories) plus a **best-effort** `getMarketingChannelSummary()` (wrapped in
+  try/catch so a channel outage can't break the assistant). The front-end widgets are
+  clones: the ROI one reuses the ROAS `.asst-*` CSS/markup/JS with `--roi-accent*`
+  (same blue→purple) and `postJSON('/api/roi-assistant', …)` — no `app.js` bump
+  (`postJSON`/`currentUser` already present). Adding the ROI assistant needs **NO new
+  secret** (it reuses the key already on the service) but DOES need a **dashboard
+  redeploy** (new `server/roiAssistant.js` + `roi.html`). Without the key both routes
+  return 503 and the widgets show it gracefully. **GOTCHA:** this is the **Cloud Run
+  service's own env var** — the OpenAI key that already exists as a **Supabase edge
+  secret** (used by `buyer-sheet-sync`) is NOT visible to the dashboard; it must be set
+  on the Cloud Run service too. **Attach ADDITIVELY on redeploy:** `gcloud run services
+  update dashboard --region australia-southeast1 --update-secrets
+  OPENAI_API_KEY=OPENAI_API_KEY:latest` (`--update-secrets`, NOT `--set-secrets`, so the
+  existing `SUPABASE_DB_URL`/`GMAIL_*` secrets aren't dropped). MVP only — deeper/cross-tab
+  Q&A would need read-only *tools* (the GET endpoints or a SELECT-only DB role), never a
+  write path.
+- **`META_PAGE_TOKEN`** (+ optional `META_PAGE_ID`, `META_IG_ID`) — non-expiring Facebook PAGE token with the
+  Instagram insight scopes; powers the Social Platforms tab's live Facebook/Instagram figures
+  (`server/metrics/meta-*.js`). Cloud Run **service** env var from Secret Manager secret `META_PAGE_TOKEN`
+  (attached 2026-11-25 with `--update-secrets META_PAGE_TOKEN=META_PAGE_TOKEN:latest`; grant the runtime service
+  account `secretAccessor`). Plain redeploys keep it. If it ever stops working (admin password change / revoked
+  app access), re-mint: Graph API Explorer user token → `fb_exchange_token` → `GET /{page-id}?fields=access_token`
+  → `gcloud secrets versions add META_PAGE_TOKEN`. Never commit it; the minted tokens may also sit in a local
+  Downloads file — delete it once the secret is stored.
+- Not yet configured: `AC_API_URL`/`AC_API_KEY` (ActiveCampaign), `XERO_*`
+  (Xero OAuth), `CALENDLY_TOKEN`, `MONDAY_TOKEN`,
+  `GOOGLE_SERVICE_ACCOUNT_JSON`/`BUYER_ANALYSIS_SHEET_ID` (the MAG Buyer
+  Analysis sheet). Read from env by `server/config.js`; add each the same way
+  as Supabase (Secret Manager + `--set-secrets`) when connected.
+

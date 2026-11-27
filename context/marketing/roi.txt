@@ -1,0 +1,166 @@
+# MARKETING / ROI (roi.html)
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+  **ROI page (`roi.html` = Marketing sidebar "ROI", `/api/marketing/roi`,
+  `server/metrics/marketing-roi.js`)** is a self-rendering page (same pattern as `roas.html`:
+  `initPage('marketing')` with no renderFn + `renderMarketingSidebar('roi')` + its own
+  `fetchJSON`). LIVE, computed at request time from Supabase, framed by Australian FY (Jul–Jun,
+  END-year) with an FY filter bar (default = current FY). Unlike ROAS it is **NOT ad-attributed**.
+  **As of 2026-11-02 the ROI tab's SPEND is MARKETING-ONLY** (revenue stays whole-business), so the
+  page is a **return on MARKETING investment**, not a whole-business margin. **Revenue** = `total_income`
+  from `public.xero_expenses_monthly` (Xero P&L "Total Income", **ex-GST, accrual**; REPLACED the old
+  `invoice_tracking` incl-GST source). **Marketing spend** now = **`public.marketing_channel_monthly`**
+  (the SAME live-from-Xero marketing pipeline that backs the Channel Summary — see below), summed by
+  month/FY in `marketing-roi.js`, matching `Marketing Expenses - Xero Account - Description.md` exactly.
+  This **REPLACED** the old whole-business spend (`operating_expenses + cost_of_sales`); ROI now reads
+  `xero_expenses_monthly` for **revenue only** (its `total_spend`/`owner_wages` columns are no longer
+  read here). The revenue table is a STATIC
+  Xero-P&L load via MCP (refresh routine pending), covering **FY22–FY27 MONTHLY** (Jul 2021–
+  current; FY24–FY27 re-seeded 2026-10-29, **FY22 & FY23 manual monthly seeds 2026-10-30**). deals =
+  ALL `activecampaign_deals` (status 1/2/0 by `cdate`, won value via `public.ac_value_aud`), also
+  split **per pipeline** (`"group"` → name map in `marketing-roi.js`). **FY axis = FYs with Xero
+  P&L (revenue/spend) UNION FYs with AC deals.**
+  **Xero's P&L *API* only exposes the current + 3 prior FYs** (FY24–FY27), so **FY22 & FY23 were
+  hand-exported from the Xero *web* Reports P&L** (which keeps full history), entity **"Ditch
+  Investments Pty Ltd"** = MAG's legal trading entity. Current seed = **migration
+  `20261030160000_seed_fy22_fy23_monthly_pnl.sql`** = **24 MONTHLY rows** (Jul 2021–Jun 2023),
+  which **SUPERSEDED** the first annual single-row seeds (`20261030140000`/`150000` — those are kept
+  because they also seed the `xero_pnl_accounts_fy` top-12 per FY). Monthly sums reconcile **to the
+  cent** with the FY totals, and the FY24 export reconciled against the API rows, validating the
+  grouping (**`total_income` = Total *Trading* Income only — Other Income like interest/COVID grants
+  is EXCLUDED**, matching FY24+). `marketing-roi.js` **`MONTH_FLOOR` was lowered `2023-07-01` →
+  `2021-07-01`** so the by-month revenue series covers FY22+. (The marketing-spend series covers FY22+
+  too — see the Channel Summary paragraph; its Xero pull floor was lowered to `2021-07-01` on 2026-11-02.)
+  The current FY and FY22 are partial (YTD / Xero bank-txn history begins ~early 2022), so their spend is
+  below a full year. Jun-2023 `total_income` is negative (year-end accrual reversal). To add/refresh the
+  FY22/FY23 *revenue* seed, re-export monthly from Xero and re-run the seed (the API can't reach them).
+  **NB FY22 has 162 "won" AC deals (COVID-era, many small/virtual), so its CAC/avg-rev reads low — a
+  deal-count artifact, not an error.** **Owner/director wages are NO LONGER RELEVANT here (as of
+  2026-11-02):** marketing spend excludes all wages except the listed WrkPod marketing team, so the old
+  `#exclOwnerToggle` / `EXCL_OWNER` / `owner_wages` machinery was removed from `roi.html` — `effSpend()`/
+  `effRoi()`/`effMonthSpend()` now just pass the marketing spend through. (`effRoi()` =
+  whole-business revenue ÷ marketing spend ≈ **7–20× per FY** still backs the **"ROI by FY" TABLE**
+  column + the month chart — NOT the KPI cards, see next.)
+  **8 cards as of 2026-11-04, order changed 2026-11-04** — **Marketing revenue (FIRST + highlighted)** /
+  Total company revenue / **Marketing spend** / Return on spend `x.xx×` /
+  **Net ROI** `±%` / Clients won / **Cost per client (CAC)** / Avg revenue per client — all
+  computed **client-side** in `render()` from the `/api/marketing/roi` payload.
+  **As of 2026-11-04 the revenue-driven KPI CARDS use MARKETING revenue (`row.marketingRevenue`), NOT
+  whole-business revenue:** `roi = marketingRevenue ÷ marketingSpend` (card "Return on spend", so the
+  card now reads ~1–2×, much lower than the table's whole-business `effRoi`), `netRoi = (roi−1)×100`,
+  `avgRev = marketingRevenue ÷ dealsWon`. `cac = marketingSpend ÷ dealsWon` is unchanged (no revenue
+  term). **DELIBERATE DIVERGENCE:** the KPI "Return on spend"/"Avg revenue per client" cards (marketing
+  revenue) differ from the "ROI by FY" table's ROI column + the revenue-vs-spend month chart, which
+  BOTH still use whole-business `revenue`/`effRoi` — only the cards were switched. "Total company
+  revenue" card is display-only (whole-business, feeds no ratio). "Marketing revenue" is the FIRST card
+  so it gets the `.kpi-grid .kpi:first-child` highlight (gradient bg + accent value).
+  **MARKETING REVENUE card (new 2026-11-04):** marketing-ATTRIBUTED **won** revenue per FY, the sum of
+  four buckets, **DEDUPED by deal_id** across the three AC buckets (precedence roas > organic >
+  bureau/tailor; Exec X is a separate sheet source, never deduped, always adds on top): **(1) ROAS-paid**
+  = `public.roas_counted_deals` status='won' (`coalesce(xero_engagement_fee, value)`); **(2) organic
+  search** = `public.ga4_ac_contact_source` `channel ~* 'organic'` + `deal_status='won'` (`deal_value`
+  AUD, FY from contact `cdate`); **(3) bureau/tailor** = `public.ac_deals_ytd` `status='won' AND
+  (is_bureau OR is_tailor)` (same identification as the Sales overview; NB that cache is **Jul 2024+**
+  so this reads 0 before FY25); **(4) Exec X** = `public.exec_x_revenue` summed by its **event-date FY**.
+  Computed **server-side** in a new `MARKETING_REVENUE_SQL` in `marketing-roi.js` and attached per-FY to
+  each `rows[]` as `marketingRevenue` + `marketingRevenueParts{roas,organic,bureauTailor,execX,total}`
+  (and summed onto the `total` row); `roi.html`'s `render()` shows it as the **1st/highlighted KPI card**
+  (as of 2026-11-04) with the per-bucket breakdown tucked in its ⓘ tooltip (`marketingRevenueSource` in
+  the payload = the card's source string). Grand total ≈ **$884k** across FY22–27.
+  **REVENUE vs SPEND BY MONTH chart (updated 2026-11-04):** `renderMonthChart()` now plots THREE series
+  — green **marketing-spend bars** + the blue **MARKETING-revenue line** SHARE the LEFT $ axis (same
+  magnitude, one `[0, niceCeil(max)]` scale — the old blue "Revenue" RIGHT axis was removed) and a gray
+  **dashed whole-business "Total company revenue" line** sits on its OWN RIGHT axis (`yCompany`, a larger
+  context scale). The blue line is fed by a new per-month marketing-revenue series: `byMonth[].marketingRevenue`
+  from a new **`MARKETING_REVENUE_MONTH_SQL`** (same four buckets/dedup as the card, each AC deal in its
+  own month, Exec X by `event_date`); months reconcile to the per-FY totals ($884k all-time). That
+  required adding **`exec_x_revenue.event_date`** (migration `20261104170000_exec_x_revenue_event_date.sql`,
+  the first date in each EVENT cell; the one undated row → nominal Oct-2023 cohort date, still FY24).
+  **The revenue-driven KPI CARDS use MARKETING revenue, the FY TABLE + this chart's company-revenue line
+  still use whole-business revenue — deliberate (see the cards note above).** **`public.exec_x_revenue`** is a **STATIC**
+  one-time load of the **"Executive X ROI Report" Google Sheet**
+  (`1GO5hCbI4l0Jpn9GelbWeI61mM6A4NOiH0Qp_OdnonFg`, migration `20261104090000_create_exec_x_revenue.sql`,
+  one row per REVENUE line across the 6 season tabs; `fy_end` = AU FY of the EVENT date, the one undated
+  line → cohort FY). **Re-seed it when the sheet changes** (dashboard has no live Google Sheets access).
+  FY-end Exec X totals: FY24 $10k · FY25 $113,255 · FY26 $177,315 · FY27 $22,450. The cards' "Marketing spend"/CAC/ROI are genuinely **MARKETING** figures (revenue
+  whole-business ÷ marketing-only spend). Plus 2 charts (**revenue-vs-spend by month** =
+  a **two-axis combo chart** as of
+  2026-10-29: green **spend bars** on the left $ axis, blue **revenue line** on the right $ axis —
+  self-rendered by `renderMonthChart()` in `roi.html`, **no longer** the shared-axis `lineChart`.
+  **As of 2026-11-02 BOTH $ axes share ONE `[0, niceCeil(max)]` scale** (same `compactAud` ticks;
+  `niceCeil()` rounds the shared max to 1/2/2.5/5/10×10ⁿ) so the **left and right tick levels show
+  the same figures**, and each axis carries a **title** = its series ("Marketing spend" green /
+  "Revenue" blue). Tradeoff: on the shared scale the small monthly spend bars read much smaller than
+  monthly revenue — intentional, it's what makes the levels line up;
+  **AC pipeline Won/Open/Lost** — **as of 2026-11-02 PER MONTH** (vertical stacked bars, FY-filtered,
+  **same monthly design as Channel Summary**; was per-pipeline horizontal bars). Backed by a new
+  **`pipelineMonths`** payload section in `marketing-roi.js` (`PIPELINE_MONTH_SQL` counts status
+  1/0/2 by `date_trunc('month', cdate)` from `MONTH_FLOOR`); the per-FY **`pipelines`** section is
+  **kept** (used by the ROI chat assistant snapshot). Its **"Won only"** control is now an **All /
+  Won-only SEGMENTED toggle** `#pipeWonSeg` (matching the FY toggle) via `setPipeWon()` — the old
+  `#pipeWonToggle` checkbox is gone; "Won only" drops Open/Lost), a "Where the spend goes"
+  category chart (**as of 2026-11-02 = marketing spend by Xero account** for the selected FY —
+  `CATEGORIES_SQL` groups `marketing_channel_monthly` by `account_code`; was whole-business P&L
+  accounts), a **LIVE "Channel Summary" chart (as of 2026-10-30)** — a monthly **STACKED bar
+  chart** (months on the x axis) with a **By type / By platform / By account** toggle (`#channelDimBar`;
+  **"By account" added 2026-11-02** = split by Xero marketing account),
+  self-rendered by `renderChannelChart()` in `roi.html`. `loadChannelSummary()` fetches
+  **`/api/marketing/channel-summary`** (`server/metrics/marketing-channel-summary.js`), which is
+  backed by the **live-from-Xero channel pipeline**: the **`xero-channel-summary-sync` edge fn**
+  (reuses the `xero-ad-spend-sync` Xero OAuth) pulls **SPEND bank transactions** since the pull floor
+  (`XERO_CHANNEL_SINCE`, default **`2021-07-01`** = FY22 as of 2026-11-02; was 2025-07-01) on the
+  marketing accounts (**302 Advertising = OPEN; 475 Website, 332 Software, 411 Printing, 377 WrkPod
+  Staff = SHARED** — only 302 is OPEN as of 2026-11-02, matching the spec's "ALL DESCRIPTIONS" for
+  302 and listed-vendors-only for the rest; **475 moved OPEN→SHARED then**), buckets ex-GST by
+  (month, contact, account) into **`public.marketing_channel_monthly`**, and the API joins
+  **`public.marketing_channel_vendor_map`** (contact_id → type/platform, ~38 seeded vendors) for the
+  Type/Platform. **Key rule:** a line is kept if its contact is MAPPED **or** it's on the OPEN account
+  (302, where unmapped vendors roll up as **"Uncategorized"**); unmapped vendors on the SHARED accounts
+  (475/332/411/377, which also hold non-marketing spend — Netflix, non-marketing staff wages) are
+  **dropped**. So to categorise/include a new vendor, **insert a row into
+  `marketing_channel_vendor_map`** — no Xero re-pull (Type/Platform are joined at query time, not
+  stored). **`include` is the exclusion switch:** set `include=false` on a vendor-map row to drop that
+  vendor (the sync keeps a mapped vendor only when `include=true`, on ANY account incl. 302). The read path
+  (`marketing-channel-summary.js`, `marketing-channel-items.js`, `marketing-roi.js`) does NOT check `include`
+  — it only sums what's stored — so after flipping `include` you must also delete that vendor's existing
+  `marketing_channel_monthly` rows (or wait for the next sync) for the change to show. Excluded vendors can
+  be given `type='Excluded'` as a marker. **The deployed defaults (`SINCE`/`OPEN_ACCOUNTS=302`/`SHARED_ACCOUNTS=475,332,411,377`) live
+  in the edge fn's `index.ts`** (env secrets can override). Since the sync WIPES-then-reinserts the whole
+  window, keep `SINCE` a stable FY22 floor (narrowing it deletes history). Refreshed **monthly** by cron
+  `xero-channel-summary-sync-monthly` (`0 22 2 * *`). AP bills
+  are fetched best-effort but 401 (the Xero app scope lacks invoices) — non-fatal, since the spend is
+  all in bank txns. **As of 2026-11-02 the Channel Summary IS FILTERED to the active FY's calendar
+  months** (via `channelMonthFyEnd()` in `roi.html`, and `renderChannelChart()` is now called from
+  `render()` so it re-renders on FY change) — it is **no longer** loaded once independent of the FY bar.
+  — and an **ROI-by-FY table (as of 2026-11-02 each row is CLICKABLE** to filter the whole page to that
+  FY, ROAS-style: `clickrow`/`rowsel` highlight + an **"All years" total row** selecting `all`;
+  `renderTable()`'s output is post-processed in `render()`), all re-rendered client-side on FY change.
+  **Both monthly charts** (revenue-vs-spend, Channel Summary, AC pipeline) label each bar with the
+  **full calendar-month span `"Mon 1-<last day>"`** via `monthSpanLabel`/`ymSpanLabel`/`channelSpanLabel`
+  helpers in `roi.html`. **As of 2026-11-02 the whole ROI tab's look/feel + hover animations +
+  active-toggle colour MIRROR the ROAS tab** (bespoke inline CSS in `roi.html`: `--roi-shadow`/`-lift`
+  tokens, card + KPI hover-lift + gradient accent bars, gradient active-pill `.segmented` toggles,
+  aurora backdrop — but **deliberately NOT `overflow:hidden`** on cards/KPIs unlike ROAS, because the
+  tab's `.src-tip` info-icon tooltips live inside card heads/KPI labels and would be clipped; the accent
+  bars are rounded to the card radius instead). **Tooltip-clipping gotcha (fixed 2026-11-03):** the KPI
+  cards' **hover-lift `transform`** makes each `.kpi` its own stacking context, which TRAPS its ⓘ tooltip's
+  `z-index:60` inside the card; since `.kpi` is `position:relative` with no `z-index`, a top-row card's
+  upward tooltip then paints UNDER the sticky toolbar (`z-index:9`) and gets cut off. Fixed with
+  **`.kpi:hover, .kpi:focus-within { z-index: 40 }`** in `roi.html` (lifts the whole hovered/focused card
+  — tooltip included — above the toolbar). Same clipping class as `#roiNoteInfo` (the heading tooltip, which
+  is instead flipped to open **downward**). So any new hover-`transform` on a card/KPI that holds a `.src-tip`
+  needs a matching `z-index` lift. The page is **full-width** (`.content { max-width: none }`,
+  like `sales_overview`) and its FY toolbar is **sticky** (`position:sticky; top:var(--topbar-h,58px)`)
+  so it freezes under the top bar on scroll. Note: a Xero year-end accrual reversal can occasionally make
+  a single month's marketing-spend bar read slightly **negative** — kept as-is (annual FY totals net
+  correctly). The 6 other Marketing pages' `app.js` was bumped to `?v=7` so the ROI link shows.
+  **As of 2026-11-02 every DESCRIPTION on the ROI page is tucked behind a small ⓘ info icon**
+  (hover/focus to reveal), not a visible caption: the FY note (`#roiNoteInfo` next to the heading,
+  set in `loadRoi()`), all 7 KPI card sub-lines (moved next to each card's `.label`), and the three
+  chart captions (`Revenue vs spend by month` / `Where the spend goes` / `Channel Summary`). Done
+  **ROI-only in `roi.html`** via inline helpers — `infoTip(text)` (mirrors `app.js srcInfo` but
+  carries arbitrary text and no "Source" label, reusing the global `.src-info`/`.src-tip` CSS),
+  `fillHeadInfo()` (fills the static `<span class="head-info" data-info="…">` placeholders once at
+  init), and `tuckKpiSubs()` (post-processes `renderKpis` output on every `render()`, selecting each
+  card's `:scope > .muted` sub). The shared `app.js` `srcInfo`/`renderKpis` were **NOT** changed, so
+  **no `app.js?v=` bump**. Frontend-only; needs a Cloud Run redeploy.

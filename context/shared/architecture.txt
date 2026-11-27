@@ -1,0 +1,49 @@
+# ARCHITECTURE — frontend/server layout, charts, data layer, cached sub-resources
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+  Shared styling in `public/app.css` (CSS
+  variables drive theming). Shared logic in `public/app.js`. Each page has an
+  inline `<script>` that calls `initPage(area, renderFn)` and maps API data onto
+  charts/tables. **Do not add a bundler** — the point is hand-editability.
+- **Charts:** Chart.js, vendored locally at `public/vendor/chart.umd.min.js`.
+  `app.js` exposes `lineChart`/`barChart`/`pieChart`/`renderKpis`/`renderTable`
+  plus `metaChips()`/`renderPendingBody()` for the source / "needs setup"
+  badges every metric can carry. **As of 2026-11-02 the data SOURCE is hidden
+  behind a small ⓘ info icon, not a loud always-on chip:** `metaChips()` calls a
+  new `srcInfo(source)` helper (small circular SVG info icon, accessible via
+  `tabindex`/`role`/`aria-label`; hover/focus reveals the source in a `.src-tip`
+  tooltip). CSS `.src-info`/`.src-tip`/`.src-tip-label` in `app.css` **replaced
+  `.chip.src`** (the `needs setup`/`partial` chips are unchanged). `metaChips()`
+  is the **single source of truth** for every tab (called via each page's
+  `setChips`, via `renderKpis`, and directly on `roas.html`/`roi.html`), so this
+  one change updates all Source chips at once — **all 17 pages' `app.js?v=` were
+  bumped to `?v=8`** to force the new helper. `monthLabel()`/`weekLabel()` format the
+  month/week-bucketed x-axes the live data uses (date range is now month-window
+  based: `3m`/`6m`/`12m`/`ytd`, default `12m` — not the old daily `7d`/`30d`).
+- **ESM on the server** (`"type":"module"` in package.json) — use `import`.
+- **Data layer (live, not mock):**
+  - `server/config.js` — reads every source credential from env vars and
+    exposes `hasSource(name)`.
+  - `server/providers/supabase.js` — pooled `pg` connection; **the primary
+    data source**.
+  - `server/lib/range.js` — month-window date-range → a complete month-bucket
+    axis (`fillMonths` left-joins query rows onto it so trends have no gaps).
+  - `server/lib/sql.js` — shared SQL fragments, esp. `SOURCE_BUCKET` (buckets
+    the free-text taxonomy MAG encodes in `activecampaign_deals.title` after
+    `//`, e.g. `"Acme // Keynote"`).
+  - `server/lib/metric.js` — `live()`/`pending()`/`section()` wrap every value
+    in `{value, unit, delta, meta:{status, source, note}}` (or `{data, meta}`).
+  - `server/metrics/{sales,marketing,operations}.js` — compose real Supabase
+    queries into the API payload. Each has a `notConfigured()` fallback (all
+    metrics `pending`) if `SUPABASE_DB_URL` isn't set — **the app never
+    hard-fails on a missing credential**, tiles just show "needs setup".
+  - `server/index.js` metrics route is generic (`/api/metrics/:area`) and
+    caches each `(area, range)` response briefly via `server/lib/cache.js`.
+  - **Cached sub-resources** (plain SELECT of a pre-filled Supabase cache, no
+    source calls at request time): `server/metrics/{liv-deals,mag-buyer-sheet,
+    invoice-tracking,sales-topline,roas}.js`. `sales-topline.js` (`/api/sales/topline`)
+    backs the **Sales** page from `public.sales_topline`, refreshed **weekly**
+    (Mon 6am PH) by the `sales-topline-sync` Claude routine — see
+    `routines/sales-topline-sync.md`. Live: total_income, bureau, tailor;
+    "needs setup" until their AC fields/tags are mirrored: direct/indirect split,
+    speaking_enquiries, inbound/outbound.

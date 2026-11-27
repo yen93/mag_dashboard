@@ -1,0 +1,18 @@
+# OPERATIONS — Overview, Buyer Analysis, Invoices
+# (Signpost note. Operations is LIVE, queried at runtime from Supabase.)
+
+- **Top tab `operations.html`** (Overview). Metrics via the generic `/api/metrics/operations`
+  route → `server/metrics/operations.js`.
+- **Operations left sidebar** (built by `renderOperationsSidebar(active)` in `app.js`, shown on
+  3 pages) → full nav rules in `context/shared/navigation.txt`:
+    - `operations.html` (Overview)
+    - `mag_buyer_sheet.html` (nav label "Buyer Analysis"; in-page `<h3>`/`<title>` still read
+      "Buyer Sheet")
+    - `invoice_tracking.html` ("Invoices")
+- **Buyer Analysis + Invoices are cached sub-resources** (plain SELECT of a pre-filled Supabase
+  cache, no source calls at request time): `server/metrics/mag-buyer-sheet.js` +
+  `server/metrics/invoice-tracking.js`. See `context/shared/architecture.txt` (Cached
+  sub-resources) for the pattern, and the memory notes `mag-buyer-sheet-feature` /
+  `invoice-tracking-feature` for how each cache is filled.
+- The Xero invoice data behind Invoices also feeds the ROAS deals-table "See Invoice" modal
+  (`context/marketing/roas.txt`) and the buyer-sheet aggregation.

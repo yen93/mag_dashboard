@@ -1,0 +1,80 @@
+# DATA PIPELINE — ActiveCampaign mirror syncs + attribution caches
+# (Extracted from CLAUDE.md — the dashboard dev reference. Read this when working on the page/area above.)
+
+  - **Indirect/bureau deals cache (`public.ac_indirect_deals`, NEW 2026-11-05)** — a
+    cache of **every INDIRECT ("bureau") AC deal 2021→present** (559 rows). **"Indirect"
+    is defined STRICTLY as the AC deal custom field "Deal Source?" (dealCustomFieldMeta
+    id 6) = `"Indirect (PCO/ Bureau/ Events company)"`** — deliberately NOT the
+    title-heuristic `ac_deals_ytd.is_bureau` flag (which diverges + only covers
+    Jul-2024+). The "Deal Source?" value is NOT in the `activecampaign_deals` mirror, so
+    the **`ac-indirect-deals-sync` edge fn** (`--no-verify-jwt`; daily cron
+    `ac-indirect-deals-sync-daily` `15 22 * * 0-4` = 06:15 PH, after the deal+contact
+    mirrors) sweeps the AC field-6 feed `GET /api/3/dealCustomFieldMeta/6/
+    dealCustomFieldData` in one paginated pass (**GOTCHA: that nested feed returns its
+    value rows under JSON key `dealCustomFieldMeta`, NOT `dealCustomFieldData`**), keeps
+    deals whose value starts "Indirect", then calls RPC **`reload_ac_indirect_deals(_ids
+    jsonb)`** (**UPSERT-ONLY on the `deal_id` PK — NEVER deletes/truncates** as of
+    2026-11-05, so a deal that drops out of the Indirect feed keeps its last-synced row;
+    refuses empty payload; joins the ids onto
+    `activecampaign_deals` + `activecampaign_contacts`/`activecampaign_accounts` for
+    names; `value_aud` via `ac_value_aud`, `fy`/`cal_yr` via `mag_fy_label`/`mag_cal_yr`).
+    **`is_tailor` column (added 2026-11-05, migrations `20261105140000` col +
+    `20261105150000` rpc-upsert):** `boolean`, set `= (title ILIKE '%the tailor%')` on
+    every upsert (124/559 rows today). The edge-fn code is unchanged by the upsert switch
+    (it calls the same RPC) — **the behaviour change is entirely in the RPC body, no fn
+    redeploy needed**.
+    Modes `?dry=1`/`?sync=1`/bare(bg). **Supabase-only — NO server/public code reads it
+    yet, so NO dashboard redeploy** (add a route/page later if a tab needs it). Created
+    as `ac_bureau_deals` and **renamed same day** (migrations `20261105120000` create →
+    `20261105130000` rename + `20261105131000` rpc-body; NB `ALTER FUNCTION … RENAME`
+    doesn't rewrite the body, so the rpc body was re-created vs the renamed table). The
+    old `ac-bureau-deals-sync` slug + the throwaway `ac-probe-tmp` probe are inert 410
+    stubs (deletable from the Supabase dashboard; the MCP has no delete-function tool).
+  - **Google-Ads-flag deals cache (`public.ac_google_ads_yes_deals`, NEW 2026-11-13)** — every AC deal
+    whose deal custom field **"Google Ads?" (dealCustomFieldMeta id 18) = "Yes"** (95 rows; the field only
+    exists in AC from 2022-05-24, so there are no 2021 rows). Same family/shape as `ac_indirect_deals`;
+    **DELIBERATELY separate from the contact-sources `ac_google_ads_deals`** (different pipeline, goes
+    stale — it still had 6 deals flipped to No on 2026-10-21/22). Filled by the
+    **`ac-google-ads-yes-deals-sync`** edge fn (`--no-verify-jwt`; sweeps `/dealCustomFieldMeta/18/
+    dealCustomFieldData` — **GOTCHA: rows come back under JSON key `dealCustomFieldMeta`**) → RPC
+    **`reload_ac_google_ads_yes_deals(_ids)`** (**UPSERT-ONLY on `deal_id`, never truncates**, refuses empty
+    payload). **WEEKLY** cron `ac-google-ads-yes-deals-sync-weekly` (`20 22 * * 0` = Mon 06:20 PH; owner
+    asked weekly, not daily). Because it never deletes, a deal later flipped to "No" stays ("is or was
+    flagged Yes"). Consumed by `marketing-leads-by-source.js` + `marketing-overview.js` (see the
+    Leads & Bookings paragraph). Migrations `20261113120000`/`20261113121000`.
+
+  - **`public.activecampaign_deals` (the base AC deal mirror) is the denormalization
+    source** for both deal-linkers above — **if it's empty/stale, every matched row's
+    `deal_title`/value/status goes blank even though `deal_id` is still set** (the recurring
+    "deal column blank" bug). As of 2026-10-20 it's fully refreshed daily by the
+    **`activecampaign-deals-sync` edge function** (pg_cron jobid 19, `0 21 * * 0-4` =
+    05:00 AM PH, an hour before the 06:00 rebuild), replacing a flaky n8n webhook that
+    deleted-then-reloaded and left the table empty on failure. It fetches the full AC
+    snapshot FIRST, then `reload_activecampaign_deals(_deals jsonb)` does null-refs →
+    delete → insert in ONE transaction (never wipes on failure; emails `julienne@` via
+    Gmail SMTP on any error — needs `GMAIL_USER`/`GMAIL_APP_PASSWORD` edge secrets, the
+    16-char app password with NO spaces). Deploy `--no-verify-jwt`; the cron calls it
+    with **`?sync=1`** because async/background mode doesn't finish the ~40s job. The old
+    n8n trigger lives in a SEPARATE Supabase project (`n8n-production`, ref
+    `uwsncuowtzydylfabikj`, cron jobid 7) and is now **disabled**. Files:
+    `supabase/functions/activecampaign-deals-sync/`, `supabase/migrations/20261020*`.
+  - **`public.activecampaign_contacts` is synced the same way (as of 2026-10-20):**
+    the **`activecampaign-contacts-sync` edge function** (pg_cron jobid 20,
+    `30 21 * * 0-4` = 05:30 AM PH — after deals, before the 06:00 rebuild/consumer
+    batch that reads contacts) fetches the full AC `/api/3/contacts` snapshot (paginated,
+    concurrency 4; ~15.5k rows, ~95s) then calls `reload_activecampaign_contacts(_contacts
+    jsonb)` (delete-all → insert in ONE transaction; refuses empty; emails `julienne@` on
+    failure). Replaces n8n-production cron **jobid 8** (`n8n-get-all-ac-contacts`, now
+    `active=false`; sibling **jobid 9** `n8n-get-all-ac-accounts` is still on n8n — not yet
+    converted). **Full rebuild, NOT an upsert** (no `ON CONFLICT`), same as the deals sync.
+    **Two contacts-specific gotchas (it's ~4× the deals row count):** (1) the AC `links`
+    object is deliberately **NOT fetched** — it was ~1.6 kB/row (~85% of the table) and
+    nothing reads it; the rpc stores `links='{}'` (keeps the tiny `scoreValues`/
+    `accountContacts`). Sending it made the rpc payload ~38 MB and blew the ~150s edge wall
+    clock. (2) the rpc carries **`SET statement_timeout TO '120000'`** because the PostgREST
+    role `authenticator` caps at 8s — too short for a 15k-row insert. Function
+    `WALL_CLOCK_MS=140000` trips its own guard before the ~150s gateway kill (clean 500 +
+    email, not a silent 504). Deploy `--no-verify-jwt`; cron calls it with **`?sync=1`** +
+    150s pg_net timeout. Secrets reused from the deals sync. Files:
+    `supabase/functions/activecampaign-contacts-sync/`, `supabase/migrations/20261020040000*`
+    (rpc) + `20261020050000*` (schedule).
