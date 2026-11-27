@@ -226,6 +226,8 @@
       line-height: 1.2;
       margin-top: 2px;
     }
+    .sp-mini-box .m-val.pos { color: var(--pos); }
+    .sp-mini-box .m-val.neg { color: var(--neg); }
     .sp-mini-box .m-sub {
       font-size: 11.5px;
       color: var(--text-muted);
@@ -2159,10 +2161,12 @@
           ) +
           kpiTile(
             'Reached beyond followers',
-            PENDING_CHIP,
-            '<div class="delta">Instagram figure to be pulled</div>',
-            'Share of Instagram reach coming from non-followers.',
-            'Instagram Insights (pending connection)'
+            (ig && ig.nonFollowerReachPct != null) ? fmtPct(ig.nonFollowerReachPct, 1) : PENDING_CHIP,
+            (ig && ig.reachNonFollower28d != null)
+              ? '<div class="delta">' + fmt(ig.reachNonFollower28d, 'count') + ' of ' + fmt((ig.reachFollower28d || 0) + ig.reachNonFollower28d, 'count') + ' accounts reached were non-followers (28d)</div>'
+              : '<div class="delta">Instagram figure to be pulled</div>',
+            'Share of Instagram reach coming from non-followers (last 28 days).',
+            'Instagram Business Insights (Meta)'
           ) +
         '</div>';
 
@@ -2176,16 +2180,16 @@
                 (ig ? '<span class="sp-live-pill"><span class="dot"></span>Live · last 28 days</span>' : PENDING_CHIP) +
               '</div>' +
               '<div class="sp-mini-grid cols-6">' +
-                '<div class="sp-mini-box"><div class="m-label">Views ' + infoTip('Total Instagram views across reels, posts and stories. Not yet connected.', 'Instagram Insights (pending)') + '</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Views ' + infoTip('Total Instagram views across reels, posts and stories in the last 28 days.', 'Instagram Business Insights (Meta)') + '</div><div class="m-val">' + (ig && ig.views28d != null ? fmtCompact(ig.views28d) : PENDING_CHIP) + '</div><div class="m-sub">Last 28 days</div></div>' +
                 '<div class="sp-mini-box"><div class="m-label">Reach ' + infoTip('Unique Instagram accounts reached in the last 28 days, with monthly reach trend sparkline.', 'Instagram Business Insights (Meta)') + '</div><div class="m-val">' + (ig && ig.reach28d != null ? fmtCompact(ig.reach28d) : PENDING_CHIP) + '</div>' +
                   (igTrend.length >= 2 ? '<div class="sp-spark"><canvas id="igReachSpark"></canvas></div>' : '<div class="m-sub">Last 28 days</div>') +
                 '</div>' +
                 '<div class="sp-mini-box"><div class="m-label">Content interactions ' + infoTip('Likes and comments on recent posts, with monthly total-interactions trend sparkline.', 'Instagram Business Insights (Meta)') + '</div><div class="m-val">' + (ig && ig.recentEngagement != null ? fmt(ig.recentEngagement, 'count') : PENDING_CHIP) + '</div>' +
                   (igTrend.length >= 2 ? '<div class="sp-spark"><canvas id="igInterSpark"></canvas></div>' : '<div class="m-sub">Recent posts</div>') +
                 '</div>' +
-                '<div class="sp-mini-box"><div class="m-label">Link clicks ' + infoTip('Profile and sticker link clicks on Instagram. Not yet connected.', 'Instagram Insights (pending)') + '</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Visits ' + infoTip('Instagram profile visits in the period. Not yet connected.', 'Instagram Insights (pending)') + '</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Follows ' + infoTip('New Instagram follows in the period. Not yet connected.', 'Instagram Insights (pending)') + '</div><div class="m-val">' + PENDING_CHIP + '</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Link clicks ' + infoTip('Website link taps plus profile button taps (address, call, email, text) on Instagram, last 28 days.', 'Instagram Business Insights (Meta)') + '</div><div class="m-val">' + (ig && ig.linkClicks28d != null ? fmt(ig.linkClicks28d, 'count') : PENDING_CHIP) + '</div><div class="m-sub">Last 28 days</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Visits ' + infoTip('Instagram profile visits in the last 28 days.', 'Instagram Business Insights (Meta)') + '</div><div class="m-val">' + (ig && ig.profileViews28d != null ? fmt(ig.profileViews28d, 'count') : PENDING_CHIP) + '</div><div class="m-sub">Last 28 days</div></div>' +
+                '<div class="sp-mini-box"><div class="m-label">Follows ' + infoTip('Net new Instagram follows (follows minus unfollows) over the last 28 days. Meta\'s API exposes only the net figure.', 'Instagram Business Insights (Meta)') + '</div><div class="m-val">' + (ig && ig.netFollows28d != null ? (ig.netFollows28d >= 0 ? '+' : '') + fmt(ig.netFollows28d, 'count') : PENDING_CHIP) + '</div><div class="m-sub">Net · last 28 days</div></div>' +
               '</div>' +
             '</div>' +
 
@@ -2194,10 +2198,16 @@
 
             '<div class="sp-card">' +
               '<div class="sp-card-head">' +
-                '<h3>Follows vs unfollows — Instagram ' + infoTip('Gross follows vs unfollows on Instagram. Instagram\'s API does not expose an unfollows metric.', 'Instagram Insights (unavailable via API)') + '</h3>' +
-                PENDING_CHIP +
+                '<h3>Net follower growth — Instagram ' + infoTip('Net new follows (follows minus unfollows) over the last 28 days, with the current follower total. Instagram\'s API exposes only NET change — gross unfollows are not available.', 'Instagram Business Insights (Meta)') + '</h3>' +
+                (ig && ig.netFollows28d != null ? '<span class="sp-live-pill"><span class="dot"></span>Live · last 28 days</span>' : PENDING_CHIP) +
               '</div>' +
-              pendingBox('Instagram unfollows unavailable via API', 'Meta\'s Instagram Graph API does not expose gross unfollows, so only net follower snapshots can be tracked over time.') +
+              (ig && ig.netFollows28d != null
+                ? '<div class="sp-mini-grid cols-2">' +
+                    '<div class="sp-mini-box"><div class="m-label">Net new follows</div><div class="m-val ' + (ig.netFollows28d >= 0 ? 'pos' : 'neg') + '">' + (ig.netFollows28d >= 0 ? '+' : '') + fmt(ig.netFollows28d, 'count') + '</div><div class="m-sub">Last 28 days</div></div>' +
+                    '<div class="sp-mini-box"><div class="m-label">Current followers</div><div class="m-val">' + (ig.followers != null ? fmt(ig.followers, 'count') : '—') + '</div><div class="m-sub">As of ' + (ig.asOf || 'today') + '</div></div>' +
+                  '</div>' +
+                  '<p class="sp-context-line">Meta\'s Instagram API reports net follower change only; gross unfollows aren\'t exposed, so a follows-vs-unfollows split isn\'t available.</p>'
+                : pendingBox('Instagram unfollows unavailable via API', 'Meta\'s Instagram Graph API does not expose gross unfollows, so only net follower snapshots can be tracked over time.')) +
             '</div>' +
 
             '<div class="sp-card wide">' +
