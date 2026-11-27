@@ -35,6 +35,7 @@ import { getMetaIgByType } from './metrics/meta-ig-by-type.js';
 import { getMetaFbAudience, saveMetaFbAudienceImport } from './metrics/meta-fb-audience.js';
 import { getMetaTopPosts } from './metrics/meta-top-posts.js';
 import { getSocialAudience } from './metrics/social-audience.js';
+import { getSocialEnquiries } from './metrics/social-enquiries.js';
 import { getLinkedInAnalytics, saveLinkedInImport } from './metrics/linkedin-analytics.js';
 import { getEdmReport } from './metrics/edm-report.js';
 import { getContentMetrics } from './metrics/content-metrics.js';
@@ -783,6 +784,19 @@ marketing.get('/social-audience', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:social-audience]', err);
     res.status(502).json({ error: 'Failed to load social audience.', detail: err.message });
+  }
+});
+// Enquiries traced to social — counts of new ActiveCampaign contacts whose UTM source is a
+// social channel (linkedin / facebook / instagram), per financial year, from
+// public.ac_new_contacts_src. Backs the "Enquiries traced to social" KPI tile on every
+// platform tab of social_platforms.html. See server/metrics/social-enquiries.js.
+marketing.get('/social-enquiries', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:social-enquiries', getSocialEnquiries, 10 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:social-enquiries]', err);
+    res.status(502).json({ error: 'Failed to load social enquiries.', detail: err.message });
   }
 });
 // LinkedIn Analytics manual .xlsx imports (James's LinkedIn & MAG LinkedIn).

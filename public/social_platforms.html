@@ -651,7 +651,8 @@
         topPosts: [],        // /api/marketing/meta-top-posts (IG)
         fbTopPosts: [],      // /api/marketing/meta-top-posts (FB)
         fbAudience: null,    // /api/marketing/meta-fb-audience (imported FB Audience CSV)
-        linkedin: {}         // { james_linkedin, mag_linkedin } from /api/marketing/linkedin-analytics
+        linkedin: {},        // { james_linkedin, mag_linkedin } from /api/marketing/linkedin-analytics
+        socialEnq: null      // /api/marketing/social-enquiries (UTM-tagged enquiries per platform/FY)
       };
 
       var PENDING_CHIP = '<span class="chip warn">pending</span>';
@@ -1051,6 +1052,45 @@
         '</div>';
       }
 
+      // "Enquiries traced to social" KPI tile — live from /api/marketing/social-enquiries
+      // (new CRM contacts whose UTM source is a social channel, per financial year).
+      // platformKeys ⊆ ['linkedin','facebook','instagram']; the value respects the selected FY
+      // (all-FY total when CURRENT_FY === 'all'), with a FY-over-FY delta otherwise.
+      function enquiriesTile(platformKeys, info) {
+        var se = LIVE.socialEnq;
+        var fy = selectedFyEnd();                 // null when CURRENT_FY === 'all'
+        var haveData = !!(se && se.byPlatform);
+        var val = null, prior = null;
+        if (haveData) {
+          val = 0;
+          if (fy != null) prior = 0;
+          platformKeys.forEach(function (k) {
+            var p = se.byPlatform[k];
+            if (!p) return;
+            if (fy == null) {
+              val += p.total || 0;
+            } else {
+              val += (p.byFy && p.byFy[fy]) || 0;
+              prior += (p.byFy && p.byFy[fy - 1]) || 0;
+            }
+          });
+        }
+        var src = 'Live (Supabase): new ActiveCampaign contacts whose captured UTM source is ' +
+          'linkedin / facebook / instagram (public.ac_new_contacts_src), counted by the contact\'s ' +
+          'creation financial year.';
+        return kpiTile(
+          'Enquiries traced to social',
+          val == null ? PENDING_CHIP : fmt(val, 'count'),
+          val == null
+            ? '<div class="delta">CRM attribution unavailable</div>'
+            : (fy == null
+                ? '<div class="delta">All financial years · UTM-tagged</div>'
+                : deltaHtmlFromPair(val, prior)),
+          info,
+          src
+        );
+      }
+
       function pendingBox(title, body) {
         return '<div class="sp-pending-box">' +
           PENDING_CHIP +
@@ -1414,12 +1454,9 @@
             'Overall engagement rate — total engagements divided by total times seen, pooled (reach-weighted) across the accounts that report reach/impressions (Facebook views, Instagram reach, LinkedIn impressions when imported).',
             'Meta Insights (Facebook & Instagram) + LinkedIn Analytics'
           ) +
-          kpiTile(
-            'Enquiries traced to social',
-            PENDING_CHIP,
-            '<div class="delta">Pending social attribution tagging</div>',
-            'Enquiries and leads attributed to social media channels via tracked links and enquiry source tagging.',
-            'CRM attribution (pending setup)'
+          enquiriesTile(
+            ['linkedin', 'facebook', 'instagram'],
+            'New CRM contacts whose UTM source is a social channel — LinkedIn, Facebook or Instagram — counted by the financial year the contact was created.'
           ) +
           kpiTile(
             'Video hours',
@@ -1619,12 +1656,9 @@
             hasLi ? 'Total engagements divided by total post impressions in the selected period.' : 'Average per-post engagement as a share of James\'s LinkedIn follower base.',
             hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn profile snapshot'
           ) +
-          kpiTile(
-            'Enquiries traced to social',
-            PENDING_CHIP,
-            '<div class="delta">Pending attribution tagging</div>',
-            'Keynote and corporate enquiries attributed to James\'s LinkedIn profile.',
-            'CRM attribution (pending setup)'
+          enquiriesTile(
+            ['linkedin'],
+            'New CRM contacts whose UTM source is LinkedIn. UTM source does not separate the two LinkedIn accounts, so JC\'s and MAG\'s LinkedIn tabs show the same figure.'
           ) +
           kpiTile(
             'Newsletter subscribers',
@@ -1775,12 +1809,9 @@
             hasLi ? 'Total engagements divided by total post impressions in the selected period.' : 'Average per-post engagement as a share of the MAG LinkedIn follower base.',
             hasLi ? 'Imported LinkedIn Analytics (.xlsx)' : 'Weekly LinkedIn company snapshot'
           ) +
-          kpiTile(
-            'Enquiries traced to social',
-            PENDING_CHIP,
-            '<div class="delta">Pending attribution tagging</div>',
-            'Enquiries attributed to the MAG LinkedIn company page.',
-            'CRM attribution (pending setup)'
+          enquiriesTile(
+            ['linkedin'],
+            'New CRM contacts whose UTM source is LinkedIn. UTM source does not separate the two LinkedIn accounts, so the MAG and JC LinkedIn tabs show the same figure.'
           ) +
           kpiTile(
             'Members reached',
@@ -2056,12 +2087,9 @@
             '28-day Facebook post engagements divided by 28-day page views.',
             'Facebook Page Insights (Meta)'
           ) +
-          kpiTile(
-            'Enquiries traced to social',
-            PENDING_CHIP,
-            '<div class="delta">Pending attribution tagging</div>',
-            'Enquiries attributed to Facebook via tracked links and enquiry source tagging.',
-            'CRM attribution (pending setup)'
+          enquiriesTile(
+            ['facebook'],
+            'New CRM contacts whose UTM source is Facebook, counted by the financial year the contact was created.'
           ) +
         '</div>';
 
@@ -2229,12 +2257,9 @@
             'Recent Instagram post engagement divided by 28-day account reach.',
             'Instagram Business Insights (Meta)'
           ) +
-          kpiTile(
-            'Enquiries traced to social',
-            PENDING_CHIP,
-            '<div class="delta">Pending attribution tagging</div>',
-            'Enquiries and messaging contacts attributed to Instagram.',
-            'CRM attribution (pending setup)'
+          enquiriesTile(
+            ['instagram'],
+            'New CRM contacts whose UTM source is Instagram, counted by the financial year the contact was created.'
           ) +
           kpiTile(
             'Reached beyond followers',
@@ -2719,6 +2744,7 @@
         }
 
         safeFetch('/api/marketing/social-audience', function (res) { LIVE.audience = res; });
+        safeFetch('/api/marketing/social-enquiries', function (res) { LIVE.socialEnq = res; });
         safeFetch('/api/marketing/platforms', function (res) { LIVE.platforms = (res && res.data) || []; });
         safeFetch('/api/marketing/content-metrics', function (res) { LIVE.content = (res && res.data) || {}; });
         safeFetch('/api/marketing/meta-fb', function (res) { LIVE.metaFb = res; });

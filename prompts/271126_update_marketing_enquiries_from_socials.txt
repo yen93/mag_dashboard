@@ -1,0 +1,18 @@
+## main task: 
+- update "Enquiries traced to social" for all plaform_tabs in social_platforms.html
+- get the enquiries count from utm_query
+
+**plaform_tabs:**
+All accounts
+JC's LinkedIn
+MAG LinkedIn
+Facebook
+Instagram
+
+**utm_query:**
+select * from public.ac_new_contacts_src
+where src_utm_source in (
+  'linkedin',
+  'facebook',
+  'instagram'
+)

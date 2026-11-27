@@ -49,5 +49,14 @@
   `GET`/`POST /api/marketing/meta-fb-audience[/import]`; the Meta Business Suite export is **UTF-16LE** with
   a `sep=,` line — decode the BOM, don't read as UTF-8). All accounts "Engagement rate" is pooled
   (sum engagements ÷ sum times-seen over accounts reporting both). **Gotcha:** `snapFmt()` needs
-  `YYYY-MM-DD` — slice ISO timestamps (`uploadedAt`) to 10 chars first or you get `NaN`. Still pending by
-  design: Enquiries traced to social, Video hours (+ chart), seniority/industry. Needs a manual redeploy.
+  `YYYY-MM-DD` — slice ISO timestamps (`uploadedAt`) to 10 chars first or you get `NaN`.
+  **"Enquiries traced to social" is LIVE (2026-11-27)** on all 5 platform tabs: `meta-fb-insights.js`'s
+  sibling `server/metrics/social-enquiries.js` → `GET /api/marketing/social-enquiries` counts rows of
+  `public.ac_new_contacts_src` where `lower(src_utm_source) in ('linkedin','facebook','instagram')`,
+  bucketed per platform AND per Australian FY (fyEnd = year(cdate)+(month>=7?1:0), same convention as
+  indirect-deals.js). Returns `{ byPlatform: { linkedin|facebook|instagram: { total, byFy{fyEnd:n} } }, fyEnds }`.
+  Client: `LIVE.socialEnq` (safeFetch) + the single-source `enquiriesTile(platformKeys, info)` helper — All
+  accounts = all three keys, Facebook/Instagram = their key, and **both LinkedIn tabs share the one `linkedin`
+  key** (UTM source can't separate JC's profile from the MAG company page — the tile info note says so). Value
+  respects the FY toggle (all-FY total when CURRENT_FY='all', else that fyEnd with a FY-over-FY delta via
+  `deltaHtmlFromPair`). Still pending by design: Video hours (+ chart), seniority/industry. Needs a manual redeploy.
