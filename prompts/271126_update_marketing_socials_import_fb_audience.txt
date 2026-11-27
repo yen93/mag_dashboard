@@ -1,7 +1,5 @@
-**import_sample:**
-"C:\Users\Cloverly\Downloads\Audience.csv"
+**target_scope:**
+social_platforms.html > "Facebook" platform tab >"Reached beyond followers" kpi card
 
-## main task: update social_platforms.html > "Facebook" platform tab > "Audience — who follows us" section 
-- add an import data feature. 
-- expected file to be imported is like import_sample
-- see for reference only: import feature for our linkedin pages 
+## main task: update target_scope
+- it currently shows pending. i need it to display real live data
