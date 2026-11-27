@@ -1,0 +1,11 @@
+## main q: regarding target_scope
+- is what_i_did enough to populate graph with data? 
+
+**target_scope:**
+social_platforms.html > "All accounts" platform tab >"Video hours vs engagement" graph
+
+**what_i_did:**
+I created a time doctor sync to track the hrs worked for our video editor (Relben). interface is in td_sync.html. see proj_files.
+
+**proj_files:**
+C:\Users\Cloverly\claude_code\time_doctor_sync

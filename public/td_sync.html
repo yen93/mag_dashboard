@@ -50,7 +50,7 @@
     <div class="toolbar">
       <strong>Time Doctor Sync</strong>
       <div class="spacer"></div>
-      <span class="muted" style="font-size:13px">Pull your own Time Doctor activity &amp; hours into Supabase · last 30 days</span>
+      <span class="muted" style="font-size:13px">Pull your own Time Doctor activity &amp; hours into Supabase · last 3 months</span>
     </div>
 
     <div class="card col-12">
@@ -63,7 +63,7 @@
           <label for="password">Time Doctor password</label>
           <input id="password" type="password" autocomplete="current-password" placeholder="Your Time Doctor password" required />
         </div>
-        <button class="btn" type="submit" id="syncBtn">⟳ Sync my last 30 days</button>
+        <button class="btn" type="submit" id="syncBtn">⟳ Sync my last 3 months</button>
         <span class="td-note">Your password is sent once to Time Doctor to log in, then discarded. It is never stored or logged. Only your own data is fetched.</span>
       </form>
     </div>
@@ -124,7 +124,7 @@
       card.hidden = false;
       whoFor.textContent = sel.value;
       setStatus('syncing…', 'working');
-      body.innerHTML = '<p class="muted" style="font-size:13px">Logging in to Time Doctor and pulling the last 30 days…</p>';
+      body.innerHTML = '<p class="muted" style="font-size:13px">Logging in to Time Doctor and pulling the last 3 months…</p>';
 
       fetch(API, {
         method: 'POST',
