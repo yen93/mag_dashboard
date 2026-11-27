@@ -1343,6 +1343,20 @@
           ? Math.round((totNetNew / aud.prior.followers) * 1000) / 10
           : null;
 
+        // Overall engagement rate — pooled (Σ engagements ÷ Σ times-seen) across the accounts that
+        // report reach/impressions (Facebook views, Instagram reach, LinkedIn impressions when
+        // imported). Reach-weighted, so it's live as soon as any account reports a 'seen' figure.
+        var seenSum = 0, engForRate = 0, haveRate = false;
+        accounts.forEach(function (a) {
+          var s = a.st;
+          if (s.seen != null && s.seen > 0 && s.engagements != null) {
+            seenSum += s.seen;
+            engForRate += s.engagements;
+            haveRate = true;
+          }
+        });
+        var overallEngRate = (haveRate && seenSum > 0) ? Math.round((engForRate / seenSum) * 1000) / 10 : null;
+
         var kpisHtml = '<div class="sp-kpi-grid">' +
           kpiTile(
             'Followers',
@@ -1367,10 +1381,12 @@
           ) +
           kpiTile(
             'Engagement rate',
-            PENDING_CHIP,
-            '<div class="delta">Requires impressions on all accounts</div>',
-            'Overall engagement rate (engagements divided by times seen) across all accounts. Pending until LinkedIn impressions are connected.',
-            'Cross-platform analytics (pending LinkedIn impressions)'
+            overallEngRate == null ? PENDING_CHIP : '≈' + fmtPct(overallEngRate, 1),
+            overallEngRate == null
+              ? '<div class="delta">Requires reach/impressions on an account</div>'
+              : '<div class="delta">Pooled engagements ÷ times seen</div>',
+            'Overall engagement rate — total engagements divided by total times seen, pooled (reach-weighted) across the accounts that report reach/impressions (Facebook views, Instagram reach, LinkedIn impressions when imported).',
+            'Meta Insights (Facebook & Instagram) + LinkedIn Analytics'
           ) +
           kpiTile(
             'Enquiries traced to social',
@@ -1407,7 +1423,7 @@
           '<td>' + fmtNetNewCell(totNetNew, totNetRate) + '</td>' +
           '<td>—</td>' +
           '<td>' + (totEng == null ? PENDING_CHIP : fmt(totEng, 'count')) + '</td>' +
-          '<td>' + PENDING_CHIP + '</td>' +
+          '<td>' + (overallEngRate == null ? PENDING_CHIP : fmtPct(overallEngRate, 1)) + '</td>' +
         '</tr>';
 
         var allSnaps = (aud && aud.snaps) || [];
