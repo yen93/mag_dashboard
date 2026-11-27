@@ -622,6 +622,7 @@
         igTrend: [],         // /api/marketing/meta-ig-trend
         fbTrend: [],         // /api/marketing/meta-fb-trend
         igDemo: null,        // { ageGender, locations }
+        igByType: [],        // /api/marketing/meta-ig-by-type (IG "what works best by type", daily cache)
         topPosts: [],        // /api/marketing/meta-top-posts (IG)
         fbTopPosts: [],      // /api/marketing/meta-top-posts (FB)
         linkedin: {}         // { james_linkedin, mag_linkedin } from /api/marketing/linkedin-analytics
@@ -2122,6 +2123,18 @@
         var demo = LIVE.igDemo;
         var hasAgeGender = !!(demo && demo.ageGender && demo.ageGender.length);
         var hasLocations = !!(demo && demo.locations && demo.locations.length);
+        var igByType = (isLiveWindowFy() && LIVE.igByType) ? LIVE.igByType : [];
+        var hasIgByType = !!(igByType && igByType.length);
+        var igByTypeCardHtml = hasIgByType
+          ? '<div class="sp-card">' +
+              '<div class="sp-card-head">' +
+                '<h3>What works best, by type — Instagram ' + infoTip('Average reach per post grouped by content format (Reel/Video, Carousel, Image) across recent Instagram posts. Refreshed once a day.', 'Instagram Business Insights (Meta)') + '</h3>' +
+                '<span class="sp-live-pill"><span class="dot"></span>Live · Meta · daily</span>' +
+              '</div>' +
+              '<div class="cap">Average reach per post by format</div>' +
+              '<div class="sp-chart-box h-md"><canvas id="igByTypeChart"></canvas></div>' +
+            '</div>'
+          : whatWorksBestCard('What works best, by type — Instagram', 'Instagram');
 
         var kpisHtml = '<div class="sp-kpi-grid">' +
           kpiTile(
@@ -2194,7 +2207,7 @@
             '</div>' +
 
             followersOverTimeCard('Followers over time — Instagram', 'igFollowersChart', st.snaps, 'Instagram') +
-            whatWorksBestCard('What works best, by type — Instagram', 'Instagram') +
+            igByTypeCardHtml +
 
             '<div class="sp-card">' +
               '<div class="sp-card-head">' +
@@ -2238,6 +2251,14 @@
           '</div>';
 
         drawFollowersLine('igFollowersChart', st.snaps);
+        if (hasIgByType) {
+          drawHbar(
+            'igByTypeChart',
+            igByType.map(function (b) { return b.type + ' (' + b.count + ')'; }),
+            igByType.map(function (b) { return b.avgReach; }),
+            { color: PAL[0], pct: false }
+          );
+        }
         if (igTrend.length >= 2) {
           var labels = igTrend.map(function (r) { return monthLbl(r.month); });
           drawSparkline('igReachSpark', labels, igTrend.map(function (r) { return r.reach; }), PAL[0]);
@@ -2528,6 +2549,7 @@
         safeFetch('/api/marketing/meta-ig-trend', function (res) { LIVE.igTrend = (res && res.data) || []; });
         safeFetch('/api/marketing/meta-fb-trend', function (res) { LIVE.fbTrend = (res && res.data) || []; });
         safeFetch('/api/marketing/meta-ig-demographics', function (res) { LIVE.igDemo = res; });
+        safeFetch('/api/marketing/meta-ig-by-type', function (res) { LIVE.igByType = (res && res.data) || []; });
         safeFetch('/api/marketing/meta-top-posts', function (res) {
           LIVE.topPosts = (res && res.data) || [];
           LIVE.fbTopPosts = (res && res.fbPosts) || [];

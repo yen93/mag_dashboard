@@ -31,6 +31,7 @@ import { getMetaFbInsights } from './metrics/meta-fb-insights.js';
 import { getMetaIgTrend } from './metrics/meta-ig-trend.js';
 import { getMetaFbTrend } from './metrics/meta-fb-trend.js';
 import { getMetaIgDemographics } from './metrics/meta-ig-demographics.js';
+import { getMetaIgByType } from './metrics/meta-ig-by-type.js';
 import { getMetaTopPosts } from './metrics/meta-top-posts.js';
 import { getSocialAudience } from './metrics/social-audience.js';
 import { getLinkedInAnalytics, saveLinkedInImport } from './metrics/linkedin-analytics.js';
@@ -715,6 +716,20 @@ marketing.get('/meta-ig-demographics', async (_req, res) => {
   } catch (err) {
     console.error('[marketing:meta-ig-demographics]', err);
     res.status(502).json({ error: 'Failed to load Instagram demographics.', detail: err.message });
+  }
+});
+// Instagram "What works best, by type" — average per-post reach + engagement by content format.
+// Cached to public.meta_ig_by_type and refreshed AT MOST ONCE A DAY inside the metric (per-post
+// reach is one Graph call per post). Backs the "What works best, by type — Instagram" card. The
+// in-process 1h cache just avoids re-SELECTing; the daily gate lives in the metric. See
+// server/metrics/meta-ig-by-type.js.
+marketing.get('/meta-ig-by-type', async (_req, res) => {
+  try {
+    const payload = await cached('marketing:meta-ig-by-type', getMetaIgByType, 60 * 60 * 1000);
+    res.json(payload);
+  } catch (err) {
+    console.error('[marketing:meta-ig-by-type]', err);
+    res.status(502).json({ error: 'Failed to load Instagram by-type.', detail: err.message });
   }
 });
 // Top posts — recent Facebook + Instagram posts ranked by engagement (IG rows carry real per-post
