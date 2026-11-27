@@ -67,7 +67,8 @@ export async function getMetaFbInsights() {
     views28d: null,          // back-compat (page_views_total)
     mediaViews28d: null,     // page_media_view (content views across posts/reels)
     pageVisits28d: null,     // page_views_total (Page visits)
-    viewers28d: null,        // unique viewers if exposed by Meta
+    viewers28d: null,        // unique viewers if exposed by Meta (retired on New Pages → stays null)
+    videoViews28d: null,     // page_video_views (28-day total video views)
     linkClicks28d: null,     // link clicks / total actions if exposed by Meta
     newFollows28d: null,
     postEngagements28d: null,
@@ -138,6 +139,14 @@ export async function getMetaFbInsights() {
   const uniqViewers = await tryFbMetric('page_impressions_unique');
   if (uniqViewers != null && !Number.isNaN(Number(uniqViewers))) {
     fb.viewers28d = Number(uniqViewers);
+  }
+
+  // Video views (page_video_views) — a real, live 28-day metric. Unique viewers / page reach are
+  // retired on New Pages (every reach metric returns "(#100) not a valid insights metric", verified
+  // 2026-11-27), so the "Viewers" card is fed by video views instead.
+  const videoViews = await tryFbMetric('page_video_views');
+  if (videoViews != null && !Number.isNaN(Number(videoViews))) {
+    fb.videoViews28d = Number(videoViews);
   }
 
   const fbLive = fb.followers != null || fb.views28d != null || fb.mediaViews28d != null || fb.postEngagements28d != null;

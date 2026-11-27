@@ -1991,6 +1991,7 @@
         var fbViewsVal = fb ? (fb.mediaViews28d != null ? fb.mediaViews28d : fb.views28d) : null;
         var fbVisitsVal = fb ? (fb.pageVisits28d != null ? fb.pageVisits28d : fb.views28d) : null;
         var fbViewersVal = fb && fb.viewers28d != null ? fb.viewers28d : null;
+        var fbVideoViewsVal = fb && fb.videoViews28d != null ? fb.videoViews28d : null;
         var fbClicksVal = fb && fb.linkClicks28d != null ? fb.linkClicks28d : null;
         if (fbClicksVal == null && fbPosts.some(function (p) { return p.linkClicks != null; })) {
           fbClicksVal = fbPosts.reduce(function (s, p) { return s + (p.linkClicks || 0); }, 0);
@@ -2096,12 +2097,12 @@
           '<div class="sp-grid">' +
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
-                '<h3>Facebook — Meta Business Suite ' + infoTip('Live 28-day Facebook Page performance metrics from Meta Business Suite. Metrics not exposed by Meta\'s Page API (Viewers, Link clicks, Visits) are marked pending.', 'Facebook Page Insights (Meta)') + '</h3>' +
+                '<h3>Facebook — Meta Business Suite ' + infoTip('Live 28-day Facebook Page performance metrics from Meta Business Suite. Unique viewers / page reach are retired from Meta\'s New-Pages API, so that slot shows video views instead.', 'Facebook Page Insights (Meta)') + '</h3>' +
                 (fb ? '<span class="sp-live-pill"><span class="dot"></span>Live · last 28 days</span>' : PENDING_CHIP) +
               '</div>' +
               '<div class="sp-mini-grid cols-6">' +
                 '<div class="sp-mini-box"><div class="m-label">Views ' + infoTip('Total Facebook content/page views in the last 28 days.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fbViewsVal != null ? fmtCompact(fbViewsVal) : PENDING_CHIP) + '</div><div class="m-sub">Last 28 days</div></div>' +
-                '<div class="sp-mini-box"><div class="m-label">Viewers ' + infoTip('Unique Facebook viewers / page reach (deprecated by Meta on most New Pages).', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fbViewersVal != null ? fmtCompact(fbViewersVal) : PENDING_CHIP) + '</div>' + (fbViewersVal != null ? '<div class="m-sub">Last 28 days</div>' : '') + '</div>' +
+                '<div class="sp-mini-box"><div class="m-label">Video views ' + infoTip('Total Facebook video views in the last 28 days (page_video_views). Shown here because unique viewers / page reach are retired from Meta\'s New-Pages API.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fbVideoViewsVal != null ? fmtCompact(fbVideoViewsVal) : PENDING_CHIP) + '</div>' + (fbVideoViewsVal != null ? '<div class="m-sub">Last 28 days</div>' : '') + '</div>' +
                 '<div class="sp-mini-box"><div class="m-label">Content interactions ' + infoTip('Post engagements (reactions, comments, shares, clicks) over the last 28 days.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fb && fb.postEngagements28d != null ? fmt(fb.postEngagements28d, 'count') : PENDING_CHIP) + '</div><div class="m-sub">Last 28 days</div></div>' +
                 '<div class="sp-mini-box"><div class="m-label">Link clicks ' + infoTip('Outbound / post clicks from Facebook Page insights or recent posts.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fbClicksVal != null ? fmt(fbClicksVal, 'count') : PENDING_CHIP) + '</div>' + (fbClicksVal != null ? '<div class="m-sub">' + (fb && fb.linkClicks28d != null ? 'Last 28 days' : 'Recent posts') + '</div>' : '') + '</div>' +
                 '<div class="sp-mini-box"><div class="m-label">Visits ' + infoTip('Total Facebook Page visits (page_views_total) over the last 28 days.', 'Facebook Page Insights (Meta)') + '</div><div class="m-val">' + (fbVisitsVal != null ? fmtCompact(fbVisitsVal) : PENDING_CHIP) + '</div>' + (fbVisitsVal != null ? '<div class="m-sub">Last 28 days</div>' : '') + '</div>' +
@@ -2133,7 +2134,7 @@
             '<div class="sp-card wide">' +
               '<div class="sp-card-head">' +
                 '<h3>Audience — who follows us ' + infoTip('Facebook follower age, gender, top cities and top countries. Facebook Page demographics are retired from Meta\'s Graph API, so this is imported from a Meta Business Suite Audience CSV export.', hasFbAud ? 'Imported Facebook Audience CSV (Meta Business Suite)' : 'Facebook Audience CSV (import to populate)') + '</h3>' +
-                (hasFbAud ? '<span class="sp-live-pill"><span class="dot"></span>Imported' + (fbAud && fbAud.uploadedAt ? ' · ' + snapFmt(fbAud.uploadedAt) : '') + '</span>' : PENDING_CHIP) +
+                (hasFbAud ? '<span class="sp-live-pill"><span class="dot"></span>Imported' + (fbAud && fbAud.uploadedAt ? ' · ' + snapFmt(String(fbAud.uploadedAt).slice(0, 10)) : '') + '</span>' : PENDING_CHIP) +
                 '<div class="spacer"></div>' +
                 '<button type="button" class="sp-import-btn secondary" data-fbaud-import style="padding:4px 10px;font-size:11.5px">↑ Import audience CSV</button>' +
               '</div>' +
