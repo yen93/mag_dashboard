@@ -147,11 +147,7 @@ Cloud Run.
   no deal are added in**), but because `marketing-overview.js` was switched to the SAME basis, **the Overview
   "Keynote enquiries/bookings" cards STILL reconcile EXACTLY** with this by-source total. Validated FY27
   (post-exclusion): **Google Ads 2/1 · Bing Ads 3/1 · Organic 1/0 · Tailor 11/1 · Bureau 24/5 = 41 enq / 8
-  booked** (Overview FY27 = 41/8 too; was 44/9 under the old roas basis). (Build history 2026-11-09: v1 LABELLED
-  roas paid rows Google/Bing via a `plat` CTE, defaulted no-ga4 deals to Google (Bing=2, reconciled w/ Overview);
-  v2 switched FY27 paid to ga4-sourced + the conversion_link list (Bing=3, 43 enq) — the owner wanted the GA4-page
-  basis; v3 added the `free_gifts_opt_ins` conversion_action exclusion (drops low.victor etc., 41 enq); v4 then
-  propagated the v2+v3 FY27 logic INTO `marketing-overview.js` so the Overview cards match again.) Month + AU FY
+  booked** (Overview FY27 = 41/8 too; was 44/9 under the old roas basis). Month + AU FY
   (END-year) from `cdate`. Exports
   `LEAD_SOURCES=['Google Ads','Bing Ads','Paid Ads','Organic','Tailor','Bureau']` (master order); the client's
   `visibleSources(rows)` shows **only the sources actually present in the selected FY** (FY27 → Google Ads/Bing
@@ -514,27 +510,18 @@ Cloud Run.
   indirect, matching `roi.js`'s marketing-revenue dedup). The buckets are disjoint (organic 0 overlap),
   so the total is a plain sum. **Enquiries = ALL deals/leads** (status-agnostic); **Bookings = WON only**
   (`roas_counted_deals.status='won'` / ga4 `deal_status='won'` / `ac_indirect_deals.status=1`).
-  (This is the 2026-11-09 revision of the 2026-11-05 build, which counted only TWO sources —
-  ads + indirect, deduped by `deal_id`, **no organic** — and so did NOT tie out with the leads-by-source
-  table; organic was ADDED and indirect now excludes paid overlap. The even-older four-group model —
-  ads + organic + bureau/tailor `ac_deals_ytd` — had already been dropped.) Backed by
+  Backed by
   **`GET /api/marketing/overview`** → **`server/metrics/marketing-overview.js`** (`getMarketingOverview`,
   requireAuth, cached 10 min) — the per-FY / per-month / custom-range SQL all now share **ONE
   `BUCKETS_CTE`** carrying a per-row `won` flag, returning `{ enquiries:{…}, bookings:{…} }`, each
   `{ byFy:[{fyEnd,fy,ads,organic,indirect,total}], total, meta }` (the `organic` field was ADDED
   2026-11-09; `total` is `count(*)` over the disjoint partition). Client-side, a generic `liveCard(cfg)` helper
   renders both cards from `ENQ` / `BOOKINGS` state objects, re-rendering on FY change (`wireSeg` onChange),
-  each with an ⓘ tooltip (per-source breakdown) + a vs-prior-FY delta. **GOTCHA:** the chart sample array
-  that used to be `var ENQ` collided (hoisting) with the `ENQ` state object — renamed to `ENQ_SERIES`;
-  the bookings state is `BOOKINGS` (distinct from the chart's `BOOK` array), keep them distinct. **Cards
-  3–6 ARE NOW ALL LIVE too (as of 2026-11-05)** — the `KPIS[]` sample array is EMPTY. Card 3 **Enquiry → booking rate** (`rateCard()` = bookings ÷ enquiries, pts delta). Cards 4–6 come from a new **`MROI` state** fetched from **`GET /api/marketing/roi`** (`loadRoiCards()` indexes `rows.data` by `fyEnd` + the `total` row; the SAME source as the ROI tab): **Marketing revenue** = `row.marketingRevenue` (`revenueCard`), **Marketing spend** = `row.totalSpend` where `hasSpend` (`spendCard`), **Marketing ROI** = net return `(rev÷spend−1)×100` (`roiCard`, mirrors the ROI tab's Net ROI); helpers `mroiRow`/`currencyDelta`/`costDelta`/`kpiHtml`. **CHARTS now LIVE:** the old sample "Spend vs marketing revenue" chart was REPLACED by a COPY of `roi.html`'s "Revenue vs spend by month" combo chart (green spend bars + blue marketing-revenue line on a shared `niceCeil` LEFT $ axis + gray dashed company-revenue line on the RIGHT axis), fed by `MROI.byMonth` (= `/api/marketing/roi` `byMonth.data`) and filtered by `currentMroiMonths()` — `roi.html` was NOT modified (copy, not move); and "Enquiries vs bookings" is LIVE monthly from new **`ENQ.byMonth`/`BOOKINGS.byMonth`** (`renderEnqBookChart`), backed by **`OVERVIEW_MONTH_SQL`** in `marketing-overview.js` → `enquiries.byMonth`/`bookings.byMonth` (`[{month,fyEnd,total}]`, the SAME three-bucket disjoint set — incl. the FY27+ ga4-sourced paid basis — as of 2026-11-09, one row per deal/lead by creation month). The sample chart arrays (`MONTHS`/`ENQ_SERIES`/`BOOK`/`SPEND`/`REVENUE`/`_c1`) are GONE, so the ENQ/ENQ_SERIES hoisting-gotcha noted above no longer applies; `drawCharts()` just calls `renderMonthChart()`+`renderEnqBookChart()`. **BOTTOM CARDS:** **Cost per enquiry** LIVE (`renderBottomCards()` = marketing spend ÷ enquiries, `costDelta` lower=green); **Cadence delivered** KEPT but shows a `pending` chip (no DB source for cadence — owner's decision); **Past-client Offsites booked** REMOVED; **"Latest notes · October" RENAMED "Live AI Insight"** → `#aiInsight` auto-loads a 1–2 sentence OpenAI insight from **`GET /api/marketing/insight?fy=fy27`** → **`server/marketingInsight.js`** (`getMarketingInsight(fy)`, on the `marketing` router, `fy` validated `/^fy\d{2}$/|all`, cached per-FY 10 min; read-only context-stuff of the live Overview+ROI figures for the FY + prior FY, ONE Chat Completions call; returns `{insight}` or `{insight:null,note}` when the key is unset; `loadInsight`/`scheduleInsight` 400ms debounce on FY change; REUSES the existing `OPENAI_API_KEY` — no new secret). (The amber `.mkt-take` takeaway sentence is still sample prose.) **Validated enquiries per FY (3-bucket,
+  each with an ⓘ tooltip (per-source breakdown) + a vs-prior-FY delta. **Cards
+  3–6 ARE NOW ALL LIVE too (as of 2026-11-05)** — the `KPIS[]` sample array is EMPTY. Card 3 **Enquiry → booking rate** (`rateCard()` = bookings ÷ enquiries, pts delta). Cards 4–6 come from a new **`MROI` state** fetched from **`GET /api/marketing/roi`** (`loadRoiCards()` indexes `rows.data` by `fyEnd` + the `total` row; the SAME source as the ROI tab): **Marketing revenue** = `row.marketingRevenue` (`revenueCard`), **Marketing spend** = `row.totalSpend` where `hasSpend` (`spendCard`), **Marketing ROI** = net return `(rev÷spend−1)×100` (`roiCard`, mirrors the ROI tab's Net ROI); helpers `mroiRow`/`currencyDelta`/`costDelta`/`kpiHtml`. **CHARTS now LIVE:** the old sample "Spend vs marketing revenue" chart was REPLACED by a COPY of `roi.html`'s "Revenue vs spend by month" combo chart (green spend bars + blue marketing-revenue line on a shared `niceCeil` LEFT $ axis + gray dashed company-revenue line on the RIGHT axis), fed by `MROI.byMonth` (= `/api/marketing/roi` `byMonth.data`) and filtered by `currentMroiMonths()` — `roi.html` was NOT modified (copy, not move); and "Enquiries vs bookings" is LIVE monthly from new **`ENQ.byMonth`/`BOOKINGS.byMonth`** (`renderEnqBookChart`), backed by **`OVERVIEW_MONTH_SQL`** in `marketing-overview.js` → `enquiries.byMonth`/`bookings.byMonth` (`[{month,fyEnd,total}]`, the SAME three-bucket disjoint set — incl. the FY27+ ga4-sourced paid basis — as of 2026-11-09, one row per deal/lead by creation month). The sample chart arrays are GONE; `drawCharts()` just calls `renderMonthChart()`+`renderEnqBookChart()`. **BOTTOM CARDS:** **Cost per enquiry** LIVE (`renderBottomCards()` = marketing spend ÷ enquiries, `costDelta` lower=green); **Cadence delivered** KEPT but shows a `pending` chip (no DB source for cadence — owner's decision); **Past-client Offsites booked** REMOVED; **"Latest notes · October" RENAMED "Live AI Insight"** → `#aiInsight` auto-loads a 1–2 sentence OpenAI insight from **`GET /api/marketing/insight?fy=fy27`** → **`server/marketingInsight.js`** (`getMarketingInsight(fy)`, on the `marketing` router, `fy` validated `/^fy\d{2}$/|all`, cached per-FY 10 min; read-only context-stuff of the live Overview+ROI figures for the FY + prior FY, ONE Chat Completions call; returns `{insight}` or `{insight:null,note}` when the key is unset; `loadInsight`/`scheduleInsight` 400ms debounce on FY change; REUSES the existing `OPENAI_API_KEY` — no new secret). (The amber `.mkt-take` takeaway sentence is still sample prose.) **Validated enquiries per FY (3-bucket,
   as of 2026-11-09): FY22 66 · FY23 142 · FY24 151 · FY25 180 · FY26 136 · FY27 41.** Validated
-  bookings/won per FY: FY22 34 · FY23 44 · FY24 44 · FY25 40 · FY26 21 · FY27 8. (**FY27 was 44/9 under the
-  pre-2026-11-09 roas-only paid basis; it is 41/8 now that FY27 paid+organic are ga4-sourced + the
-  non-keynote/free-gift exclusions apply — see the leads-by-source paragraph.** Both pages reconcile to
-  these; organic has rows only in FY27 — GA4 ~60-day retention. These replaced the 2026-11-05 two-source
-  figures — enquiries FY22 65·FY23 128·FY24 147·FY25 178·FY26 137·FY27 40 — which lacked organic and
-  excluded Niki no-`deal_id` rows from the paid side.) Server + frontend change (no `app.js` bump) →
+  bookings/won per FY: FY22 34 · FY23 44 · FY24 44 · FY25 40 · FY26 21 · FY27 8. (Both pages reconcile to
+  these; organic has rows only in FY27 — GA4 ~60-day retention.) Server + frontend change (no `app.js` bump) →
   needs a **Cloud Run redeploy**.
   **Marketing left sidebar (as of 2026-10-22; +`roi.html` 2026-10-28):** five former top
   tabs plus the new **ROI** page live UNDER Marketing, reached via a left sidebar
@@ -896,9 +883,7 @@ Cloud Run.
     prevails"); niki rows with no deal_id kept via surrogate `'niki-'||id`. **Owner decisions:** FY24 =
     Niki+clover mix; include ALL Niki incl **outbound**; a **VIEW** (always live, no refresh job).
     Rebuild the underlying tables, not the view. Known quirk: 2 clover returning-customer wins land in
-    **FY22** by contact cdate (deals really FY24+) — accepted. (Dropping jc removed 10 rows, but 2 of
-    those deal_ids also live in Niki's log and resurfaced as niki rows, so the view went 171→163 deals;
-    net 8 distinct deals removed.) Per-FY won (after the jc removal): FY22 6·FY23 11·FY24 15·FY25
+    **FY22** by contact cdate (deals really FY24+) — accepted. Per-FY won (after the jc removal): FY22 6·FY23 11·FY24 15·FY25
     9·FY26 7·FY27 1.
     **END-YEAR FY is derived explicitly in SQL for every source** (`extract(year)+(month>=7?1:0)`;
     clover's `fiscal_year` text is already END-year via `right(fiscal_year,2)+2000`). As of
@@ -952,9 +937,7 @@ Cloud Run.
     re-add a row-filter**.
     **NOT the full audited ROAS report** (ex-GST Buyer Analysis values → different numbers).
     The old calendar-year design (`won_audit` CTE by `calendar_year`; lost/open from
-    `ac_google_ads_deals`; `CONTACT_SOURCE_SHOWN` for the shown-leads basis) is **replaced**,
-    as is the even-older sheet-mirror design (cache `public.roas_year_on_year` +
-    `roas-year-on-year-sync` routine — both retired/unused, safe to drop). Google ad-spend
+    `ac_google_ads_deals`; `CONTACT_SOURCE_SHOWN` for the shown-leads basis) is **replaced**. Google ad-spend
     freshness (FY25+) depends on the
     **`google-ads-campaign-monthly-sync` Supabase edge function** (deployed
     `--no-verify-jwt`; pg_cron `google-ads-campaign-monthly-sync-weekly`, `0 22 * * 0`
@@ -1019,33 +1002,6 @@ Cloud Run.
     double-count the `campaign_id=0` Xero total, since `roas.js` sums all rows). Caveat: Xero
     figures are actual **billed** card/debit charges (threshold/arrears timing), so months differ
     from platform-reported spend — the right basis for All-in cost.
-    **HISTORY (superseded 2026-10-23, kept for reference):**
-    Bing was to be filled by the **`bing-ads-campaign-monthly-sync` edge function (IMPLEMENTED +
-    DEPLOYED 2026-10-23, `verify_jwt:false` v1)** — full Microsoft Advertising Reporting API
-    v13 REST flow (OAuth refresh-token grant → `SubmitGenerateReport` CampaignPerformanceReport
-    Aggregation=Monthly → poll → download ZIP → unzip via `fflate` → parse CSV → upsert on
-    `(month, campaign_id)`), with MSA single-use refresh-token **rotation** persisted in the NEW
-    `public.oauth_token_store` table (migration `20261023090000`, `provider='bing_ads'`; seeded
-    from the `BING_ADS_REFRESH_TOKEN` secret, rotated token written back each run). Needs the six
-    `BING_ADS_*` edge secrets (client id/secret, refresh token, developer token, account/customer
-    id) — **SET**. ⚠ **BLOCKED** at time of writing: every call returns **Code 105
-    InvalidCredentials** (even `GetUser`, which needs no account access). Root cause: the only
-    developer token is the **Gmail Super Admin's SINGLE-USER** token, but OAuth authenticates as
-    the user's **Microsoft/Outlook account** (Gmail is Google-federated → can't do Microsoft
-    OAuth) — the dev token and OAuth identity **must be the same user**. Fix: promote the MS
-    account to Super Admin and self-issue a dev token, OR get a **Universal** dev token. Weekly
-    cron is **staged** (`20261023091000`) but **not yet applied** (held until the backfill works).
-    **Full resume guide: `BING_SYNC_NEXT_STEPS.txt`.** Simple Digital is filled by the
-    **`simple-digital-fees-sync` Claude routine** (Gmail MCP
-    → GoCardless "Upcoming Direct Debit … Simple Digital" notices ÷1.1, less $600 SEO from Mar
-    2026; monthly). Files: `supabase/functions/bing-ads-campaign-monthly-sync/index.ts`,
-    `routines/simple-digital-fees-sync.md`. A dashboard redeploy is needed for the roas.js/
-    roas.html rebuild + the new `/api/operations/roas/deals` route.
-    **(Former TEMPORARY sheet load, now REPLACED):** both tables briefly held a one-time load
-    from the "Ad spend by month" tab of the ROAS sheet (Bing as `campaign_id=0, '__sheet_total__'`;
-    Simple Digital mirrored per month). `xero-ad-spend-sync`'s first run **deleted and replaced**
-    those rows on 2026-10-23, so the sheet load is gone — the tables now hold only the Xero data
-    above.
   - **Contact Sources** (`ac_contact_sources.html` = "GA4 & Ads Leads Tracking",
     `/api/operations/contact-sources`, `server/metrics/ac-contact-sources.js`) is
     also a plain single-table read: as of 2026-10-09 **every display column is stored
@@ -1369,6 +1325,25 @@ Cloud Run.
   Development mode (Standard Access, no App Review). Needs a manual redeploy for changes; the plain
   `deployment_script.txt` preserves `META_PAGE_TOKEN`. Known gap: LinkedIn **posts** aren't in Top posts (the
   Apify sync only sums engagement; storing per-post rows needs an `apify-platforms-sync` extension).
+  **Platform-tab pending-card pass (2026-11-27):** `social_platforms.html` now has per-platform tabs (All
+  accounts / JC's LinkedIn / MAG LinkedIn / Facebook / Instagram; state in a `LIVE` object, each endpoint
+  loaded via `safeFetch`). Added, all verified live: IG `views` / `profile_views` (= visits) /
+  `website_clicks`+`profile_links_taps` (= link clicks) / `reach` with `breakdown=follow_type` (non-follower
+  %) / `follower_count` (daily NET series, **must be summed client-side — it rejects `metric_type=total_value`**)
+  in `meta-fb-insights.js`; FB `page_video_views`. **IG gross unfollows are not exposed**
+  (`follows_and_unfollows` only splits by `follow_type`; its FOLLOWER value == net) → the IG card is "Net
+  follower growth", don't re-attempt a follows-vs-unfollows split. **IG "What works best, by type"** =
+  `meta-ig-by-type.js` + cache `public.meta_ig_by_type`: per-post reach is one Graph call per post, so a
+  staleness gate (>20h) refreshes it at most daily on the first IG-tab view (no cron). **Facebook retired
+  reach everywhere** (page AND post level, unique/fan/non-fan, `page_fans*` demographics — all `(#100) not a
+  valid insights metric`, re-verified 2026-11-27), so FB "Viewers" became live **Video views**
+  (`page_video_views`), FB "Reached beyond followers" stays pending on purpose, and FB "Audience — who
+  follows us" is a **CSV import** (`meta-fb-audience.js`, `public.meta_fb_audience_import`, routes
+  `GET`/`POST /api/marketing/meta-fb-audience[/import]`; the Meta Business Suite export is **UTF-16LE** with
+  a `sep=,` line — decode the BOM, don't read as UTF-8). All accounts "Engagement rate" is pooled
+  (sum engagements ÷ sum times-seen over accounts reporting both). **Gotcha:** `snapFmt()` needs
+  `YYYY-MM-DD` — slice ISO timestamps (`uploadedAt`) to 10 chars first or you get `NaN`. Still pending by
+  design: Enquiries traced to social, Video hours (+ chart), seniority/industry. Needs a manual redeploy.
 - **Alternate Leads tab (2026-11-18).** `alternate_leads.html` (Sales left sidebar key `alternate`; the 4 pages using `renderSalesSidebar` are `app.js?v=22`) replaces Liv's old "alternate_leads_found" Google Sheet. Rows come from `public.alternate_leads`, filled weekly by the separate Alternate Lead Finder project (`C:\Users\Cloverly\claude_code\Alternate Lead Finder`; DeepMine, **`email` is always NULL**). `server/metrics/alternate-leads.js` + `GET /api/sales/alternate-leads` (uncached; returns per-user `canReview`) + `POST /api/sales/alternate-leads/:id/review`. **Tagging writes `alternate_leads.status` = `'Send intro'` / `'skip'` (NULL = for review) — NOT `sheet_remark`** (that is only a legacy one-time copy of the sheet, read as a fallback, cleared when a reviewer changes that row). Only rows with `is_processed IS NULL` can be tagged. Gate: `canReviewAltLeads` (`ALT_LEADS_REVIEW_EMAILS` in `server/users.js` = liv@ + julienne@; server 403s everyone else, UI shows read-only pills). Audit: append-only `public.alternate_leads_review_log` (migration `20261118120000`, applied). The downstream "send intro" email step lives elsewhere. **Gotcha:** `alternate_leads.id` is a bigint and `pg` returns it as a STRING in the JSON, so client-side id matching must compare `String(l.id) === dataId` (a strict compare against `Number(...)` silently never matched, so the dropdown did nothing and sent no request). Needs a manual redeploy.
 - **Auth = passwordless email code (OTP).** No passwords, no user table.
   `login.html` is a two-step form (email → code). `POST /api/request-code`

@@ -1,0 +1,216 @@
+================================================================================
+CHAT HISTORY EXPORT — 2026-11-27
+Session: Social Platforms tab — fill pending cards on the Instagram / All accounts / Facebook tabs from the Meta Graph API (+ a daily IG by-type cache and a Facebook audience CSV import)
+================================================================================
+
+NOTE ON REDACTIONS: While probing the Instagram Graph API, the PowerShell probe printed the
+`paging.previous` / `paging.next` URLs returned by Meta, and those URLs embed the Page access token as
+an `access_token=` query parameter (a long prefix of the real token was visible in the tool output).
+That value is NOT reproduced here — it is referred to only as [REDACTED_META_PAGE_TOKEN]. The token itself
+lives in Google Secret Manager (secret META_PAGE_TOKEN) and was read into a process env var only, never
+echoed (only its length, 220, was printed). The `gcloud auth login` OAuth URL echoed in the session
+(contains a one-time `state` / PKCE challenge) is also omitted. Non-secret identifiers (Page id
+1421118044806726, Instagram business account id 17841401738850546, Supabase project ref) are kept because
+they are already config defaults in code / CLAUDE.md.
+
+--------------------------------------------------------------------------------
+USER:
+Main task: update social_platforms.html > "Instagram" platform tab. Get data for all cards and graphs
+that currently have a "pending" tag. Use the Graph API for Instagram.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read renderInstagram() in public/social_platforms.html plus server/metrics/meta-fb-insights.js,
+meta-ig-trend.js, meta-ig-demographics.js and meta-top-posts.js to see what was already live. Needed the
+live token to verify which IG metrics actually return data (Meta deprecates them often). gcloud had an
+expired session (non-interactive reauth impossible), so asked how to proceed; user chose to re-auth
+gcloud, ran `! gcloud auth login`, and it succeeded.
+
+Pulled META_PAGE_TOKEN from Secret Manager into an env var and probed the IG Graph API live (28-day
+window, metric_type=total_value). Results: views 6,846; profile_views 158; website_clicks 3 and
+profile_links_taps 0; reach with breakdown=follow_type NON_FOLLOWER 832 / FOLLOWER 429 (=> 66% beyond
+followers); follower_count daily net series summing to +34. follows_and_unfollows only breaks down by
+follow_type (its FOLLOWER value equals the net follower_count), so gross unfollows are NOT exposed — only
+net follows are reportable.
+
+Edited server/metrics/meta-fb-insights.js to add IG fields views28d, profileViews28d, linkClicks28d,
+netFollows28d, reachFollower28d, reachNonFollower28d, nonFollowerReachPct (each isolated in try/catch).
+Verified against the live API (all populated). Edited renderInstagram(): "Reached beyond followers" KPI,
+the Views / Link clicks / Visits / Follows mini-boxes, and rebuilt the "Follows vs unfollows" card as a
+live "Net follower growth" card (added .m-val.pos/.neg CSS). Left "Enquiries traced to social" pending (CRM
+attribution, not a Graph metric). Syntax-checked server module and inline page scripts.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — one-line git commit command.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran git status/diff and produced: feat(social): fill Instagram tab pending cards live from Meta Graph API
+(views, profile visits, link clicks, net follows, non-follower reach %); rebuild follows-vs-unfollows as
+net follower growth.
+
+--------------------------------------------------------------------------------
+USER:
+Can we also populate "What works best, by type — Instagram"? (/q)
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read-only investigation (q skill). The card was the shared always-pending whatWorksBestCard helper (live
+only for MAG LinkedIn via li.byType). Probed IG media: 30 posts, FEED 19 / REELS 11, per-post reach
+populated 15/15; sample avg reach Reels ~156 vs Feed ~108. Answered yes, buildable, noting per-post reach
+is one Graph call per post (~24), and asked grouping/metric/sample-size choices; recommended media_type,
+avg reach, 24 posts.
+
+--------------------------------------------------------------------------------
+USER:
+/q — will that literally cost us money?
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+No. The Meta Graph API is free; the only ceiling is rate limits/latency. Clarified that "cost" meant
+call-budget, not dollars; contrasted with Apify and OpenAI/Gemini which do cost money.
+
+--------------------------------------------------------------------------------
+USER:
+/q — just create caching so we only pull it once a day then.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+The go-ahead cancelled the read-only constraint. Built: migration 20261127120000_create_meta_ig_by_type.sql
+(public.meta_ig_by_type, upsert-only, RLS on; applied via Supabase MCP), server/metrics/meta-ig-by-type.js
+(staleness gate: only re-pulls ~24 posts + per-post reach when the stored snapshot is >20h old; groups by
+Reel/Video, Carousel, Image; upserts), route GET /api/marketing/meta-ig-by-type in server/index.js, and a
+live avg-reach-by-format bar card on the IG tab (LIVE.igByType). Verified live: first run populated 3
+formats (Reel/Video 166 avg reach n=9, Image 132 n=10, Carousel 91 n=5) in 2.1s; second run 0.9s with no
+Graph pull; table rows confirmed via SELECT.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — commit line.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Produced the feat(social) commit line for the live IG by-type card + once-a-day meta_ig_by_type cache.
+
+--------------------------------------------------------------------------------
+USER:
+The "Audience — who follows us" in the Facebook tab: can't we use the API? If it's available for IG it
+should be for FB.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Did not trust the code comment; probed the live Graph API for page_fans_gender_age, page_fans_city,
+page_fans_country, page_fans, follower_demographics (IG metric on a Page), page_impressions_by_age_gender_
+unique, page_impressions_by_country_unique. All returned "(#100) The value must be a valid insights
+metric" — retired by Meta's New-Pages API with no replacement; follower_demographics is Instagram-node
+only. Concluded the FB card is correctly pending. No changes.
+
+--------------------------------------------------------------------------------
+USER:
+Main task: "All accounts" platform tab — populate live data for all elements currently tagged pending.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Mapped renderAllAccounts(). Fillable: the "Engagement rate" KPI and the By-account total-row "Eng. rate"
+cell (were forced pending). Verified live FB seen=85/eng=36 and IG seen=1253/eng=52 => pooled 6.6%.
+Implemented a pooled, reach-weighted rate (sum engagements / sum times-seen over accounts that report
+both) in renderAllAccounts(). Left pending: "Enquiries traced to social" (no attribution source) and
+"Video hours" KPI + "Video hours vs engagement" card (no Video production log exists). Offered to scope a
+Video log or social attribution next.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — commit line.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Produced the feat(social) commit line for the All-accounts engagement-rate fill.
+
+--------------------------------------------------------------------------------
+USER:
+Pasted task + sample file C:\Users\Cloverly\Downloads\Audience.csv: Facebook tab > "Audience — who follows
+us" — add an import-data feature (file like the sample), referencing the LinkedIn import feature.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Read the sample (UTF-16LE Meta Business Suite export: "Age & gender" % Women/Men per bracket, "Top
+cities" names+% rows, "Top countries" names+% rows). Studied the LinkedIn import (route, modal, base64
+upload). Built: migration 20261127140000_create_meta_fb_audience_import.sql (public.meta_fb_audience_import
+singleton + _log, applied via Supabase MCP); server/metrics/meta-fb-audience.js (UTF-16/BOM-aware CSV
+parser, getMetaFbAudience, saveMetaFbAudienceImport upsert + audit log); routes GET
+/api/marketing/meta-fb-audience and POST /api/marketing/meta-fb-audience/import; frontend: LIVE.fbAudience,
+"Import audience CSV" button + dedicated <dialog> controller, and live age/gender pyramid + top cities +
+top countries charts on the FB audience card. Parser verified on the real sample (6 age rows, 10 cities, 10
+countries); full DB round-trip verified and the row left populated. Noted an untracked prompts/ file that
+was not mine.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — commit line.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Produced the feat(social) commit line for the Facebook audience CSV import.
+
+--------------------------------------------------------------------------------
+USER:
+The badge says "Imported · NaN Nov 2026". Fix please.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Root cause: snapFmt() expects YYYY-MM-DD but uploadedAt is a full ISO timestamp. Fixed by slicing to the
+first 10 chars before formatting; verified "27 Nov 2026". Frontend-only.
+
+--------------------------------------------------------------------------------
+USER:
+Pasted task: Facebook tab > "Facebook — Meta Business Suite" > "Viewers" card currently pending; display
+real live data.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Probed the live FB Page API: every unique-viewer / reach / impressions metric is retired (#100). The one
+real unused metric is page_video_views (677 for 28 days). Asked the user; they chose "Repurpose to Video
+views". Added fb.videoViews28d in meta-fb-insights.js (verified live = 677), relabelled the card "Video
+views", and updated the section tooltip. Frontend + server change.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — commit line.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Produced the feat(social) commit line replacing the pending Viewers card with live Video views.
+
+--------------------------------------------------------------------------------
+USER:
+Pasted task: Facebook tab > "Reached beyond followers" KPI currently pending; display real live data.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Probed page-level and post-level fan/non-fan reach metrics on the live API (page_fans,
+page_impressions_by_fan_type_unique, post_impressions_fan_unique, post_impressions_unique, post_reach, ...):
+all "(#100) not a valid insights metric". No live FB metric means "reach beyond followers", so asked; the
+user chose "Keep pending, clearer note". Updated the card's sub-line/tooltip/source to say the data is
+retired from Meta's New-Pages API (Instagram shows it live on its own tab). Frontend-only text change.
+
+--------------------------------------------------------------------------------
+USER:
+/cm — commit line.
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Produced a docs(social) commit line for the clarified Facebook Reached-beyond-followers note.
+
+--------------------------------------------------------------------------------
+USER:
+/dcp — save chat history, update as_built.txt, CLAUDE.md and .gitignore (no git).
+
+--------------------------------------------------------------------------------
+ASSISTANT:
+Ran this skill: saved this transcript, updated as_built.txt and CLAUDE.md, checked .gitignore (already
+covers secrets/cookies/scratch; nothing to add). No git commands run.
+
+================================================================================
+END OF EXPORT
+================================================================================
